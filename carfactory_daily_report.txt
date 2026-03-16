@@ -1,1 +1,251 @@
-Initializing — first real data will appear after next scheduled run.
+CAR FACTORY DAILY REPORT
+Last updated: 03/14/2026 at 06:40 AM
+
+LATE ACCOUNTS
+DEBARY: 148 total
+  90+ days:   KREMER, AUSTIN (Repo)
+              TRAYLOR, ROBYN
+              SALGADO, MICHAEL (Repo)
+              TAYLOR, TYLOR (Repo)
+              CLAYTON, OCTAVIUS (Repo)
+              CHANTHAVONGSA, KHONSAVANH (Repo)
+              THOMAS, CORIE (Repo)
+              TORRES MALDONADO, JESSICA (Repo)
+              HARRIS, ANTOINE (Repo)
+              PIEDRA, EDGAR (Repo)
+              NAVARRETE, CECILIA (Repo)
+              GARCIA TAZAMA, SANTIAGO (Repo)
+              STRUNK, JORDAN (Repo)
+              RAMIREZ FLORES, CHRISTIAN (Repo)
+              WILLIAMS, DARRELL (Repo)
+              NUGENT, SEAN (Repo)
+              SOTO GONZALEZ, JOSE
+              TURNER, BO (Repo)
+              PIEDRA, EDGAR
+              BRAMLET, DEVONDRE (Repo)
+              BROWN, ROBIN (Repo)
+              ORTIZ, NAYOME (Repo)
+              BILGER, BRANDON
+              COOKE, ASHTON
+              NEWTON, ERICA
+              STONE, JAMIE (Repo)
+              POLCHIES, ERIC (Repo)
+              EGBERT, JESSICA (Repo)
+              ORTIZ, NAYOME (Repo)
+              BILGER, BRANDON (Repo)
+              MARTINEZ, MILTON
+              CRUZ, JESSICA
+              TOLBERT, NICHOLE (Repo)
+              YOUNG, LEE (Repo)
+              ESTEVEZ, ARACELY (Repo)
+              REYES, GILBERT (Repo)
+              WILSON, TA'NEKA (Repo)
+              BRIGHT, IESHA (Repo)
+              SHEPARD, CHRISTINA (Repo)
+              WHITTAKER, TAKIYA
+              SANCHEZ, SHATIEK (Repo)
+              JONES, GRADY
+              PINNOCK, GLENNIE
+              SHAFFER, WILLIAM (Repo)
+              MARMOL, MARK (Repo)
+              DATIZ MILLAN, LEE
+              MCHUGH, CHRISTOPHER (Repo)
+              FUSS, JOSHUA (Repo)
+              SAILOR, TATIYANA (Repo)
+              ACEVEDO DOWNS, JUAN
+              FLETCHER, XETH (Repo)
+              ERAZO, LUIS (Repo)
+              SHAW, REGINALD
+              HUDSON, ADAM (Repo)
+              DIEDRICH, BARBARA (Repo)
+              MORIARTY, CYNTHIA
+              HALL, SHERMAIN
+              SOTO DE JESUS, AMANDA (Repo)
+              LUCIANO, ANGIE (Repo)
+              CHALMERS, RICHARD (Repo)
+              HILLERY, RICHARD (Repo)
+              ROSS, DAVID
+              WINNINGHAM, CALVIN (Repo)
+              RODRIGUEZ, KARENTH (Repo)
+              SMITH, NICOLE (Repo)
+              NIEVES, YAZMIN
+              CRUZ ISAAC, MARLIUBYS (Repo)
+              VILORIA MARTURET, DIEGO (Repo)
+              SIERRA SANCHEZ, PEDRO
+              BORDONADA, RICHARD (Repo)
+              HUMPHREYS, DAVID (Repo)
+              CARROLL, JONATHAN (Repo)
+              CREW-VENTURA, ASHLEI
+              NIEVES, ANGELINA
+              AUGUSTIN, YADMY (Repo)
+              SMITH, EARL (Repo)
+              MEJIA, NIGEL (Repo)
+              FRANCISCO, ROBERT
+              NUNNALLY, TYRESE
+              NEWTON, DAELIN (Repo)
+              DOBELL, ERNEST (Repo)
+              MELVIN, ROBERT
+              HARPER, RICKEY
+              STEER, DESLEY
+              RIVERA, MARGARITA
+              TODD, AUSTIN
+              SMITH, NICOLE
+              GUADALUPE LOPEZ, JOSE (Repo)
+              WRIGHT, JASON
+              GUERRERO, RAMONA
+              EMERY, ETHAN (Repo)
+              BATISTA, AMALIA (Repo)
+              MCDONALD, JADA (Repo)
+              MARSHALL, JAMES
+              HARDY, JUSTIN
+              SAVOY, TONYETTE
+              PIEDRA, EDGAR
+              REYES, FELIPE
+              MUNET CORTES, KRESHALIZ
+              HERCEG, WILLIAM
+              HOWARD, JAMES (Repo)
+              OTERO SERRANO, ALEX
+              COLEMAN, CHARLES
+              BENNETT, RONNIE
+              ESCALANTE LOPEZ, ALFONSO
+              SULLIVAN, NATHAN
+              DANZIG, BOBBIE
+              HOLLIS, OCTAVIA
+              MEJIA, CHRISTINA (Repo)
+              NOOKS, SHADAE
+              WRIGHT, LILAL
+              WALTERS, JEFFREY (Repo)
+              DAVIS, DOUGLAS
+              SANCHEZ, FIDEL
+              SANCHEZ, MARTIN
+              KNOOP, TAYLOR (Repo)
+              HARRIS, KATIE (Repo)
+              WOODS JACKSON, JIMMIE (Repo)
+              BROWN, TABATHA
+              SANTIAGO QUINONES, ROGELIO (Repo)
+              ORIHUELA, ISABELLA
+  60-89 days: BURGOS RIVERA, ZULEIKA (Repo)
+              DOUGLAS, KENDRICK (Repo)
+              TALL, JONATHAN
+              RODRIGUEZ SANTANA, BRYAN (Repo)
+              DE LEON HERNANDEZ, ANGEL (Repo)
+              OSBORNE, JUSTIN
+              JENKINS, TIFFANY
+              RAMIREZ, VICTORIA
+  30-59 days: MC KNIGHT, JACKIE (Repo)
+              MITCHELL, ANTONIO
+              COLON, ABIGAIL (Repo)
+              RODRIGUEZ, AMANI
+              VELAZQUEZ, ANGELA (Repo)
+              BING, ALVOYE
+              BAUZA ORTIZ, ROBERTO
+              CARMONA RIVERA, ANGEL
+              DANIELS, KYLE
+              BUSSIERE, SHERRY
+              WEITZEL, CASSIDY
+              DATIZ MILLAN, LEE
+              CARTER SANTANA, DYLON
+              MIZIN, JONATHAN
+              SANDS BENEFIELD, CLARA
+              ALFONSO VALCARCEL, ALBERTO
+              BERRIEN, ARIAL
+  Just 30:    SAWYER, CARLY
+              ANDERSON, MALIK (Repo)
+
+DELAND: 67 total
+  90+ days:   RODRIGUEZ, ROMIS (Repo)
+              GOMEZ PARADA, BENJAMIN (Repo)
+              HARRELL, JAMSHMEA (Repo)
+              VAZQUEZ, MIRIAM (Repo)
+              ROBLES, ALEXANDER
+              WERNER, STEVE (Repo)
+              NEMBHARD, KAMARSH (Repo)
+              JENNINGS, JOSEPH (Repo)
+              STONE, INGEBORG (Repo)
+              FIGUEROA, ASHLEY (Repo)
+              MELENDEZ VAZQUEZ, ELADIO (Repo)
+              THOMAS, OCTAVIA (Repo)
+              SKINNER, CHARLES
+              ONEAL, MARY (Repo)
+              AVILES, JANET (Repo)
+              TAYLOR, OLLIE
+              BASS, HEATHER (Repo)
+              BARNES, ERIC
+              CHIAPPETTA, FELISA (Repo)
+              SMITH, CODY
+              NOSAVANH, KATIE ANN (Repo)
+              MEDLEY, HUNTAVIAN
+              LINDSEY, BARRON
+              WHITAKER, ARONIA (Repo)
+              YATES, ANGELA (Repo)
+              HERNANDEZ ORTIZ, EILEEN
+              CARTER SANTANA, DYLON (Repo)
+              KING, CANDACE (Repo)
+              VALDES, DENISHA (Repo)
+              FIELDS, SAMUEL (Repo)
+              KNIGHT, JEFFREY (Repo)
+              CAMPBELL, VICTOR
+              MATTHEWS, MICHAEL (Repo)
+              HAYNES, LINDSEY (Repo)
+              WILLIAMS, CHARLES (Repo)
+              GONZALEZ, GABRIEL
+              PIERCE, ERIN (Repo)
+              PEARCE, VARNEY
+              KENNEDY, DUSTIN
+              DUNAGAN, TYLER (Repo)
+              WILLIAMS, CLARENCE
+              TURNER, SHIANNA (Repo)
+              GREEN, STEPHANIE
+              PIETRZAK, PAUL (Repo)
+              MORAN, FLOR
+              STRIDACCHIO, MICHAEL
+              CANN, KIMBERLY
+              LILLY, KATRINA (Repo)
+              MARQUEZ GONZALEZ, JOSE (Repo)
+              FRANKLIN, OLLIE
+              CHANTHAVONGSA, KHONSAVANH (Repo)
+              GREEN, MIKEL (Repo)
+              BIBARAO RODRIGUEZ, ANGEL
+              MANCHESTER, PHILLIP
+              LANE, KERBY (Repo)
+  60-89 days: MARTORI, SANTOS
+              VEGA JIMENEZ, GIOVANNI
+              LETT, ANNE-MARIE
+              MULONAS, LANCE
+              GARNETT, TYRON
+              PROSOCK, JESSICA
+              SPRUILL, DARIEN
+  30-59 days: WEAVER, AMANDA
+              DEXTER, DAVID
+              JACKSON, MAKI
+              CLAY JACKSON, GABRIELLE
+  Just 30:    BLAISE, DOVENSKY
+
+COMBINED TOTAL: 215 late accounts
+
+RECENT PAYMENTS (Yesterday - 03/14/2026)
+DEBARY:
+PANAYOTIS, MITCHELL - $325.00
+MCTIZIC, WILLIAM - $310.00
+DIAZ, ANTONIO - $240.00
+BOONE, KADEEM - $310.00
+JACKSON, ARRON - $310.00
+MCCREA, ALISA - $340.00
+THOMAS, TRINITY - $235.00
+
+DELAND:
+BARE, DIANE - $225.00
+WIDMER, SHAUN - $275.00
+CARRASQUILLO COLON, ELVIS - $180.00
+
+DMs SENT
+ALFONSO VALCARCEL, ALBERTO (DeBary) - messaged
+BERRIEN, ARIAL (DeBary) - messaged
+SAWYER, CARLY (DeBary) - messaged
+ANDERSON, MALIK (DeBary) - messaged
+BLAISE, DOVENSKY (DeLand) - messaged
+
+STATUS
+Email sent: YES - carfactorydebaryfl@gmail.com (3 PDFs attached)
+Google Sheet updated: SKIPPED
+GitHub updated: YES
