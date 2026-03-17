@@ -1,251 +1,313 @@
 CAR FACTORY DAILY REPORT
-Last updated: 03/14/2026 at 06:40 AM
+Last updated: 03/16/2026 at 7:59:50 AM
 
-LATE ACCOUNTS
-DEBARY: 148 total
-  90+ days:   KREMER, AUSTIN (Repo)
-              TRAYLOR, ROBYN
-              SALGADO, MICHAEL (Repo)
-              TAYLOR, TYLOR (Repo)
-              CLAYTON, OCTAVIUS (Repo)
-              CHANTHAVONGSA, KHONSAVANH (Repo)
-              THOMAS, CORIE (Repo)
-              TORRES MALDONADO, JESSICA (Repo)
-              HARRIS, ANTOINE (Repo)
-              PIEDRA, EDGAR (Repo)
-              NAVARRETE, CECILIA (Repo)
-              GARCIA TAZAMA, SANTIAGO (Repo)
-              STRUNK, JORDAN (Repo)
-              RAMIREZ FLORES, CHRISTIAN (Repo)
-              WILLIAMS, DARRELL (Repo)
-              NUGENT, SEAN (Repo)
-              SOTO GONZALEZ, JOSE
-              TURNER, BO (Repo)
-              PIEDRA, EDGAR
-              BRAMLET, DEVONDRE (Repo)
-              BROWN, ROBIN (Repo)
-              ORTIZ, NAYOME (Repo)
-              BILGER, BRANDON
-              COOKE, ASHTON
-              NEWTON, ERICA
-              STONE, JAMIE (Repo)
-              POLCHIES, ERIC (Repo)
-              EGBERT, JESSICA (Repo)
-              ORTIZ, NAYOME (Repo)
-              BILGER, BRANDON (Repo)
-              MARTINEZ, MILTON
-              CRUZ, JESSICA
-              TOLBERT, NICHOLE (Repo)
-              YOUNG, LEE (Repo)
-              ESTEVEZ, ARACELY (Repo)
-              REYES, GILBERT (Repo)
-              WILSON, TA'NEKA (Repo)
-              BRIGHT, IESHA (Repo)
-              SHEPARD, CHRISTINA (Repo)
-              WHITTAKER, TAKIYA
-              SANCHEZ, SHATIEK (Repo)
-              JONES, GRADY
-              PINNOCK, GLENNIE
-              SHAFFER, WILLIAM (Repo)
-              MARMOL, MARK (Repo)
-              DATIZ MILLAN, LEE
-              MCHUGH, CHRISTOPHER (Repo)
-              FUSS, JOSHUA (Repo)
-              SAILOR, TATIYANA (Repo)
-              ACEVEDO DOWNS, JUAN
-              FLETCHER, XETH (Repo)
-              ERAZO, LUIS (Repo)
-              SHAW, REGINALD
-              HUDSON, ADAM (Repo)
-              DIEDRICH, BARBARA (Repo)
-              MORIARTY, CYNTHIA
-              HALL, SHERMAIN
-              SOTO DE JESUS, AMANDA (Repo)
-              LUCIANO, ANGIE (Repo)
-              CHALMERS, RICHARD (Repo)
-              HILLERY, RICHARD (Repo)
-              ROSS, DAVID
-              WINNINGHAM, CALVIN (Repo)
-              RODRIGUEZ, KARENTH (Repo)
-              SMITH, NICOLE (Repo)
-              NIEVES, YAZMIN
-              CRUZ ISAAC, MARLIUBYS (Repo)
-              VILORIA MARTURET, DIEGO (Repo)
-              SIERRA SANCHEZ, PEDRO
-              BORDONADA, RICHARD (Repo)
-              HUMPHREYS, DAVID (Repo)
-              CARROLL, JONATHAN (Repo)
-              CREW-VENTURA, ASHLEI
-              NIEVES, ANGELINA
-              AUGUSTIN, YADMY (Repo)
-              SMITH, EARL (Repo)
-              MEJIA, NIGEL (Repo)
-              FRANCISCO, ROBERT
-              NUNNALLY, TYRESE
-              NEWTON, DAELIN (Repo)
-              DOBELL, ERNEST (Repo)
-              MELVIN, ROBERT
-              HARPER, RICKEY
-              STEER, DESLEY
-              RIVERA, MARGARITA
-              TODD, AUSTIN
-              SMITH, NICOLE
-              GUADALUPE LOPEZ, JOSE (Repo)
-              WRIGHT, JASON
-              GUERRERO, RAMONA
-              EMERY, ETHAN (Repo)
-              BATISTA, AMALIA (Repo)
-              MCDONALD, JADA (Repo)
-              MARSHALL, JAMES
-              HARDY, JUSTIN
-              SAVOY, TONYETTE
-              PIEDRA, EDGAR
-              REYES, FELIPE
-              MUNET CORTES, KRESHALIZ
-              HERCEG, WILLIAM
-              HOWARD, JAMES (Repo)
-              OTERO SERRANO, ALEX
-              COLEMAN, CHARLES
-              BENNETT, RONNIE
-              ESCALANTE LOPEZ, ALFONSO
-              SULLIVAN, NATHAN
-              DANZIG, BOBBIE
-              HOLLIS, OCTAVIA
-              MEJIA, CHRISTINA (Repo)
-              NOOKS, SHADAE
-              WRIGHT, LILAL
-              WALTERS, JEFFREY (Repo)
-              DAVIS, DOUGLAS
-              SANCHEZ, FIDEL
-              SANCHEZ, MARTIN
-              KNOOP, TAYLOR (Repo)
-              HARRIS, KATIE (Repo)
-              WOODS JACKSON, JIMMIE (Repo)
-              BROWN, TABATHA
-              SANTIAGO QUINONES, ROGELIO (Repo)
-              ORIHUELA, ISABELLA
-  60-89 days: BURGOS RIVERA, ZULEIKA (Repo)
-              DOUGLAS, KENDRICK (Repo)
-              TALL, JONATHAN
-              RODRIGUEZ SANTANA, BRYAN (Repo)
-              DE LEON HERNANDEZ, ANGEL (Repo)
-              OSBORNE, JUSTIN
-              JENKINS, TIFFANY
-              RAMIREZ, VICTORIA
-  30-59 days: MC KNIGHT, JACKIE (Repo)
-              MITCHELL, ANTONIO
-              COLON, ABIGAIL (Repo)
-              RODRIGUEZ, AMANI
-              VELAZQUEZ, ANGELA (Repo)
-              BING, ALVOYE
-              BAUZA ORTIZ, ROBERTO
-              CARMONA RIVERA, ANGEL
-              DANIELS, KYLE
-              BUSSIERE, SHERRY
-              WEITZEL, CASSIDY
-              DATIZ MILLAN, LEE
-              CARTER SANTANA, DYLON
-              MIZIN, JONATHAN
-              SANDS BENEFIELD, CLARA
-              ALFONSO VALCARCEL, ALBERTO
-              BERRIEN, ARIAL
-  Just 30:    SAWYER, CARLY
-              ANDERSON, MALIK (Repo)
+════════════════════════════════
+LATE ACCOUNTS — DEBARY
+════════════════════════════════
+150+ days (93 accounts):
+  KREMER, AUSTIN — 1102 days — Acct 2583
+  TRAYLOR, ROBYN — 676 days — Acct 2942
+  SALGADO, MICHAEL — 657 days — Acct 3259
+  TAYLOR, TYLOR — 617 days — Acct 3358RFI
+  CLAYTON, OCTAVIUS — 585 days — Acct 3396
+  CHANTHAVONGSA, KHONSAVANH — 546 days — Acct 3415
+  THOMAS, CORIE — 509 days — Acct 3383
+  TORRES MALDONADO, JESSICA — 507 days — Acct 3565
+  HARRIS, ANTOINE — 500 days — Acct 3625
+  PIEDRA, EDGAR — 483 days — Acct 3640
+  NAVARRETE, CECILIA — 450 days — Acct 3681
+  GARCIA TAZAMA, SANTIAGO — 428 days — Acct 3452
+  STRUNK, JORDAN — 426 days — Acct 3769
+  RAMIREZ FLORES, CHRISTIAN — 417 days — Acct 3750
+  WILLIAMS, DARRELL — 403 days — Acct 3719
+  NUGENT, SEAN — 396 days — Acct 3715
+  SOTO GONZALEZ, JOSE — 382 days — Acct 3710
+  TURNER, BO — 369 days — Acct 3902
+  PIEDRA, EDGAR — 361 days — Acct 3826
+  BRAMLET, DEVONDRE — 358 days — Acct 3889
+  BROWN, ROBIN — 358 days — Acct 3908
+  ORTIZ, NAYOME — 353 days — Acct 3907
+  BILGER, BRANDON — 346 days — Acct 3723
+  COOKE, ASHTON — 344 days — Acct 3600
+  NEWTON, ERICA — 341 days — Acct 3748
+  STONE, JAMIE — 341 days — Acct 3812
+  POLCHIES, ERIC — 336 days — Acct 3949
+  EGBERT, JESSICA — 333 days — Acct 3881
+  ORTIZ, NAYOME — 333 days — Acct 3922
+  BILGER, BRANDON — 331 days — Acct 3964
+  MARTINEZ, MILTON — 330 days — Acct 3911
+  CRUZ, JESSICA — 328 days — Acct 3720RFI
+  TOLBERT, NICHOLE — 326 days — Acct 3898
+  YOUNG, LEE — 318 days — Acct 3910
+  ESTEVEZ, ARACELY — 310 days — Acct 3859
+  REYES, GILBERT — 307 days — Acct 4015
+  WILSON, TA'NEKA — 302 days — Acct 3892
+  BRIGHT, IESHA — 301 days — Acct 3878RFI
+  SHEPARD, CHRISTINA — 300 days — Acct 3957
+  WHITTAKER, TAKIYA — 299 days — Acct 3820
+  SANCHEZ, SHATIEK — 298 days — Acct 3959
+  JONES, GRADY — 294 days — Acct 3851
+  PINNOCK, GLENNIE — 293 days — Acct 3692
+  SHAFFER, WILLIAM — 290 days — Acct 3988
+  MARMOL, MARK — 278 days — Acct 3818
+  DATIZ MILLAN, LEE — 276 days — Acct 4035
+  MCHUGH, CHRISTOPHER — 274 days — Acct 3703
+  FUSS, JOSHUA — 263 days — Acct 3800
+  SAILOR, TATIYANA — 262 days — Acct 4071
+  ACEVEDO DOWNS, JUAN — 256 days — Acct 4055
+  FLETCHER, XETH — 255 days — Acct 4025
+  ERAZO, LUIS — 254 days — Acct 4012
+  SHAW, REGINALD — 250 days — Acct 3745
+  HUDSON, ADAM — 248 days — Acct 4001
+  DIEDRICH, BARBARA — 245 days — Acct 3980
+  MORIARTY, CYNTHIA — 239 days — Acct 3858
+  HALL, SHERMAIN — 237 days — Acct 3915
+  SOTO DE JESUS, AMANDA — 231 days — Acct 3918
+  LUCIANO, ANGIE — 228 days — Acct 3821RFI
+  CHALMERS, RICHARD — 227 days — Acct 4104
+  HILLERY, RICHARD — 227 days — Acct 4103
+  ROSS, DAVID — 223 days — Acct 3944
+  WINNINGHAM, CALVIN — 223 days — Acct 3773
+  RODRIGUEZ, KARENTH — 221 days — Acct 4089
+  SMITH, NICOLE — 221 days — Acct 3997
+  NIEVES, YAZMIN — 218 days — Acct 3848
+  CRUZ ISAAC, MARLIUBYS — 216 days — Acct 4040
+  VILORIA MARTURET, DIEGO — 214 days — Acct 4133
+  SIERRA SANCHEZ, PEDRO — 207 days — Acct 4003
+  BORDONADA, RICHARD — 205 days — Acct 4115
+  HUMPHREYS, DAVID — 201 days — Acct 4101
+  CARROLL, JONATHAN — 200 days — Acct 4145
+  CREW-VENTURA, ASHLEI — 199 days — Acct 3991
+  NIEVES, ANGELINA — 195 days — Acct 3838
+  AUGUSTIN, YADMY — 195 days — Acct 3975
+  SMITH, EARL — 193 days — Acct 4175
+  MEJIA, NIGEL — 187 days — Acct 4016
+  FRANCISCO, ROBERT — 185 days — Acct 4107
+  NUNNALLY, TYRESE — 182 days — Acct 4154
+  NEWTON, DAELIN — 180 days — Acct 3983
+  DOBELL, ERNEST — 179 days — Acct 4173
+  MELVIN, ROBERT — 178 days — Acct 3923
+  HARPER, RICKEY — 174 days — Acct 4060
+  STEER, DESLEY — 169 days — Acct 4105
+  RIVERA, MARGARITA — 168 days — Acct 3311
+  TODD, AUSTIN — 166 days — Acct 4067
+  SMITH, NICOLE — 163 days — Acct 4139
+  GUADALUPE LOPEZ, JOSE — 160 days — Acct 4185
+  WRIGHT, JASON — 158 days — Acct 4147
+  GUERRERO, RAMONA — 154 days — Acct 3954
+  EMERY, ETHAN — 152 days — Acct 4171
+  BATISTA, AMALIA — 150 days — Acct 4136
+  MCDONALD, JADA — 150 days — Acct 3914RFI
 
-DELAND: 67 total
-  90+ days:   RODRIGUEZ, ROMIS (Repo)
-              GOMEZ PARADA, BENJAMIN (Repo)
-              HARRELL, JAMSHMEA (Repo)
-              VAZQUEZ, MIRIAM (Repo)
-              ROBLES, ALEXANDER
-              WERNER, STEVE (Repo)
-              NEMBHARD, KAMARSH (Repo)
-              JENNINGS, JOSEPH (Repo)
-              STONE, INGEBORG (Repo)
-              FIGUEROA, ASHLEY (Repo)
-              MELENDEZ VAZQUEZ, ELADIO (Repo)
-              THOMAS, OCTAVIA (Repo)
-              SKINNER, CHARLES
-              ONEAL, MARY (Repo)
-              AVILES, JANET (Repo)
-              TAYLOR, OLLIE
-              BASS, HEATHER (Repo)
-              BARNES, ERIC
-              CHIAPPETTA, FELISA (Repo)
-              SMITH, CODY
-              NOSAVANH, KATIE ANN (Repo)
-              MEDLEY, HUNTAVIAN
-              LINDSEY, BARRON
-              WHITAKER, ARONIA (Repo)
-              YATES, ANGELA (Repo)
-              HERNANDEZ ORTIZ, EILEEN
-              CARTER SANTANA, DYLON (Repo)
-              KING, CANDACE (Repo)
-              VALDES, DENISHA (Repo)
-              FIELDS, SAMUEL (Repo)
-              KNIGHT, JEFFREY (Repo)
-              CAMPBELL, VICTOR
-              MATTHEWS, MICHAEL (Repo)
-              HAYNES, LINDSEY (Repo)
-              WILLIAMS, CHARLES (Repo)
-              GONZALEZ, GABRIEL
-              PIERCE, ERIN (Repo)
-              PEARCE, VARNEY
-              KENNEDY, DUSTIN
-              DUNAGAN, TYLER (Repo)
-              WILLIAMS, CLARENCE
-              TURNER, SHIANNA (Repo)
-              GREEN, STEPHANIE
-              PIETRZAK, PAUL (Repo)
-              MORAN, FLOR
-              STRIDACCHIO, MICHAEL
-              CANN, KIMBERLY
-              LILLY, KATRINA (Repo)
-              MARQUEZ GONZALEZ, JOSE (Repo)
-              FRANKLIN, OLLIE
-              CHANTHAVONGSA, KHONSAVANH (Repo)
-              GREEN, MIKEL (Repo)
-              BIBARAO RODRIGUEZ, ANGEL
-              MANCHESTER, PHILLIP
-              LANE, KERBY (Repo)
-  60-89 days: MARTORI, SANTOS
-              VEGA JIMENEZ, GIOVANNI
-              LETT, ANNE-MARIE
-              MULONAS, LANCE
-              GARNETT, TYRON
-              PROSOCK, JESSICA
-              SPRUILL, DARIEN
-  30-59 days: WEAVER, AMANDA
-              DEXTER, DAVID
-              JACKSON, MAKI
-              CLAY JACKSON, GABRIELLE
-  Just 30:    BLAISE, DOVENSKY
+90-150 days (28 accounts):
+  MARSHALL, JAMES — 148 days — Acct 4002
+  HARDY, JUSTIN — 146 days — Acct 3943
+  SAVOY, TONYETTE — 146 days — Acct 4229
+  PIEDRA, EDGAR — 145 days — Acct 4246
+  REYES, FELIPE — 145 days — Acct 4044
+  MUNET CORTES, KRESHALIZ — 144 days — Acct 3960RFI
+  HERCEG, WILLIAM — 143 days — Acct 4191
+  HOWARD, JAMES — 141 days — Acct 4088
+  OTERO SERRANO, ALEX — 136 days — Acct 3998
+  COLEMAN, CHARLES — 133 days — Acct 4196
+  ESCALANTE LOPEZ, ALFONSO — 127 days — Acct 4053
+  SULLIVAN, NATHAN — 124 days — Acct 4220
+  DANZIG, BOBBIE — 124 days — Acct 4159
+  HOLLIS, OCTAVIA — 123 days — Acct 4023
+  MEJIA, CHRISTINA — 123 days — Acct 4223
+  NOOKS, SHADAE — 122 days — Acct 3886
+  WRIGHT, LILAL — 116 days — Acct 4122
+  WALTERS, JEFFREY — 116 days — Acct 4253
+  DAVIS, DOUGLAS — 109 days — Acct 4094
+  SANCHEZ, FIDEL — 108 days — Acct 3962
+  SANCHEZ, MARTIN — 108 days — Acct 4316
+  KNOOP, TAYLOR — 103 days — Acct 4311
+  HARRIS, KATIE — 102 days — Acct 4261
+  WOODS JACKSON, JIMMIE — 102 days — Acct 4127
+  BROWN, TABATHA — 101 days — Acct 4049
+  SANTIAGO QUINONES, ROGELIO — 101 days — Acct 4263
+  ORIHUELA, ISABELLA — 92 days — Acct 4304
+  BURGOS RIVERA, ZULEIKA — 90 days — Acct 4286
 
-COMBINED TOTAL: 215 late accounts
+30-90 days (26 accounts):
+  DOUGLAS, KENDRICK — 81 days — Acct 4323
+  TALL, JONATHAN — 80 days — Acct 4215
+  RODRIGUEZ SANTANA, BRYAN — 75 days — Acct 4232
+  DE LEON HERNANDEZ, ANGEL — 73 days — Acct 4335
+  OSBORNE, JUSTIN — 67 days — Acct 4240
+  JENKINS, TIFFANY — 64 days — Acct 4282
+  RAMIREZ, VICTORIA — 63 days — Acct 4309
+  MC KNIGHT, JACKIE — 61 days — Acct 4364
+  MITCHELL, ANTONIO — 60 days — Acct 4135
+  COLON, ABIGAIL — 60 days — Acct 4174
+  RODRIGUEZ, AMANI — 58 days — Acct 4153
+  VELAZQUEZ, ANGELA — 58 days — Acct 4131
+  BING, ALVOYE — 56 days — Acct 4295
+  BAUZA ORTIZ, ROBERTO — 53 days — Acct 4321
+  CARMONA RIVERA, ANGEL — 53 days — Acct 4093
+  DANIELS, KYLE — 52 days — Acct 4342
+  BUSSIERE, SHERRY — 47 days — Acct 4283
+  WEITZEL, CASSIDY — 47 days — Acct 4248
+  DATIZ MILLAN, LEE — 45 days — Acct 4400
+  CARTER SANTANA, DYLON — 40 days — Acct 4380
+  MIZIN, JONATHAN — 39 days — Acct 4268
+  SANDS BENEFIELD, CLARA — 38 days — Acct 4387
+  ALFONSO VALCARCEL, ALBERTO — 33 days — Acct 4395
+  SAWYER, CARLY — 32 days — Acct 4408
+  ANDERSON, MALIK — 32 days — Acct 4340
+  TYRELL, JARAN — 31 days — Acct 4257
 
-RECENT PAYMENTS (Yesterday - 03/14/2026)
+0-30 days (32 accounts):
+  COX, ANGEL — 29 days — Acct 4168
+  GONZALEZ, PAOLA — 28 days — Acct 4244
+  BARBER, TAVORIS — 27 days — Acct 4120
+  WHITTED, TATUM — 27 days — Acct 4156
+  SMITH, DEION — 23 days — Acct 4345
+  ROBINSON, SABRINA — 19 days — Acct 4172
+  JACKSON, KARIAN — 15 days — Acct 4236
+  LOGAN, SCOTT — 15 days — Acct 4334
+  LIGGINS, TYRONE — 14 days — Acct 4467
+  MARTIRE, MICHEL — 12 days — Acct 4453
+  SEPULVEDA FERRER, JONATHAN — 11 days — Acct 4190
+  DIAZ ORALES, CARLOS — 9 days — Acct 4328
+  CHU, OMAR — 7 days — Acct 4469
+  GARRAWAY, BERT — 7 days — Acct 4265
+  PAGAN RODRIGUEZ, RICARDO — 7 days — Acct 4494
+  BERRIEN, ARIAL — 5 days — Acct 4312
+  CRESPO, GIANCARLOS — 5 days — Acct 4394
+  LEON, CASSANDRA — 5 days — Acct 4331
+  LOPEZ, ADRIANNA — 5 days — Acct 4313
+  DESIR, GEYYFER — 4 days — Acct 4397
+  FOXWORTH DAUGHERTY, QUILEI — 4 days — Acct 4197
+  MCTIZIC, WILLIAM — 4 days — Acct 4447
+  JACKSON, DUANE — 3 days — Acct 4421
+  JOYCE, STEVEN — 3 days — Acct 4486
+  LEGISTER, DANIEL — 3 days — Acct 4293
+  RIOS, JUANKIE — 3 days — Acct 4047
+  FLORES RAMIRES, RICARDO — 2 days — Acct 4303
+  LEBRUN, JESLY — 2 days — Acct 4448
+  COOPER, TAVARIOUS — 1 days — Acct 4318
+  GARCIA, MARTA — 1 days — Acct 4347
+  MEYERS, BRIAN — 1 days — Acct 4193
+  OLMSTEAD, CHRISTOPHER — 1 days — Acct 4217
+
+DEBARY TOTAL: 179 accounts
+
+════════════════════════════════
+LATE ACCOUNTS — DELAND
+════════════════════════════════
+150+ days (49 accounts):
+  RODRIGUEZ, ROMIS — 578 days — Acct 3225
+  GOMEZ PARADA, BENJAMIN — 536 days — Acct 3289
+  HARRELL, JAMSHMEA — 536 days — Acct 3298
+  VAZQUEZ, MIRIAM — 536 days — Acct 3355
+  ROBLES, ALEXANDER — 516 days — Acct 3342
+  WERNER, STEVE — 514 days — Acct 3435
+  NEMBHARD, KAMARSH — 487 days — Acct 3448
+  JENNINGS, JOSEPH — 486 days — Acct 3662
+  STONE, INGEBORG — 476 days — Acct 3642
+  FIGUEROA, ASHLEY — 474 days — Acct 3646
+  MELENDEZ VAZQUEZ, ELADIO — 469 days — Acct 3339
+  THOMAS, OCTAVIA — 465 days — Acct 3660
+  SKINNER, CHARLES — 444 days — Acct 3234
+  ONEAL, MARY — 438 days — Acct 3560
+  AVILES, JANET — 430 days — Acct 3569
+  TAYLOR, OLLIE — 379 days — Acct 3249
+  BASS, HEATHER — 369 days — Acct 3857
+  BARNES, ERIC — 368 days — Acct 3645
+  CHIAPPETTA, FELISA — 346 days — Acct 3947
+  SMITH, CODY — 346 days — Acct 3919
+  NOSAVANH, KATIE ANN — 326 days — Acct 3903
+  MEDLEY, HUNTAVIAN — 318 days — Acct 3869
+  LINDSEY, BARRON — 316 days — Acct 3473
+  WHITAKER, ARONIA — 312 days — Acct 3900
+  YATES, ANGELA — 312 days — Acct 3530
+  HERNANDEZ ORTIZ, EILEEN — 311 days — Acct 3666
+  CARTER SANTANA, DYLON — 311 days — Acct 3924
+  KING, CANDACE — 300 days — Acct 3822RFI
+  VALDES, DENISHA — 300 days — Acct 3810
+  FIELDS, SAMUEL — 293 days — Acct 3852
+  KNIGHT, JEFFREY — 291 days — Acct 3746
+  CAMPBELL, VICTOR — 283 days — Acct 4005
+  MATTHEWS, MICHAEL — 282 days — Acct 4022
+  HAYNES, LINDSEY — 278 days — Acct 4028
+  WILLIAMS, CHARLES — 277 days — Acct 3920
+  GONZALEZ, GABRIEL — 259 days — Acct 3776
+  PIERCE, ERIN — 256 days — Acct 4014
+  PEARCE, VARNEY — 255 days — Acct 3854
+  KENNEDY, DUSTIN — 241 days — Acct 3930
+  DUNAGAN, TYLER — 231 days — Acct 3704
+  WILLIAMS, CLARENCE — 210 days — Acct 3874
+  TURNER, SHIANNA — 189 days — Acct 4182
+  GREEN, STEPHANIE — 186 days — Acct 3986
+  PIETRZAK, PAUL — 179 days — Acct 4129
+  MORAN, FLOR — 175 days — Acct 4077
+  STRIDACCHIO, MICHAEL — 166 days — Acct 4041
+  CANN, KIMBERLY — 165 days — Acct 4018
+  LILLY, KATRINA — 150 days — Acct 4189
+  MARQUEZ GONZALEZ, JOSE — 150 days — Acct 3936
+
+90-150 days (8 accounts):
+  FRANKLIN, OLLIE — 136 days — Acct 3844
+  CHANTHAVONGSA, KHONSAVANH — 136 days — Acct 4251
+  GREEN, MIKEL — 129 days — Acct 4247
+  BIBARAO RODRIGUEZ, ANGEL — 116 days — Acct 4106
+  MANCHESTER, PHILLIP — 116 days — Acct 4207
+  LANE, KERBY — 116 days — Acct 4140
+  MARTORI, SANTOS — 91 days — Acct 4235
+  VEGA JIMENEZ, GIOVANNI — 90 days — Acct 4243
+
+30-90 days (12 accounts):
+  LETT, ANNE-MARIE — 87 days — Acct 4149
+  MULONAS, LANCE — 87 days — Acct 4146
+  GARNETT, TYRON — 80 days — Acct 4199
+  PROSOCK, JESSICA — 80 days — Acct 4114
+  SPRUILL, DARIEN — 63 days — Acct 4325
+  WEAVER, AMANDA — 59 days — Acct 4254
+  DEXTER, DAVID — 45 days — Acct 4151
+  JACKSON, MAKI — 39 days — Acct 4339
+  CLAY JACKSON, GABRIELLE — 38 days — Acct 4222
+  BLAISE, DOVENSKY — 32 days — Acct 4378
+  MITCHELL, TRISTAN — 31 days — Acct 4256
+  SINCLAIR, BRITTANY — 31 days — Acct 4343
+
+0-30 days (18 accounts):
+  PEREZ MARTINEZ, LUIS — 28 days — Acct 4428
+  LUGO MORALES, TIARA — 22 days — Acct 4367
+  MCGRATH, RYAN — 22 days — Acct 4264
+  BRICENO ROSALES, DANYERLYS — 18 days — Acct 4430
+  MARINO, AMBER — 18 days — Acct 4416
+  WRIGHT, PAIGE — 18 days — Acct 4405
+  DUNAGAN, TYLER — 13 days — Acct 4353
+  CHAMBERS, JEDEDIAH — 11 days — Acct 4337
+  CLARK, CARLTON — 11 days — Acct 4157
+  DIAZ, YONATHAN — 11 days — Acct 4358
+  CARR, MICHAEL — 7 days — Acct 4491
+  GRAHAM, RANDY — 7 days — Acct 4435
+  MYERS, ASHLEY — 6 days — Acct 4203
+  WOOD, CHASE — 5 days — Acct 4476
+  STAFFORD, CHANDA — 4 days — Acct 4480
+  WILLIAMS, RAVON — 4 days — Acct 3927
+  RILLING, RICHARD — 3 days — Acct 4338
+  KING, DEANNA — 1 days — Acct 4204
+
+DELAND TOTAL: 87 accounts
+
+COMBINED TOTAL: 266 accounts
+
+════════════════════════════════
+RECENT PAYMENTS — YESTERDAY (03/16/2026)
+════════════════════════════════
 DEBARY:
-PANAYOTIS, MITCHELL - $325.00
-MCTIZIC, WILLIAM - $310.00
-DIAZ, ANTONIO - $240.00
-BOONE, KADEEM - $310.00
-JACKSON, ARRON - $310.00
-MCCREA, ALISA - $340.00
-THOMAS, TRINITY - $235.00
+  SILVA HERNANDEZ, RAINIER — $310.00
+  GUERRERO, RAMONA — $210.00
+  DUNGEY, JOHN — $470.00
+  GARRAWAY, BERT — $450.00
+  MALPICA, JOSUE — $230.00
 
 DELAND:
-BARE, DIANE - $225.00
-WIDMER, SHAUN - $275.00
-CARRASQUILLO COLON, ELVIS - $180.00
+  GARCIA, JUSTIN — $360.00
 
-DMs SENT
-ALFONSO VALCARCEL, ALBERTO (DeBary) - messaged
-BERRIEN, ARIAL (DeBary) - messaged
-SAWYER, CARLY (DeBary) - messaged
-ANDERSON, MALIK (DeBary) - messaged
-BLAISE, DOVENSKY (DeLand) - messaged
-
-STATUS
-Email sent: YES - carfactorydebaryfl@gmail.com (3 PDFs attached)
-Google Sheet updated: SKIPPED
-GitHub updated: YES
+DEBARY COLLECTED: $1670.00
+DELAND COLLECTED: $360.00
+COMBINED COLLECTED: $2030.00
