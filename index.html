@@ -34,7 +34,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .tb-title{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;}
 .tb-right{display:flex;align-items:center;gap:10px;}
 .ub{background:#111;border:1px solid #1e1e1e;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;color:#aaa;}
-.so{background:none;border:none;color:#333;font-size:20px;cursor:pointer;padding:4px;}
+.so{background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px;}
 
 /* MGR TABS */
 .mtabs{display:flex;background:#000;border-bottom:1px solid #111;flex-shrink:0;}
@@ -340,7 +340,7 @@ canvas{display:none;}
     <input class="mfi" id="ne-n" placeholder="Full name" />
     <input class="mfi" id="ne-u" placeholder="Username" />
     <input class="mfi" id="ne-p" type="number" placeholder="PIN (4 digits)" />
-    <select class="msel" id="ne-r"><option value="employee">Employee</option><option value="manager">Manager</option></select>
+    <select class="msel" id="ne-r"><option value="employee">Employee</option><option value="manager">Owner</option></select>
     <select class="msel" id="ne-l"><option value="DeBary">DeBary</option><option value="DeLand">DeLand</option></select>
     <div class="b2">
       <button class="mbtn gh" onclick="closeM('m-add-emp')">Cancel</button>
@@ -487,7 +487,7 @@ async function doLogin(){
   me=e;
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
-  document.getElementById('ub').textContent=e.name+(e.role==='manager'?' · MGR':'');
+  document.getElementById('ub').textContent=e.name+(e.role==='manager'?' · OWNER':'');
   await syncFromSupabase();
   if(e.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';showView('emp-home');renderGrid();}
@@ -688,7 +688,7 @@ async function sendBack(aid){
 }
 
 // ── TEAM ───────────────────────────────────────────────────────────────────────
-function renderTeam(){document.getElementById('team-list').innerHTML=S.employees.map(e=>{const ac=S.assignments.filter(a=>a.employeeId===e.id&&!a.approved).length;return`<div class="emp-row"><div class="emp-av">${e.name[0]}</div><div class="emp-inf"><div class="emp-nm">${e.name}</div><div class="emp-mt">${e.role} \xB7 ${e.location} \xB7 @${e.username}</div><div class="emp-at">${ac} active assignment${ac!==1?'s':''}</div></div></div>`;}).join('');}
+function renderTeam(){document.getElementById('team-list').innerHTML=S.employees.map(e=>{const ac=S.assignments.filter(a=>a.employeeId===e.id&&!a.approved).length;return`<div class="emp-row"><div class="emp-av">${e.name[0]}</div><div class="emp-inf"><div class="emp-nm">${e.name}</div><div class="emp-mt">${e.role==="manager"?"Owner":"Employee"} \xB7 ${e.location} \xB7 @${e.username}</div><div class="emp-at">${ac} active assignment${ac!==1?'s':''}</div></div></div>`;}).join('');}
 async function addEmp(){
   const n=document.getElementById('ne-n').value.trim();
   const u=document.getElementById('ne-u').value.trim();
