@@ -449,10 +449,12 @@ async function syncFromSupabase(){
     if(!emps || !inv) throw new Error('Empty response from Supabase');
     // Completely replace — never merge with stale localStorage
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:c.location,photo:c.photo||null}));
+    const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
     localStorage.clear();
+    if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     sv();
     console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
   } catch(e){
@@ -744,7 +746,7 @@ async function importFromReport(){
   }
 }
 
-async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;imp.forEach(c=>{if(!ex.has(c.stock)){S.inventory.push(c);added++;}});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
+async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');imp.forEach(c=>{if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}if(!ex.has(c.stock)){S.inventory.push(c);added++;}});localStorage.setItem('cf_colormap',JSON.stringify(colorMap));S.inventory.forEach(c=>{if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
 function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const color=row['color']||row['colorexterior']||row['ext color']||row['exterior color']||row['ext. color']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,color,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
 
