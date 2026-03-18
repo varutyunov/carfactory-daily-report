@@ -449,7 +449,7 @@ async function syncFromSupabase(){
     if(!emps || !inv) throw new Error('Empty response from Supabase');
     // Completely replace — never merge with stale localStorage
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',location:c.location,photo:c.photo||null}));
+    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:c.location,photo:c.photo||null}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
     localStorage.clear();
@@ -512,7 +512,8 @@ function renderGrid(){
     const badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':`<span class="tile-badge tbp">${done}/${total}</span>`;
     const urgentBadge=hasUrgent?'<span class="tile-urgent">&#x26A0; Urgent</span>':'';
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph">${carEmoji(car.name)}</div>`;
-    return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${car.stock}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} · ${colorStr}`:vinLast6;
+    return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
   }).join('');
 }
 
@@ -525,7 +526,7 @@ function openTaskView(aid){
   if(car.photo){img.src=car.photo;img.style.display='block';ph.style.display='none';}
   else{img.style.display='none';ph.style.display='flex';ph.innerHTML=carEmoji(car.name);}
   document.getElementById('th-name').textContent=car.name;
-  document.getElementById('th-stock').textContent=car.stock+' \xB7 '+car.location;
+  const _vinLast6=car.vin?car.vin.slice(-6):car.stock;const _detailSub=[_vinLast6,car.color].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
   updateProg(a);renderTaskItems(a);
   document.getElementById('photo-grid').innerHTML='';
   updateSubBtn(a);showView('emp-tasks');
@@ -601,7 +602,7 @@ function renderInv(){
     const asgn=S.assignments.find(a=>a.inventoryId===car.id&&!a.approved);
     const emp=asgn?S.employees.find(e=>e.id===asgn.employeeId):null;
     const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:`<div class="inv-thumb-ph">${carEmoji(car.name)}</div>`;
-    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock} \xB7 ${car.location}</div>${asgn?`<div class="inv-assigned-tag">\u2192 ${emp?emp.name:'Assigned'}</div>`:''}</div><button class="inv-btn ${asgn?'asgn':''}" onclick="openAssign(${car.id})">${asgn?'Reassign':'Assign'}</button></div></div>`;
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${asgn?`<div class="inv-assigned-tag">\u2192 ${emp?emp.name:'Assigned'}</div>`:''}</div><button class="inv-btn ${asgn?'asgn':''}" onclick="openAssign(${car.id})">${asgn?'Reassign':'Assign'}</button></div></div>`;
   }).join('');
 }
 
@@ -664,7 +665,7 @@ function renderReview(){
   el.innerHTML=p.map(a=>{
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
     const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:`<div class="rc-img-ph">${carEmoji(car.name)}</div>`;
-    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.stock} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note">"${t.note}"</div>`:''}</div></div>`).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
+    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note">"${t.note}"</div>`:''}</div></div>`).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
   }).join('');
 }
 async function approve(aid){
@@ -744,7 +745,7 @@ async function importFromReport(){
 }
 
 async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;imp.forEach(c=>{if(!ex.has(c.stock)){S.inventory.push(c);added++;}});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
-function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
+function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const color=row['color']||row['ext color']||row['exterior color']||row['ext. color']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,color,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
 
 // ── MODALS ─────────────────────────────────────────────────────────────────────
@@ -769,7 +770,7 @@ async function addCarManually(){
   try{
     const rows=await sbPost('inventory',{name,stock,vin,location:loc,photo:null});
     const row=rows[0];
-    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',location:row.location,photo:null});
+    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',location:row.location,photo:null});
     sv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
