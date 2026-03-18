@@ -149,7 +149,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .cpu-txt{font-size:13px;color:#444;}
 .cpu-preview{width:100%;height:140px;object-fit:cover;border-radius:8px;margin-top:10px;filter:contrast(1.12) saturate(1.2);}
 
-/* MANAGER RET��WG */
+/* MANAGER RET��WG */
 #mgr-tasks{padding:14px;}
 .rev-card{background:#0d0d0d;border:1px solid #2a2500;border-radius:14px;overflow:hidden;margin-bottom:12px;}
 .rc-head{padding:13px 14px;border-bottom:1px solid #111;display:flex;align-items:center;gap:12px;}
@@ -388,7 +388,7 @@ canvas{display:none;}
 // ── PHOTO ENHANCEMENT ──────────────────────────────────────────────────────────
 function enhancePhoto(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const c=document.getElementById('enhance-canvas');const W=800,H=500;c.width=W;c.height=H;const ctx=c.getContext('2d');const sr=img.width/img.height,tr=W/H;let sx=0,sy=0,sw=img.width,sh=img.height;if(sr>tr){sw=img.height*tr;sx=(img.width-sw)/2;}else{sh=img.width/tr;sy=(img.height-sh)*.45;}ctx.drawImage(img,sx,sy,sw,sh,0,0,W,H);const id=ctx.getImageData(0,0,W,H);const d=id.data;for(let i=0;i<d.length;i+=4){let r=d[i]*1.05,g=d[i+1]*1.05,b=d[i+2]*1.05;r=(r-128)*1.15+128;g=(g-128)*1.15+128;b=(b-128)*1.15+128;const l=.2126*r+.7152*g+.0722*b;r=l+(r-l)*1.2;g=l+(g-l)*1.2;b=l+(b-l)*1.2;d[i]=Math.max(0,Math.min(255,r));d[i+1]=Math.max(0,Math.min(255,g));d[i+2]=Math.max(0,Math.min(255,b));}ctx.putImageData(id,0,0);const v=ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.85);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.45)');ctx.fillStyle=v;ctx.fillRect(0,0,W,H);const g2=ctx.createLinearGradient(0,H*.6,0,H);g2.addColorStop(0,'rgba(0,0,0,0)');g2.addColorStop(1,'rgba(0,0,0,.65)');ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);cb(c.toDataURL('image/jpeg',.88));};img.src=ev.target.result;};r.readAsDataURL(file);}
 
-function carEmoji(n){const v=(n||'').toLowerCase();if(/truck|f-150|f150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger/.test(v))return'&#x1F6FB;';if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'&#x1F690;';if(/mustang|camaro|challenger|corvette|charger/.test(v))return'&#x1F3CE;';if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban/.test(v))return'&#x1F699;';return'&#x1F697;'~
+function carEmoji(n){const v=(n||'').toLowerCase();if(/truck|f-150|f150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger/.test(v))return'&#x1F6FB;';if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'&#x1F690;';if(/mustang|camaro|challenger|corvette|charger/.test(v))return'&#x1F3CE;';if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban/.test(v))return'&#x1F699;';return'&#x1F697;'
 ;}
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
@@ -561,7 +561,7 @@ function togTask(aid,idx){
   // Async save to Supabase (non-blocking)
   sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));
 }
-function togUrgent(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].urgent=!a.tasks[idx].urgent;sv();renderTaskItems(a);renderGrid();}
+function togUrgent(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].urgent=!a.tasks[idx].urgent;sv();renderTaskItems(a);renderGrid();sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn(e));}
 function toggleNote(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].editingNote=!a.tasks[idx].editingNote;sv();renderTaskItems(a);}
 function saveNote(aid,idx,val){
   const a=S.assignments.find(x=>x.id===aid);
@@ -707,7 +707,7 @@ async function addEmp(){
 // ── CSV SYNC ───────────────────────────────────────────────────────────────────
 
 async function importFromReport(){
-  document.getElementById('sync-st').texti.textContent = 'Fetching daily report...';
+  document.getElementById('sync-st').textContent = 'Fetching daily report...';
   try {
     const url = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/carfactory_daily_report.txt?t=' + Date.now();
     const r = await fetch(url);
@@ -716,7 +716,7 @@ async function importFromReport(){
     if(txt.includes('Initializing')) throw new Error('Report not populated yet — run daily skill first');
     // Parse late accounts from report
     const lines = txt.split('\n');
-    let added = 0;
+    const newCars = [];
     const ex = new Set(S.inventory.map(c => c.stock));
     lines.forEach(line => {
       // Match lines like: "  John Smith — 45 days — Acct CF-1234"
@@ -724,16 +724,18 @@ async function importFromReport(){
       if(m){
         const acct = m[1].trim();
         if(!ex.has(acct)){
-          // Extract name from line
           const namePart = line.trim().split('—')[0].trim();
-          S.inventory.push({id:Date.now()+Math.random(), name:'Account: '+namePart, stock:acct, vin:'', location:'DeBary', photo:null});
+          newCars.push({name:'Account: '+namePart, stock:acct, vin:'', location:'DeBary', photo:null});
           ex.add(acct);
-          added++;
         }
       }
     });
+    if(newCars.length){
+      const rows = await sbPost('inventory', newCars);
+      rows.forEach(row => S.inventory.push({id:row.id, name:row.name, stock:row.stock, vin:row.vin||'', location:row.location, photo:null}));
+    }
     S.lastSync = Date.now(); sv();
-    document.getElementById('sync-st').textContent = added > 0 ? added + ' accounts imported from report.' : 'No new accounts found in report.';
+    document.getElementById('sync-st').textContent = newCars.length > 0 ? newCars.length + ' accounts imported from report.' : 'No new accounts found in report.';
     document.getElementById('sync-tm').textContent = 'Last synced: ' + new Date(S.lastSync).toLocaleString();
     renderInv();
   } catch(e) {
@@ -741,7 +743,7 @@ async function importFromReport(){
   }
 }
 
-async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;imp.forEach(c=>{if(!ex.has(c.stock)){S.inventory.push(c);added++;}});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
+async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));const newCars=imp.filter(c=>!ex.has(c.stock));if(newCars.length){const rows=await sbPost('inventory',newCars.map(c=>({name:c.name,stock:c.stock,vin:c.vin,location:c.location,photo:null})));rows.forEach(row=>S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',location:row.location,photo:null}));}S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${newCars.length} new vehicle${newCars.length!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
 function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
 
