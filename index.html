@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>Car Factory</title>
+<link rel="manifest" href="/manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
+
+/* LOGIN */
+#login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:40px 28px;}
+.logo{font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:900;letter-spacing:4px;text-transform:uppercase;color:#fff;line-height:1;}
+.logo-sub{font-size:12px;color:#333;letter-spacing:4px;text-transform:uppercase;margin-top:6px;margin-bottom:56px;font-family:'Barlow Condensed',sans-serif;}
+.lf{width:100%;max-width:300px;}
+.lfi{width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:17px 18px;font-size:17px;margin-bottom:14px;}
+.lfi:focus{outline:none;border-color:#333;}
+.lfi::placeholder{color:#2a2a2a;}
+.lbtn{width:100%;padding:18px;background:#fff;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:4px;}
+.lbtn:active{opacity:.85;}
+.lerr{color:#ff453a;font-size:13px;margin-top:12px;text-align:center;}
+
+/* APP */
+#app{display:none;flex-direction:column;height:100vh;overflow:hidden;}
+.tb{background:#000;border-bottom:1px solid #111;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tb-title{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;}
+.tb-right{display:flex;align-items:center;gap:10px;}
+.ub{background:#111;border:1px solid #1e1e1e;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;color:#aaa;}
+.so{background:none;border:none;color:#333;font-size:20px;cursor:pointer;padding:4px;}
+
+/* MGR TABS */
+.mtabs{display:flex;background:#000;border-bottom:1px solid #111;flex-shrink:0;}
+.mt{flex:1;padding:12px 8px;background:none;border:none;color:#444;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;}
+.mt.on{color:#fff;border-bottom-color:#fff;}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.view{display:none;min-height:100%;}
+.view.on{display:block;}
+
+/* EMPLOYEE GRID */
+#emp-home{padding:14px;}
+.greeting{font-size:13px;font-weight:600;color:#555;margin-bottom:14px;}
+.car-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.car-tile{border-radius:16px;overflow:hidden;cursor:pointer;position:relative;background:#0d0d0d;border:1px solid #1e1e1e;transition:transform .15s;}
+.car-tile:active{transform:scale(.96);}
+.car-tile.st-done{border-color:#1e3a1e;}
+.car-tile.st-review{border-color:#2a2500;}
+.tile-photo-wrap{width:100%;height:145px;position:relative;overflow:hidden;background:#111;}
+.tile-photo{width:100%;height:100%;object-fit:cover;filter:contrast(1.12) saturate(1.2) brightness(1.05);}
+.tile-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#141414,#1c1c1c);font-size:54px;}
+.tile-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,transparent 35%,rgba(0,0,0,.55) 100%);}
+.tile-grad{position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
+.tile-badge{position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;z-index:2;}
+.tbd{background:rgba(48,209,88,.2);color:#30d158;border:1px solid rgba(48,209,88,.25);}
+.tbr{background:rgba(255,214,10,.2);color:#ffd60a;border:1px solid rgba(255,214,10,.25);}
+.tbp{background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);}
+.tile-urgent{position:absolute;top:9px;left:9px;background:rgba(255,69,58,.25);color:#ff453a;border:1px solid rgba(255,69,58,.3);font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;z-index:2;}
+.tile-body{padding:10px 11px 12px;}
+.tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tile-stock{font-size:11px;color:#444;}
+.tile-pb{height:2px;background:#1a1a1a;border-radius:1px;overflow:hidden;margin-top:8px;}
+.tile-pf{height:100%;border-radius:1px;transition:width .3s;}
+.pfg{background:#30d158;}
+.pfw{background:#555;}
+.tile-pct{font-size:10px;color:#444;margin-top:3px;}
+
+/* TASK VIEW */
+#emp-tasks{padding:0;}
+.task-hero{height:230px;position:relative;overflow:hidden;background:#0d0d0d;}
+.th-img{width:100%;height:100%;object-fit:cover;filter:contrast(1.12) saturate(1.2);}
+.th-vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 30%,rgba(0,0,0,.65) 100%);}
+.th-grad{position:absolute;bottom:0;left:0;right:0;height:130px;background:linear-gradient(to top,#000,transparent);}
+.th-back{position:absolute;top:16px;left:16px;background:rgba(0,0,0,.55);border:none;color:#fff;font-size:15px;border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:600;backdrop-filter:blur(10px);z-index:5;}
+.th-info{position:absolute;bottom:16px;left:16px;right:16px;z-index:5;}
+.th-name{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;text-transform:uppercase;letter-spacing:1px;line-height:1.1;}
+.th-stock{font-size:13px;color:#666;margin-top:3px;}
+.th-prog{height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-top:12px;}
+.th-pf{height:100%;background:#30d158;border-radius:2px;transition:width .4s;}
+
+.task-body{padding:14px 14px 100px;}
+.tsec{font-size:11px;font-weight:600;color:#444;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+.task-card{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;overflow:hidden;margin-bottom:10px;}
+
+.ti{display:flex;align-items:flex-start;gap:12px;padding:14px;border-bottom:1px solid #111;}
+.ti:last-child{border-bottom:none;}
+.ti-left{display:flex;align-items:center;padding-top:2px;}
+.chk{width:26px;height:26px;border:2px solid #222;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer;}
+.chk.on{background:#30d158;border-color:#30d158;}
+.chk-m{display:none;color:#000;font-size:13px;font-weight:900;}
+.chk.on .chk-m{display:block;}
+.ti-main{flex:1;min-width:0;}
+.ti-top{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+.ti-name{font-size:15px;font-weight:500;cursor:pointer;flex:1;}
+.ti-name.dn{color:#333;text-decoration:line-through;}
+.ti-urgent-flag{background:rgba(255,69,58,.15);color:#ff453a;border:1px solid rgba(255,69,58,.25);font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;}
+.ti-by{font-size:11px;color:#444;margin-bottom:4px;}
+.ti-note{font-size:13px;color:#666;font-style:italic;background:#111;border-radius:8px;padding:8px 10px;margin-top:6px;}
+.ti-note-input{width:100%;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#aaa;padding:8px 10px;font-size:13px;font-family:-apple-system,sans-serif;margin-top:6px;resize:none;}
+.ti-note-input:focus{outline:none;border-color:#333;}
+.ti-actions{display:flex;gap:8px;margin-top:8px;}
+.ti-act-btn{background:none;border:1px solid #222;border-radius:8px;color:#555;font-size:11px;padding:5px 10px;cursor:pointer;font-family:-apple-system,sans-serif;}
+.ti-act-btn.urgent-on{border-color:rgba(255,69,58,.4);color:#ff453a;background:rgba(255,69,58,.08);}
+.ti-act-btn:active{opacity:.7;}
+
+/* PHOTO SECTION */
+.photo-upload-area{width:100%;background:#0d0d0d;border:1.5px dashed #1e1e1e;border-radius:14px;padding:22px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;transition:border-color .2s;}
+.photo-upload-area:active{border-color:#333;}
+.pua-icon{font-size:32px;}
+.pua-txt{font-size:15px;color:#555;font-weight:500;}
+.pua-sub{font-size:12px;color:#2a2a2a;}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;}
+.photo-thumb{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;border:1px solid #1a1a1a;filter:contrast(1.1) saturate(1.15);}
+.submit-btn{width:100%;padding:18px;background:#30d158;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:16px;letter-spacing:.2px;}
+.submit-btn:disabled{background:#1a1a1a;color:#333;cursor:not-allowed;}
+.submit-btn:not(:disabled):active{opacity:.85;}
+.offline-badge{background:rgba(255,159,10,.15);color:#ff9f0a;border:1px solid rgba(255,159,10,.25);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;margin-bottom:14px;text-align:center;}
+
+/* MANAGER INVENTORY */
+#mgr-inventory{padding:14px;}
+.sync-box{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;margin-bottom:14px;}
+.sync-lbl{font-size:11px;font-weight:600;color:#444;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
+.sync-st{font-size:14px;color:#666;margin-bottom:10px;}
+.sync-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.sync-btn{padding:11px;border-radius:10px;border:1px solid #1e1e1e;background:none;color:#888;font-size:13px;font-weight:600;cursor:pointer;}
+.sync-tm{font-size:11px;color:#333;margin-top:8px;}
+.inv-search{width:100%;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#fff;padding:13px 16px;font-size:15px;margin-bottom:12px;}
+.inv-search:focus{outline:none;border-color:#333;}
+.inv-search::placeholder{color:#2a2a2a;}
+.inv-card{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:10px;overflow:hidden;}
+.inv-card-top{display:flex;align-items:center;gap:12px;padding:12px 14px;}
+.inv-thumb{width:80px;height:58px;border-radius:8px;object-fit:cover;background:#111;flex-shrink:0;filter:contrast(1.1) saturate(1.15);}
+.inv-thumb-ph{width:80px;height:58px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.inv-inf{flex:1;min-width:0;}
+.inv-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inv-meta{font-size:12px;color:#444;margin-top:2px;}
+.inv-assigned-tag{font-size:11px;color:#30d158;margin-top:3px;}
+.inv-btn{background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#ccc;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.inv-btn.asgn{border-color:#1e3a1e;color:#30d158;background:rgba(48,209,88,.05);}
+
+/* PHOTO UPLOAD IN ASSIGN */
+.car-photo-lbl{display:block;border:1.5px dashed #1e1e1e;border-radius:10px;padding:14px;text-align:center;cursor:pointer;margin-bottom:14px;transition:border-color .2s;}
+.car-photo-lbl:active{border-color:#333;}
+.cpu-txt{font-size:13px;color:#444;}
+.cpu-preview{width:100%;height:140px;object-fit:cover;border-radius:8px;margin-top:10px;filter:contrast(1.12) saturate(1.2);}
+
+/* MANAGER RET��WG */
+#mgr-tasks{padding:14px;}
+.rev-card{background:#0d0d0d;border:1px solid #2a2500;border-radius:14px;overflow:hidden;margin-bottom:12px;}
+.rc-head{padding:13px 14px;border-bottom:1px solid #111;display:flex;align-items:center;gap:12px;}
+.rc-img{width:62px;height:46px;object-fit:cover;border-radius:8px;background:#111;flex-shrink:0;filter:contrast(1.1) saturate(1.15);}
+.rc-img-ph{width:62px;height:46px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.rc-info{flex:1;}
+.rc-name{font-size:15px;font-weight:700;}
+.rc-meta{font-size:12px;color:#444;margin-top:2px;}
+.rc-tasks-list{padding:0;}
+.rc-task{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid #111;}
+.rc-task:last-child{border-bottom:none;}
+.rc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+.dot-on{background:#30d158;}
+.dot-off{background:#1e1e1e;}
+.rc-tn{flex:1;}
+.rc-tn-name{font-size:14px;color:#aaa;}
+.rc-tn-note{font-size:12px;color:#555;font-style:italic;margin-top:2px;}
+.rc-photos-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:10px 14px;}
+.rc-ph{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;filter:contrast(1.1) saturate(1.15);}
+.rc-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px;}
+.rc-btn{padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:none;}
+.rc-approve{background:rgba(48,209,88,.15);color:#30d158;}
+.rc-back{background:#111;color:#666;}
+
+/* MANAGER TEAM */
+#mgr-employees{padding:14px;}
+.emp-row{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+.emp-av{width:44px;height:44px;border-radius:50%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#555;flex-shrink:0;text-transform:uppercase;}
+.emp-inf{flex:1;}
+.emp-nm{font-size:16px;font-weight:600;}
+.emp-mt{font-size:12px;color:#444;margin-top:2px;}
+.emp-at{font-size:12px;color:#666;margin-top:4px;}
+
+/* MODALS */
+.mb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-end;justify-content:center;}
+.mb.on{display:flex;}
+.md{background:#0d0d0d;border:1px solid #1e1e1e;border-radius:20px 20px 0 0;padding:20px 20px 48px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
+.mh{width:36px;height:4px;background:#1e1e1e;border-radius:2px;margin:0 auto 20px;}
+.mt2{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:18px;}
+.mfi{width:100%;background:#000;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:15px 16px;font-size:16px;margin-bottom:14px;}
+.mfi:focus{outline:none;border-color:#333;}
+.msel{width:100%;background:#000;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:15px 16px;font-size:16px;margin-bottom:14px;}
+.mbtn{width:100%;padding:17px;background:#fff;color:#000;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:6px;}
+.mbtn:active{opacity:.85;}
+.mbtn.gh{background:none;border:1px solid #1e1e1e;color:#666;margin-top:10px;}
+.b2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.fl2{display:block;font-size:11px;font-weight:600;color:#444;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;color:#222;}
+.ei{font-size:52px;margin-bottom:14px;}
+.et{font-size:14px;text-align:center;line-height:1.8;}
+.add-btn{width:100%;padding:17px;background:#fff;color:#000;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;}
+input[type=file]{display:none;}
+canvas{display:none;}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="logo">Car Factory</div>
+  <div class="logo-sub">Employee Portal</div>
+  <div class="lf">
+    <input class="lfi" id="lu" placeholder="Username" autocomplete="username" />
+    <input class="lfi" id="lp" type="password" placeholder="PIN" maxlength="4" inputmode="numeric" />
+    <button class="lbtn" onclick="doLogin()">Sign In</button>
+    <div class="lerr" id="lerr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="load-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+    <div style="width:32px;height:32px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
+    <div id="load-msg" style="color:#888;font-size:14px;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:1px;">Loading...</div>
+  </div>
+  <style>@keyframes spin{{to{{transform:rotate(360deg)}}}}</style>
+  <div class="tb">
+    <div class="tb-title">Car Factory</div>
+    <div class="tb-right">
+      <div class="ub" id="ub">Employee</div>
+      <button class="so" onclick="doLogout()">&#x2715;</button>
+    </div>
+  </div>
+  <div class="mtabs" id="mtabs" style="display:none;">
+    <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
+    <button class="mt" onclick="mgrGo('tasks',this)">Review</button>
+    <button class="mt" onclick="mgrGo('employees',this)">Team</button>
+  </div>
+  <div class="content">
+
+    <div class="view on" id="emp-home">
+      <div style="padding:14px 14px 8px;"><div class="greeting" id="greeting">My Cars</div></div>
+      <div style="padding:0 14px 80px;">
+        <div id="offline-notice" style="display:none;" class="offline-badge">&#x2022; Offline mode &#x2014; changes saved locally</div>
+        <div class="car-grid" id="car-grid"></div>
+        <div class="empty" id="grid-empty" style="display:none;"><div class="ei">&#x1F697;</div><div class="et">No cars assigned yet.<br>Check back soon.</div></div>
+      </div>
+    </div>
+
+    <div class="view" id="emp-tasks">
+      <div class="task-hero" id="task-hero">
+        <img class="th-img" id="th-img" src="" style="display:none;" />
+        <div class="tile-ph" id="th-ph" style="height:230px;font-size:64px;"></div>
+        <div class="th-vig"></div><div class="th-grad"></div>
+        <button class="th-back" onclick="backToGrid()">&#x2190; Back</button>
+        <div class="th-info">
+          <div class="th-name" id="th-name">Vehicle</div>
+          <div class="th-stock" id="th-stock"></div>
+          <div class="th-prog"><div class="th-pf" id="th-pf" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="task-body">
+        <div class="tsec">Tasks</div>
+        <div class="task-card" id="task-list"></div>
+        <div style="margin-top:16px;">
+          <div class="tsec">Photos</div>
+          <label class="photo-upload-area" for="photo-inp">
+            <span class="pua-icon">&#x1F4F7;</span>
+            <span class="pua-txt">Add photos</span>
+            <span class="pua-sub">Tap to take or upload from camera roll</span>
+          </label>
+          <input type="file" id="photo-inp" accept="image/*" multiple capture="environment" onchange="handlePhotos(event)" />
+          <div class="photo-grid" id="photo-grid"></div>
+        </div>
+        <button class="submit-btn" id="sub-btn" disabled onclick="submitReview()">Submit for Review</button>
+      </div>
+    </div>
+
+    <div class="view" id="mgr-inventory">
+      <div style="padding:14px;">
+        <div class="sync-box">
+          <div class="sync-lbl">Wayne Reaves Sync</div>
+          <div class="sync-st" id="sync-st">Import from Wayne Reaves CSV or add manually below</div>
+          <div class="sync-btns">
+            <button class="sync-btn" onclick="syncNow()">&#x21BB; Sync Now</button>
+            <button class="sync-btn" onclick="openM('m-sync')">&#x2699; Configure</button>
+          </div>
+          <button class="sync-btn" style="width:100%;margin-top:8px;" onclick="importFromReport()">&#x1F4CA; Import from Daily Report</button>
+          <div class="sync-tm" id="sync-tm"></div>
+        </div>
+        <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
+        <div id="inv-list"></div>
+              <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
+      </div>
+    </div>
+
+    <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
+
+    <div class="view" id="mgr-employees">
+      <div style="padding:14px;">
+        <div id="team-list"></div>
+        <button class="add-btn" onclick="openM('m-add-emp')">+ Add Employee</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ASSIGN MODAL -->
+<div class="mb" id="m-assign">
+  <div class="md">
+    <div class="mh"></div>
+    <div class="mt2">Assign Vehicle</div>
+    <div id="assign-info" style="background:#000;border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;color:#666;"></div>
+    <label class="fl2">Car Photo</label>
+    <label class="car-photo-lbl" for="car-photo-inp" id="car-photo-lbl"><span class="cpu-txt">&#x1F4F7; Tap to photograph the car</span></label>
+    <input type="file" id="car-photo-inp" accept="image/*" capture="environment" onchange="handleCarPhoto(event)" />
+    <canvas id="enhance-canvas"></canvas>
+    <label class="fl2">Assign To</label>
+    <select class="msel" id="assign-emp"></select>
+    <label class="fl2">Tasks</label>
+    <div id="task-builder" style="margin-bottom:14px;"></div>
+    <button class="mbtn gh" style="margin-top:0;margin-bottom:14px;" onclick="addCustomTask()">+ Add Task</button>
+    <div class="b2">
+      <button class="mbtn gh" onclick="closeM('m-assign')">Cancel</button>
+      <button class="mbtn" onclick="doAssign()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD EMPLOYEE MODAL -->
+<div class="mb" id="m-add-emp">
+  <div class="md">
+    <div class="mh"></div>
+    <div class="mt2">Add Employee</div>
+    <input class="mfi" id="ne-n" placeholder="Full name" />
+    <input class="mfi" id="ne-u" placeholder="Username" />
+    <input class="mfi" id="ne-p" type="number" placeholder="PIN (4 digits)" />
+    <select class="msel" id="ne-r"><option value="employee">Employee</option><option value="manager">Manager</option></select>
+    <select class="msel" id="ne-l"><option value="DeBary">DeBary</option><option value="DeLand">DeLand</option></select>
+    <div class="b2">
+      <button class="mbtn gh" onclick="closeM('m-add-emp')">Cancel</button>
+      <button class="mbtn" onclick="addEmp()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- SYNC CONFIG MODAL -->
+<div class="mb" id="m-sync">
+  <div class="md">
+    <div class="mh"></div>
+    <div class="mt2">Configure Sync</div>
+    <label class="fl2">GitHub Raw CSV URL</label>
+    <input class="mfi" id="sync-url" placeholder="https://raw.githubusercontent.com/..." />
+    <div class="b2">
+      <button class="mbtn gh" onclick="closeM('m-sync')">Cancel</button>
+      <button class="mbtn" onclick="saveSyncUrl()">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ADD CAR MODAL -->
+<div class="mb" id="m-add-car">
+  <div class="md">
+    <div class="mh"></div>
+    <div class="mt2">Add Vehicle</div>
+    <label class="fl2">Year / Make / Model</label>
+    <input class="mfi" id="ac-name" placeholder="e.g. 2021 Toyota Camry" />
+    <label class="fl2">Stock #</label>
+    <input class="mfi" id="ac-stock" placeholder="e.g. CF-1005" />
+    <label class="fl2">VIN (optional)</label>
+    <input class="mfi" id="ac-vin" placeholder="17-character VIN" />
+    <label class="fl2">Location</label>
+    <select class="msel" id="ac-loc">
+      <option value="DeBary">DeBary</option>
+      <option value="DeLand">DeLand</option>
+    </select>
+    <div class="b2">
+      <button class="mbtn gh" onclick="closeM('m-add-car')">Cancel</button>
+      <button class="mbtn" onclick="addCarManually()">Add Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── PHOTO ENHANCEMENT ──────────────────────────────────────────────────────────
+function enhancePhoto(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const c=document.getElementById('enhance-canvas');const W=800,H=500;c.width=W;c.height=H;const ctx=c.getContext('2d');const sr=img.width/img.height,tr=W/H;let sx=0,sy=0,sw=img.width,sh=img.height;if(sr>tr){sw=img.height*tr;sx=(img.width-sw)/2;}else{sh=img.width/tr;sy=(img.height-sh)*.45;}ctx.drawImage(img,sx,sy,sw,sh,0,0,W,H);const id=ctx.getImageData(0,0,W,H);const d=id.data;for(let i=0;i<d.length;i+=4){let r=d[i]*1.05,g=d[i+1]*1.05,b=d[i+2]*1.05;r=(r-128)*1.15+128;g=(g-128)*1.15+128;b=(b-128)*1.15+128;const l=.2126*r+.7152*g+.0722*b;r=l+(r-l)*1.2;g=l+(g-l)*1.2;b=l+(b-l)*1.2;d[i]=Math.max(0,Math.min(255,r));d[i+1]=Math.max(0,Math.min(255,g));d[i+2]=Math.max(0,Math.min(255,b));}ctx.putImageData(id,0,0);const v=ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.85);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.45)');ctx.fillStyle=v;ctx.fillRect(0,0,W,H);const g2=ctx.createLinearGradient(0,H*.6,0,H);g2.addColorStop(0,'rgba(0,0,0,0)');g2.addColorStop(1,'rgba(0,0,0,.65)');ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);cb(c.toDataURL('image/jpeg',.88));};img.src=ev.target.result;};r.readAsDataURL(file);}
+
+function carEmoji(n){const v=(n||'').toLowerCase();if(/truck|f-150|f150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger/.test(v))return'&#x1F6FB;';if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'&#x1F690;';if(/mustang|camaro|challenger|corvette|charger/.test(v))return'&#x1F3CE;';if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban/.test(v))return'&#x1F699;';return'&#x1F697;'
+;}
+
+// ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
+const SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
+const SB_HEADERS = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation'};
+
+async function sbGet(table, params='') {
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params, {headers:SB_HEADERS});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(SB_URL+'/rest/v1/'+table, {method:'POST',headers:SB_HEADERS,body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, id, body) {
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'PATCH',headers:SB_HEADERS,body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, id) {
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'DELETE',headers:SB_HEADERS});
+  if(!r.ok) throw new Error(await r.text());
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+const DEFAULT_TASKS=[{name:'Exterior Wash',urgent:false},{name:'Interior Clean',urgent:false},{name:'Vacuum',urgent:false},{name:'Window Clean',urgent:false},{name:'Tire Shine',urgent:false},{name:'Inspection',urgent:true},{name:'Photo Shoot',urgent:false}];
+
+// S holds local cache - Supabase is the source of truth
+let S={employees:[],inventory:[],assignments:[]};
+let me=null,curAssign=null,curTaskId=null,uploadedPhotos=[],pendingCarPhoto=null,invFilter='',customTasksForAssign=[];
+
+// Local cache save/load (fallback + session persistence)
+function sv(){try{localStorage.setItem('cf_sb2',JSON.stringify(S));}catch(e){}}
+function ld(){/* localStorage disabled - Supabase is source of truth */}
+
+// Show loading state
+function showLoading(msg){
+  document.getElementById('load-overlay').style.display='flex';
+  document.getElementById('load-msg').textContent=msg||'Loading...';
+}
+function hideLoading(){document.getElementById('load-overlay').style.display='none';}
+
+// ── SUPABASE DATA SYNC ─────────────────────────────────────────────────────────
+async function syncFromSupabase(){
+  showLoading('Syncing data...');
+  try{
+    // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
+    const [emps, inv, asgn] = await Promise.all([
+      sbGet('employees', 'order=name&limit=500'),
+      sbGet('inventory', 'order=name&limit=500&select=*'),
+      sbGet('assignments', 'select=*&order=assigned_at.desc&limit=500')
+    ]);
+    if(!emps || !inv) throw new Error('Empty response from Supabase');
+    // Completely replace — never merge with stale localStorage
+    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
+    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',location:c.location,photo:c.photo||null}));
+    S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
+    // Wipe localStorage completely and save fresh Supabase data
+    localStorage.clear();
+    sv();
+    console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
+  } catch(e){
+    console.error('Sync failed:', e);
+    showLoading('Sync failed — retrying...');
+    setTimeout(()=>syncFromSupabase(), 2000);
+    return;
+  }
+  hideLoading();
+}
+
+// ── OFFLINE DETECTION ──────────────────────────────────────────────────────────
+window.addEventListener('online',()=>{document.getElementById('offline-notice').style.display='none';});
+window.addEventListener('offline',()=>{document.getElementById('offline-notice').style.display='block';});
+if(!navigator.onLine) document.getElementById('offline-notice').style.display='block';
+
+// ── AUTH ───────────────────────────────────────────────────────────────────────
+async function doLogin(){
+  const u=document.getElementById('lu').value.trim().toLowerCase();
+  const p=document.getElementById('lp').value.trim();
+  // First try local cache, then sync
+  showLoading('Signing in...');
+  try {
+    const emps = await sbGet('employees','select=*');
+    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
+  } catch(e) { ld(); }
+  hideLoading();
+  const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
+  if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
+  me=e;
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('ub').textContent=e.name+(e.role==='manager'?' · MGR':'');
+  await syncFromSupabase();
+  if(e.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
+  else{document.getElementById('mtabs').style.display='none';document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';showView('emp-home');renderGrid();}
+}
+function doLogout(){me=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+// ── NAV ────────────────────────────────────────────────────────────────────────
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
+function mgrGo(id,btn){document.querySelectorAll('.mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='tasks')renderReview();if(id==='employees')renderTeam();}
+
+// ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
+function renderGrid(){
+  const mine=S.assignments.filter(a=>a.employeeId===me.id&&!a.approved);
+  const grid=document.getElementById('car-grid');const empty=document.getElementById('grid-empty');
+  if(!mine.length){grid.style.display='none';empty.style.display='flex';return;}
+  grid.style.display='grid';empty.style.display='none';
+  grid.innerHTML=mine.map(a=>{
+    const car=S.inventory.find(c=>c.id===a.inventoryId);if(!car)return'';
+    const done=a.tasks.filter(t=>t.done).length;const total=a.tasks.length;
+    const pct=total?Math.round(done/total*100):0;
+    const status=a.submitted?'review':done===total?'done':'prog';
+    const hasUrgent=a.tasks.some(t=>t.urgent&&!t.done);
+    const badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':`<span class="tile-badge tbp">${done}/${total}</span>`;
+    const urgentBadge=hasUrgent?'<span class="tile-urgent">&#x26A0; Urgent</span>':'';
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph">${carEmoji(car.name)}</div>`;
+    return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${car.stock}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pgw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
+  }).join('');
+}
+
+// ── TASK VIEW ──────────────────────────────────────────────────────────────────
+function openTaskView(aid){
+  curTaskId=aid;uploadedPhotos=[];
+  const a=S.assignments.find(x=>x.id===aid);
+  const car=S.inventory.find(c=>c.id===a.inventoryId);
+  const img=document.getElementById('th-img');const ph=document.getElementById('th-ph');
+  if(car.photo){img.src=car.photo;img.style.display='block';ph.style.display='none';}
+  else{img.style.display='none';ph.style.display='flex';ph.innerHTML=carEmoji(car.name);}
+  document.getElementById('th-name').textContent=car.name;
+  document.getElementById('th-stock').textContent=car.stock+' \xB7 '+car.location;
+  updateProg(a);renderTaskItems(a);
+  document.getElementById('photo-grid').innerHTML='';
+  updateSubBtn(a);showView('emp-tasks');
+  // scroll to top
+  document.querySelector('.content').scrollTop=0;
+}
+
+function renderTaskItems(a){
+  document.getElementById('task-list').innerHTML=a.tasks.map((t,i)=>`
+    <div class="ti">
+      <div class="ti-left"><div class="chk ${t.done?'on':''}" onclick="togTask(${a.id},${i})"><span class="chk-m">&#x2713;</span></div></div>
+      <div class="ti-main">
+        <div class="ti-top">
+          <span class="ti-name ${t.done?'dn':''}" onclick="togTask(${a.id},${i})">${t.name}</span>
+          ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
+        </div>
+        ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
+        ${t.note&&!t.editingNote?`<div class="ti-note">${t.note}</div>`:''}
+        ${t.editingNote?`<textarea class="ti-note-input" rows="2" placeholder="Add a note..." onblur="saveNote(${a.id},${i},this.value)">${t.note||''}</textarea>`:''}
+        <div class="ti-actions">
+          <button class="ti-act-btn" onclick="toggleNote(${a.id},${i})">&#x1F4DD; ${t.note&&!t.editingNote?'Edit note':'Add note'}</button>
+          <button class="ti-act-btn ${t.urgent?'urgent-on':''}" onclick="togUrgent(${a.id},${i})">&#x26A0; ${t.urgent?'Urgent':'Mark urgent'}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function togTask(aid,idx){
+  const a=S.assignments.find(x=>x.id===aid);
+  if(a.submitted)return;
+  a.tasks[idx].done=!a.tasks[idx].done;
+  if(a.tasks[idx].done)a.tasks[idx].by=me.name;
+  else a.tasks[idx].by=null;
+  sv();renderTaskItems(a);updateProg(a);updateSubBtn(a);
+  // Async save to Supabase (non-blocking)
+  sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));
+}
+function togUrgent(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].urgent=!a.tasks[idx].urgent;sv();renderTaskItems(a);renderGrid();sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn(e));}
+function toggleNote(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].editingNote=!a.tasks[idx].editingNote;sv();renderTaskItems(a);}
+function saveNote(aid,idx,val){
+  const a=S.assignments.find(x=>x.id===aid);
+  a.tasks[idx].note=val.trim();a.tasks[idx].editingNote=false;
+  sv();renderTaskItems(a);
+  sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));
+}
+function updateProg(a){const done=a.tasks.filter(t=>t.done).length;const pct=a.tasks.length?Math.round(done/a.tasks.length*100):0;document.getElementById('th-pf').style.width=pct+'%';}
+function updateSubBtn(a){const btn=document.getElementById('sub-btn');const all=a.tasks.every(t=>t.done);btn.disabled=!all||a.submitted;btn.textContent=a.submitted?'Submitted for Review \u2713':'Submit for Review';}
+
+function handlePhotos(e){Array.from(e.target.files).forEach(file=>{enhancePhoto(file,url=>{uploadedPhotos.push(url);const g=document.getElementById('photo-grid');const img=document.createElement('img');img.className='photo-thumb';img.src=url;g.appendChild(img);const a=S.assignments.find(x=>x.id===curTaskId);if(a&&a.tasks.every(t=>t.done))updateSubBtn(a);});});}
+
+async function submitReview(){
+  const a=S.assignments.find(x=>x.id===curTaskId);
+  if(!a.tasks.every(t=>t.done)){alert('Complete all tasks first');return;}
+  showLoading('Submitting for review...');
+  try {
+    const now = new Date().toISOString();
+    await sbPatch('assignments',a.id,{submitted:true,photos:uploadedPhotos,submitted_at:now,tasks:a.tasks});
+    a.submitted=true;a.photos=uploadedPhotos;a.submittedAt=now;sv();
+    updateSubBtn(a);
+  } catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  setTimeout(()=>backToGrid(),400);
+}
+function backToGrid(){showView('emp-home');renderGrid();}
+
+// ── MANAGER INVENTORY ──────────────────────────────────────────────────────────
+function filterInv(v){invFilter=v.toLowerCase();renderInv();}
+function renderInv(){
+  const items=S.inventory.filter(c=>!invFilter||(c.name+c.stock).toLowerCase().includes(invFilter));
+  if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
+  if(S.syncUrl)document.getElementById('sync-st').textContent='Ready to sync';
+  document.getElementById('inv-list').innerHTML=items.map(car=>{
+    const asgn=S.assignments.find(a=>a.inventoryId===car.id&&!a.approved);
+    const emp=asgn?S.employees.find(e=>e.id===asgn.employeeId):null;
+    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:`<div class="inv-thumb-ph">${carEmoji(car.name)}</div>`;
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock} \xB7 ${car.location}</div>${asgn?`<div class="inv-assigned-tag">\u2192 ${emp?emp.name:'Assigned'}</div>`:''}</div><button class="inv-btn ${asgn?'asgn':''}" onclick="openAssign(${car.id})">${asgn?'Reassign':'Assign'}</button></div></div>`;
+  }).join('');
+}
+
+// ── ASSIGN ─────────────────────────────────────────────────────────────────────
+function openAssign(carId){
+  curAssign=carId;pendingCarPhoto=null;
+  customTasksForAssign=[...DEFAULT_TASKS.map(t=>({...t}))];
+  const car=S.inventory.find(c=>c.id===carId);
+  document.getElementById('assign-info').innerHTML=`<strong style="color:#fff;">${car.name}</strong><br><span>${car.stock} \xB7 ${car.location}</span>`;
+  document.getElementById('assign-emp').innerHTML=S.employees.filter(e=>e.role==='employee').map(e=>`<option value="${e.id}">${e.name} \xB7 ${e.location}</option>`).join('');
+  const lbl=document.getElementById('car-photo-lbl');
+  if(car.photo){lbl.innerHTML=`<img class="cpu-preview" src="${car.photo}"/><span class="cpu-txt" style="margin-top:8px;">Tap to change photo</span>`;}
+  else{lbl.innerHTML='<span class="cpu-txt">&#x1F4F7; Tap to photograph the car</span>';}
+  renderTaskBuilder();
+  openM('m-assign');
+}
+
+function renderTaskBuilder(){
+  document.getElementById('task-builder').innerHTML=customTasksForAssign.map((t,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:10px;margin-bottom:8px;border:1px solid #1a1a1a;">
+      <span style="flex:1;font-size:14px;color:#ccc;">${t.name}</span>
+      <button onclick="toggleTaskUrgentBuilder(${i})" style="background:none;border:1px solid ${t.urgent?'rgba(255,69,58,.4)':'#222'};border-radius:7px;color:${t.urgent?'#ff453a':'#444'};font-size:11px;padding:4px 9px;cursor:pointer;">&#x26A0;</button>
+      <button onclick="removeTaskBuilder(${i})" style="background:none;border:none;color:#333;font-size:16px;cursor:pointer;">&#x2715;</button>
+    </div>`).join('');
+}
+function toggleTaskUrgentBuilder(i){customTasksForAssign[i].urgent=!customTasksForAssign[i].urgent;renderTaskBuilder();}
+function removeTaskBuilder(i){customTasksForAssign.splice(i,1);renderTaskBuilder();}
+function addCustomTask(){const n=prompt('Task name:');if(n&&n.trim())customTasksForAssign.push({name:n.trim(),urgent:false});renderTaskBuilder();}
+
+function handleCarPhoto(e){const f=e.target.files[0];if(!f)return;enhancePhoto(f,url=>{pendingCarPhoto=url;const lbl=document.getElementById('car-photo-lbl');lbl.innerHTML=`<img class="cpu-preview" src="${url}"/><span class="cpu-txt" style="margin-top:8px;">Tap to retake</span>`;});}
+
+async function doAssign(){
+  const empId=parseInt(document.getElementById('assign-emp').value);
+  const tasks=customTasksForAssign.map(t=>({name:t.name,urgent:t.urgent,done:false,by:null,note:'',editingNote:false}));
+  showLoading('Assigning vehicle...');
+  try {
+    // Save photo to inventory if taken
+    if(pendingCarPhoto){
+      await sbPatch('inventory', curAssign, {photo: pendingCarPhoto});
+      S.inventory.find(c=>c.id===curAssign).photo=pendingCarPhoto;
+    }
+    // Remove existing open assignment for this car
+    const existing = S.assignments.find(a=>a.inventoryId===curAssign&&!a.approved);
+    if(existing) await sbDelete('assignments', existing.id);
+    S.assignments = S.assignments.filter(a=>!(a.inventoryId===curAssign&&!a.approved));
+    // Create new assignment
+    const rows = await sbPost('assignments', {inventory_id:curAssign, employee_id:empId, tasks, submitted:false, approved:false, photos:[]});
+    const row = rows[0];
+    S.assignments.push({id:row.id,inventoryId:row.inventory_id,employeeId:row.employee_id,tasks:row.tasks,submitted:false,approved:false,photos:[],assignedAt:row.assigned_at});
+    sv();
+  } catch(e){ alert('Error: '+e.message); }
+  hideLoading();
+  closeM('m-assign');renderInv();
+}
+
+// ── REVIEW ─────────────────────────────────────────────────────────────────────
+function renderReview(){
+  const p=S.assignments.filter(a=>a.submitted&&!a.approved);const el=document.getElementById('rev-list');
+  if(!p.length){el.innerHTML='<div class="empty"><div class="ei">&#x2705;</div><div class="et">No tasks pending review</div></div>';return;}
+  el.innerHTML=p.map(a=>{
+    const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
+    const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:`<div class="rc-img-ph">${carEmoji(car.name)}</div>`;
+    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.stock} \xB7 by ${emp?emp.name:'?'}</div></div><div class="rc-tasks-list">${a.tasks.map(t=>`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note">"${t.note}"</div>`:''}</div></div>`).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
+  }).join('');
+}
+async function approve(aid){
+  showLoading('Approving...');
+  try{await sbPatch('assignments',aid,{approved:true});const a=S.assignments.find(x=>x.id===aid);a.approved=true;sv();}
+  catch(e){alert('Error: '+e.message);}
+  hideLoading();renderReview();
+}
+async function sendBack(aid){
+  showLoading('Sending back...');
+  try{
+    const a=S.assignments.find(x=>x.id===aid);
+    a.tasks.forEach(t=>{t.done=false;t.by=null;});
+    await sbPatch('assignments',aid,{submitted:false,tasks:a.tasks});
+    a.submitted=false;sv();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();renderReview();
+}
+
+// ── TEAM ───────────────────────────────────────────────────────────────────────
+function renderTeam(){document.getElementById('team-list').innerHTML=S.employees.map(e=>{const ac=S.assignments.filter(a=>a.employeeId===e.id&&!a.approved).length;return`<div class="emp-row"><div class="emp-av">${e.name[0]}</div><div class="emp-inf"><div class="emp-nm">${e.name}</div><div class="emp-mt">${e.role} \xB7 ${e.location} \xB7 @${e.username}</div><div class="emp-at">${ac} active assignment${ac!==1?'s':''}</div></div></div>`;}).join('');}
+async function addEmp(){
+  const n=document.getElementById('ne-n').value.trim();
+  const u=document.getElementById('ne-u').value.trim();
+  const p=document.getElementById('ne-p').value.trim();
+  const r=document.getElementById('ne-r').value;
+  const l=document.getElementById('ne-l').value;
+  if(!n||!u||!p)return;
+  showLoading('Adding employee...');
+  try{
+    const rows=await sbPost('employees',{name:n,username:u,pin:p,role:r,location:l});
+    const row=rows[0];
+    S.employees.push({id:row.id,name:row.name,username:row.username,pin:row.pin,role:row.role,location:row.location});
+    sv();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  closeM('m-add-emp');
+  ['ne-n','ne-u','ne-p'].forEach(id=>document.getElementById(id).value='');
+  renderTeam();
+}
+
+// ── CSV SYNC ───────────────────────────────────────────────────────────────────
+
+async function importFromReport(){
+  document.getElementById('sync-st').textContent = 'Fetching daily report...';
+  try {
+    const url = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/carfactory_daily_report.txt?t=' + Date.now();
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if(txt.includes('Initializing')) throw new Error('Report not populated yet — run daily skill first');
+    // Parse late accounts from report
+    const lines = txt.split('\n');
+    const newCars = [];
+    const ex = new Set(S.inventory.map(c => c.stock));
+    lines.forEach(line => {
+      // Match lines like: "  John Smith — 45 days — Acct CF-1234"
+      const m = line.match(/Acct\s+([A-Z0-9-]+)/i);
+      if(m){
+        const acct = m[1].trim();
+        if(!ex.has(acct)){
+          const namePart = line.trim().split('—')[0].trim();
+          newCars.push({name:'Account: '+namePart, stock:acct, vin:'', location:'DeBary', photo:null});
+          ex.add(acct);
+        }
+      }
+    });
+    if(newCars.length){
+      const rows = await sbPost('inventory', newCars);
+      rows.forEach(row => S.inventory.push({id:row.id, name:row.name, stock:row.stock, vin:row.vin||'', location:row.location, photo:null}));
+    }
+    S.lastSync = Date.now(); sv();
+    document.getElementById('sync-st').textContent = newCars.length > 0 ? newCars.length + ' accounts imported from report.' : 'No new accounts found in report.';
+    document.getElementById('sync-tm').textContent = 'Last synced: ' + new Date(S.lastSync).toLocaleString();
+    renderInv();
+  } catch(e) {
+    document.getElementById('sync-st').textContent = 'Import failed: ' + e.message;
+  }
+}
+
+async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));const newCars=imp.filter(c=>!ex.has(c.stock));if(newCars.length){const rows=await sbPost('inventory',newCars.map(c=>({name:c.name,stock:c.stock,vin:c.vin,location:c.location,photo:null})));rows.forEach(row=>S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',location:row.location,photo:null}));}S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${newCars.length} new vehicle${newCars.length!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
+function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
+function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
+
+// ── MODALS ─────────────────────────────────────────────────────────────────────
+function openM(id){document.getElementById(id).classList.add('on');}
+function closeM(id){document.getElementById(id).classList.remove('on');}
+document.querySelectorAll('.mb').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');});});
+
+// Unregister any old service workers
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+}
+
+
+async function addCarManually(){
+  const name = document.getElementById('ac-name').value.trim();
+  const stock = document.getElementById('ac-stock').value.trim();
+  const vin = document.getElementById('ac-vin').value.trim();
+  const loc = document.getElementById('ac-loc').value;
+  if(!name || !stock){ alert('Name and Stock # required'); return; }
+  if(S.inventory.find(c => c.stock === stock)){ alert('Stock # already exists'); return; }
+  showLoading('Adding vehicle...');
+  try{
+    const rows=await sbPost('inventory',{name,stock,vin,location:loc,photo:null});
+    const row=rows[0];
+    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',location:row.location,photo:null});
+    sv();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  closeM('m-add-car');
+  ['ac-name','ac-stock','ac-vin'].forEach(id => document.getElementById(id).value = '');
+  renderInv();
+}
+
+// Wipe ALL localStorage on every load - Supabase is always the source of truth
+localStorage.clear();
+ld();
+</script>
+</body>
+</html>
