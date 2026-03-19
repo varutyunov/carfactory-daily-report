@@ -469,18 +469,33 @@ function carImage(n){
 
 // ── PEXELS STOCK PHOTOS ────────────────────────────────────────────────────────
 const PX_KEY='PriC07whW68aE2NkagFgvnxVi4NanYIDP9P4TUHQpPA2SY3rNg79tksP';
-let pxCache={};try{pxCache=JSON.parse(localStorage.getItem('px_cache')||'{}');}catch(e){}
+const PX_CACHE_VER='v2';
+let pxCache={};try{const _pc=JSON.parse(localStorage.getItem('px_cache')||'{}');pxCache=_pc._v===PX_CACHE_VER?_pc:{_v:PX_CACHE_VER};}catch(e){pxCache={_v:PX_CACHE_VER};}
 
+function _pxQuery(car,withColor){
+  // Strip leading 4-digit year from name: "2024 Ford Mustang" → "Ford Mustang"
+  const base=(car.name||'').replace(/^\d{4}\s+/,'').trim();
+  const color=withColor&&car.color?car.color:'';
+  return encodeURIComponent([base,color,'car exterior'].filter(Boolean).join(' '));
+}
 async function fetchPexels(car){
   const k=String(car.id);
   if(pxCache[k])return pxCache[k];
-  const q=encodeURIComponent([car.name,car.color].filter(Boolean).join(' '));
   try{
-    const r=await fetch(`https://api.pexels.com/v1/search?query=${q}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
+    // First try: make+model+color+exterior
+    let r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,true)}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
     if(!r.ok)return null;
-    const d=await r.json();
+    let d=await r.json();
+    // Second try: drop color if first pass had no results
+    if(!d.photos?.length){
+      r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,false)}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
+      if(!r.ok)return null;
+      d=await r.json();
+    }
     const url=d.photos?.[0]?.src?.large2x||d.photos?.[0]?.src?.large||null;
     if(url){pxCache[k]=url;try{localStorage.setItem('px_cache',JSON.stringify(pxCache));}catch(e){}}
+    // Log what query returned what for debugging
+    console.log('[Pexels]',(car.name||'?'),'=>',url?'found':'no result');
     return url;
   }catch(e){return null;}
 }
