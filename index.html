@@ -469,14 +469,20 @@ function carImage(n){
 
 // ── PEXELS STOCK PHOTOS ────────────────────────────────────────────────────────
 const PX_KEY='PriC07whW68aE2NkagFgvnxVi4NanYIDP9P4TUHQpPA2SY3rNg79tksP';
-const PX_CACHE_VER='v2';
+const PX_CACHE_VER='v3';
 let pxCache={};try{const _pc=JSON.parse(localStorage.getItem('px_cache')||'{}');pxCache=_pc._v===PX_CACHE_VER?_pc:{_v:PX_CACHE_VER};}catch(e){pxCache={_v:PX_CACHE_VER};}
 
+const _PX_MAKES={'vw':'Volkswagen','vw.':'Volkswagen','gmc':'GMC','bmw':'BMW','kia':'Kia','ram':'Ram','mini':'MINI','jeep':'Jeep','ford':'Ford','audi':'Audi','fiat':'Fiat','acura':'Acura','buick':'Buick','honda':'Honda','lexus':'Lexus','mazda':'Mazda','tesla':'Tesla','volvo':'Volvo','dodge':'Dodge','infiniti':'Infiniti','subaru':'Subaru','nissan':'Nissan','toyota':'Toyota','lincoln':'Lincoln','pontiac':'Pontiac','genesis':'Genesis','hyundai':'Hyundai','cadillac':'Cadillac','chrysler':'Chrysler','chevrolet':'Chevrolet','chevy':'Chevrolet','mercedes':'Mercedes-Benz','mercedes-benz':'Mercedes-Benz','porsche':'Porsche','maserati':'Maserati','jaguar':'Jaguar','landrover':'Land Rover','land rover':'Land Rover','mitsubishi':'Mitsubishi','alfa':'Alfa Romeo','alfa romeo':'Alfa Romeo'};
 function _pxQuery(car,withColor){
-  // Strip leading 4-digit year from name: "2024 Ford Mustang" → "Ford Mustang"
-  const base=(car.name||'').replace(/^\d{4}\s+/,'').trim();
+  // Strip leading 4-digit year: "2009 VW CC" → "VW CC"
+  let base=(car.name||'').replace(/^\d{4}\s+/,'').trim();
+  // Expand abbreviated make: "VW CC" → "Volkswagen CC"
+  const words=base.split(/\s+/);
+  const makeKey=words[0].toLowerCase();
+  if(_PX_MAKES[makeKey])words[0]=_PX_MAKES[makeKey];
+  base=words.join(' ');
   const color=withColor&&car.color?car.color:'';
-  return encodeURIComponent([base,color,'car exterior'].filter(Boolean).join(' '));
+  return encodeURIComponent([base,color,'automobile'].filter(Boolean).join(' '));
 }
 async function fetchPexels(car){
   const k=String(car.id);
