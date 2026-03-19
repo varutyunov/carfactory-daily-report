@@ -1,0 +1,21 @@
+name: Update version on deploy
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'version.json'
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update version.json
+        run: echo "{\"v\":\"$(date +%s)\"}" > version.json
+      - name: Commit version
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add version.json
+          git diff --staged --quiet || (git commit -m "chore: update version timestamp" && git push)

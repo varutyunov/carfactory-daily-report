@@ -210,11 +210,13 @@ canvas{display:none;}
 </style>
 <script>
 (function(){
-  fetch(location.pathname,{method:'HEAD',cache:'no-store'})
-    .then(function(r){
-      var ver=r.headers.get('etag')||r.headers.get('last-modified')||'';
+  if(location.search) history.replaceState(null,'',location.pathname);
+  fetch('version.json?_='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var ver=d.v||'';
       var stored=localStorage.getItem('cf-app-ver');
-      if(ver && stored && ver!==stored){localStorage.setItem('cf-app-ver',ver);location.reload(true);}
+      if(ver && stored && ver!==stored){localStorage.setItem('cf-app-ver',ver);location.replace(location.pathname+'?v='+ver);}
       else if(ver){localStorage.setItem('cf-app-ver',ver);}
     }).catch(function(){});
 })();
