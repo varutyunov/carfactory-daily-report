@@ -467,6 +467,44 @@ function carImage(n){
   return'<img src="'+CAR_SVG._sedan+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
 }
 
+// ── PEXELS STOCK PHOTOS ────────────────────────────────────────────────────────
+const PX_KEY='PriC07whW68aE2NkagFgvnxVi4NanYIDP9P4TUHQpPA2SY3rNg79tksP';
+let pxCache={};try{pxCache=JSON.parse(localStorage.getItem('px_cache')||'{}');}catch(e){}
+
+async function fetchPexels(car){
+  const k=String(car.id);
+  if(pxCache[k])return pxCache[k];
+  const q=encodeURIComponent([car.name,car.color].filter(Boolean).join(' '));
+  try{
+    const r=await fetch(`https://api.pexels.com/v1/search?query=${q}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
+    if(!r.ok)return null;
+    const d=await r.json();
+    const url=d.photos?.[0]?.src?.large2x||d.photos?.[0]?.src?.large||null;
+    if(url){pxCache[k]=url;try{localStorage.setItem('px_cache',JSON.stringify(pxCache));}catch(e){}}
+    return url;
+  }catch(e){return null;}
+}
+
+function applyPexels(cars){
+  (cars||[]).forEach(car=>{
+    if(!car||car.photo)return;
+    if(pxCache[String(car.id)]){_swapPx(car.id,pxCache[String(car.id)]);return;}
+    fetchPexels(car).then(url=>{if(url)_swapPx(car.id,url);});
+  });
+}
+
+function _swapPx(id,url){
+  // Grid tile photo-wrap
+  const ph=document.querySelector(`.tile-ph[data-px="${id}"]`);
+  if(ph&&ph.parentElement){ph.parentElement.innerHTML=`<img class="tile-photo" src="${url}"/><div class="tile-vig"></div><div class="tile-grad"></div>`;}
+  // Inventory thumb
+  const inv=document.querySelector(`.inv-thumb-ph[data-px="${id}"]`);
+  if(inv){inv.outerHTML=`<img class="inv-thumb" src="${url}"/>`;}
+  // Review card
+  const rc=document.querySelector(`.rc-img-ph[data-px="${id}"]`);
+  if(rc){rc.outerHTML=`<img class="rc-img" src="${url}"/>`;}
+}
+
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
@@ -524,11 +562,13 @@ async function syncFromSupabase(){
     // Completely replace — never merge with stale localStorage
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
     const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+    const pxSaved=localStorage.getItem('px_cache');
     S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
     localStorage.clear();
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
+    if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
     console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
   } catch(e){
@@ -587,10 +627,12 @@ function renderGrid(){
     const hasUrgent=a.tasks.some(t=>t.urgent&&!t.done);
     const badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':`<span class="tile-badge tbp">${done}/${total}</span>`;
     const urgentBadge=hasUrgent?'<span class="tile-urgent">&#x26A0; Urgent</span>':'';
-    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph">${carImage(car.name)}</div>`;
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} · ${colorStr}`:vinLast6;
     return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
   }).join('');
+  applyPexels(mine.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
 
 // ── TASK VIEW ──────────────────────────────────────────────────────────────────
@@ -600,7 +642,12 @@ function openTaskView(aid){
   const car=S.inventory.find(c=>c.id===a.inventoryId);
   const img=document.getElementById('th-img');const ph=document.getElementById('th-ph');
   if(car.photo){img.src=car.photo;img.style.display='block';ph.style.display='none';}
-  else{img.style.display='none';ph.style.display='flex';ph.innerHTML=carImage(car.name);}
+  else{
+    const cached=pxCache[String(car.id)];
+    if(cached){img.src=cached;img.style.display='block';ph.style.display='none';}
+    else{img.style.display='none';ph.style.display='flex';ph.innerHTML=carImage(car.name);
+      fetchPexels(car).then(url=>{if(url){img.src=url;img.style.display='block';ph.style.display='none';}});}
+  }
   document.getElementById('th-name').textContent=car.name;
   const _vinLast6=car.vin?car.vin.slice(-6):car.stock;const _detailSub=[_vinLast6,car.color].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
   updateProg(a);renderTaskItems(a);
@@ -677,9 +724,11 @@ function renderInv(){
   document.getElementById('inv-list').innerHTML=items.map(car=>{
     const asgn=S.assignments.find(a=>a.inventoryId===car.id&&!a.approved);
     const emp=asgn?S.employees.find(e=>e.id===asgn.employeeId):null;
-    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:`<div class="inv-thumb-ph">${carImage(car.name)}</div>`;
+    const pxI=!car.photo&&pxCache[String(car.id)];
+    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${asgn?`<div class="inv-assigned-tag">\u2192 ${emp?emp.name:'Assigned'}</div>`:''}</div><button class="inv-btn ${asgn?'asgn':''}" onclick="openAssign(${car.id})">${asgn?'Reassign':'Assign'}</button></div></div>`;
   }).join('');
+  applyPexels(items);
 }
 
 // ── ASSIGN ─────────────────────────────────────────────────────────────────────
@@ -740,9 +789,11 @@ function renderReview(){
   if(!p.length){el.innerHTML='<div class="empty"><div class="ei">&#x2705;</div><div class="et">No tasks pending review</div></div>';return;}
   el.innerHTML=p.map(a=>{
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
-    const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:`<div class="rc-img-ph">${carImage(car.name)}</div>`;
+    const pxR=!car.photo&&pxCache[String(car.id)];
+    const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxR?`<img class="rc-img" src="${pxR}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note">"${t.note}"</div>`:''}</div></div>`).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
   }).join('');
+  applyPexels(p.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
 async function approve(aid){
   showLoading('Approving...');
