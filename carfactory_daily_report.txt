@@ -1,296 +1,291 @@
-CAR FACTORY — LATE ACCOUNTS SNAPSHOT
-Last updated: 03/19/2026 at 2:58:10 PM
-(Payments history is in carfactory_payments_history.txt)
+========================================
+CAR FACTORY DAILY LATE ACCOUNT REPORT
+Date: 03/19/2026
+Generated: 3/20/2026, 3:16:48 PM
+========================================
 
-════════════════════════════════
-LATE ACCOUNTS — DEBARY
-════════════════════════════════
-150+ days (94 accounts):
-  KREMER, AUSTIN — 1105 days — Acct 2583
-  TRAYLOR, ROBYN — 679 days — Acct 2942
-  SALGADO, MICHAEL — 660 days — Acct 3259
-  TAYLOR, TYLOR — 620 days — Acct 3358RFI
-  CLAYTON, OCTAVIUS — 588 days — Acct 3396
-  CHANTHAVONGSA, KHONSAVANH — 549 days — Acct 3415
-  THOMAS, CORIE — 512 days — Acct 3383
-  TORRES MALDONADO, JESSICA — 510 days — Acct 3565
-  HARRIS, ANTOINE — 503 days — Acct 3625
-  PIEDRA, EDGAR — 486 days — Acct 3640
-  NAVARRETE, CECILIA — 453 days — Acct 3681
-  GARCIA TAZAMA, SANTIAGO — 431 days — Acct 3452
-  STRUNK, JORDAN — 429 days — Acct 3769
-  RAMIREZ FLORES, CHRISTIAN — 420 days — Acct 3750
-  WILLIAMS, DARRELL — 406 days — Acct 3719
-  NUGENT, SEAN — 399 days — Acct 3715
-  SOTO GONZALEZ, JOSE — 385 days — Acct 3710
-  TURNER, BO — 372 days — Acct 3902
-  PIEDRA, EDGAR — 364 days — Acct 3826
-  BRAMLET, DEVONDRE — 361 days — Acct 3889
-  BROWN, ROBIN — 361 days — Acct 3908
-  ORTIZ, NAYOME — 356 days — Acct 3907
-  BILGER, BRANDON — 349 days — Acct 3723
-  COOKE, ASHTON — 347 days — Acct 3600
-  NEWTON, ERICA — 344 days — Acct 3748
-  STONE, JAMIE — 344 days — Acct 3812
-  POLCHIES, ERIC — 339 days — Acct 3949
-  EGBERT, JESSICA — 336 days — Acct 3881
-  ORTIZ, NAYOME — 336 days — Acct 3922
-  BILGER, BRANDON — 334 days — Acct 3964
-  MARTINEZ, MILTON — 333 days — Acct 3911
-  CRUZ, JESSICA — 331 days — Acct 3720RFI
-  TOLBERT, NICHOLE — 329 days — Acct 3898
-  YOUNG, LEE — 321 days — Acct 3910
-  ESTEVEZ, ARACELY — 313 days — Acct 3859
-  REYES, GILBERT — 310 days — Acct 4015
-  WILSON, TA'NEKA — 305 days — Acct 3892
-  BRIGHT, IESHA — 304 days — Acct 3878RFI
-  SHEPARD, CHRISTINA — 303 days — Acct 3957
-  WHITTAKER, TAKIYA — 302 days — Acct 3820
-  SANCHEZ, SHATIEK — 301 days — Acct 3959
-  JONES, GRADY — 297 days — Acct 3851
-  PINNOCK, GLENNIE — 296 days — Acct 3692
-  SHAFFER, WILLIAM — 293 days — Acct 3988
-  MARMOL, MARK — 281 days — Acct 3818
-  DATIZ MILLAN, LEE — 279 days — Acct 4035
-  MCHUGH, CHRISTOPHER — 277 days — Acct 3703
-  FUSS, JOSHUA — 266 days — Acct 3800
-  SAILOR, TATIYANA — 265 days — Acct 4071
-  ACEVEDO DOWNS, JUAN — 259 days — Acct 4055
-  FLETCHER, XETH — 258 days — Acct 4025
-  ERAZO, LUIS — 257 days — Acct 4012
-  SHAW, REGINALD — 253 days — Acct 3745
-  HUDSON, ADAM — 251 days — Acct 4001
-  DIEDRICH, BARBARA — 248 days — Acct 3980
-  MORIARTY, CYNTHIA — 242 days — Acct 3858
-  HALL, SHERMAIN — 240 days — Acct 3915
-  SOTO DE JESUS, AMANDA — 234 days — Acct 3918
-  LUCIANO, ANGIE — 231 days — Acct 3821RFI
-  CHALMERS, RICHARD — 230 days — Acct 4104
-  HILLERY, RICHARD — 230 days — Acct 4103
-  ROSS, DAVID — 226 days — Acct 3944
-  WINNINGHAM, CALVIN — 226 days — Acct 3773
-  RODRIGUEZ, KARENTH — 224 days — Acct 4089
-  SMITH, NICOLE — 224 days — Acct 3997
-  NIEVES, YAZMIN — 221 days — Acct 3848
-  CRUZ ISAAC, MARLIUBYS — 219 days — Acct 4040
-  VILORIA MARTURET, DIEGO — 217 days — Acct 4133
-  SIERRA SANCHEZ, PEDRO — 210 days — Acct 4003
-  BORDONADA, RICHARD — 208 days — Acct 4115
-  HUMPHREYS, DAVID — 204 days — Acct 4101
-  CARROLL, JONATHAN — 203 days — Acct 4145
-  CREW-VENTURA, ASHLEI — 202 days — Acct 3991
-  NIEVES, ANGELINA — 198 days — Acct 3838
-  AUGUSTIN, YADMY — 198 days — Acct 3975
-  SMITH, EARL — 196 days — Acct 4175
-  MEJIA, NIGEL — 190 days — Acct 4016
-  FRANCISCO, ROBERT — 188 days — Acct 4107
-  NUNNALLY, TYRESE — 185 days — Acct 4154
-  NEWTON, DAELIN — 183 days — Acct 3983
-  DOBELL, ERNEST — 182 days — Acct 4173
-  MELVIN, ROBERT — 181 days — Acct 3923
-  HARPER, RICKEY — 177 days — Acct 4060
-  RIVERA, MARGARITA — 171 days — Acct 3311
-  TODD, AUSTIN — 169 days — Acct 4067
-  SMITH, NICOLE — 166 days — Acct 4139
-  GUADALUPE LOPEZ, JOSE — 163 days — Acct 4185
-  WRIGHT, JASON — 161 days — Acct 4147
-  STEER, DESLEY — 158 days — Acct 4105
-  GUERRERO, RAMONA — 157 days — Acct 3954
-  EMERY, ETHAN — 155 days — Acct 4171
-  BATISTA, AMALIA — 153 days — Acct 4136
-  MCDONALD, JADA — 153 days — Acct 3914RFI
-  MARSHALL, JAMES — 151 days — Acct 4002
+--- DEBARY ---
+Total Late: 181
+150+ days (94):
+  KREMER, AUSTIN (#2583) — 1105 days late
+  TRAYLOR, ROBYN (#2942) — 679 days late
+  SALGADO, MICHAEL (#3259) — 660 days late
+  TAYLOR, TYLOR (#3358RFI) — 620 days late
+  CLAYTON, OCTAVIUS (#3396) — 588 days late
+  CHANTHAVONGSA, KHONSAVANH (#3415) — 549 days late
+  THOMAS, CORIE (#3383) — 512 days late
+  TORRES MALDONADO, JESSICA (#3565) — 510 days late
+  HARRIS, ANTOINE (#3625) — 503 days late
+  PIEDRA, EDGAR (#3640) — 486 days late
+  NAVARRETE, CECILIA (#3681) — 453 days late
+  GARCIA TAZAMA, SANTIAGO (#3452) — 431 days late
+  STRUNK, JORDAN (#3769) — 429 days late
+  RAMIREZ FLORES, CHRISTIAN (#3750) — 420 days late
+  WILLIAMS, DARRELL (#3719) — 406 days late
+  NUGENT, SEAN (#3715) — 399 days late
+  SOTO GONZALEZ, JOSE (#3710) — 385 days late
+  TURNER, BO (#3902) — 372 days late
+  PIEDRA, EDGAR (#3826) — 364 days late
+  BRAMLET, DEVONDRE (#3889) — 361 days late
+  BROWN, ROBIN (#3908) — 361 days late
+  ORTIZ, NAYOME (#3907) — 356 days late
+  BILGER, BRANDON (#3723) — 349 days late
+  COOKE, ASHTON (#3600) — 347 days late
+  NEWTON, ERICA (#3748) — 344 days late
+  STONE, JAMIE (#3812) — 344 days late
+  POLCHIES, ERIC (#3949) — 339 days late
+  EGBERT, JESSICA (#3881) — 336 days late
+  ORTIZ, NAYOME (#3922) — 336 days late
+  BILGER, BRANDON (#3964) — 334 days late
+  MARTINEZ, MILTON (#3911) — 333 days late
+  CRUZ, JESSICA (#3720RFI) — 331 days late
+  TOLBERT, NICHOLE (#3898) — 329 days late
+  YOUNG, LEE (#3910) — 321 days late
+  ESTEVEZ, ARACELY (#3859) — 313 days late
+  REYES, GILBERT (#4015) — 310 days late
+  WILSON, TA'NEKA (#3892) — 305 days late
+  BRIGHT, IESHA (#3878RFI) — 304 days late
+  SHEPARD, CHRISTINA (#3957) — 303 days late
+  WHITTAKER, TAKIYA (#3820) — 302 days late
+  SANCHEZ, SHATIEK (#3959) — 301 days late
+  JONES, GRADY (#3851) — 297 days late
+  PINNOCK, GLENNIE (#3692) — 296 days late
+  SHAFFER, WILLIAM (#3988) — 293 days late
+  MARMOL, MARK (#3818) — 281 days late
+  DATIZ MILLAN, LEE (#4035) — 279 days late
+  MCHUGH, CHRISTOPHER (#3703) — 277 days late
+  FUSS, JOSHUA (#3800) — 266 days late
+  SAILOR, TATIYANA (#4071) — 265 days late
+  ACEVEDO DOWNS, JUAN (#4055) — 259 days late
+  FLETCHER, XETH (#4025) — 258 days late
+  ERAZO, LUIS (#4012) — 257 days late
+  SHAW, REGINALD (#3745) — 253 days late
+  HUDSON, ADAM (#4001) — 251 days late
+  DIEDRICH, BARBARA (#3980) — 248 days late
+  MORIARTY, CYNTHIA (#3858) — 242 days late
+  HALL, SHERMAIN (#3915) — 240 days late
+  SOTO DE JESUS, AMANDA (#3918) — 234 days late
+  LUCIANO, ANGIE (#3821RFI) — 231 days late
+  CHALMERS, RICHARD (#4104) — 230 days late
+  HILLERY, RICHARD (#4103) — 230 days late
+  ROSS, DAVID (#3944) — 226 days late
+  WINNINGHAM, CALVIN (#3773) — 226 days late
+  RODRIGUEZ, KARENTH (#4089) — 224 days late
+  SMITH, NICOLE (#3997) — 224 days late
+  NIEVES, YAZMIN (#3848) — 221 days late
+  CRUZ ISAAC, MARLIUBYS (#4040) — 219 days late
+  VILORIA MARTURET, DIEGO (#4133) — 217 days late
+  SIERRA SANCHEZ, PEDRO (#4003) — 210 days late
+  BORDONADA, RICHARD (#4115) — 208 days late
+  HUMPHREYS, DAVID (#4101) — 204 days late
+  CARROLL, JONATHAN (#4145) — 203 days late
+  CREW-VENTURA, ASHLEI (#3991) — 202 days late
+  NIEVES, ANGELINA (#3838) — 198 days late
+  AUGUSTIN, YADMY (#3975) — 198 days late
+  SMITH, EARL (#4175) — 196 days late
+  MEJIA, NIGEL (#4016) — 190 days late
+  FRANCISCO, ROBERT (#4107) — 188 days late
+  NUNNALLY, TYRESE (#4154) — 185 days late
+  NEWTON, DAELIN (#3983) — 183 days late
+  DOBELL, ERNEST (#4173) — 182 days late
+  MELVIN, ROBERT (#3923) — 181 days late
+  HARPER, RICKEY (#4060) — 177 days late
+  RIVERA, MARGARITA (#3311) — 171 days late
+  TODD, AUSTIN (#4067) — 169 days late
+  SMITH, NICOLE (#4139) — 166 days late
+  GUADALUPE LOPEZ, JOSE (#4185) — 163 days late
+  WRIGHT, JASON (#4147) — 161 days late
+  STEER, DESLEY (#4105) — 158 days late
+  GUERRERO, RAMONA (#3954) — 157 days late
+  EMERY, ETHAN (#4171) — 155 days late
+  BATISTA, AMALIA (#4136) — 153 days late
+  MCDONALD, JADA (#3914RFI) — 153 days late
+  MARSHALL, JAMES (#4002) — 151 days late
+90-150 days (25):
+  HARDY, JUSTIN (#3943) — 149 days late
+  SAVOY, TONYETTE (#4229) — 149 days late
+  PIEDRA, EDGAR (#4246) — 148 days late
+  REYES, FELIPE (#4044) — 148 days late
+  MUNET CORTES, KRESHALIZ (#3960RFI) — 147 days late
+  HERCEG, WILLIAM (#4191) — 146 days late
+  HOWARD, JAMES (#4088) — 144 days late
+  COLEMAN, CHARLES (#4196) — 136 days late
+  ESCALANTE LOPEZ, ALFONSO (#4053) — 130 days late
+  DANZIG, BOBBIE (#4159) — 127 days late
+  HOLLIS, OCTAVIA (#4023) — 126 days late
+  MEJIA, CHRISTINA (#4223) — 126 days late
+  NOOKS, SHADAE (#3886) — 125 days late
+  OTERO SERRANO, ALEX (#3998) — 125 days late
+  WRIGHT, LILAL (#4122) — 119 days late
+  WALTERS, JEFFREY (#4253) — 119 days late
+  DAVIS, DOUGLAS (#4094) — 112 days late
+  SANCHEZ, FIDEL (#3962) — 111 days late
+  SANCHEZ, MARTIN (#4316) — 111 days late
+  KNOOP, TAYLOR (#4311) — 106 days late
+  HARRIS, KATIE (#4261) — 105 days late
+  WOODS JACKSON, JIMMIE (#4127) — 105 days late
+  SANTIAGO QUINONES, ROGELIO (#4263) — 104 days late
+  ORIHUELA, ISABELLA (#4304) — 95 days late
+  BURGOS RIVERA, ZULEIKA (#4286) — 93 days late
+30-90 days (29):
+  SULLIVAN, NATHAN (#4220) — 85 days late
+  DOUGLAS, KENDRICK (#4323) — 84 days late
+  TALL, JONATHAN (#4215) — 83 days late
+  RODRIGUEZ SANTANA, BRYAN (#4232) — 78 days late
+  DE LEON HERNANDEZ, ANGEL (#4335) — 76 days late
+  OSBORNE, JUSTIN (#4240) — 70 days late
+  JENKINS, TIFFANY (#4282) — 67 days late
+  RAMIREZ, VICTORIA (#4309) — 66 days late
+  MC KNIGHT, JACKIE (#4364) — 64 days late
+  MITCHELL, ANTONIO (#4135) — 63 days late
+  COLON, ABIGAIL (#4174) — 63 days late
+  RODRIGUEZ, AMANI (#4153) — 61 days late
+  VELAZQUEZ, ANGELA (#4131) — 61 days late
+  BAUZA ORTIZ, ROBERTO (#4321) — 56 days late
+  CARMONA RIVERA, ANGEL (#4093) — 56 days late
+  DANIELS, KYLE (#4342) — 55 days late
+  BUSSIERE, SHERRY (#4283) — 50 days late
+  WEITZEL, CASSIDY (#4248) — 50 days late
+  DATIZ MILLAN, LEE (#4400) — 48 days late
+  BING, ALVOYE (#4295) — 45 days late
+  MIZIN, JONATHAN (#4268) — 42 days late
+  SANDS BENEFIELD, CLARA (#4387) — 41 days late
+  ALFONSO VALCARCEL, ALBERTO (#4395) — 36 days late
+  ANDERSON, MALIK (#4340) — 35 days late
+  SAWYER, CARLY (#4408) — 35 days late
+  TYRELL, JARAN (#4257) — 34 days late
+  COX, ANGEL (#4168) — 32 days late
+  BARBER, TAVORIS (#4120) — 30 days late
+  WHITTED, TATUM (#4156) — 30 days late
+0-30 days (33):
+  CARTER SANTANA, DYLON (#4380) — 29 days late
+  SMITH, DEION (#4345) — 26 days late
+  ROBINSON, SABRINA (#4172) — 22 days late
+  JACKSON, KARIAN (#4236) — 18 days late
+  LOGAN, SCOTT (#4334) — 18 days late
+  GONZALEZ, PAOLA (#4244) — 17 days late
+  LIGGINS, TYRONE (#4467) — 17 days late
+  MARTIRE, MICHEL (#4453) — 15 days late
+  SEPULVEDA FERRER, JONATHAN (#4190) — 14 days late
+  DIAZ ORALES, CARLOS (#4328) — 12 days late
+  CHU, OMAR (#4469) — 10 days late
+  GARRAWAY, BERT (#4265) — 10 days late
+  PAGAN RODRIGUEZ, RICARDO (#4494) — 10 days late
+  BERRIEN, ARIAL (#4312) — 8 days late
+  CRESPO, GIANCARLOS (#4394) — 8 days late
+  LEON, CASSANDRA (#4331) — 8 days late
+  LOPEZ, ADRIANNA (#4313) — 8 days late
+  DESIR, GEYYFER (#4397) — 7 days late
+  FOXWORTH DAUGHERTY, QUILEI (#4197) — 7 days late
+  MCTIZIC, WILLIAM (#4447) — 7 days late
+  JOYCE, STEVEN (#4486) — 6 days late
+  LEGISTER, DANIEL (#4293) — 6 days late
+  RIOS, JUANKIE (#4047) — 6 days late
+  COOPER, TAVARIOUS (#4318) — 4 days late
+  GARCIA, MARTA (#4347) — 4 days late
+  MEYERS, BRIAN (#4193) — 4 days late
+  OLMSTEAD, CHRISTOPHER (#4217) — 4 days late
+  DAVIS, ZACHARIAH (#4376) — 3 days late
+  DUBON ERAZO, XENIA (#4218) — 3 days late
+  SIERRA SANCHEZ, PEDRO (#4391) — 3 days late
+  ALICEA VIRELLA, IANLUIS (#4449) — 1 days late
+  NEWBY, BRIANA (#4351) — 1 days late
+  ROLON, ELENA (#4259) — 1 days late
 
-90-150 days (25 accounts):
-  HARDY, JUSTIN — 149 days — Acct 3943
-  SAVOY, TONYETTE — 149 days — Acct 4229
-  PIEDRA, EDGAR — 148 days — Acct 4246
-  REYES, FELIPE — 148 days — Acct 4044
-  MUNET CORTES, KRESHALIZ — 147 days — Acct 3960RFI
-  HERCEG, WILLIAM — 146 days — Acct 4191
-  HOWARD, JAMES — 144 days — Acct 4088
-  COLEMAN, CHARLES — 136 days — Acct 4196
-  ESCALANTE LOPEZ, ALFONSO — 130 days — Acct 4053
-  DANZIG, BOBBIE — 127 days — Acct 4159
-  HOLLIS, OCTAVIA — 126 days — Acct 4023
-  MEJIA, CHRISTINA — 126 days — Acct 4223
-  NOOKS, SHADAE — 125 days — Acct 3886
-  OTERO SERRANO, ALEX — 125 days — Acct 3998
-  WRIGHT, LILAL — 119 days — Acct 4122
-  WALTERS, JEFFREY — 119 days — Acct 4253
-  DAVIS, DOUGLAS — 112 days — Acct 4094
-  SANCHEZ, FIDEL — 111 days — Acct 3962
-  SANCHEZ, MARTIN — 111 days — Acct 4316
-  KNOOP, TAYLOR — 106 days — Acct 4311
-  HARRIS, KATIE — 105 days — Acct 4261
-  WOODS JACKSON, JIMMIE — 105 days — Acct 4127
-  SANTIAGO QUINONES, ROGELIO — 104 days — Acct 4263
-  ORIHUELA, ISABELLA — 95 days — Acct 4304
-  BURGOS RIVERA, ZULEIKA — 93 days — Acct 4286
+--- DELAND ---
+Total Late: 84
+150+ days (50):
+  RODRIGUEZ, ROMIS (#3225) — 581 days late
+  SMERESKY, THOMAS (#3477RFI) — 572 days late
+  GOMEZ PARADA, BENJAMIN (#3289) — 539 days late
+  HARRELL, JAMSHMEA (#3298) — 539 days late
+  VAZQUEZ, MIRIAM (#3355) — 539 days late
+  ROBLES, ALEXANDER (#3342) — 519 days late
+  WERNER, STEVE (#3435) — 517 days late
+  NEMBHARD, KAMARSH (#3448) — 490 days late
+  JENNINGS, JOSEPH (#3662) — 489 days late
+  STONE, INGEBORG (#3642) — 479 days late
+  FIGUEROA, ASHLEY (#3646) — 477 days late
+  MELENDEZ VAZQUEZ, ELADIO (#3339) — 472 days late
+  THOMAS, OCTAVIA (#3660) — 468 days late
+  SKINNER, CHARLES (#3234) — 447 days late
+  ONEAL, MARY (#3560) — 441 days late
+  AVILES, JANET (#3569) — 433 days late
+  TAYLOR, OLLIE (#3249) — 382 days late
+  BASS, HEATHER (#3857) — 372 days late
+  BARNES, ERIC (#3645) — 371 days late
+  CHIAPPETTA, FELISA (#3947) — 349 days late
+  SMITH, CODY (#3919) — 349 days late
+  NOSAVANH, KATIE ANN (#3903) — 329 days late
+  MEDLEY, HUNTAVIAN (#3869) — 321 days late
+  LINDSEY, BARRON (#3473) — 319 days late
+  WHITAKER, ARONIA (#3900) — 315 days late
+  YATES, ANGELA (#3530) — 315 days late
+  HERNANDEZ ORTIZ, EILEEN (#3666) — 314 days late
+  CARTER SANTANA, DYLON (#3924) — 314 days late
+  KING, CANDACE (#3822RFI) — 303 days late
+  VALDES, DENISHA (#3810) — 303 days late
+  FIELDS, SAMUEL (#3852) — 296 days late
+  KNIGHT, JEFFREY (#3746) — 294 days late
+  CAMPBELL, VICTOR (#4005) — 286 days late
+  MATTHEWS, MICHAEL (#4022) — 285 days late
+  HAYNES, LINDSEY (#4028) — 281 days late
+  WILLIAMS, CHARLES (#3920) — 280 days late
+  GONZALEZ, GABRIEL (#3776) — 262 days late
+  PIERCE, ERIN (#4014) — 259 days late
+  PEARCE, VARNEY (#3854) — 258 days late
+  DUNAGAN, TYLER (#3704) — 234 days late
+  KENNEDY, DUSTIN (#3930) — 216 days late
+  WILLIAMS, CLARENCE (#3874) — 213 days late
+  TURNER, SHIANNA (#4182) — 192 days late
+  GREEN, STEPHANIE (#3986) — 189 days late
+  PIETRZAK, PAUL (#4129) — 182 days late
+  MORAN, FLOR (#4077) — 178 days late
+  STRIDACCHIO, MICHAEL (#4041) — 169 days late
+  CANN, KIMBERLY (#4018) — 168 days late
+  LILLY, KATRINA (#4189) — 153 days late
+  MARQUEZ GONZALEZ, JOSE (#3936) — 153 days late
+90-150 days (8):
+  FRANKLIN, OLLIE (#3844) — 139 days late
+  CHANTHAVONGSA, KHONSAVANH (#4251) — 139 days late
+  GREEN, MIKEL (#4247) — 132 days late
+  BIBARAO RODRIGUEZ, ANGEL (#4106) — 119 days late
+  MANCHESTER, PHILLIP (#4207) — 119 days late
+  LANE, KERBY (#4140) — 119 days late
+  MARTORI, SANTOS (#4235) — 94 days late
+  VEGA JIMENEZ, GIOVANNI (#4243) — 93 days late
+30-90 days (12):
+  GARNETT, TYRON (#4199) — 83 days late
+  PROSOCK, JESSICA (#4114) — 83 days late
+  LETT, ANNE-MARIE (#4149) — 76 days late
+  MULONAS, LANCE (#4146) — 76 days late
+  SPRUILL, DARIEN (#4325) — 66 days late
+  WEAVER, AMANDA (#4254) — 62 days late
+  DEXTER, DAVID (#4151) — 48 days late
+  JACKSON, MAKI (#4339) — 42 days late
+  BLAISE, DOVENSKY (#4378) — 35 days late
+  MITCHELL, TRISTAN (#4256) — 34 days late
+  SINCLAIR, BRITTANY (#4343) — 34 days late
+  PEREZ MARTINEZ, LUIS (#4428) — 31 days late
+0-30 days (14):
+  LUGO MORALES, TIARA (#4367) — 25 days late
+  MARINO, AMBER (#4416) — 21 days late
+  WRIGHT, PAIGE (#4405) — 21 days late
+  DUNAGAN, TYLER (#4353) — 16 days late
+  CHAMBERS, JEDEDIAH (#4337) — 14 days late
+  CLAY JACKSON, GABRIELLE (#4222) — 13 days late
+  CARR, MICHAEL (#4491) — 10 days late
+  GRAHAM, RANDY (#4435) — 10 days late
+  MYERS, ASHLEY (#4203) — 9 days late
+  WOOD, CHASE (#4476) — 8 days late
+  BRICENO ROSALES, DANYERLYS (#4430) — 7 days late
+  STAFFORD, CHANDA (#4480) — 7 days late
+  WILLIAMS, RAVON (#3927) — 7 days late
+  KING, DEANNA (#4204) — 4 days late
 
-30-90 days (29 accounts):
-  SULLIVAN, NATHAN — 85 days — Acct 4220
-  DOUGLAS, KENDRICK — 84 days — Acct 4323
-  TALL, JONATHAN — 83 days — Acct 4215
-  RODRIGUEZ SANTANA, BRYAN — 78 days — Acct 4232
-  DE LEON HERNANDEZ, ANGEL — 76 days — Acct 4335
-  OSBORNE, JUSTIN — 70 days — Acct 4240
-  JENKINS, TIFFANY — 67 days — Acct 4282
-  RAMIREZ, VICTORIA — 66 days — Acct 4309
-  MC KNIGHT, JACKIE — 64 days — Acct 4364
-  MITCHELL, ANTONIO — 63 days — Acct 4135
-  COLON, ABIGAIL — 63 days — Acct 4174
-  RODRIGUEZ, AMANI — 61 days — Acct 4153
-  VELAZQUEZ, ANGELA — 61 days — Acct 4131
-  BAUZA ORTIZ, ROBERTO — 56 days — Acct 4321
-  CARMONA RIVERA, ANGEL — 56 days — Acct 4093
-  DANIELS, KYLE — 55 days — Acct 4342
-  BUSSIERE, SHERRY — 50 days — Acct 4283
-  WEITZEL, CASSIDY — 50 days — Acct 4248
-  DATIZ MILLAN, LEE — 48 days — Acct 4400
-  BING, ALVOYE — 45 days — Acct 4295
-  MIZIN, JONATHAN — 42 days — Acct 4268
-  SANDS BENEFIELD, CLARA — 41 days — Acct 4387
-  ALFONSO VALCARCEL, ALBERTO — 36 days — Acct 4395
-  ANDERSON, MALIK — 35 days — Acct 4340
-  SAWYER, CARLY — 35 days — Acct 4408
-  TYRELL, JARAN — 34 days — Acct 4257
-  COX, ANGEL — 32 days — Acct 4168
-  BARBER, TAVORIS — 30 days — Acct 4120
-  WHITTED, TATUM — 30 days — Acct 4156
-
-0-30 days (33 accounts):
-  CARTER SANTANA, DYLON — 29 days — Acct 4380
-  SMITH, DEION — 26 days — Acct 4345
-  ROBINSON, SABRINA — 22 days — Acct 4172
-  JACKSON, KARIAN — 18 days — Acct 4236
-  LOGAN, SCOTT — 18 days — Acct 4334
-  GONZALEZ, PAOLA — 17 days — Acct 4244
-  LIGGINS, TYRONE — 17 days — Acct 4467
-  MARTIRE, MICHEL — 15 days — Acct 4453
-  SEPULVEDA FERRER, JONATHAN — 14 days — Acct 4190
-  DIAZ ORALES, CARLOS — 12 days — Acct 4328
-  CHU, OMAR — 10 days — Acct 4469
-  GARRAWAY, BERT — 10 days — Acct 4265
-  PAGAN RODRIGUEZ, RICARDO — 10 days — Acct 4494
-  BERRIEN, ARIAL — 8 days — Acct 4312
-  CRESPO, GIANCARLOS — 8 days — Acct 4394
-  LEON, CASSANDRA — 8 days — Acct 4331
-  LOPEZ, ADRIANNA — 8 days — Acct 4313
-  DESIR, GEYYFER — 7 days — Acct 4397
-  FOXWORTH DAUGHERTY, QUILEI — 7 days — Acct 4197
-  MCTIZIC, WILLIAM — 7 days — Acct 4447
-  JOYCE, STEVEN — 6 days — Acct 4486
-  LEGISTER, DANIEL — 6 days — Acct 4293
-  RIOS, JUANKIE — 6 days — Acct 4047
-  COOPER, TAVARIOUS — 4 days — Acct 4318
-  GARCIA, MARTA — 4 days — Acct 4347
-  MEYERS, BRIAN — 4 days — Acct 4193
-  OLMSTEAD, CHRISTOPHER — 4 days — Acct 4217
-  DAVIS, ZACHARIAH — 3 days — Acct 4376
-  DUBON ERAZO, XENIA — 3 days — Acct 4218
-  SIERRA SANCHEZ, PEDRO — 3 days — Acct 4391
-  ALICEA VIRELLA, IANLUIS — 1 days — Acct 4449
-  NEWBY, BRIANA — 1 days — Acct 4351
-  ROLON, ELENA — 1 days — Acct 4259
-
-DEBARY TOTAL: 181 accounts
-
-════════════════════════════════
-LATE ACCOUNTS — DELAND
-════════════════════════════════
-150+ days (50 accounts):
-  RODRIGUEZ, ROMIS — 581 days — Acct 3225
-  SMERESKY, THOMAS — 572 days — Acct 3477RFI
-  GOMEZ PARADA, BENJAMIN — 539 days — Acct 3289
-  HARRELL, JAMSHMEA — 539 days — Acct 3298
-  VAZQUEZ, MIRIAM — 539 days — Acct 3355
-  ROBLES, ALEXANDER — 519 days — Acct 3342
-  WERNER, STEVE — 517 days — Acct 3435
-  NEMBHARD, KAMARSH — 490 days — Acct 3448
-  JENNINGS, JOSEPH — 489 days — Acct 3662
-  STONE, INGEBORG — 479 days — Acct 3642
-  FIGUEROA, ASHLEY — 477 days — Acct 3646
-  MELENDEZ VAZQUEZ, ELADIO — 472 days — Acct 3339
-  THOMAS, OCTAVIA — 468 days — Acct 3660
-  SKINNER, CHARLES — 447 days — Acct 3234
-  ONEAL, MARY — 441 days — Acct 3560
-  AVILES, JANET — 433 days — Acct 3569
-  TAYLOR, OLLIE — 382 days — Acct 3249
-  BASS, HEATHER — 372 days — Acct 3857
-  BARNES, ERIC — 371 days — Acct 3645
-  CHIAPPETTA, FELISA — 349 days — Acct 3947
-  SMITH, CODY — 349 days — Acct 3919
-  NOSAVANH, KATIE ANN — 329 days — Acct 3903
-  MEDLEY, HUNTAVIAN — 321 days — Acct 3869
-  LINDSEY, BARRON — 319 days — Acct 3473
-  WHITAKER, ARONIA — 315 days — Acct 3900
-  YATES, ANGELA — 315 days — Acct 3530
-  HERNANDEZ ORTIZ, EILEEN — 314 days — Acct 3666
-  CARTER SANTANA, DYLON — 314 days — Acct 3924
-  KING, CANDACE — 303 days — Acct 3822RFI
-  VALDES, DENISHA — 303 days — Acct 3810
-  FIELDS, SAMUEL — 296 days — Acct 3852
-  KNIGHT, JEFFREY — 294 days — Acct 3746
-  CAMPBELL, VICTOR — 286 days — Acct 4005
-  MATTHEWS, MICHAEL — 285 days — Acct 4022
-  HAYNES, LINDSEY — 281 days — Acct 4028
-  WILLIAMS, CHARLES — 280 days — Acct 3920
-  GONZALEZ, GABRIEL — 262 days — Acct 3776
-  PIERCE, ERIN — 259 days — Acct 4014
-  PEARCE, VARNEY — 258 days — Acct 3854
-  DUNAGAN, TYLER — 234 days — Acct 3704
-  KENNEDY, DUSTIN — 216 days — Acct 3930
-  WILLIAMS, CLARENCE — 213 days — Acct 3874
-  TURNER, SHIANNA — 192 days — Acct 4182
-  GREEN, STEPHANIE — 189 days — Acct 3986
-  PIETRZAK, PAUL — 182 days — Acct 4129
-  MORAN, FLOR — 178 days — Acct 4077
-  STRIDACCHIO, MICHAEL — 169 days — Acct 4041
-  CANN, KIMBERLY — 168 days — Acct 4018
-  LILLY, KATRINA — 153 days — Acct 4189
-  MARQUEZ GONZALEZ, JOSE — 153 days — Acct 3936
-
-90-150 days (8 accounts):
-  FRANKLIN, OLLIE — 139 days — Acct 3844
-  CHANTHAVONGSA, KHONSAVANH — 139 days — Acct 4251
-  GREEN, MIKEL — 132 days — Acct 4247
-  BIBARAO RODRIGUEZ, ANGEL — 119 days — Acct 4106
-  MANCHESTER, PHILLIP — 119 days — Acct 4207
-  LANE, KERBY — 119 days — Acct 4140
-  MARTORI, SANTOS — 94 days — Acct 4235
-  VEGA JIMENEZ, GIOVANNI — 93 days — Acct 4243
-
-30-90 days (12 accounts):
-  GARNETT, TYRON — 83 days — Acct 4199
-  PROSOCK, JESSICA — 83 days — Acct 4114
-  LETT, ANNE-MARIE — 76 days — Acct 4149
-  MULONAS, LANCE — 76 days — Acct 4146
-  SPRUILL, DARIEN — 66 days — Acct 4325
-  WEAVER, AMANDA — 62 days — Acct 4254
-  DEXTER, DAVID — 48 days — Acct 4151
-  JACKSON, MAKI — 42 days — Acct 4339
-  BLAISE, DOVENSKY — 35 days — Acct 4378
-  MITCHELL, TRISTAN — 34 days — Acct 4256
-  SINCLAIR, BRITTANY — 34 days — Acct 4343
-  PEREZ MARTINEZ, LUIS — 31 days — Acct 4428
-
-0-30 days (14 accounts):
-  LUGO MORALES, TIARA — 25 days — Acct 4367
-  MARINO, AMBER — 21 days — Acct 4416
-  WRIGHT, PAIGE — 21 days — Acct 4405
-  DUNAGAN, TYLER — 16 days — Acct 4353
-  CHAMBERS, JEDEDIAH — 14 days — Acct 4337
-  CLAY JACKSON, GABRIELLE — 13 days — Acct 4222
-  CARR, MICHAEL — 10 days — Acct 4491
-  GRAHAM, RANDY — 10 days — Acct 4435
-  MYERS, ASHLEY — 9 days — Acct 4203
-  WOOD, CHASE — 8 days — Acct 4476
-  BRICENO ROSALES, DANYERLYS — 7 days — Acct 4430
-  STAFFORD, CHANDA — 7 days — Acct 4480
-  WILLIAMS, RAVON — 7 days — Acct 3927
-  KING, DEANNA — 4 days — Acct 4204
-
-DELAND TOTAL: 84 accounts
-
-COMBINED TOTAL: 265 accounts
+--- COMBINED TOTALS ---
+Grand Total Late: 265
+150+: 144
+90-150: 33
+30-90: 41
+0-30: 47
