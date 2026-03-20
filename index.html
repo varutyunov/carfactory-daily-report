@@ -772,14 +772,30 @@ function openAssign(carId){
 }
 
 function renderTaskBuilder(){
-  document.getElementById('task-builder').innerHTML=customTasksForAssign.map((t,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:10px;margin-bottom:8px;border:1px solid #1a1a1a;">
+  document.getElementById('task-builder').innerHTML=customTasksForAssign.map((t,i)=>{
+    const isExpand=EXPANDABLE_TASKS.includes(t.name.toLowerCase());
+    const expanded=t.expanded||false;
+    if(isExpand){
+      return`<div style="background:#000;border-radius:10px;margin-bottom:8px;border:1px solid #1a1a1a;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;" onclick="toggleBuilderExpand(${i})">
+          <span style="flex:1;font-size:14px;color:#ccc;cursor:pointer;">${t.name}</span>
+          <span style="color:#444;font-size:12px;">${expanded?'▲':'▼'}</span>
+          <button onclick="event.stopPropagation();toggleTaskUrgentBuilder(${i})" style="background:none;border:1px solid ${t.urgent?'rgba(255,69,58,.4)':'#222'};border-radius:7px;color:${t.urgent?'#ff453a':'#444'};font-size:11px;padding:4px 9px;cursor:pointer;">&#x26A0;</button>
+          <button onclick="event.stopPropagation();removeTaskBuilder(${i})" style="background:none;border:none;color:#333;font-size:16px;cursor:pointer;">&#x2715;</button>
+        </div>
+        ${expanded?`<textarea style="width:100%;box-sizing:border-box;background:#0a0a0a;border:none;border-top:1px solid #1a1a1a;color:#ccc;padding:10px 12px;font-size:13px;resize:none;" rows="3" placeholder="Describe ${t.name.toLowerCase()}..." onblur="saveBuilderNote(${i},this.value)">${t.note||''}</textarea>`:''}
+      </div>`;
+    }
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:10px;margin-bottom:8px;border:1px solid #1a1a1a;">
       <span style="flex:1;font-size:14px;color:#ccc;">${t.name}</span>
       <button onclick="toggleTaskUrgentBuilder(${i})" style="background:none;border:1px solid ${t.urgent?'rgba(255,69,58,.4)':'#222'};border-radius:7px;color:${t.urgent?'#ff453a':'#444'};font-size:11px;padding:4px 9px;cursor:pointer;">&#x26A0;</button>
       <button onclick="removeTaskBuilder(${i})" style="background:none;border:none;color:#333;font-size:16px;cursor:pointer;">&#x2715;</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function toggleTaskUrgentBuilder(i){customTasksForAssign[i].urgent=!customTasksForAssign[i].urgent;renderTaskBuilder();}
+function toggleBuilderExpand(i){customTasksForAssign[i].expanded=!customTasksForAssign[i].expanded;renderTaskBuilder();}
+function saveBuilderNote(i,val){customTasksForAssign[i].note=val.trim();}
 function removeTaskBuilder(i){customTasksForAssign.splice(i,1);renderTaskBuilder();}
 function addCustomTask(){const n=prompt('Task name:');if(n&&n.trim())customTasksForAssign.push({name:n.trim(),urgent:false});renderTaskBuilder();}
 
@@ -787,7 +803,7 @@ function handleCarPhoto(e){const f=e.target.files[0];if(!f)return;enhancePhoto(f
 
 async function doAssign(){
   const empId=parseInt(document.getElementById('assign-emp').value);
-  const tasks=customTasksForAssign.map(t=>({name:t.name,urgent:t.urgent,done:false,by:null,note:'',editingNote:false}));
+  const tasks=customTasksForAssign.map(t=>({name:t.name,urgent:t.urgent,done:false,by:null,note:t.note||'',editingNote:false}));
   showLoading('Assigning vehicle...');
   try {
     // Save photo to inventory if taken
@@ -817,7 +833,7 @@ function renderReview(){
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
     const pxR=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxR?`<img class="rc-img" src="${pxR}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note">"${t.note}"</div>`:''}</div></div>`).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
+    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>{const _exp=EXPANDABLE_TASKS.includes(t.name.toLowerCase());return`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note" style="${_exp?'white-space:pre-wrap;color:#888;font-style:normal;':''}">${_exp?t.note:'"'+t.note+'"'}</div>`:''}</div></div>`;}).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
   }).join('');
   applyPexels(p.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
