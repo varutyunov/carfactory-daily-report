@@ -3369,5 +3369,2037 @@
       "deland_total": 3574.41,
       "combined_total": 5014.41
     }
+  },
+  {
+    "date": "03/19/2026",
+    "skipped": false,
+    "late_accounts": {
+      "debary": {
+        "total": 181,
+        "buckets": {
+          "150+": [
+            {
+              "name": "KREMER, AUSTIN",
+              "acct": "2583",
+              "days": 1105,
+              "nextPayDate": "3/11/23"
+            },
+            {
+              "name": "TRAYLOR, ROBYN",
+              "acct": "2942",
+              "days": 679,
+              "nextPayDate": "5/10/24"
+            },
+            {
+              "name": "SALGADO, MICHAEL",
+              "acct": "3259",
+              "days": 660,
+              "nextPayDate": "5/29/24"
+            },
+            {
+              "name": "TAYLOR, TYLOR",
+              "acct": "3358RFI",
+              "days": 620,
+              "nextPayDate": "7/8/24"
+            },
+            {
+              "name": "CLAYTON, OCTAVIUS",
+              "acct": "3396",
+              "days": 588,
+              "nextPayDate": "8/9/24"
+            },
+            {
+              "name": "CHANTHAVONGSA, KHONSAVANH",
+              "acct": "3415",
+              "days": 549,
+              "nextPayDate": "9/17/24"
+            },
+            {
+              "name": "THOMAS, CORIE",
+              "acct": "3383",
+              "days": 512,
+              "nextPayDate": "10/24/24"
+            },
+            {
+              "name": "TORRES MALDONADO, JESSICA",
+              "acct": "3565",
+              "days": 510,
+              "nextPayDate": "10/26/24"
+            },
+            {
+              "name": "HARRIS, ANTOINE",
+              "acct": "3625",
+              "days": 503,
+              "nextPayDate": "11/2/24"
+            },
+            {
+              "name": "PIEDRA, EDGAR",
+              "acct": "3640",
+              "days": 486,
+              "nextPayDate": "11/19/24"
+            },
+            {
+              "name": "NAVARRETE, CECILIA",
+              "acct": "3681",
+              "days": 453,
+              "nextPayDate": "12/22/24"
+            },
+            {
+              "name": "GARCIA TAZAMA, SANTIAGO",
+              "acct": "3452",
+              "days": 431,
+              "nextPayDate": "1/13/25"
+            },
+            {
+              "name": "STRUNK, JORDAN",
+              "acct": "3769",
+              "days": 429,
+              "nextPayDate": "1/15/25"
+            },
+            {
+              "name": "RAMIREZ FLORES, CHRISTIAN",
+              "acct": "3750",
+              "days": 420,
+              "nextPayDate": "1/24/25"
+            },
+            {
+              "name": "WILLIAMS, DARRELL",
+              "acct": "3719",
+              "days": 406,
+              "nextPayDate": "2/7/25"
+            },
+            {
+              "name": "NUGENT, SEAN",
+              "acct": "3715",
+              "days": 399,
+              "nextPayDate": "2/14/25"
+            },
+            {
+              "name": "SOTO GONZALEZ, JOSE",
+              "acct": "3710",
+              "days": 385,
+              "nextPayDate": "2/28/25"
+            },
+            {
+              "name": "TURNER, BO",
+              "acct": "3902",
+              "days": 372,
+              "nextPayDate": "3/13/25"
+            },
+            {
+              "name": "PIEDRA, EDGAR",
+              "acct": "3826",
+              "days": 364,
+              "nextPayDate": "3/21/25"
+            },
+            {
+              "name": "BRAMLET, DEVONDRE",
+              "acct": "3889",
+              "days": 361,
+              "nextPayDate": "3/24/25"
+            },
+            {
+              "name": "BROWN, ROBIN",
+              "acct": "3908",
+              "days": 361,
+              "nextPayDate": "3/24/25"
+            },
+            {
+              "name": "ORTIZ, NAYOME",
+              "acct": "3907",
+              "days": 356,
+              "nextPayDate": "3/29/25"
+            },
+            {
+              "name": "BILGER, BRANDON",
+              "acct": "3723",
+              "days": 349,
+              "nextPayDate": "4/5/25"
+            },
+            {
+              "name": "COOKE, ASHTON",
+              "acct": "3600",
+              "days": 347,
+              "nextPayDate": "4/7/25"
+            },
+            {
+              "name": "NEWTON, ERICA",
+              "acct": "3748",
+              "days": 344,
+              "nextPayDate": "4/10/25"
+            },
+            {
+              "name": "STONE, JAMIE",
+              "acct": "3812",
+              "days": 344,
+              "nextPayDate": "4/10/25"
+            },
+            {
+              "name": "POLCHIES, ERIC",
+              "acct": "3949",
+              "days": 339,
+              "nextPayDate": "4/15/25"
+            },
+            {
+              "name": "EGBERT, JESSICA",
+              "acct": "3881",
+              "days": 336,
+              "nextPayDate": "4/18/25"
+            },
+            {
+              "name": "ORTIZ, NAYOME",
+              "acct": "3922",
+              "days": 336,
+              "nextPayDate": "4/18/25"
+            },
+            {
+              "name": "BILGER, BRANDON",
+              "acct": "3964",
+              "days": 334,
+              "nextPayDate": "4/20/25"
+            },
+            {
+              "name": "MARTINEZ, MILTON",
+              "acct": "3911",
+              "days": 333,
+              "nextPayDate": "4/21/25"
+            },
+            {
+              "name": "CRUZ, JESSICA",
+              "acct": "3720RFI",
+              "days": 331,
+              "nextPayDate": "4/23/25"
+            },
+            {
+              "name": "TOLBERT, NICHOLE",
+              "acct": "3898",
+              "days": 329,
+              "nextPayDate": "4/25/25"
+            },
+            {
+              "name": "YOUNG, LEE",
+              "acct": "3910",
+              "days": 321,
+              "nextPayDate": "5/3/25"
+            },
+            {
+              "name": "ESTEVEZ, ARACELY",
+              "acct": "3859",
+              "days": 313,
+              "nextPayDate": "5/11/25"
+            },
+            {
+              "name": "REYES, GILBERT",
+              "acct": "4015",
+              "days": 310,
+              "nextPayDate": "5/14/25"
+            },
+            {
+              "name": "WILSON, TA'NEKA",
+              "acct": "3892",
+              "days": 305,
+              "nextPayDate": "5/19/25"
+            },
+            {
+              "name": "BRIGHT, IESHA",
+              "acct": "3878RFI",
+              "days": 304,
+              "nextPayDate": "5/20/25"
+            },
+            {
+              "name": "SHEPARD, CHRISTINA",
+              "acct": "3957",
+              "days": 303,
+              "nextPayDate": "5/21/25"
+            },
+            {
+              "name": "WHITTAKER, TAKIYA",
+              "acct": "3820",
+              "days": 302,
+              "nextPayDate": "5/22/25"
+            },
+            {
+              "name": "SANCHEZ, SHATIEK",
+              "acct": "3959",
+              "days": 301,
+              "nextPayDate": "5/23/25"
+            },
+            {
+              "name": "JONES, GRADY",
+              "acct": "3851",
+              "days": 297,
+              "nextPayDate": "5/27/25"
+            },
+            {
+              "name": "PINNOCK, GLENNIE",
+              "acct": "3692",
+              "days": 296,
+              "nextPayDate": "5/28/25"
+            },
+            {
+              "name": "SHAFFER, WILLIAM",
+              "acct": "3988",
+              "days": 293,
+              "nextPayDate": "5/31/25"
+            },
+            {
+              "name": "MARMOL, MARK",
+              "acct": "3818",
+              "days": 281,
+              "nextPayDate": "6/12/25"
+            },
+            {
+              "name": "DATIZ MILLAN, LEE",
+              "acct": "4035",
+              "days": 279,
+              "nextPayDate": "6/14/25"
+            },
+            {
+              "name": "MCHUGH, CHRISTOPHER",
+              "acct": "3703",
+              "days": 277,
+              "nextPayDate": "6/16/25"
+            },
+            {
+              "name": "FUSS, JOSHUA",
+              "acct": "3800",
+              "days": 266,
+              "nextPayDate": "6/27/25"
+            },
+            {
+              "name": "SAILOR, TATIYANA",
+              "acct": "4071",
+              "days": 265,
+              "nextPayDate": "6/28/25"
+            },
+            {
+              "name": "ACEVEDO DOWNS, JUAN",
+              "acct": "4055",
+              "days": 259,
+              "nextPayDate": "7/4/25"
+            },
+            {
+              "name": "FLETCHER, XETH",
+              "acct": "4025",
+              "days": 258,
+              "nextPayDate": "7/5/25"
+            },
+            {
+              "name": "ERAZO, LUIS",
+              "acct": "4012",
+              "days": 257,
+              "nextPayDate": "7/6/25"
+            },
+            {
+              "name": "SHAW, REGINALD",
+              "acct": "3745",
+              "days": 253,
+              "nextPayDate": "7/10/25"
+            },
+            {
+              "name": "HUDSON, ADAM",
+              "acct": "4001",
+              "days": 251,
+              "nextPayDate": "7/12/25"
+            },
+            {
+              "name": "DIEDRICH, BARBARA",
+              "acct": "3980",
+              "days": 248,
+              "nextPayDate": "7/15/25"
+            },
+            {
+              "name": "MORIARTY, CYNTHIA",
+              "acct": "3858",
+              "days": 242,
+              "nextPayDate": "7/21/25"
+            },
+            {
+              "name": "HALL, SHERMAIN",
+              "acct": "3915",
+              "days": 240,
+              "nextPayDate": "7/23/25"
+            },
+            {
+              "name": "SOTO DE JESUS, AMANDA",
+              "acct": "3918",
+              "days": 234,
+              "nextPayDate": "7/29/25"
+            },
+            {
+              "name": "LUCIANO, ANGIE",
+              "acct": "3821RFI",
+              "days": 231,
+              "nextPayDate": "8/1/25"
+            },
+            {
+              "name": "CHALMERS, RICHARD",
+              "acct": "4104",
+              "days": 230,
+              "nextPayDate": "8/2/25"
+            },
+            {
+              "name": "HILLERY, RICHARD",
+              "acct": "4103",
+              "days": 230,
+              "nextPayDate": "8/2/25"
+            },
+            {
+              "name": "ROSS, DAVID",
+              "acct": "3944",
+              "days": 226,
+              "nextPayDate": "8/6/25"
+            },
+            {
+              "name": "WINNINGHAM, CALVIN",
+              "acct": "3773",
+              "days": 226,
+              "nextPayDate": "8/6/25"
+            },
+            {
+              "name": "RODRIGUEZ, KARENTH",
+              "acct": "4089",
+              "days": 224,
+              "nextPayDate": "8/8/25"
+            },
+            {
+              "name": "SMITH, NICOLE",
+              "acct": "3997",
+              "days": 224,
+              "nextPayDate": "8/8/25"
+            },
+            {
+              "name": "NIEVES, YAZMIN",
+              "acct": "3848",
+              "days": 221,
+              "nextPayDate": "8/11/25"
+            },
+            {
+              "name": "CRUZ ISAAC, MARLIUBYS",
+              "acct": "4040",
+              "days": 219,
+              "nextPayDate": "8/13/25"
+            },
+            {
+              "name": "VILORIA MARTURET, DIEGO",
+              "acct": "4133",
+              "days": 217,
+              "nextPayDate": "8/15/25"
+            },
+            {
+              "name": "SIERRA SANCHEZ, PEDRO",
+              "acct": "4003",
+              "days": 210,
+              "nextPayDate": "8/22/25"
+            },
+            {
+              "name": "BORDONADA, RICHARD",
+              "acct": "4115",
+              "days": 208,
+              "nextPayDate": "8/24/25"
+            },
+            {
+              "name": "HUMPHREYS, DAVID",
+              "acct": "4101",
+              "days": 204,
+              "nextPayDate": "8/28/25"
+            },
+            {
+              "name": "CARROLL, JONATHAN",
+              "acct": "4145",
+              "days": 203,
+              "nextPayDate": "8/29/25"
+            },
+            {
+              "name": "CREW-VENTURA, ASHLEI",
+              "acct": "3991",
+              "days": 202,
+              "nextPayDate": "8/30/25"
+            },
+            {
+              "name": "NIEVES, ANGELINA",
+              "acct": "3838",
+              "days": 198,
+              "nextPayDate": "9/3/25"
+            },
+            {
+              "name": "AUGUSTIN, YADMY",
+              "acct": "3975",
+              "days": 198,
+              "nextPayDate": "9/3/25"
+            },
+            {
+              "name": "SMITH, EARL",
+              "acct": "4175",
+              "days": 196,
+              "nextPayDate": "9/5/25"
+            },
+            {
+              "name": "MEJIA, NIGEL",
+              "acct": "4016",
+              "days": 190,
+              "nextPayDate": "9/11/25"
+            },
+            {
+              "name": "FRANCISCO, ROBERT",
+              "acct": "4107",
+              "days": 188,
+              "nextPayDate": "9/13/25"
+            },
+            {
+              "name": "NUNNALLY, TYRESE",
+              "acct": "4154",
+              "days": 185,
+              "nextPayDate": "9/16/25"
+            },
+            {
+              "name": "NEWTON, DAELIN",
+              "acct": "3983",
+              "days": 183,
+              "nextPayDate": "9/18/25"
+            },
+            {
+              "name": "DOBELL, ERNEST",
+              "acct": "4173",
+              "days": 182,
+              "nextPayDate": "9/19/25"
+            },
+            {
+              "name": "MELVIN, ROBERT",
+              "acct": "3923",
+              "days": 181,
+              "nextPayDate": "9/20/25"
+            },
+            {
+              "name": "HARPER, RICKEY",
+              "acct": "4060",
+              "days": 177,
+              "nextPayDate": "9/24/25"
+            },
+            {
+              "name": "RIVERA, MARGARITA",
+              "acct": "3311",
+              "days": 171,
+              "nextPayDate": "9/30/25"
+            },
+            {
+              "name": "TODD, AUSTIN",
+              "acct": "4067",
+              "days": 169,
+              "nextPayDate": "10/2/25"
+            },
+            {
+              "name": "SMITH, NICOLE",
+              "acct": "4139",
+              "days": 166,
+              "nextPayDate": "10/5/25"
+            },
+            {
+              "name": "GUADALUPE LOPEZ, JOSE",
+              "acct": "4185",
+              "days": 163,
+              "nextPayDate": "10/8/25"
+            },
+            {
+              "name": "WRIGHT, JASON",
+              "acct": "4147",
+              "days": 161,
+              "nextPayDate": "10/10/25"
+            },
+            {
+              "name": "STEER, DESLEY",
+              "acct": "4105",
+              "days": 158,
+              "nextPayDate": "10/13/25"
+            },
+            {
+              "name": "GUERRERO, RAMONA",
+              "acct": "3954",
+              "days": 157,
+              "nextPayDate": "10/14/25"
+            },
+            {
+              "name": "EMERY, ETHAN",
+              "acct": "4171",
+              "days": 155,
+              "nextPayDate": "10/16/25"
+            },
+            {
+              "name": "BATISTA, AMALIA",
+              "acct": "4136",
+              "days": 153,
+              "nextPayDate": "10/18/25"
+            },
+            {
+              "name": "MCDONALD, JADA",
+              "acct": "3914RFI",
+              "days": 153,
+              "nextPayDate": "10/18/25"
+            },
+            {
+              "name": "MARSHALL, JAMES",
+              "acct": "4002",
+              "days": 151,
+              "nextPayDate": "10/20/25"
+            }
+          ],
+          "90-150": [
+            {
+              "name": "HARDY, JUSTIN",
+              "acct": "3943",
+              "days": 149,
+              "nextPayDate": "10/22/25"
+            },
+            {
+              "name": "SAVOY, TONYETTE",
+              "acct": "4229",
+              "days": 149,
+              "nextPayDate": "10/22/25"
+            },
+            {
+              "name": "PIEDRA, EDGAR",
+              "acct": "4246",
+              "days": 148,
+              "nextPayDate": "10/23/25"
+            },
+            {
+              "name": "REYES, FELIPE",
+              "acct": "4044",
+              "days": 148,
+              "nextPayDate": "10/23/25"
+            },
+            {
+              "name": "MUNET CORTES, KRESHALIZ",
+              "acct": "3960RFI",
+              "days": 147,
+              "nextPayDate": "10/24/25"
+            },
+            {
+              "name": "HERCEG, WILLIAM",
+              "acct": "4191",
+              "days": 146,
+              "nextPayDate": "10/25/25"
+            },
+            {
+              "name": "HOWARD, JAMES",
+              "acct": "4088",
+              "days": 144,
+              "nextPayDate": "10/27/25"
+            },
+            {
+              "name": "COLEMAN, CHARLES",
+              "acct": "4196",
+              "days": 136,
+              "nextPayDate": "11/4/25"
+            },
+            {
+              "name": "ESCALANTE LOPEZ, ALFONSO",
+              "acct": "4053",
+              "days": 130,
+              "nextPayDate": "11/10/25"
+            },
+            {
+              "name": "DANZIG, BOBBIE",
+              "acct": "4159",
+              "days": 127,
+              "nextPayDate": "11/13/25"
+            },
+            {
+              "name": "HOLLIS, OCTAVIA",
+              "acct": "4023",
+              "days": 126,
+              "nextPayDate": "11/14/25"
+            },
+            {
+              "name": "MEJIA, CHRISTINA",
+              "acct": "4223",
+              "days": 126,
+              "nextPayDate": "11/14/25"
+            },
+            {
+              "name": "NOOKS, SHADAE",
+              "acct": "3886",
+              "days": 125,
+              "nextPayDate": "11/15/25"
+            },
+            {
+              "name": "OTERO SERRANO, ALEX",
+              "acct": "3998",
+              "days": 125,
+              "nextPayDate": "11/15/25"
+            },
+            {
+              "name": "WRIGHT, LILAL",
+              "acct": "4122",
+              "days": 119,
+              "nextPayDate": "11/21/25"
+            },
+            {
+              "name": "WALTERS, JEFFREY",
+              "acct": "4253",
+              "days": 119,
+              "nextPayDate": "11/21/25"
+            },
+            {
+              "name": "DAVIS, DOUGLAS",
+              "acct": "4094",
+              "days": 112,
+              "nextPayDate": "11/28/25"
+            },
+            {
+              "name": "SANCHEZ, FIDEL",
+              "acct": "3962",
+              "days": 111,
+              "nextPayDate": "11/29/25"
+            },
+            {
+              "name": "SANCHEZ, MARTIN",
+              "acct": "4316",
+              "days": 111,
+              "nextPayDate": "11/29/25"
+            },
+            {
+              "name": "KNOOP, TAYLOR",
+              "acct": "4311",
+              "days": 106,
+              "nextPayDate": "12/4/25"
+            },
+            {
+              "name": "HARRIS, KATIE",
+              "acct": "4261",
+              "days": 105,
+              "nextPayDate": "12/5/25"
+            },
+            {
+              "name": "WOODS JACKSON, JIMMIE",
+              "acct": "4127",
+              "days": 105,
+              "nextPayDate": "12/5/25"
+            },
+            {
+              "name": "SANTIAGO QUINONES, ROGELIO",
+              "acct": "4263",
+              "days": 104,
+              "nextPayDate": "12/6/25"
+            },
+            {
+              "name": "ORIHUELA, ISABELLA",
+              "acct": "4304",
+              "days": 95,
+              "nextPayDate": "12/15/25"
+            },
+            {
+              "name": "BURGOS RIVERA, ZULEIKA",
+              "acct": "4286",
+              "days": 93,
+              "nextPayDate": "12/17/25"
+            }
+          ],
+          "30-90": [
+            {
+              "name": "SULLIVAN, NATHAN",
+              "acct": "4220",
+              "days": 85,
+              "nextPayDate": "12/25/25"
+            },
+            {
+              "name": "DOUGLAS, KENDRICK",
+              "acct": "4323",
+              "days": 84,
+              "nextPayDate": "12/26/25"
+            },
+            {
+              "name": "TALL, JONATHAN",
+              "acct": "4215",
+              "days": 83,
+              "nextPayDate": "12/27/25"
+            },
+            {
+              "name": "RODRIGUEZ SANTANA, BRYAN",
+              "acct": "4232",
+              "days": 78,
+              "nextPayDate": "1/1/26"
+            },
+            {
+              "name": "DE LEON HERNANDEZ, ANGEL",
+              "acct": "4335",
+              "days": 76,
+              "nextPayDate": "1/3/26"
+            },
+            {
+              "name": "OSBORNE, JUSTIN",
+              "acct": "4240",
+              "days": 70,
+              "nextPayDate": "1/9/26"
+            },
+            {
+              "name": "JENKINS, TIFFANY",
+              "acct": "4282",
+              "days": 67,
+              "nextPayDate": "1/12/26"
+            },
+            {
+              "name": "RAMIREZ, VICTORIA",
+              "acct": "4309",
+              "days": 66,
+              "nextPayDate": "1/13/26"
+            },
+            {
+              "name": "MC KNIGHT, JACKIE",
+              "acct": "4364",
+              "days": 64,
+              "nextPayDate": "1/15/26"
+            },
+            {
+              "name": "MITCHELL, ANTONIO",
+              "acct": "4135",
+              "days": 63,
+              "nextPayDate": "1/16/26"
+            },
+            {
+              "name": "COLON, ABIGAIL",
+              "acct": "4174",
+              "days": 63,
+              "nextPayDate": "1/16/26"
+            },
+            {
+              "name": "RODRIGUEZ, AMANI",
+              "acct": "4153",
+              "days": 61,
+              "nextPayDate": "1/18/26"
+            },
+            {
+              "name": "VELAZQUEZ, ANGELA",
+              "acct": "4131",
+              "days": 61,
+              "nextPayDate": "1/18/26"
+            },
+            {
+              "name": "BAUZA ORTIZ, ROBERTO",
+              "acct": "4321",
+              "days": 56,
+              "nextPayDate": "1/23/26"
+            },
+            {
+              "name": "CARMONA RIVERA, ANGEL",
+              "acct": "4093",
+              "days": 56,
+              "nextPayDate": "1/23/26"
+            },
+            {
+              "name": "DANIELS, KYLE",
+              "acct": "4342",
+              "days": 55,
+              "nextPayDate": "1/24/26"
+            },
+            {
+              "name": "BUSSIERE, SHERRY",
+              "acct": "4283",
+              "days": 50,
+              "nextPayDate": "1/29/26"
+            },
+            {
+              "name": "WEITZEL, CASSIDY",
+              "acct": "4248",
+              "days": 50,
+              "nextPayDate": "1/29/26"
+            },
+            {
+              "name": "DATIZ MILLAN, LEE",
+              "acct": "4400",
+              "days": 48,
+              "nextPayDate": "1/31/26"
+            },
+            {
+              "name": "BING, ALVOYE",
+              "acct": "4295",
+              "days": 45,
+              "nextPayDate": "2/3/26"
+            },
+            {
+              "name": "MIZIN, JONATHAN",
+              "acct": "4268",
+              "days": 42,
+              "nextPayDate": "2/6/26"
+            },
+            {
+              "name": "SANDS BENEFIELD, CLARA",
+              "acct": "4387",
+              "days": 41,
+              "nextPayDate": "2/7/26"
+            },
+            {
+              "name": "ALFONSO VALCARCEL, ALBERTO",
+              "acct": "4395",
+              "days": 36,
+              "nextPayDate": "2/12/26"
+            },
+            {
+              "name": "ANDERSON, MALIK",
+              "acct": "4340",
+              "days": 35,
+              "nextPayDate": "2/13/26"
+            },
+            {
+              "name": "SAWYER, CARLY",
+              "acct": "4408",
+              "days": 35,
+              "nextPayDate": "2/13/26"
+            },
+            {
+              "name": "TYRELL, JARAN",
+              "acct": "4257",
+              "days": 34,
+              "nextPayDate": "2/14/26"
+            },
+            {
+              "name": "COX, ANGEL",
+              "acct": "4168",
+              "days": 32,
+              "nextPayDate": "2/16/26"
+            },
+            {
+              "name": "BARBER, TAVORIS",
+              "acct": "4120",
+              "days": 30,
+              "nextPayDate": "2/18/26"
+            },
+            {
+              "name": "WHITTED, TATUM",
+              "acct": "4156",
+              "days": 30,
+              "nextPayDate": "2/18/26"
+            }
+          ],
+          "0-30": [
+            {
+              "name": "CARTER SANTANA, DYLON",
+              "acct": "4380",
+              "days": 29,
+              "nextPayDate": "2/19/26"
+            },
+            {
+              "name": "SMITH, DEION",
+              "acct": "4345",
+              "days": 26,
+              "nextPayDate": "2/22/26"
+            },
+            {
+              "name": "ROBINSON, SABRINA",
+              "acct": "4172",
+              "days": 22,
+              "nextPayDate": "2/26/26"
+            },
+            {
+              "name": "JACKSON, KARIAN",
+              "acct": "4236",
+              "days": 18,
+              "nextPayDate": "3/2/26"
+            },
+            {
+              "name": "LOGAN, SCOTT",
+              "acct": "4334",
+              "days": 18,
+              "nextPayDate": "3/2/26"
+            },
+            {
+              "name": "GONZALEZ, PAOLA",
+              "acct": "4244",
+              "days": 17,
+              "nextPayDate": "3/3/26"
+            },
+            {
+              "name": "LIGGINS, TYRONE",
+              "acct": "4467",
+              "days": 17,
+              "nextPayDate": "3/3/26"
+            },
+            {
+              "name": "MARTIRE, MICHEL",
+              "acct": "4453",
+              "days": 15,
+              "nextPayDate": "3/5/26"
+            },
+            {
+              "name": "SEPULVEDA FERRER, JONATHAN",
+              "acct": "4190",
+              "days": 14,
+              "nextPayDate": "3/6/26"
+            },
+            {
+              "name": "DIAZ ORALES, CARLOS",
+              "acct": "4328",
+              "days": 12,
+              "nextPayDate": "3/8/26"
+            },
+            {
+              "name": "CHU, OMAR",
+              "acct": "4469",
+              "days": 10,
+              "nextPayDate": "3/10/26"
+            },
+            {
+              "name": "GARRAWAY, BERT",
+              "acct": "4265",
+              "days": 10,
+              "nextPayDate": "3/10/26"
+            },
+            {
+              "name": "PAGAN RODRIGUEZ, RICARDO",
+              "acct": "4494",
+              "days": 10,
+              "nextPayDate": "3/10/26"
+            },
+            {
+              "name": "BERRIEN, ARIAL",
+              "acct": "4312",
+              "days": 8,
+              "nextPayDate": "3/12/26"
+            },
+            {
+              "name": "CRESPO, GIANCARLOS",
+              "acct": "4394",
+              "days": 8,
+              "nextPayDate": "3/12/26"
+            },
+            {
+              "name": "LEON, CASSANDRA",
+              "acct": "4331",
+              "days": 8,
+              "nextPayDate": "3/12/26"
+            },
+            {
+              "name": "LOPEZ, ADRIANNA",
+              "acct": "4313",
+              "days": 8,
+              "nextPayDate": "3/12/26"
+            },
+            {
+              "name": "DESIR, GEYYFER",
+              "acct": "4397",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "FOXWORTH DAUGHERTY, QUILEI",
+              "acct": "4197",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "MCTIZIC, WILLIAM",
+              "acct": "4447",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "JOYCE, STEVEN",
+              "acct": "4486",
+              "days": 6,
+              "nextPayDate": "3/14/26"
+            },
+            {
+              "name": "LEGISTER, DANIEL",
+              "acct": "4293",
+              "days": 6,
+              "nextPayDate": "3/14/26"
+            },
+            {
+              "name": "RIOS, JUANKIE",
+              "acct": "4047",
+              "days": 6,
+              "nextPayDate": "3/14/26"
+            },
+            {
+              "name": "COOPER, TAVARIOUS",
+              "acct": "4318",
+              "days": 4,
+              "nextPayDate": "3/16/26"
+            },
+            {
+              "name": "GARCIA, MARTA",
+              "acct": "4347",
+              "days": 4,
+              "nextPayDate": "3/16/26"
+            },
+            {
+              "name": "MEYERS, BRIAN",
+              "acct": "4193",
+              "days": 4,
+              "nextPayDate": "3/16/26"
+            },
+            {
+              "name": "OLMSTEAD, CHRISTOPHER",
+              "acct": "4217",
+              "days": 4,
+              "nextPayDate": "3/16/26"
+            },
+            {
+              "name": "DAVIS, ZACHARIAH",
+              "acct": "4376",
+              "days": 3,
+              "nextPayDate": "3/17/26"
+            },
+            {
+              "name": "DUBON ERAZO, XENIA",
+              "acct": "4218",
+              "days": 3,
+              "nextPayDate": "3/17/26"
+            },
+            {
+              "name": "SIERRA SANCHEZ, PEDRO",
+              "acct": "4391",
+              "days": 3,
+              "nextPayDate": "3/17/26"
+            },
+            {
+              "name": "ALICEA VIRELLA, IANLUIS",
+              "acct": "4449",
+              "days": 1,
+              "nextPayDate": "3/19/26"
+            },
+            {
+              "name": "NEWBY, BRIANA",
+              "acct": "4351",
+              "days": 1,
+              "nextPayDate": "3/19/26"
+            },
+            {
+              "name": "ROLON, ELENA",
+              "acct": "4259",
+              "days": 1,
+              "nextPayDate": "3/19/26"
+            }
+          ]
+        }
+      },
+      "deland": {
+        "total": 84,
+        "buckets": {
+          "150+": [
+            {
+              "name": "RODRIGUEZ, ROMIS",
+              "acct": "3225",
+              "days": 581,
+              "nextPayDate": "8/16/24"
+            },
+            {
+              "name": "SMERESKY, THOMAS",
+              "acct": "3477RFI",
+              "days": 572,
+              "nextPayDate": "8/25/24"
+            },
+            {
+              "name": "GOMEZ PARADA, BENJAMIN",
+              "acct": "3289",
+              "days": 539,
+              "nextPayDate": "9/27/24"
+            },
+            {
+              "name": "HARRELL, JAMSHMEA",
+              "acct": "3298",
+              "days": 539,
+              "nextPayDate": "9/27/24"
+            },
+            {
+              "name": "VAZQUEZ, MIRIAM",
+              "acct": "3355",
+              "days": 539,
+              "nextPayDate": "9/27/24"
+            },
+            {
+              "name": "ROBLES, ALEXANDER",
+              "acct": "3342",
+              "days": 519,
+              "nextPayDate": "10/17/24"
+            },
+            {
+              "name": "WERNER, STEVE",
+              "acct": "3435",
+              "days": 517,
+              "nextPayDate": "10/19/24"
+            },
+            {
+              "name": "NEMBHARD, KAMARSH",
+              "acct": "3448",
+              "days": 490,
+              "nextPayDate": "11/15/24"
+            },
+            {
+              "name": "JENNINGS, JOSEPH",
+              "acct": "3662",
+              "days": 489,
+              "nextPayDate": "11/16/24"
+            },
+            {
+              "name": "STONE, INGEBORG",
+              "acct": "3642",
+              "days": 479,
+              "nextPayDate": "11/26/24"
+            },
+            {
+              "name": "FIGUEROA, ASHLEY",
+              "acct": "3646",
+              "days": 477,
+              "nextPayDate": "11/28/24"
+            },
+            {
+              "name": "MELENDEZ VAZQUEZ, ELADIO",
+              "acct": "3339",
+              "days": 472,
+              "nextPayDate": "12/3/24"
+            },
+            {
+              "name": "THOMAS, OCTAVIA",
+              "acct": "3660",
+              "days": 468,
+              "nextPayDate": "12/7/24"
+            },
+            {
+              "name": "SKINNER, CHARLES",
+              "acct": "3234",
+              "days": 447,
+              "nextPayDate": "12/28/24"
+            },
+            {
+              "name": "ONEAL, MARY",
+              "acct": "3560",
+              "days": 441,
+              "nextPayDate": "1/3/25"
+            },
+            {
+              "name": "AVILES, JANET",
+              "acct": "3569",
+              "days": 433,
+              "nextPayDate": "1/11/25"
+            },
+            {
+              "name": "TAYLOR, OLLIE",
+              "acct": "3249",
+              "days": 382,
+              "nextPayDate": "3/3/25"
+            },
+            {
+              "name": "BASS, HEATHER",
+              "acct": "3857",
+              "days": 372,
+              "nextPayDate": "3/13/25"
+            },
+            {
+              "name": "BARNES, ERIC",
+              "acct": "3645",
+              "days": 371,
+              "nextPayDate": "3/14/25"
+            },
+            {
+              "name": "CHIAPPETTA, FELISA",
+              "acct": "3947",
+              "days": 349,
+              "nextPayDate": "4/5/25"
+            },
+            {
+              "name": "SMITH, CODY",
+              "acct": "3919",
+              "days": 349,
+              "nextPayDate": "4/5/25"
+            },
+            {
+              "name": "NOSAVANH, KATIE ANN",
+              "acct": "3903",
+              "days": 329,
+              "nextPayDate": "4/25/25"
+            },
+            {
+              "name": "MEDLEY, HUNTAVIAN",
+              "acct": "3869",
+              "days": 321,
+              "nextPayDate": "5/3/25"
+            },
+            {
+              "name": "LINDSEY, BARRON",
+              "acct": "3473",
+              "days": 319,
+              "nextPayDate": "5/5/25"
+            },
+            {
+              "name": "WHITAKER, ARONIA",
+              "acct": "3900",
+              "days": 315,
+              "nextPayDate": "5/9/25"
+            },
+            {
+              "name": "YATES, ANGELA",
+              "acct": "3530",
+              "days": 315,
+              "nextPayDate": "5/9/25"
+            },
+            {
+              "name": "HERNANDEZ ORTIZ, EILEEN",
+              "acct": "3666",
+              "days": 314,
+              "nextPayDate": "5/10/25"
+            },
+            {
+              "name": "CARTER SANTANA, DYLON",
+              "acct": "3924",
+              "days": 314,
+              "nextPayDate": "5/10/25"
+            },
+            {
+              "name": "KING, CANDACE",
+              "acct": "3822RFI",
+              "days": 303,
+              "nextPayDate": "5/21/25"
+            },
+            {
+              "name": "VALDES, DENISHA",
+              "acct": "3810",
+              "days": 303,
+              "nextPayDate": "5/21/25"
+            },
+            {
+              "name": "FIELDS, SAMUEL",
+              "acct": "3852",
+              "days": 296,
+              "nextPayDate": "5/28/25"
+            },
+            {
+              "name": "KNIGHT, JEFFREY",
+              "acct": "3746",
+              "days": 294,
+              "nextPayDate": "5/30/25"
+            },
+            {
+              "name": "CAMPBELL, VICTOR",
+              "acct": "4005",
+              "days": 286,
+              "nextPayDate": "6/7/25"
+            },
+            {
+              "name": "MATTHEWS, MICHAEL",
+              "acct": "4022",
+              "days": 285,
+              "nextPayDate": "6/8/25"
+            },
+            {
+              "name": "HAYNES, LINDSEY",
+              "acct": "4028",
+              "days": 281,
+              "nextPayDate": "6/12/25"
+            },
+            {
+              "name": "WILLIAMS, CHARLES",
+              "acct": "3920",
+              "days": 280,
+              "nextPayDate": "6/13/25"
+            },
+            {
+              "name": "GONZALEZ, GABRIEL",
+              "acct": "3776",
+              "days": 262,
+              "nextPayDate": "7/1/25"
+            },
+            {
+              "name": "PIERCE, ERIN",
+              "acct": "4014",
+              "days": 259,
+              "nextPayDate": "7/4/25"
+            },
+            {
+              "name": "PEARCE, VARNEY",
+              "acct": "3854",
+              "days": 258,
+              "nextPayDate": "7/5/25"
+            },
+            {
+              "name": "DUNAGAN, TYLER",
+              "acct": "3704",
+              "days": 234,
+              "nextPayDate": "7/29/25"
+            },
+            {
+              "name": "KENNEDY, DUSTIN",
+              "acct": "3930",
+              "days": 216,
+              "nextPayDate": "8/16/25"
+            },
+            {
+              "name": "WILLIAMS, CLARENCE",
+              "acct": "3874",
+              "days": 213,
+              "nextPayDate": "8/19/25"
+            },
+            {
+              "name": "TURNER, SHIANNA",
+              "acct": "4182",
+              "days": 192,
+              "nextPayDate": "9/9/25"
+            },
+            {
+              "name": "GREEN, STEPHANIE",
+              "acct": "3986",
+              "days": 189,
+              "nextPayDate": "9/12/25"
+            },
+            {
+              "name": "PIETRZAK, PAUL",
+              "acct": "4129",
+              "days": 182,
+              "nextPayDate": "9/19/25"
+            },
+            {
+              "name": "MORAN, FLOR",
+              "acct": "4077",
+              "days": 178,
+              "nextPayDate": "9/23/25"
+            },
+            {
+              "name": "STRIDACCHIO, MICHAEL",
+              "acct": "4041",
+              "days": 169,
+              "nextPayDate": "10/2/25"
+            },
+            {
+              "name": "CANN, KIMBERLY",
+              "acct": "4018",
+              "days": 168,
+              "nextPayDate": "10/3/25"
+            },
+            {
+              "name": "LILLY, KATRINA",
+              "acct": "4189",
+              "days": 153,
+              "nextPayDate": "10/18/25"
+            },
+            {
+              "name": "MARQUEZ GONZALEZ, JOSE",
+              "acct": "3936",
+              "days": 153,
+              "nextPayDate": "10/18/25"
+            }
+          ],
+          "90-150": [
+            {
+              "name": "FRANKLIN, OLLIE",
+              "acct": "3844",
+              "days": 139,
+              "nextPayDate": "11/1/25"
+            },
+            {
+              "name": "CHANTHAVONGSA, KHONSAVANH",
+              "acct": "4251",
+              "days": 139,
+              "nextPayDate": "11/1/25"
+            },
+            {
+              "name": "GREEN, MIKEL",
+              "acct": "4247",
+              "days": 132,
+              "nextPayDate": "11/8/25"
+            },
+            {
+              "name": "BIBARAO RODRIGUEZ, ANGEL",
+              "acct": "4106",
+              "days": 119,
+              "nextPayDate": "11/21/25"
+            },
+            {
+              "name": "MANCHESTER, PHILLIP",
+              "acct": "4207",
+              "days": 119,
+              "nextPayDate": "11/21/25"
+            },
+            {
+              "name": "LANE, KERBY",
+              "acct": "4140",
+              "days": 119,
+              "nextPayDate": "11/21/25"
+            },
+            {
+              "name": "MARTORI, SANTOS",
+              "acct": "4235",
+              "days": 94,
+              "nextPayDate": "12/16/25"
+            },
+            {
+              "name": "VEGA JIMENEZ, GIOVANNI",
+              "acct": "4243",
+              "days": 93,
+              "nextPayDate": "12/17/25"
+            }
+          ],
+          "30-90": [
+            {
+              "name": "GARNETT, TYRON",
+              "acct": "4199",
+              "days": 83,
+              "nextPayDate": "12/27/25"
+            },
+            {
+              "name": "PROSOCK, JESSICA",
+              "acct": "4114",
+              "days": 83,
+              "nextPayDate": "12/27/25"
+            },
+            {
+              "name": "LETT, ANNE-MARIE",
+              "acct": "4149",
+              "days": 76,
+              "nextPayDate": "1/3/26"
+            },
+            {
+              "name": "MULONAS, LANCE",
+              "acct": "4146",
+              "days": 76,
+              "nextPayDate": "1/3/26"
+            },
+            {
+              "name": "SPRUILL, DARIEN",
+              "acct": "4325",
+              "days": 66,
+              "nextPayDate": "1/13/26"
+            },
+            {
+              "name": "WEAVER, AMANDA",
+              "acct": "4254",
+              "days": 62,
+              "nextPayDate": "1/17/26"
+            },
+            {
+              "name": "DEXTER, DAVID",
+              "acct": "4151",
+              "days": 48,
+              "nextPayDate": "1/31/26"
+            },
+            {
+              "name": "JACKSON, MAKI",
+              "acct": "4339",
+              "days": 42,
+              "nextPayDate": "2/6/26"
+            },
+            {
+              "name": "BLAISE, DOVENSKY",
+              "acct": "4378",
+              "days": 35,
+              "nextPayDate": "2/13/26"
+            },
+            {
+              "name": "MITCHELL, TRISTAN",
+              "acct": "4256",
+              "days": 34,
+              "nextPayDate": "2/14/26"
+            },
+            {
+              "name": "SINCLAIR, BRITTANY",
+              "acct": "4343",
+              "days": 34,
+              "nextPayDate": "2/14/26"
+            },
+            {
+              "name": "PEREZ MARTINEZ, LUIS",
+              "acct": "4428",
+              "days": 31,
+              "nextPayDate": "2/17/26"
+            }
+          ],
+          "0-30": [
+            {
+              "name": "LUGO MORALES, TIARA",
+              "acct": "4367",
+              "days": 25,
+              "nextPayDate": "2/23/26"
+            },
+            {
+              "name": "MARINO, AMBER",
+              "acct": "4416",
+              "days": 21,
+              "nextPayDate": "2/27/26"
+            },
+            {
+              "name": "WRIGHT, PAIGE",
+              "acct": "4405",
+              "days": 21,
+              "nextPayDate": "2/27/26"
+            },
+            {
+              "name": "DUNAGAN, TYLER",
+              "acct": "4353",
+              "days": 16,
+              "nextPayDate": "3/4/26"
+            },
+            {
+              "name": "CHAMBERS, JEDEDIAH",
+              "acct": "4337",
+              "days": 14,
+              "nextPayDate": "3/6/26"
+            },
+            {
+              "name": "CLAY JACKSON, GABRIELLE",
+              "acct": "4222",
+              "days": 13,
+              "nextPayDate": "3/7/26"
+            },
+            {
+              "name": "CARR, MICHAEL",
+              "acct": "4491",
+              "days": 10,
+              "nextPayDate": "3/10/26"
+            },
+            {
+              "name": "GRAHAM, RANDY",
+              "acct": "4435",
+              "days": 10,
+              "nextPayDate": "3/10/26"
+            },
+            {
+              "name": "MYERS, ASHLEY",
+              "acct": "4203",
+              "days": 9,
+              "nextPayDate": "3/11/26"
+            },
+            {
+              "name": "WOOD, CHASE",
+              "acct": "4476",
+              "days": 8,
+              "nextPayDate": "3/12/26"
+            },
+            {
+              "name": "BRICENO ROSALES, DANYERLYS",
+              "acct": "4430",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "STAFFORD, CHANDA",
+              "acct": "4480",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "WILLIAMS, RAVON",
+              "acct": "3927",
+              "days": 7,
+              "nextPayDate": "3/13/26"
+            },
+            {
+              "name": "KING, DEANNA",
+              "acct": "4204",
+              "days": 4,
+              "nextPayDate": "3/16/26"
+            }
+          ]
+        }
+      },
+      "combined_total": 265
+    },
+    "payments": {
+      "debary": [
+        {
+          "name": "SOUZA, JUSTIN",
+          "amount": 320
+        },
+        {
+          "name": "RAINVILLE, JAMES",
+          "amount": 450
+        },
+        {
+          "name": "BERRY, PAUL",
+          "amount": 310
+        },
+        {
+          "name": "GRAHAM, MARCUS",
+          "amount": 270
+        },
+        {
+          "name": "HINES, BRIAN",
+          "amount": 330
+        },
+        {
+          "name": "SANTIAGO, RUBEN",
+          "amount": 320
+        },
+        {
+          "name": "GONZALEZ, PAOLA",
+          "amount": 310
+        },
+        {
+          "name": "HUFF GIARDULLO, AUSTIN",
+          "amount": 240
+        },
+        {
+          "name": "CARTER SANTANA, DYLON",
+          "amount": 200
+        },
+        {
+          "name": "SULLIVAN, NATHAN",
+          "amount": 1010
+        },
+        {
+          "name": "LOWERY, MISTY",
+          "amount": 300
+        },
+        {
+          "name": "PERRY, REBECCA",
+          "amount": 360
+        },
+        {
+          "name": "CHAMBERLIN, STEVEN",
+          "amount": 275
+        },
+        {
+          "name": "CHARLES, MONTELLE",
+          "amount": 290
+        },
+        {
+          "name": "DAVIS, ZACHARIAH",
+          "amount": 160
+        },
+        {
+          "name": "CARTER SANTANA, DYLON",
+          "amount": 150
+        },
+        {
+          "name": "OQUENDO, CARLOS",
+          "amount": 310
+        },
+        {
+          "name": "SMITH, DEION",
+          "amount": 110
+        },
+        {
+          "name": "SALGADO, MICHAEL",
+          "amount": 400
+        },
+        {
+          "name": "KERR, LOIS",
+          "amount": 310
+        },
+        {
+          "name": "LEBRUN, JESLY",
+          "amount": 360
+        },
+        {
+          "name": "COLAS, GARDY",
+          "amount": 360
+        },
+        {
+          "name": "SILVA HERNANDEZ, RAINIER",
+          "amount": 310
+        },
+        {
+          "name": "GUERRERO, RAMONA",
+          "amount": 210
+        },
+        {
+          "name": "DUNGEY, JOHN",
+          "amount": 470
+        },
+        {
+          "name": "GARRAWAY, BERT",
+          "amount": 450
+        },
+        {
+          "name": "MALPICA, JOSUE",
+          "amount": 230
+        },
+        {
+          "name": "TAYLOR, HENRY",
+          "amount": 420
+        },
+        {
+          "name": "THOMPSON, THOMAS",
+          "amount": 460
+        },
+        {
+          "name": "PANAYOTIS, MITCHELL",
+          "amount": 325
+        },
+        {
+          "name": "MCTIZIC, WILLIAM",
+          "amount": 310
+        },
+        {
+          "name": "DIAZ, ANTONIO",
+          "amount": 240
+        },
+        {
+          "name": "BOONE, KADEEM",
+          "amount": 310
+        },
+        {
+          "name": "JACKSON, ARRON",
+          "amount": 310
+        },
+        {
+          "name": "MCCREA, ALISA",
+          "amount": 340
+        },
+        {
+          "name": "THOMAS, TRINITY",
+          "amount": 235
+        },
+        {
+          "name": "SAMPSON, JESSICA",
+          "amount": 180
+        },
+        {
+          "name": "HALL, GUY",
+          "amount": 490
+        },
+        {
+          "name": "MITCHELL, ANTONIO",
+          "amount": 241.54
+        },
+        {
+          "name": "NEAL, MARIE",
+          "amount": 270
+        },
+        {
+          "name": "JONES, MAE KELLE",
+          "amount": 210
+        },
+        {
+          "name": "HANSCOM, KYLEE",
+          "amount": 210
+        },
+        {
+          "name": "MILLER, MAHNU",
+          "amount": 300
+        },
+        {
+          "name": "GORSKI, ZACHARY",
+          "amount": 300
+        },
+        {
+          "name": "REDDICK, DAMION",
+          "amount": 200
+        },
+        {
+          "name": "SOTO SERRANO, JEREMY",
+          "amount": 230
+        },
+        {
+          "name": "MULLINS, FRANCIS",
+          "amount": 360
+        },
+        {
+          "name": "GONZALEZ, PAOLA",
+          "amount": 210
+        },
+        {
+          "name": "DELACRUZ CINTRON, ENRIQUE",
+          "amount": 355
+        },
+        {
+          "name": "CLIFFORD, ERIK",
+          "amount": 310
+        }
+      ],
+      "deland": [
+        {
+          "name": "DIAZ, YONATHAN",
+          "amount": 310
+        },
+        {
+          "name": "BEAVER, LANDON",
+          "amount": 200
+        },
+        {
+          "name": "BEATO, MICHAEL",
+          "amount": 335
+        },
+        {
+          "name": "CLAY JACKSON, GABRIELLE",
+          "amount": 409.41
+        },
+        {
+          "name": "LETT, ANNE-MARIE",
+          "amount": 260
+        },
+        {
+          "name": "MULONAS, LANCE",
+          "amount": 310
+        },
+        {
+          "name": "RILLING, RICHARD",
+          "amount": 310
+        },
+        {
+          "name": "RAMOS, GRISELA",
+          "amount": 2010
+        },
+        {
+          "name": "BLAISE, DOVENSKY",
+          "amount": 275
+        },
+        {
+          "name": "GARCIA, JUSTIN",
+          "amount": 360
+        },
+        {
+          "name": "QUINONES, ROGELIO",
+          "amount": 310
+        },
+        {
+          "name": "KING, DEANNA",
+          "amount": 361.35
+        },
+        {
+          "name": "BARE, DIANE",
+          "amount": 225
+        },
+        {
+          "name": "WIDMER, SHAUN",
+          "amount": 275
+        },
+        {
+          "name": "CARRASQUILLO COLON, ELVIS",
+          "amount": 180
+        },
+        {
+          "name": "GORHAM, AMANDA",
+          "amount": 280
+        },
+        {
+          "name": "MARINO, AMBER",
+          "amount": 325
+        },
+        {
+          "name": "MORRISON, WILLIAM",
+          "amount": 195
+        },
+        {
+          "name": "MANCHESTER, PHILLIP",
+          "amount": 310
+        },
+        {
+          "name": "CLAVELL RAMOS, HOMMI",
+          "amount": 50.85
+        },
+        {
+          "name": "RAMOS, LACRESHA",
+          "amount": 235
+        },
+        {
+          "name": "MITCHELL, TRISTAN",
+          "amount": 300
+        },
+        {
+          "name": "KING, DEANNA",
+          "amount": 245
+        },
+        {
+          "name": "DOBELL, CHRISTINA",
+          "amount": 285
+        },
+        {
+          "name": "ALSTON, ZACHARY",
+          "amount": 210
+        },
+        {
+          "name": "BLAISE, DOVENSKY",
+          "amount": 260
+        },
+        {
+          "name": "ADAMS, BRITTNEY",
+          "amount": 260
+        },
+        {
+          "name": "CURRY, CASEY",
+          "amount": 235
+        },
+        {
+          "name": "HERNANDEZ-GONZALEZ, JEFFREY",
+          "amount": 250
+        },
+        {
+          "name": "CLAY JACKSON, GABRIELLE",
+          "amount": 80
+        },
+        {
+          "name": "LETT, ANNE-MARIE",
+          "amount": 260
+        },
+        {
+          "name": "MULONAS, LANCE",
+          "amount": 410
+        },
+        {
+          "name": "BEATO, MICHAEL",
+          "amount": 335
+        },
+        {
+          "name": "BEAVER, LANDON",
+          "amount": 200
+        },
+        {
+          "name": "BURKHART, REBECCA",
+          "amount": 260
+        },
+        {
+          "name": "ADAMS, BRITTNEY",
+          "amount": 260
+        },
+        {
+          "name": "KING, DEANNA",
+          "amount": 150
+        },
+        {
+          "name": "WILLIAMS, RAVON",
+          "amount": 38.23
+        },
+        {
+          "name": "BIBARAO RODRIGUEZ, ANGEL",
+          "amount": 335
+        },
+        {
+          "name": "BLAISE, DOVENSKY",
+          "amount": 110
+        },
+        {
+          "name": "QUINONES, ROGELIO",
+          "amount": 310
+        },
+        {
+          "name": "LIMA-FERREIRA, YAGO",
+          "amount": 410
+        },
+        {
+          "name": "BARE, DIANE",
+          "amount": 225
+        },
+        {
+          "name": "WIDMER, SHAUN",
+          "amount": 275
+        },
+        {
+          "name": "CARRASQUILLO COLON, ELVIS",
+          "amount": 180
+        },
+        {
+          "name": "WILLIAMS, RAVON",
+          "amount": 47
+        },
+        {
+          "name": "DEREGO ANDERSON, HARLEY",
+          "amount": 410
+        },
+        {
+          "name": "MARINO, AMBER",
+          "amount": 510
+        },
+        {
+          "name": "WRIGHT, PAIGE",
+          "amount": 600
+        },
+        {
+          "name": "MITCHELL, TRISTAN",
+          "amount": 310
+        }
+      ],
+      "debary_total": 15631.54,
+      "deland_total": 15286.84,
+      "combined_total": 30918.38
+    }
   }
 ]
