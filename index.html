@@ -250,6 +250,7 @@ canvas{display:none;}
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
+    <button class="mt" onclick="mgrGo('assigned',this)">Assigned</button>
     <button class="mt" onclick="mgrGo('tasks',this)">Review</button>
     <button class="mt" onclick="mgrGo('employees',this)"><img src="mascot.png" style="height:22px;width:auto;vertical-align:middle;margin-right:5px;border-radius:4px;"/>Team</button>
   </div>
@@ -301,6 +302,8 @@ canvas{display:none;}
       </div>
     </div>
 
+    <div class="view" id="mgr-assigned"><div style="padding:14px;" id="assigned-list"></div></div>
+
     <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
 
     <div class="view" id="mgr-employees">
@@ -324,8 +327,11 @@ canvas{display:none;}
     <label class="car-photo-lbl" for="car-photo-inp" id="car-photo-lbl"><span class="cpu-txt">&#x1F4F7; Tap to photograph the car</span></label>
     <input type="file" id="car-photo-inp" accept="image/*" capture="environment" onchange="handleCarPhoto(event)" />
     <canvas id="enhance-canvas"></canvas>
-    <label class="fl2">Assign To</label>
-    <select class="msel" id="assign-emp"></select>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <label class="fl2" style="margin:0;">Assign To</label>
+      <button onclick="selectAllEmps()" id="all-emp-btn" style="background:none;border:1px solid #222;border-radius:8px;color:#888;font-size:12px;padding:4px 10px;cursor:pointer;">All</button>
+    </div>
+    <div id="assign-emp-list" style="margin-bottom:14px;"></div>
     <label class="fl2">Tasks</label>
     <div id="task-builder" style="margin-bottom:14px;"></div>
     <button class="mbtn gh" style="margin-top:0;margin-bottom:14px;" onclick="addCustomTask()">+ Add Task</button>
@@ -615,7 +621,7 @@ document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
 function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
-function mgrGo(id,btn){document.querySelectorAll('.mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='tasks')renderReview();if(id==='employees')renderTeam();}
+function mgrGo(id,btn){document.querySelectorAll('.mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='tasks')renderReview();if(id==='employees')renderTeam();}
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
 function renderGrid(){
@@ -748,28 +754,49 @@ function renderInv(){
   if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
   if(S.syncUrl)document.getElementById('sync-st').textContent='Ready to sync';
   document.getElementById('inv-list').innerHTML=items.map(car=>{
-    const asgn=S.assignments.find(a=>a.inventoryId===car.id&&!a.approved);
-    const emp=asgn?S.employees.find(e=>e.id===asgn.employeeId):null;
+    const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
     const pxI=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${asgn?`<div class="inv-assigned-tag">\u2192 ${emp?emp.name:'Assigned'}</div>`:''}</div><button class="inv-btn ${asgn?'asgn':''}" onclick="openAssign(${car.id})">${asgn?'Reassign':'Assign'}</button></div></div>`;
+    const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button class="inv-btn ${asgns.length?'asgn':''}" onclick="openAssign(${car.id})">${asgns.length?'+ Assign':'Assign'}</button></div></div>`;
   }).join('');
   applyPexels(items);
 }
 
 // ── ASSIGN ─────────────────────────────────────────────────────────────────────
+let selectedEmpsForAssign=new Set();
 function openAssign(carId){
   curAssign=carId;pendingCarPhoto=null;
   customTasksForAssign=[...DEFAULT_TASKS.map(t=>({...t}))];
+  // Pre-select already-assigned employees
+  selectedEmpsForAssign=new Set(S.assignments.filter(a=>a.inventoryId===carId&&!a.approved).map(a=>a.employeeId));
   const car=S.inventory.find(c=>c.id===carId);
   document.getElementById('assign-info').innerHTML=`<strong style="color:#fff;">${car.name}</strong><br><span>${car.stock} \xB7 ${car.location}</span>`;
-  document.getElementById('assign-emp').innerHTML=S.employees.filter(e=>e.role==='employee').map(e=>`<option value="${e.id}">${e.name} \xB7 ${e.location}</option>`).join('');
   const lbl=document.getElementById('car-photo-lbl');
   if(car.photo){lbl.innerHTML=`<img class="cpu-preview" src="${car.photo}"/><span class="cpu-txt" style="margin-top:8px;">Tap to change photo</span>`;}
   else{lbl.innerHTML='<span class="cpu-txt">&#x1F4F7; Tap to photograph the car</span>';}
+  renderEmpPicker();
   renderTaskBuilder();
   openM('m-assign');
 }
+function renderEmpPicker(){
+  const emps=S.employees.filter(e=>e.role==='employee');
+  const allSel=emps.every(e=>selectedEmpsForAssign.has(e.id));
+  document.getElementById('all-emp-btn').style.color=allSel?'#30d158':'#888';
+  document.getElementById('all-emp-btn').style.borderColor=allSel?'rgba(48,209,88,.4)':'#222';
+  document.getElementById('assign-emp-list').innerHTML=emps.map(e=>{
+    const checked=selectedEmpsForAssign.has(e.id);
+    const existing=S.assignments.find(a=>a.inventoryId===curAssign&&a.employeeId===e.id&&!a.approved);
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:10px;margin-bottom:8px;border:1px solid ${checked?'rgba(48,209,88,.25)':'#1a1a1a'};cursor:pointer;" onclick="toggleEmpCheck(${e.id})">
+      <div style="width:20px;height:20px;border-radius:6px;border:2px solid ${checked?'#30d158':'#333'};background:${checked?'#30d158':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;color:#000;">${checked?'&#x2713;':''}</div>
+      <span style="flex:1;font-size:14px;color:#ccc;">${e.name}</span>
+      <span style="font-size:12px;color:#444;">${e.location}</span>
+      ${existing?'<span style="font-size:11px;color:#30d158;background:rgba(48,209,88,.1);padding:2px 6px;border-radius:4px;">Active</span>':''}
+    </div>`;
+  }).join('');
+}
+function toggleEmpCheck(empId){if(selectedEmpsForAssign.has(empId))selectedEmpsForAssign.delete(empId);else selectedEmpsForAssign.add(empId);renderEmpPicker();}
+function selectAllEmps(){const emps=S.employees.filter(e=>e.role==='employee');if(emps.every(e=>selectedEmpsForAssign.has(e.id)))selectedEmpsForAssign.clear();else emps.forEach(e=>selectedEmpsForAssign.add(e.id));renderEmpPicker();}
 
 function renderTaskBuilder(){
   document.getElementById('task-builder').innerHTML=customTasksForAssign.map((t,i)=>{
@@ -802,27 +829,52 @@ function addCustomTask(){const n=prompt('Task name:');if(n&&n.trim())customTasks
 function handleCarPhoto(e){const f=e.target.files[0];if(!f)return;enhancePhoto(f,url=>{pendingCarPhoto=url;const lbl=document.getElementById('car-photo-lbl');lbl.innerHTML=`<img class="cpu-preview" src="${url}"/><span class="cpu-txt" style="margin-top:8px;">Tap to retake</span>`;});}
 
 async function doAssign(){
-  const empId=parseInt(document.getElementById('assign-emp').value);
+  if(!selectedEmpsForAssign.size){alert('Select at least one employee.');return;}
   const tasks=customTasksForAssign.map(t=>({name:t.name,urgent:t.urgent,done:false,by:null,note:t.note||'',editingNote:false}));
   showLoading('Assigning vehicle...');
-  try {
-    // Save photo to inventory if taken
+  try{
     if(pendingCarPhoto){
-      await sbPatch('inventory', curAssign, {photo: pendingCarPhoto});
+      await sbPatch('inventory',curAssign,{photo:pendingCarPhoto});
       S.inventory.find(c=>c.id===curAssign).photo=pendingCarPhoto;
     }
-    // Remove existing open assignment for this car
-    const existing = S.assignments.find(a=>a.inventoryId===curAssign&&!a.approved);
-    if(existing) await sbDelete('assignments', existing.id);
-    S.assignments = S.assignments.filter(a=>!(a.inventoryId===curAssign&&!a.approved));
-    // Create new assignment
-    const rows = await sbPost('assignments', {inventory_id:curAssign, employee_id:empId, tasks, submitted:false, approved:false, photos:[]});
-    const row = rows[0];
-    S.assignments.push({id:row.id,inventoryId:row.inventory_id,employeeId:row.employee_id,tasks:row.tasks,submitted:false,approved:false,photos:[],assignedAt:row.assigned_at});
+    // Only create assignments for newly selected employees (not already assigned)
+    const existingEmpIds=new Set(S.assignments.filter(a=>a.inventoryId===curAssign&&!a.approved).map(a=>a.employeeId));
+    const newEmpIds=[...selectedEmpsForAssign].filter(id=>!existingEmpIds.has(id));
+    for(const empId of newEmpIds){
+      const rows=await sbPost('assignments',{inventory_id:curAssign,employee_id:empId,tasks,submitted:false,approved:false,photos:[]});
+      const row=rows[0];
+      S.assignments.push({id:row.id,inventoryId:row.inventory_id,employeeId:row.employee_id,tasks:row.tasks,submitted:false,approved:false,photos:[],assignedAt:row.assigned_at});
+    }
     sv();
-  } catch(e){ alert('Error: '+e.message); }
+  }catch(e){alert('Error: '+e.message);}
   hideLoading();
-  closeM('m-assign');renderInv();
+  closeM('m-assign');renderInv();renderAssigned();
+}
+
+// ── ASSIGNED VIEW ──────────────────────────────────────────────────────────────
+function renderAssigned(){
+  const el=document.getElementById('assigned-list');
+  const assigned=S.inventory.filter(car=>S.assignments.some(a=>a.inventoryId===car.id&&!a.approved));
+  if(!assigned.length){el.innerHTML='<div class="empty"><div class="ei">&#x1F697;</div><div class="et">No vehicles currently assigned</div></div>';return;}
+  el.innerHTML=assigned.map(car=>{
+    const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
+    const pxI=!car.photo&&pxCache[String(car.id)];
+    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const empRows=asgns.map(a=>{
+      const emp=S.employees.find(e=>e.id===a.employeeId);
+      const done=a.tasks.filter(t=>t.done).length;const total=a.tasks.length;
+      const pct=total?Math.round(done/total*100):0;
+      const statusLabel=a.submitted?'<span style="color:#ffd60a;font-size:11px;">● Review</span>':pct===100?'<span style="color:#30d158;font-size:11px;">● Done</span>':`<span style="color:#888;font-size:11px;">${pct}%</span>`;
+      return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #111;">
+        <div style="width:28px;height:28px;border-radius:50%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:12px;color:#888;flex-shrink:0;">${emp?emp.name[0]:'?'}</div>
+        <span style="flex:1;font-size:13px;color:#ccc;">${emp?emp.name:'Unknown'}</span>
+        ${statusLabel}
+        <div style="width:60px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${a.submitted?'#ffd60a':'#30d158'};border-radius:2px;"></div></div>
+      </div>`;
+    }).join('');
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info" style="flex:1;"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div></div><button class="inv-btn asgn" onclick="openAssign(${car.id})" style="flex-shrink:0;">+ Assign</button></div>${empRows}</div>`;
+  }).join('');
+  applyPexels(assigned);
 }
 
 // ── REVIEW ─────────────────────────────────────────────────────────────────────
