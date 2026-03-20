@@ -469,9 +469,24 @@ function carImage(n){
 
 // ── PEXELS STOCK PHOTOS ────────────────────────────────────────────────────────
 const PX_KEY='PriC07whW68aE2NkagFgvnxVi4NanYIDP9P4TUHQpPA2SY3rNg79tksP';
-const PX_CACHE_VER='v5';
+const PX_CACHE_VER='v6';
 let pxCache={};try{const _pc=JSON.parse(localStorage.getItem('px_cache')||'{}');pxCache=_pc._v===PX_CACHE_VER?_pc:{_v:PX_CACHE_VER};}catch(e){pxCache={_v:PX_CACHE_VER};}
-
+// Curated B&W fallback photos per category (hand-picked from Pexels)
+const PX_FALLBACK={
+  sedan:'https://images.pexels.com/photos/100656/pexels-photo-100656.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  truck:'https://images.pexels.com/photos/5182307/pexels-photo-5182307.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  suv:  'https://images.pexels.com/photos/7762678/pexels-photo-7762678.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  van:  'https://images.pexels.com/photos/3046176/pexels-photo-3046176.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  sport:'https://images.pexels.com/photos/2907/car-mustang.jpg?auto=compress&cs=tinysrgb&h=650&w=940'
+};
+function _pxCategory(name){
+  const v=(name||'').toLowerCase();
+  if(/truck|f-?150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger|frontier|ridgeline/.test(v))return'truck';
+  if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'van';
+  if(/mustang|camaro|challenger|corvette|charger|supra/.test(v))return'sport';
+  if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|sportage|tucson|cx-5|bronco|wrangler/.test(v))return'suv';
+  return'sedan';
+}
 function _pxQuery(car,withColor){
   const parts=(car.name||'').trim().split(/\s+/);
   const hasYear=/^\d{4}$/.test(parts[0]);
@@ -481,38 +496,39 @@ function _pxQuery(car,withColor){
   return encodeURIComponent([year,model,color,'car'].filter(Boolean).join(' '));
 }
 function _pxScore(photo,car){
-  // Score a Pexels photo by how many car name words appear in its alt text
   const alt=(photo.alt||'').toLowerCase();
   const words=(car.name||'').toLowerCase().split(/\s+/).filter(w=>w.length>2);
   return words.reduce((s,w)=>s+(alt.includes(w)?1:0),0);
 }
 function _pxBest(photos,car){
   if(!photos?.length)return null;
-  // Pick highest-scoring photo; fall back to first if all score 0
   let best=photos[0],bestScore=_pxScore(photos[0],car);
   for(let i=1;i<photos.length;i++){
     const s=_pxScore(photos[i],car);
     if(s>bestScore){bestScore=s;best=photos[i];}
   }
+  // Only use result if at least one word matched — else return null to use fallback
+  if(bestScore===0)return null;
   return best?.src?.large2x||best?.src?.large||null;
 }
 async function fetchPexels(car){
   const k=String(car.id);
   if(pxCache[k])return pxCache[k];
   try{
-    // First pass: year+model+color
-    let r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,true)}&per_page=15&orientation=landscape`,{headers:{Authorization:PX_KEY}});
-    if(!r.ok)return null;
+    // First pass: year+model+color, B&W filter
+    let r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,true)}&per_page=15&orientation=landscape&color=black_and_white`,{headers:{Authorization:PX_KEY}});
+    if(!r.ok)return PX_FALLBACK[_pxCategory(car.name)];
     let d=await r.json();
     // Second pass: drop color if no results
     if(!d.photos?.length){
-      r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,false)}&per_page=15&orientation=landscape`,{headers:{Authorization:PX_KEY}});
-      if(!r.ok)return null;
+      r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,false)}&per_page=15&orientation=landscape&color=black_and_white`,{headers:{Authorization:PX_KEY}});
+      if(!r.ok)return PX_FALLBACK[_pxCategory(car.name)];
       d=await r.json();
     }
-    const url=_pxBest(d.photos,car);
+    // Use best scored result, fall back to curated category photo if no match
+    const url=_pxBest(d.photos,car)||PX_FALLBACK[_pxCategory(car.name)];
     if(url){pxCache[k]=url;try{localStorage.setItem('px_cache',JSON.stringify(pxCache));}catch(e){}}
-    console.log('[Pexels]',(car.name||'?'),'=>',url?'found':'no result');
+    console.log('[Pexels]',(car.name||'?'),'=>',url);
     return url;
   }catch(e){return null;}
 }
