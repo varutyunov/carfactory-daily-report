@@ -1,3 +1,19 @@
+========================================
+PAYMENTS — 03/19/2026
+========================================
+DEBARY (8 payments, $2985.00):
+  GONZALEZ, PAOLA (#4244) — $310.00 (conv fee: $10.00)
+  HUFF GIARDULLO, AUSTIN (#4224) — $240.00 (conv fee: $10.00)
+  CARTER SANTANA, DYLON (#4380) — $200.00
+  SULLIVAN, NATHAN (#4220) — $1010.00 (conv fee: $10.00)
+  LOWERY, MISTY (#4393) — $300.00
+  PERRY, REBECCA (#4299) — $360.00
+  CHAMBERLIN, STEVEN (#4272) — $275.00
+  CHARLES, MONTELLE (#4402) — $290.00 (conv fee: $10.00)
+DELAND (0 payments, $0.00):
+  (none)
+COMBINED: 8 payments, $2985.00
+
 ════════════════════════════════
 PAYMENTS — 03/19/2026
 ════════════════════════════════
