@@ -55,7 +55,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .car-tile.st-done{border-color:#1e3a1e;}
 .car-tile.st-review{border-color:#2a2500;}
 .tile-photo-wrap{width:100%;height:145px;position:relative;overflow:hidden;background:#111;}
-.tile-photo{width:100%;height:100%;object-fit:cover;filter:contrast(1.12) saturate(1.2) brightness(1.05);}
+.tile-photo{width:100%;height:100%;object-fit:contain;padding:6px;background:#e8e8e8;}
 .tile-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#141414,#1c1c1c);}
 .tile-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,transparent 35%,rgba(0,0,0,.55) 100%);}
 .tile-grad{position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
@@ -474,25 +474,25 @@ function carImage(n){
 }
 
 // ── CURATED CATEGORY PHOTOS (B&W, hand-picked from Pexels) ────────────────────
-const pxCache={}; // no longer used for caching, kept for compatibility
-const CAT_PHOTO={
-  coupe:'https://images.pexels.com/photos/261986/pexels-photo-261986.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-  sedan:'https://images.pexels.com/photos/7012891/pexels-photo-7012891.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-  truck:'https://images.pexels.com/photos/36378102/pexels-photo-36378102.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-  suv:  'https://images.pexels.com/photos/3370332/pexels-photo-3370332.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-  van:  'https://images.pexels.com/photos/3046176/pexels-photo-3046176.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
+const pxCache={};
+const CAT_SVG={
+  sedan:`<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="100" fill="#e8e8e8"/><circle cx="65" cy="82" r="17" fill="#1a1a1a"/><circle cx="65" cy="82" r="7" fill="#888"/><circle cx="235" cy="82" r="17" fill="#1a1a1a"/><circle cx="235" cy="82" r="7" fill="#888"/><path fill="#1a1a1a" d="M5,76 L5,66 Q8,58 20,54 L76,50 Q85,44 92,34 L112,20 Q122,15 142,15 L172,15 Q190,15 198,21 L215,34 Q221,42 225,49 L248,52 Q268,54 278,60 L290,66 Q294,71 294,76 Z"/></svg>`,
+  coupe:`<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg"><rect width="320" height="100" fill="#e8e8e8"/><circle cx="78" cy="82" r="17" fill="#1a1a1a"/><circle cx="78" cy="82" r="7" fill="#888"/><circle cx="246" cy="82" r="17" fill="#1a1a1a"/><circle cx="246" cy="82" r="7" fill="#888"/><path fill="#1a1a1a" d="M5,76 L5,64 Q8,56 22,52 L85,48 Q97,38 108,25 L132,17 Q148,14 170,14 L200,14 Q220,14 230,21 L250,44 Q256,49 260,52 L282,54 Q302,57 314,64 L316,68 Q317,72 315,76 Z"/></svg>`,
+  suv:`<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="100" fill="#e8e8e8"/><circle cx="62" cy="84" r="18" fill="#1a1a1a"/><circle cx="62" cy="84" r="8" fill="#888"/><circle cx="238" cy="84" r="18" fill="#1a1a1a"/><circle cx="238" cy="84" r="8" fill="#888"/><path fill="#1a1a1a" d="M5,76 L5,64 Q8,54 22,50 L46,46 L58,22 Q66,12 86,11 L214,11 Q232,11 240,22 L254,44 L276,48 Q290,54 293,64 L293,76 Z"/></svg>`,
+  truck:`<svg viewBox="0 0 340 100" xmlns="http://www.w3.org/2000/svg"><rect width="340" height="100" fill="#e8e8e8"/><circle cx="78" cy="82" r="17" fill="#1a1a1a"/><circle cx="78" cy="82" r="7" fill="#888"/><circle cx="210" cy="82" r="17" fill="#1a1a1a"/><circle cx="210" cy="82" r="7" fill="#888"/><path fill="#1a1a1a" d="M5,74 L5,60 Q8,50 22,46 L46,44 L58,20 Q66,12 86,11 L176,11 Q192,11 200,22 L215,46 L218,74 Z"/><path fill="#1a1a1a" d="M220,74 L220,48 L322,48 L328,54 Q332,60 332,66 L332,74 Z"/><rect x="218" y="48" width="4" height="26" fill="#2d2d2d"/></svg>`,
+  van:`<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="100" fill="#e8e8e8"/><circle cx="62" cy="84" r="17" fill="#1a1a1a"/><circle cx="62" cy="84" r="7" fill="#888"/><circle cx="238" cy="84" r="17" fill="#1a1a1a"/><circle cx="238" cy="84" r="7" fill="#888"/><path fill="#1a1a1a" d="M8,76 L8,38 Q10,22 28,16 L236,14 Q256,14 264,26 L272,42 L276,52 Q280,60 280,68 L280,76 Z"/></svg>`
 };
 function carCategory(name){
   const v=(name||'').toLowerCase();
-  if(/truck|f-?150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger|frontier|ridgeline/.test(v))return'truck';
-  if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'van';
-  if(/mustang|camaro|challenger|corvette|charger|supra/.test(v))return'coupe';
-  if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|sportage|tucson|cx-5|bronco|wrangler/.test(v))return'suv';
+  if(/truck|pickup|f-?150|f-?250|f-?350|silverado|sierra|ram\s?\d|tundra|tacoma|colorado|canyon|ranger|frontier|ridgeline|titan/.test(v))return'truck';
+  if(/van|odyssey|sienna|pacifica|caravan|transit|express|savana|sprinter|metris|town.country/.test(v))return'van';
+  if(/mustang|camaro|challenger|corvette|charger|supra|370z|350z|brz|86|miata|mx-?5|genesis.coupe|stinger/.test(v))return'coupe';
+  if(/cr-?v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|yukon|escalade|expedition|navigator|sportage|tucson|cx-?5|cx-?9|bronco|wrangler|cherokee|durango|traverse|enclave|acadia|mdx|rdx|qx|q5|q7|x3|x5|rx|gx|lx|gls|gle|murano|pathfinder|armada|sequoia|atlas|tiguan|sorento|santa.fe|outback|forester|crosstrek|defender|discovery/.test(v))return'suv';
   return'sedan';
 }
 function fetchPexels(car){
-  // Return curated category photo instantly — no API call needed
-  return Promise.resolve(CAT_PHOTO[carCategory(car.name)]);
+  const svg=CAT_SVG[carCategory(car.name)];
+  return Promise.resolve('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg));
 }
 
 function applyPexels(cars){
