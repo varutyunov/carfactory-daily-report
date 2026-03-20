@@ -5401,5 +5401,42 @@
       "deland_total": 15286.84,
       "combined_total": 30918.38
     }
+  },
+  {
+    "date": "03/19/2026",
+    "generated": "2026-03-20T19:17:44.967Z",
+    "debary": {
+      "totalLate": 181,
+      "buckets": {
+        "150+": 94,
+        "90-150": 25,
+        "30-90": 29,
+        "0-30": 33
+      },
+      "payments": {
+        "count": 8,
+        "total": 2985
+      }
+    },
+    "deland": {
+      "totalLate": 84,
+      "buckets": {
+        "150+": 50,
+        "90-150": 8,
+        "30-90": 12,
+        "0-30": 14
+      },
+      "payments": {
+        "count": 0,
+        "total": 0
+      }
+    },
+    "combined": {
+      "totalLate": 265,
+      "payments": {
+        "count": 8,
+        "total": 2985
+      }
+    }
   }
 ]
