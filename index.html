@@ -469,36 +469,49 @@ function carImage(n){
 
 // ── PEXELS STOCK PHOTOS ────────────────────────────────────────────────────────
 const PX_KEY='PriC07whW68aE2NkagFgvnxVi4NanYIDP9P4TUHQpPA2SY3rNg79tksP';
-const PX_CACHE_VER='v4';
+const PX_CACHE_VER='v5';
 let pxCache={};try{const _pc=JSON.parse(localStorage.getItem('px_cache')||'{}');pxCache=_pc._v===PX_CACHE_VER?_pc:{_v:PX_CACHE_VER};}catch(e){pxCache={_v:PX_CACHE_VER};}
 
 function _pxQuery(car,withColor){
-  // Format: "2009 VW CC" → year="2009", skip make "VW", model="CC"
   const parts=(car.name||'').trim().split(/\s+/);
   const hasYear=/^\d{4}$/.test(parts[0]);
   const year=hasYear?parts[0]:'';
-  // Skip make (word after year), keep rest as model
   const model=(hasYear?parts.slice(2):parts.slice(1)).join(' ');
   const color=withColor&&car.color?car.color:'';
-  return encodeURIComponent([year,model,color,'automobile'].filter(Boolean).join(' '));
+  return encodeURIComponent([year,model,color,'car'].filter(Boolean).join(' '));
+}
+function _pxScore(photo,car){
+  // Score a Pexels photo by how many car name words appear in its alt text
+  const alt=(photo.alt||'').toLowerCase();
+  const words=(car.name||'').toLowerCase().split(/\s+/).filter(w=>w.length>2);
+  return words.reduce((s,w)=>s+(alt.includes(w)?1:0),0);
+}
+function _pxBest(photos,car){
+  if(!photos?.length)return null;
+  // Pick highest-scoring photo; fall back to first if all score 0
+  let best=photos[0],bestScore=_pxScore(photos[0],car);
+  for(let i=1;i<photos.length;i++){
+    const s=_pxScore(photos[i],car);
+    if(s>bestScore){bestScore=s;best=photos[i];}
+  }
+  return best?.src?.large2x||best?.src?.large||null;
 }
 async function fetchPexels(car){
   const k=String(car.id);
   if(pxCache[k])return pxCache[k];
   try{
-    // First try: make+model+color+exterior
-    let r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,true)}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
+    // First pass: year+model+color
+    let r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,true)}&per_page=15&orientation=landscape`,{headers:{Authorization:PX_KEY}});
     if(!r.ok)return null;
     let d=await r.json();
-    // Second try: drop color if first pass had no results
+    // Second pass: drop color if no results
     if(!d.photos?.length){
-      r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,false)}&per_page=5&orientation=landscape`,{headers:{Authorization:PX_KEY}});
+      r=await fetch(`https://api.pexels.com/v1/search?query=${_pxQuery(car,false)}&per_page=15&orientation=landscape`,{headers:{Authorization:PX_KEY}});
       if(!r.ok)return null;
       d=await r.json();
     }
-    const url=d.photos?.[0]?.src?.large2x||d.photos?.[0]?.src?.large||null;
+    const url=_pxBest(d.photos,car);
     if(url){pxCache[k]=url;try{localStorage.setItem('px_cache',JSON.stringify(pxCache));}catch(e){}}
-    // Log what query returned what for debugging
     console.log('[Pexels]',(car.name||'?'),'=>',url?'found':'no result');
     return url;
   }catch(e){return null;}
