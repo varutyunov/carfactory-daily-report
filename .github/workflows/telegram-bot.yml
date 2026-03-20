@@ -1,14 +1,11 @@
-name: Telegram Bot
+name: Telegram Bot (Fallback)
 
 on:
-  schedule:
-    - cron: '*/2 * * * *'
   workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

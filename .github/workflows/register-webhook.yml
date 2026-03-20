@@ -1,0 +1,18 @@
+name: Register Telegram Webhook
+
+on:
+  workflow_dispatch:
+    inputs:
+      netlify_url:
+        description: 'Your Netlify site URL (e.g. https://yoursite.netlify.app)'
+        required: true
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register webhook with Telegram
+        run: |
+          WEBHOOK_URL="${{ github.event.inputs.netlify_url }}/.netlify/functions/telegram-webhook"
+          echo "Registering webhook: $WEBHOOK_URL"
+          curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/setWebhook?url=${WEBHOOK_URL}"
