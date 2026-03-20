@@ -661,9 +661,32 @@ function openTaskView(aid){
   document.querySelector('.content').scrollTop=0;
 }
 
+const EXPANDABLE_TASKS=['repairs','parts'];
 function renderTaskItems(a){
-  document.getElementById('task-list').innerHTML=a.tasks.map((t,i)=>`
-    <div class="ti">
+  document.getElementById('task-list').innerHTML=a.tasks.map((t,i)=>{
+    const isExpand=EXPANDABLE_TASKS.includes(t.name.toLowerCase());
+    const expanded=t.editingNote||false;
+    if(isExpand){
+      // Expandable task: tap name to toggle textarea
+      return`<div class="ti">
+      <div class="ti-left"><div class="chk ${t.done?'on':''}" onclick="togTask(${a.id},${i})"><span class="chk-m">&#x2713;</span></div></div>
+      <div class="ti-main">
+        <div class="ti-top">
+          <span class="ti-name ${t.done?'dn':''}" onclick="toggleNote(${a.id},${i})" style="cursor:pointer;">${t.name}</span>
+          <span style="color:#444;font-size:12px;margin-left:6px;" onclick="toggleNote(${a.id},${i})">${expanded?'▲':'▼'}</span>
+          ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
+        </div>
+        ${expanded?`<textarea class="ti-note-input" rows="3" placeholder="Describe ${t.name.toLowerCase()}..." onblur="saveNote(${a.id},${i},this.value)" autofocus>${t.note||''}</textarea>`
+          :t.note?`<div class="ti-note" onclick="toggleNote(${a.id},${i})">${t.note}</div>`:''}
+        ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
+        <div class="ti-actions">
+          <button class="ti-act-btn ${t.urgent?'urgent-on':''}" onclick="togUrgent(${a.id},${i})">&#x26A0; ${t.urgent?'Urgent':'Mark urgent'}</button>
+        </div>
+      </div>
+    </div>`;
+    } else {
+      // Simple checkbox task (Detail, Photos)
+      return`<div class="ti">
       <div class="ti-left"><div class="chk ${t.done?'on':''}" onclick="togTask(${a.id},${i})"><span class="chk-m">&#x2713;</span></div></div>
       <div class="ti-main">
         <div class="ti-top">
@@ -671,14 +694,13 @@ function renderTaskItems(a){
           ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
         </div>
         ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
-        ${t.note&&!t.editingNote?`<div class="ti-note">${t.note}</div>`:''}
-        ${t.editingNote?`<textarea class="ti-note-input" rows="2" placeholder="Add a note..." onblur="saveNote(${a.id},${i},this.value)">${t.note||''}</textarea>`:''}
         <div class="ti-actions">
-          <button class="ti-act-btn" onclick="toggleNote(${a.id},${i})">&#x1F4DD; ${t.note&&!t.editingNote?'Edit note':'Add note'}</button>
           <button class="ti-act-btn ${t.urgent?'urgent-on':''}" onclick="togUrgent(${a.id},${i})">&#x26A0; ${t.urgent?'Urgent':'Mark urgent'}</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+    }
+  }).join('');
 }
 
 function togTask(aid,idx){
