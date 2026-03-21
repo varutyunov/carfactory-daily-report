@@ -898,10 +898,9 @@ function renderInv(){
     const pxI=!car.photo&&pxCache[String(car.id)];
     const ws=getWorkState(car.id);
     const carSel=ws.selected||false;
-    const thInner=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const th=`<button onclick="event.stopPropagation();openWorkScreen(${car.id})" style="cursor:pointer;flex-shrink:0;background:none;border:none;padding:0;margin:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">${thInner}</button>`;
+    const thImg=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card" onclick="toggleCarWorkSel(${car.id})" style="cursor:pointer;border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
+    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><a href="javascript:void(0)" onclick="toggleCarWorkSel(${car.id});return false;" style="flex:1;min-width:0;text-decoration:none;color:inherit;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;"><div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></a></div></div>`;
   }).join('');
   applyPexels(items);
 }
