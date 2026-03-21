@@ -301,11 +301,26 @@ canvas{display:none;}
   <div class="content">
 
     <div class="view on" id="emp-home">
-      <div style="padding:14px 14px 8px;"><div class="greeting" id="greeting">My Cars</div></div>
-      <div style="padding:0 14px 80px;">
+      <div class="emp-tabs" id="emp-tabs" style="display:none;">
+        <button class="mt on" onclick="empTabGo('detail',this)">Detail</button>
+        <button class="mt" onclick="empTabGo('tasks',this)">Tasks</button>
+        <button class="mt" onclick="empTabGo('personal',this)" id="emp-tab-name">Me</button>
+      </div>
+      <div id="emp-tab-detail" style="padding:0 14px 80px;">
+        <div style="padding:14px 0 8px;"><div class="greeting">Detail Queue</div></div>
+        <div class="car-grid" id="detail-grid"></div>
+        <div class="empty" id="detail-empty" style="display:none;"><div class="ei">✨</div><div class="et">No vehicles in detail queue.</div></div>
+      </div>
+      <div id="emp-tab-tasks" style="padding:0 14px 80px;display:none;">
+        <div style="padding:14px 0 8px;"><div class="greeting" id="greeting">My Cars</div></div>
         <div id="offline-notice" style="display:none;" class="offline-badge">&#x2022; Offline mode &#x2014; changes saved locally</div>
         <div class="car-grid" id="car-grid"></div>
         <div class="empty" id="grid-empty" style="display:none;"><div class="ei">&#x1F697;</div><div class="et">No cars assigned yet.<br>Check back soon.</div></div>
+      </div>
+      <div id="emp-tab-personal" style="padding:0 14px 80px;display:none;">
+        <div style="padding:14px 0 8px;"><div class="greeting" id="personal-greeting">My Assignments</div></div>
+        <div class="car-grid" id="personal-grid"></div>
+        <div class="empty" id="personal-empty" style="display:none;"><div class="ei">👤</div><div class="et">No personal assignments yet.</div></div>
       </div>
     </div>
 
@@ -728,7 +743,7 @@ async function doLogin(){
   await syncFromSupabase();
   fetchNotifications();
   if(e.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
-  else{document.getElementById('mtabs').style.display='none';document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';showView('emp-home');renderGrid();}
+  else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
 }
 function doSync(){
   const btn=document.getElementById('sync-btn');
@@ -774,6 +789,76 @@ function renderGrid(){
     return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
   }).join('');
   applyPexels(mine.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
+}
+
+// ── EMPLOYEE TABS ─────────────────────────────────────────────────────────────
+let curEmpTab='detail';
+function empTabGo(tab,btn){
+  curEmpTab=tab;
+  document.querySelectorAll('#emp-tabs .mt').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  ['detail','tasks','personal'].forEach(t=>{
+    const el=document.getElementById('emp-tab-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
+  });
+  if(tab==='detail') renderDetailQueue();
+  else if(tab==='tasks') renderGrid();
+  else if(tab==='personal') renderPersonalTab();
+}
+function renderDetailQueue(){
+  // Show all cars assigned to Detail section pool (visible to ALL employees)
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&(
+      (ws.categories.detail&&ws.categories.detail.sectionPool)||
+      (ws.categories.photos&&ws.categories.photos.sectionPool)
+    );
+  });
+  const grid=document.getElementById('detail-grid');
+  const empty=document.getElementById('detail-empty');
+  if(!cars.length){grid.style.display='none';empty.style.display='flex';return;}
+  grid.style.display='grid';empty.style.display='none';
+  grid.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const isDetail=ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;
+    const isPhotos=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
+    const tags=[];
+    if(isDetail) tags.push('<span style="color:#30d158;font-size:10px;font-weight:600;">✨ Detail</span>');
+    if(isPhotos) tags.push('<span style="color:#64d2ff;font-size:10px;font-weight:600;">📷 Photos</span>');
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    return`<div class="car-tile" onclick="alert('${car.name} — ${tags.map(t=>t.replace(/<[^>]+>/g,'')).join(', ')}')" style="border-color:#1e3a1e;">
+      <div class="tile-photo-wrap">${photoHTML}</div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags.join(' ')}</div></div>
+    </div>`;
+  }).join('');
+  applyPexels(cars);
+}
+function renderPersonalTab(){
+  // Show cars where photos/detail is assigned to THIS employee specifically
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    if(!ws.categories) return false;
+    return Object.values(ws.categories).some(c=>c.assignedTo===me.id);
+  });
+  const grid=document.getElementById('personal-grid');
+  const empty=document.getElementById('personal-empty');
+  if(!cars.length){grid.style.display='none';empty.style.display='flex';return;}
+  grid.style.display='grid';empty.style.display='none';
+  grid.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const assigned=Object.entries(ws.categories||{}).filter(([k,v])=>v.assignedTo===me.id).map(([k])=>k);
+    const tags=assigned.map(k=>`<span style="color:#64d2ff;font-size:10px;font-weight:600;">${catIcon(k)} ${k}</span>`).join(' ');
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    return`<div class="car-tile" style="border-color:#1a2a3a;">
+      <div class="tile-photo-wrap">${photoHTML}</div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags}</div></div>
+    </div>`;
+  }).join('');
+  applyPexels(cars);
 }
 
 // ── TASK VIEW ──────────────────────────────────────────────────────────────────
@@ -1238,7 +1323,7 @@ if(_savedSession){
       syncFromSupabase().then(()=>{
         fetchNotifications();
         if(me.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
-        else{document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';showView('emp-home');renderGrid();}
+        else{document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
       });
     }
   }catch(e){}
@@ -1338,9 +1423,14 @@ function closeCatScreen(){
   document.getElementById('cat-screen').style.display='none';
 }
 function renderCatBody(){
-  const cs=getCatState(curWorkCarId,curCatName.toLowerCase());
+  const key=curCatName.toLowerCase();
+  // Photos and Detail use assign UI, not repair items
+  if(key==='photos'||key==='detail'){
+    renderAssignCatBody();
+    return;
+  }
+  const cs=getCatState(curWorkCarId,key);
   const repairs=cs.repairs||[];
-  // Migrate old string repairs to {text,part} objects
   const items=repairs.map(r=>typeof r==='string'?{text:r,part:''}:r);
   if(items.some((r,i)=>typeof repairs[i]==='string')){cs.repairs=items;const car=S.inventory.find(c=>c.id===curWorkCarId);if(car)car.work=getWorkState(curWorkCarId);saveWorkState(curWorkCarId);}
   document.getElementById('cs-body').innerHTML=items.map((r,i)=>`
@@ -1354,6 +1444,93 @@ function renderCatBody(){
         ${r.part?`<span style="color:#30d158;font-size:12px;white-space:nowrap;">📦 → Parts</span>`:''}
       </div>
     </div>`).join('')+`<button class="cs-add-btn" onclick="addCatRepair()">+ Add Repair</button>`;
+}
+function renderAssignCatBody(){
+  const key=curCatName.toLowerCase();
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[],assignedTo:null,sectionPool:false};
+  const cs=ws.categories[key];
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  const carName=car?car.name:'Vehicle';
+  const emps=S.employees.filter(e=>e.role==='employee');
+  const assignedEmp=cs.assignedTo?S.employees.find(e=>e.id===cs.assignedTo):null;
+  document.getElementById('cs-body').innerHTML=`
+    <div style="padding:8px 0;">
+      <div style="color:#888;font-size:13px;margin-bottom:16px;">${curCatName} assignment for ${carName}</div>
+      ${cs.sectionPool?`<div style="background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.3);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="color:#30d158;font-weight:600;font-size:14px;">✓ Assigned to ${curCatName} Section</div>
+        <div style="color:#666;font-size:12px;margin-top:4px;">Visible to all employees</div>
+        <button onclick="unassignSection()" style="margin-top:10px;background:none;border:1px solid #333;color:#888;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;">Remove from section</button>
+      </div>`:''}
+      ${assignedEmp?`<div style="background:rgba(100,210,255,.1);border:1px solid rgba(100,210,255,.3);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="color:#64d2ff;font-weight:600;font-size:14px;">✓ Assigned to ${assignedEmp.name}</div>
+        <div style="color:#666;font-size:12px;margin-top:4px;">Private to this employee</div>
+        <button onclick="unassignPerson()" style="margin-top:10px;background:none;border:1px solid #333;color:#888;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;">Remove assignment</button>
+      </div>`:''}
+      <button onclick="assignToSection()" class="cs-assign-btn" style="background:#1a1a1a;border:1px solid ${cs.sectionPool?'#30d158':'#333'};color:${cs.sectionPool?'#30d158':'#fff'};padding:14px;border-radius:12px;width:100%;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px;text-align:left;">
+        📋 Assign to ${curCatName} Section<br><span style="color:#666;font-size:12px;font-weight:400;">All employees can see this</span>
+      </button>
+      <div style="color:#555;font-size:12px;text-align:center;margin:6px 0;">— or assign to a specific person —</div>
+      ${emps.map(e=>`<button onclick="assignToPerson('${e.id}')" class="cs-assign-btn" style="background:#1a1a1a;border:1px solid ${cs.assignedTo===e.id?'#64d2ff':'#222'};color:#fff;padding:12px;border-radius:10px;width:100%;font-size:14px;cursor:pointer;margin-bottom:6px;text-align:left;">
+        👤 ${e.name}
+      </button>`).join('')}
+    </div>`;
+}
+async function assignToSection(){
+  const key=curCatName.toLowerCase();
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
+  ws.categories[key].sectionPool=true;
+  ws.categories[key].selected=true;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  await saveWorkState(curWorkCarId);
+  // Notify all employees
+  const carName=car?car.name:'vehicle';
+  const msg=me.name+' added '+carName+' to '+curCatName+' section';
+  for(const e of S.employees.filter(e=>e.role==='employee')){
+    try{await createNotification(e.id,msg,null,carName);}catch(ex){}
+  }
+  renderAssignCatBody();
+  renderWorkGrid();
+}
+async function unassignSection(){
+  const key=curCatName.toLowerCase();
+  const ws=getWorkState(curWorkCarId);
+  if(ws.categories&&ws.categories[key]) ws.categories[key].sectionPool=false;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  await saveWorkState(curWorkCarId);
+  renderAssignCatBody();
+  renderWorkGrid();
+}
+async function assignToPerson(empId){
+  const key=curCatName.toLowerCase();
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
+  ws.categories[key].assignedTo=empId;
+  ws.categories[key].selected=true;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  await saveWorkState(curWorkCarId);
+  const emp=S.employees.find(e=>e.id===empId);
+  const carName=car?car.name:'vehicle';
+  if(emp){
+    try{await createNotification(empId,me.name+' assigned '+curCatName+' on '+carName+' to you',null,carName);}catch(e){}
+  }
+  renderAssignCatBody();
+  renderWorkGrid();
+}
+async function unassignPerson(){
+  const key=curCatName.toLowerCase();
+  const ws=getWorkState(curWorkCarId);
+  if(ws.categories&&ws.categories[key]) ws.categories[key].assignedTo=null;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  await saveWorkState(curWorkCarId);
+  renderAssignCatBody();
+  renderWorkGrid();
 }
 function saveCatRepair(idx,field,val){
   const ws=getWorkState(curWorkCarId);
