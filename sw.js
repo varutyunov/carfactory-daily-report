@@ -1,15 +1,11 @@
-const CACHE = 'cf-cache-v4';
-const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.png', '/apple-touch-icon.png'];
+const CACHE = 'cf-cache-v5';
 
-// Install: cache all core assets immediately
+// Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS).catch(() => {}))
-  );
 });
 
-// Activate: take control of all clients right away, clean old caches
+// Activate: delete ALL old caches, claim all clients
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -18,48 +14,59 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch: stale-while-revalidate for HTML, cache-first for everything else
+// Fetch: NETWORK-FIRST for HTML, cache-first for static assets
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-
-  // Only handle same-origin requests
   if (url.origin !== self.location.origin) return;
 
+  // HTML pages: always try network first
+  if (e.request.mode === 'navigate' || e.request.destination === 'document' ||
+      url.pathname === '/' || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request, {cache: 'no-store'}).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => { c.put(e.request, clone); });
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Static assets (images, css, js, manifest): cache-first
   e.respondWith(
     caches.open(CACHE).then(cache =>
       cache.match(e.request).then(cached => {
-        // Always fetch fresh in background and update cache
-        const fetchPromise = fetch(e.request, {cache: 'no-store'}).then(res => {
+        if (cached) return cached;
+        return fetch(e.request).then(res => {
           if (res.ok) cache.put(e.request, res.clone());
           return res;
-        }).catch(() => null);
-
-        // Return cached immediately if available, otherwise wait for network
-        return cached || fetchPromise;
+        });
       })
     )
   );
 });
 
-// Message: force update check — fetch fresh index.html and notify clients
+// Message handler for SYNC and SKIP_WAITING
 self.addEventListener('message', e => {
+  if (e.data === 'SKIP_WAITING') { self.skipWaiting(); return; }
   if (e.data === 'SYNC') {
-    caches.open(CACHE).then(cache => {
-      fetch('/index.html', {cache: 'no-store'}).then(res => {
-        if (res.ok) {
+    fetch('/index.html', {cache: 'no-store'}).then(res => {
+      if (res.ok) {
+        caches.open(CACHE).then(cache => {
           cache.put('/index.html', res.clone());
           cache.put('/', res.clone());
-        }
-        // Tell all clients the update is cached and ready
-        self.clients.matchAll().then(clients =>
-          clients.forEach(c => c.postMessage('UPDATED'))
-        );
-      }).catch(() => {
-        self.clients.matchAll().then(clients =>
-          clients.forEach(c => c.postMessage('SYNC_FAILED'))
-        );
-      });
+        });
+      }
+      self.clients.matchAll().then(clients =>
+        clients.forEach(c => c.postMessage('UPDATED'))
+      );
+    }).catch(() => {
+      self.clients.matchAll().then(clients =>
+        clients.forEach(c => c.postMessage('SYNC_FAILED'))
+      );
     });
   }
 });
