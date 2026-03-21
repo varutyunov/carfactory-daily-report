@@ -625,22 +625,20 @@ function doSync(){
   const btn=document.getElementById('sync-btn');
   btn.style.color='#30d158';
   btn.style.pointerEvents='none';
-  btn.innerHTML='&#x21BB;';
   btn.style.animation='spin 1s linear infinite';
-  syncFromSupabase().then(()=>{
-    const v=document.querySelector('.mv.active')||null;
-    const view=v?v.id:'';
-    if(view==='mgr-inventory'||!me||me.role!=='manager')renderInv&&renderInv();
-    if(view==='mgr-assigned')renderAssigned&&renderAssigned();
-    if(view==='mgr-tasks')renderReview&&renderReview();
-    if(view==='mgr-employees')renderTeam&&renderTeam();
-    if(me&&me.role!=='manager')renderGrid&&renderGrid();
-    btn.style.color='#555';
-    btn.style.pointerEvents='auto';
-    btn.style.animation='';
-  }).catch(()=>{btn.style.color='#ff453a';setTimeout(()=>{btn.style.color='#555';btn.style.pointerEvents='auto';},2000);});
+  // Save session so user stays logged in after reload
+  if(me) localStorage.setItem('cf_session', JSON.stringify(me));
+  // Tell SW to fetch fresh app version
+  if('serviceWorker' in navigator && navigator.serviceWorker.controller){
+    navigator.serviceWorker.controller.postMessage('SYNC');
+    // Fallback: if SW doesn't respond in 5s, reload anyway
+    setTimeout(()=>{ if(btn.style.pointerEvents==='none') window.location.reload(); }, 5000);
+  } else {
+    // No SW — just reload
+    window.location.reload();
+  }
 }
-function doLogout(){me=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+function doLogout(){me=null;localStorage.removeItem('cf_session');document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
@@ -1000,7 +998,18 @@ document.querySelectorAll('.mb').forEach(m=>{m.addEventListener('click',e=>{if(e
 
 // Unregister any old service workers
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+  navigator.serviceWorker.register('/sw.js').then(reg=>{
+    // Listen for messages from SW
+    navigator.serviceWorker.addEventListener('message', e=>{
+      if(e.data==='UPDATED'){
+        // Fresh version cached — reload without white screen
+        window.location.reload();
+      } else if(e.data==='SYNC_FAILED'){
+        const btn=document.getElementById('sync-btn');
+        if(btn){btn.style.color='#ff453a';setTimeout(()=>{btn.style.color='#555';btn.style.pointerEvents='auto';},2000);}
+      }
+    });
+  });
 }
 
 
@@ -1024,8 +1033,24 @@ async function addCarManually(){
   renderInv();
 }
 
+// Restore session if coming back from a sync reload
+const _savedSession = localStorage.getItem('cf_session');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
 localStorage.clear();
+if(_savedSession){
+  try{
+    const _s = JSON.parse(_savedSession);
+    if(_s && _s.id){
+      me = _s;
+      document.getElementById('login').style.display='none';
+      document.getElementById('app').style.display='flex';
+      syncFromSupabase().then(()=>{
+        if(me.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
+        else{document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';showView('emp-home');renderGrid();}
+      });
+    }
+  }catch(e){}
+}
 ld();
 </script>
 </body>
