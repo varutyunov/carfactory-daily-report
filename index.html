@@ -61,7 +61,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .car-tile.st-done{border-color:#1e3a1e;}
 .car-tile.st-review{border-color:#2a2500;}
 .tile-photo-wrap{width:100%;height:145px;position:relative;overflow:hidden;background:#111;}
-.tile-photo{width:100%;height:100%;object-fit:contain;padding:6px;background:#e8e8e8;}
+.tile-photo{width:100%;height:100%;object-fit:cover;background:#111;}
 .tile-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#141414,#1c1c1c);}
 .tile-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,transparent 35%,rgba(0,0,0,.55) 100%);}
 .tile-grad{position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
@@ -141,7 +141,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .inv-search{width:100%;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#fff;padding:13px 16px;font-size:15px;margin-bottom:12px;}
 .inv-search:focus{outline:none;border-color:#333;}
 .inv-search::placeholder{color:#2a2a2a;}
-.inv-card{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:10px;overflow:hidden;}
+.inv-card{background:#000;border:none;border-radius:14px;margin-bottom:10px;overflow:hidden;}
 .inv-card-top{display:flex;align-items:center;gap:12px;padding:12px 14px;}
 .inv-thumb{width:80px;height:58px;border-radius:8px;object-fit:cover;background:#111;flex-shrink:0;filter:contrast(1.1) saturate(1.15);}
 .inv-thumb-ph{width:80px;height:58px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -556,9 +556,10 @@ function carCategory(name){
   if(/cr-?v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|yukon|escalade|expedition|navigator|sportage|tucson|cx-?5|cx-?9|bronco|wrangler|cherokee|durango|traverse|enclave|acadia|mdx|rdx|qx|q5|q7|x3|x5|rx|gx|lx|gls|gle|murano|pathfinder|armada|sequoia|atlas|tiguan|sorento|santa.fe|outback|forester|crosstrek|defender|discovery/.test(v))return'suv';
   return'sedan';
 }
+const CAT_PHOTO={sedan:'stock-sedan.png',coupe:'stock-coupe.png',truck:'stock-truck.png',van:'stock-van.png',suv:'stock-sedan.png'};
 function fetchPexels(car){
-  const svg=CAT_SVG[carCategory(car.name)];
-  return Promise.resolve('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg));
+  const cat=carCategory(car.name);
+  return Promise.resolve(CAT_PHOTO[cat]||'stock-sedan.png');
 }
 
 function applyPexels(cars){
