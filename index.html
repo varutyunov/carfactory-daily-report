@@ -900,7 +900,7 @@ function renderInv(){
     const carSel=ws.selected||false;
     const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card" onclick="toggleCarWorkSel(${car.id})" style="cursor:pointer;border:2px solid ${carSel?'#30d158':'transparent'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
+    return`<div class="inv-card" onclick="toggleCarWorkSel(${car.id})" style="cursor:pointer;border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
   }).join('');
   applyPexels(items);
 }
