@@ -242,6 +242,9 @@ canvas{display:none;}
 .cs-repair-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .cs-repair-input{flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;color:#ccc;padding:10px 12px;font-size:14px;}
 .cs-repair-input:focus{outline:none;border-color:#333;}
+.cs-part-input{flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;color:#8e8;padding:8px 12px;font-size:13px;}
+.cs-part-input:focus{outline:none;border-color:#30d158;}
+.cs-part-input::placeholder{color:#3a5a3a;}
 .cs-repair-rm{background:none;border:none;color:#333;font-size:18px;cursor:pointer;flex-shrink:0;}
 .cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 </style>
@@ -1327,51 +1330,71 @@ function toggleCatSelected(catName){
 
 function openCatScreen(catName){
   curCatName=catName;
-  curCatTab='desc';
   document.getElementById('cs-title').textContent=catName;
-  renderCatTabs();
+  renderCatBody();
   document.getElementById('cat-screen').style.display='flex';
 }
 function closeCatScreen(){
   document.getElementById('cat-screen').style.display='none';
 }
-function switchCatTab(tab){
-  curCatTab=tab;
-  renderCatTabs();
-}
-function renderCatTabs(){
-  document.getElementById('cs-tab-desc').className='cs-tab'+(curCatTab==='desc'?' on':'');
-  document.getElementById('cs-tab-rep').className='cs-tab'+(curCatTab==='rep'?' on':'');
+function renderCatBody(){
   const cs=getCatState(curWorkCarId,curCatName.toLowerCase());
-  if(curCatTab==='desc'){
-    document.getElementById('cs-body').innerHTML=`<textarea class="cs-textarea" placeholder="Describe the work needed for ${curCatName}..." oninput="saveCatDesc(this.value)">${cs.description||''}</textarea>`;
-  } else {
-    const repairs=cs.repairs||[];
-    document.getElementById('cs-body').innerHTML=repairs.map((r,i)=>`
-      <div class="cs-repair-item">
-        <input class="cs-repair-input" value="${r.replace(/"/g,'&quot;')}" placeholder="Repair item..." onblur="saveCatRepair(${i},this.value)"/>
+  const repairs=cs.repairs||[];
+  // Migrate old string repairs to {text,part} objects
+  const items=repairs.map(r=>typeof r==='string'?{text:r,part:''}:r);
+  if(items.some((r,i)=>typeof repairs[i]==='string')){cs.repairs=items;const car=S.inventory.find(c=>c.id===curWorkCarId);if(car)car.work=getWorkState(curWorkCarId);saveWorkState(curWorkCarId);}
+  document.getElementById('cs-body').innerHTML=items.map((r,i)=>`
+    <div class="cs-repair-item">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input class="cs-repair-input" value="${(r.text||'').replace(/"/g,'&quot;')}" placeholder="Repair item..." onblur="saveCatRepair(${i},'text',this.value)"/>
         <button class="cs-repair-rm" onclick="removeCatRepair(${i})">✕</button>
-      </div>`).join('')+`<button class="cs-add-btn" onclick="addCatRepair()">+ Add Repair</button>`;
-  }
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+        <input class="cs-part-input" value="${(r.part||'').replace(/"/g,'&quot;')}" placeholder="Assign part (optional)..." onblur="saveCatRepair(${i},'part',this.value)"/>
+        ${r.part?`<span style="color:#30d158;font-size:12px;white-space:nowrap;">📦 → Parts</span>`:''}
+      </div>
+    </div>`).join('')+`<button class="cs-add-btn" onclick="addCatRepair()">+ Add Repair</button>`;
 }
-function saveCatDesc(val){
-  const ws=getWorkState(curWorkCarId);
-  if(!ws.categories) ws.categories={};
-  const key=curCatName.toLowerCase();
-  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
-  ws.categories[key].description=val;
-  const car=S.inventory.find(c=>c.id===curWorkCarId);
-  if(car) car.work=ws;
-  saveWorkState(curWorkCarId);
-}
-function saveCatRepair(idx,val){
+function saveCatRepair(idx,field,val){
   const ws=getWorkState(curWorkCarId);
   const key=curCatName.toLowerCase();
   if(ws.categories&&ws.categories[key]&&ws.categories[key].repairs){
-    ws.categories[key].repairs[idx]=val;
+    const r=ws.categories[key].repairs[idx];
+    if(typeof r==='string'){ws.categories[key].repairs[idx]={text:r,part:''};}
+    ws.categories[key].repairs[idx][field]=val;
+    // If a part was assigned, auto-populate the Parts category
+    if(field==='part'&&val.trim()){
+      autoPopulatePart(ws,key,idx,val);
+    }
     const car=S.inventory.find(c=>c.id===curWorkCarId);
     if(car) car.work=ws;
     saveWorkState(curWorkCarId);
+    renderCatBody();
+  }
+}
+async function autoPopulatePart(ws,repairCatKey,repairIdx,partName){
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories.parts) ws.categories.parts={selected:false,description:'',repairs:[]};
+  const repairText=ws.categories[repairCatKey].repairs[repairIdx].text||'';
+  const entry={text:partName,part:'',fromRepair:repairText,fromCategory:repairCatKey};
+  // Don't add duplicates
+  const exists=ws.categories.parts.repairs.some(p=>(typeof p==='object'?p.text:p)===partName&&(typeof p==='object'?p.fromRepair:'')=== repairText);
+  if(!exists){
+    ws.categories.parts.repairs.push(entry);
+    ws.categories.parts.selected=true;
+  }
+  // Send notifications
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  const carName=car?car.name:'vehicle';
+  const msg=me.name+' assigned part "'+partName+'" to repair "'+repairText+'" on '+carName;
+  const notifyIds=new Set();
+  // Notify Vlad specifically (all managers)
+  S.employees.filter(e=>e.role==='manager').forEach(e=>notifyIds.add(e.id));
+  // Notify all assigned workers on this vehicle
+  S.assignments.filter(a=>a.inventoryId===curWorkCarId&&!a.approved).forEach(a=>notifyIds.add(a.employeeId));
+  notifyIds.delete(me.id);
+  for(const rid of notifyIds){
+    try{await createNotification(rid,msg,null,carName);}catch(e){}
   }
 }
 function addCatRepair(){
@@ -1379,11 +1402,11 @@ function addCatRepair(){
   if(!ws.categories) ws.categories={};
   const key=curCatName.toLowerCase();
   if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
-  ws.categories[key].repairs.push('');
+  ws.categories[key].repairs.push({text:'',part:''});
   const car=S.inventory.find(c=>c.id===curWorkCarId);
   if(car) car.work=ws;
   saveWorkState(curWorkCarId);
-  renderCatTabs();
+  renderCatBody();
 }
 function removeCatRepair(idx){
   const ws=getWorkState(curWorkCarId);
@@ -1393,7 +1416,7 @@ function removeCatRepair(idx){
     const car=S.inventory.find(c=>c.id===curWorkCarId);
     if(car) car.work=ws;
     saveWorkState(curWorkCarId);
-    renderCatTabs();
+    renderCatBody();
   }
 }
 
@@ -1447,10 +1470,7 @@ async function empAddRepair(taskIdx, value){
     <button class="cs-back" onclick="closeCatScreen()">&#x2039;</button>
     <div class="cs-title" id="cs-title"></div>
   </div>
-  <div class="cs-tabs">
-    <button class="cs-tab on" id="cs-tab-desc" onclick="switchCatTab('desc')">Description</button>
-    <button class="cs-tab" id="cs-tab-rep" onclick="switchCatTab('rep')">Repairs</button>
-  </div>
+  <div class="cs-tabs" style="display:none;"></div>
   <div class="cs-body" id="cs-body"></div>
 </div>
 </body>
