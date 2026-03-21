@@ -575,7 +575,12 @@ function _swapPx(id,url){
   if(ph&&ph.parentElement){ph.parentElement.innerHTML=`<img class="tile-photo" src="${url}"/><div class="tile-vig"></div><div class="tile-grad"></div>`;}
   // Inventory thumb
   const inv=document.querySelector(`.inv-thumb-ph[data-px="${id}"]`);
-  if(inv){inv.outerHTML=`<img class="inv-thumb" src="${url}"/>`;}
+  if(inv){
+    const _ws=getWorkState(id);
+    const _sel=_ws.categories&&Object.values(_ws.categories).some(c=>c.selected);
+    const _st=`cursor:pointer;border-radius:8px;border:2px solid ${_sel?'#30d158':'transparent'};box-shadow:${_sel?'0 0 10px rgba(48,209,88,.5)':'none'};flex-shrink:0;`;
+    inv.outerHTML=`<img class="inv-thumb" src="${url}" onclick="openWorkScreen(${id})" style="${_st}"/>`;
+  }
   // Review card
   const rc=document.querySelector(`.rc-img-ph[data-px="${id}"]`);
   if(rc){rc.outerHTML=`<img class="rc-img" src="${url}"/>`;}
