@@ -1,4 +1,4 @@
-const CACHE = 'cf-cache-v3';
+const CACHE = 'cf-cache-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.png', '/apple-touch-icon.png'];
 
 // Install: cache all core assets immediately
