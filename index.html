@@ -291,7 +291,7 @@ canvas{display:none;}
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
-    <button class="mt" onclick="mgrGo('assigned',this)">Assigned</button>
+    <button class="mt" onclick="mgrGo('assigned',this)">Work</button>
     <button class="mt" onclick="mgrGo('tasks',this)">Review</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
@@ -897,7 +897,8 @@ function renderInv(){
     const pxI=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button class="inv-btn" onclick="openWorkScreen(${car.id})" style="background:${asgns.length?'#30d158':'#1a1a1a'};color:${asgns.length?'#000':'#888'};">WORK</button></div></div>`;
+    const ws=getWorkState(car.id);const carSel=ws.categories&&Object.values(ws.categories).some(c=>c.selected);
+    return`<div class="inv-card"><div class="inv-card-top"><div onclick="openWorkScreen(${car.id})" style="cursor:pointer;border-radius:10px;border:2px solid ${carSel?'#30d158':'transparent'};box-shadow:${carSel?'0 0 8px rgba(48,209,88,.4)':'none'};flex-shrink:0;transition:border-color .2s;">${th}</div><div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
   }).join('');
   applyPexels(items);
 }
