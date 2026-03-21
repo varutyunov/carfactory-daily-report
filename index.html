@@ -895,10 +895,16 @@ function renderInv(){
   document.getElementById('inv-list').innerHTML=items.map(car=>{
     const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
     const pxI=!car.photo&&pxCache[String(car.id)];
-    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const ws=getWorkState(car.id);
+    const carSel=ws.categories&&Object.values(ws.categories).some(c=>c.selected);
+    const thStyle=`cursor:pointer;border-radius:8px;border:2px solid ${carSel?'#30d158':'transparent'};box-shadow:${carSel?'0 0 10px rgba(48,209,88,.5)':'none'};flex-shrink:0;width:80px;height:58px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111;`;
+    const th=car.photo
+      ?`<img class="inv-thumb" src="${car.photo}" onclick="openWorkScreen(${car.id})" style="${thStyle}"/>`
+      :pxI
+        ?`<img class="inv-thumb" src="${pxI}" onclick="openWorkScreen(${car.id})" style="${thStyle}"/>`
+        :`<div class="inv-thumb-ph" data-px="${car.id}" onclick="openWorkScreen(${car.id})" style="${thStyle}">${carImage(car.name)}</div>`;
     const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    const ws=getWorkState(car.id);const carSel=ws.categories&&Object.values(ws.categories).some(c=>c.selected);
-    return`<div class="inv-card"><div class="inv-card-top"><div onclick="openWorkScreen(${car.id})" style="cursor:pointer;border-radius:10px;border:2px solid ${carSel?'#30d158':'transparent'};box-shadow:${carSel?'0 0 8px rgba(48,209,88,.4)':'none'};flex-shrink:0;transition:border-color .2s;">${th}</div><div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div></div></div>`;
   }).join('');
   applyPexels(items);
 }
