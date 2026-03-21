@@ -213,6 +213,37 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .add-btn{width:100%;padding:17px;background:#fff;color:#000;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;}
 input[type=file]{display:none;}
 canvas{display:none;}
+
+/* WORK SCREEN */
+#work-screen{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column;overflow:hidden;}
+.ws-header{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid #111;}
+.ws-back{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 8px;}
+.ws-car-name{font-size:18px;font-weight:700;color:#fff;flex:1;}
+.ws-car-sub{font-size:12px;color:#555;margin-top:2px;}
+.ws-body{flex:1;overflow-y:auto;padding:16px;}
+.ws-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.ws-cat-card{position:relative;border-radius:16px;border:2px solid #1a1a1a;background:#0a0a0a;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:border-color .2s;}
+.ws-cat-card.sel{border-color:#30d158;box-shadow:0 0 0 1px rgba(48,209,88,.3);}
+.ws-cat-icon{font-size:28px;pointer-events:none;}
+.ws-cat-name{font-size:13px;font-weight:600;color:#ccc;pointer-events:none;}
+.ws-cat-center{position:absolute;inset:20px;border-radius:10px;background:transparent;}
+.ws-assign-btn{width:100%;padding:16px;background:#fff;color:#000;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;}
+/* CATEGORY SCREEN */
+#cat-screen{position:fixed;inset:0;background:#000;z-index:201;display:none;flex-direction:column;overflow:hidden;}
+.cs-header{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid #111;}
+.cs-back{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 8px;}
+.cs-title{font-size:18px;font-weight:700;color:#fff;flex:1;}
+.cs-tabs{display:flex;border-bottom:1px solid #111;}
+.cs-tab{flex:1;padding:12px;background:none;border:none;color:#555;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;}
+.cs-tab.on{color:#fff;border-bottom-color:#fff;}
+.cs-body{flex:1;overflow-y:auto;padding:16px;}
+.cs-textarea{width:100%;min-height:140px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:12px;color:#ccc;padding:14px;font-size:14px;resize:none;font-family:inherit;}
+.cs-textarea:focus{outline:none;border-color:#333;}
+.cs-repair-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.cs-repair-input{flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;color:#ccc;padding:10px 12px;font-size:14px;}
+.cs-repair-input:focus{outline:none;border-color:#333;}
+.cs-repair-rm{background:none;border:none;color:#333;font-size:18px;cursor:pointer;flex-shrink:0;}
+.cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 </style>
 <script>
 (function(){
@@ -651,10 +682,10 @@ async function syncFromSupabase(){
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
     const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     const pxSaved=localStorage.getItem('px_cache');
-    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null}));
+    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
-    localStorage.clear();
+    Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
@@ -781,8 +812,14 @@ function renderTaskItems(a){
         ${expanded?`<textarea class="ti-note-input" rows="3" placeholder="Describe ${t.name.toLowerCase()}..." onblur="saveNote(${a.id},${i},this.value)" autofocus>${t.note||''}</textarea>`
           :t.note?`<div class="ti-note" onclick="toggleNote(${a.id},${i})">${t.note}</div>`:''}
         ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
+        ${(t.repairs&&t.repairs.length)?t.repairs.map(r=>`<div class="ti-note" style="margin-top:4px;">+ ${r.text} <span style="color:#444;font-size:10px;">— ${r.by}</span></div>`).join(''):''}
         <div class="ti-actions">
           <button class="ti-act-btn ${t.urgent?'urgent-on':''}" onclick="togUrgent(${a.id},${i})">&#x26A0; ${t.urgent?'Urgent':'Mark urgent'}</button>
+          <button class="ti-act-btn" onclick="this.style.display='none';this.nextElementSibling.style.display='flex'">+ Add</button>
+        </div>
+        <div style="display:none;gap:6px;margin-top:6px;align-items:center;">
+          <input class="ti-note-input" style="flex:1;" placeholder="Add repair/part..." id="emp-add-${a.id}-${i}"/>
+          <button class="ti-act-btn" onclick="empAddRepair(${i},document.getElementById('emp-add-${a.id}-${i}').value);this.parentElement.style.display='none';">Save</button>
         </div>
       </div>
     </div>`;
@@ -796,8 +833,14 @@ function renderTaskItems(a){
           ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
         </div>
         ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
+        ${(t.repairs&&t.repairs.length)?t.repairs.map(r=>`<div class="ti-note" style="margin-top:4px;">+ ${r.text} <span style="color:#444;font-size:10px;">— ${r.by}</span></div>`).join(''):''}
         <div class="ti-actions">
           <button class="ti-act-btn ${t.urgent?'urgent-on':''}" onclick="togUrgent(${a.id},${i})">&#x26A0; ${t.urgent?'Urgent':'Mark urgent'}</button>
+          <button class="ti-act-btn" onclick="this.style.display='none';this.nextElementSibling.style.display='flex'">+ Add</button>
+        </div>
+        <div style="display:none;gap:6px;margin-top:6px;align-items:center;">
+          <input class="ti-note-input" style="flex:1;" placeholder="Add repair/part..." id="emp-add-${a.id}-${i}"/>
+          <button class="ti-act-btn" onclick="empAddRepair(${i},document.getElementById('emp-add-${a.id}-${i}').value);this.parentElement.style.display='none';">Save</button>
         </div>
       </div>
     </div>`;
@@ -854,7 +897,7 @@ function renderInv(){
     const pxI=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button class="inv-btn ${asgns.length?'asgn':''}" onclick="openAssign(${car.id})">${asgns.length?'+ Assign':'Assign'}</button></div></div>`;
+    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button class="inv-btn" onclick="openWorkScreen(${car.id})" style="background:${asgns.length?'#30d158':'#1a1a1a'};color:${asgns.length?'#000':'#888'};">WORK</button></div></div>`;
   }).join('');
   applyPexels(items);
 }
@@ -948,6 +991,7 @@ async function doAssign(){
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
   closeM('m-assign');renderInv();renderAssigned();
+  if(curWorkCarId) openWorkScreen(curWorkCarId);
 }
 
 // ── ASSIGNED VIEW ──────────────────────────────────────────────────────────────
@@ -1168,7 +1212,7 @@ async function addCarManually(){
 // Restore session if coming back from a sync reload
 const _savedSession = localStorage.getItem('cf_session');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-localStorage.clear();
+Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
@@ -1186,6 +1230,208 @@ if(_savedSession){
   }catch(e){}
 }
 ld();
+
+// ── WORK SCREEN ──────────────────────────────────────────────────────────────
+let curWorkCarId=null, curCatName=null, curCatTab='desc';
+
+function getWorkState(carId){
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car && car.work && typeof car.work==='object') return car.work;
+  try{const ls=localStorage.getItem('cf_work_'+carId);if(ls)return JSON.parse(ls);}catch(e){}
+  return {selected:false,categories:{}};
+}
+function getCatState(carId,catName){
+  const ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[catName]) ws.categories[catName]={selected:false,description:'',repairs:[]};
+  return ws.categories[catName];
+}
+async function saveWorkState(carId){
+  const car=S.inventory.find(c=>c.id===carId);
+  if(!car) return;
+  const ws=getWorkState(carId);
+  try{localStorage.setItem('cf_work_'+carId, JSON.stringify(ws));}catch(e){}
+  try{await sbPatch('inventory',carId,{work:ws});}catch(e){}
+}
+
+function openWorkScreen(carId){
+  curWorkCarId=carId;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(!car) return;
+  document.getElementById('ws-car-name').textContent=car.name;
+  document.getElementById('ws-car-sub').textContent=(car.vin?car.vin.slice(-6):car.stock)+(car.color?' · '+car.color:'');
+  renderWorkGrid();
+  document.getElementById('work-screen').style.display='flex';
+}
+function closeWorkScreen(){
+  document.getElementById('work-screen').style.display='none';
+  curWorkCarId=null;
+  renderInv();
+}
+
+const CAT_ICONS={repairs:'🔧',parts:'📦',detail:'✨',photos:'📷',other:'📋'};
+function catIcon(name){const k=name.toLowerCase();return CAT_ICONS[k]||'📋';}
+
+function renderWorkGrid(){
+  const ws=getWorkState(curWorkCarId);
+  const cats=ws.categories||{};
+  const catNames=DEFAULT_TASKS.map(t=>t.name);
+  Object.keys(cats).forEach(k=>{if(!catNames.map(n=>n.toLowerCase()).includes(k.toLowerCase()))catNames.push(k);});
+  document.getElementById('ws-grid').innerHTML=catNames.map(name=>{
+    const key=name.toLowerCase();
+    const catState=cats[key]||{selected:false};
+    const sel=catState.selected;
+    return`<div class="ws-cat-card${sel?' sel':''}" id="wscat-${key}" onclick="handleCatCardTap(event,'${name}')">
+      <div class="ws-cat-icon">${catIcon(name)}</div>
+      <div class="ws-cat-name">${name}</div>
+      <div class="ws-cat-center" onclick="event.stopPropagation();openCatScreen('${name}')"></div>
+    </div>`;
+  }).join('');
+}
+
+function handleCatCardTap(e,catName){
+  toggleCatSelected(catName);
+}
+
+function toggleCatSelected(catName){
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories) ws.categories={};
+  const key=catName.toLowerCase();
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
+  ws.categories[key].selected=!ws.categories[key].selected;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  saveWorkState(curWorkCarId);
+  renderWorkGrid();
+}
+
+function openCatScreen(catName){
+  curCatName=catName;
+  curCatTab='desc';
+  document.getElementById('cs-title').textContent=catName;
+  renderCatTabs();
+  document.getElementById('cat-screen').style.display='flex';
+}
+function closeCatScreen(){
+  document.getElementById('cat-screen').style.display='none';
+}
+function switchCatTab(tab){
+  curCatTab=tab;
+  renderCatTabs();
+}
+function renderCatTabs(){
+  document.getElementById('cs-tab-desc').className='cs-tab'+(curCatTab==='desc'?' on':'');
+  document.getElementById('cs-tab-rep').className='cs-tab'+(curCatTab==='rep'?' on':'');
+  const cs=getCatState(curWorkCarId,curCatName.toLowerCase());
+  if(curCatTab==='desc'){
+    document.getElementById('cs-body').innerHTML=`<textarea class="cs-textarea" placeholder="Describe the work needed for ${curCatName}..." oninput="saveCatDesc(this.value)">${cs.description||''}</textarea>`;
+  } else {
+    const repairs=cs.repairs||[];
+    document.getElementById('cs-body').innerHTML=repairs.map((r,i)=>`
+      <div class="cs-repair-item">
+        <input class="cs-repair-input" value="${r.replace(/"/g,'&quot;')}" placeholder="Repair item..." onblur="saveCatRepair(${i},this.value)"/>
+        <button class="cs-repair-rm" onclick="removeCatRepair(${i})">✕</button>
+      </div>`).join('')+`<button class="cs-add-btn" onclick="addCatRepair()">+ Add Repair</button>`;
+  }
+}
+function saveCatDesc(val){
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories) ws.categories={};
+  const key=curCatName.toLowerCase();
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
+  ws.categories[key].description=val;
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  saveWorkState(curWorkCarId);
+}
+function saveCatRepair(idx,val){
+  const ws=getWorkState(curWorkCarId);
+  const key=curCatName.toLowerCase();
+  if(ws.categories&&ws.categories[key]&&ws.categories[key].repairs){
+    ws.categories[key].repairs[idx]=val;
+    const car=S.inventory.find(c=>c.id===curWorkCarId);
+    if(car) car.work=ws;
+    saveWorkState(curWorkCarId);
+  }
+}
+function addCatRepair(){
+  const ws=getWorkState(curWorkCarId);
+  if(!ws.categories) ws.categories={};
+  const key=curCatName.toLowerCase();
+  if(!ws.categories[key]) ws.categories[key]={selected:false,description:'',repairs:[]};
+  ws.categories[key].repairs.push('');
+  const car=S.inventory.find(c=>c.id===curWorkCarId);
+  if(car) car.work=ws;
+  saveWorkState(curWorkCarId);
+  renderCatTabs();
+}
+function removeCatRepair(idx){
+  const ws=getWorkState(curWorkCarId);
+  const key=curCatName.toLowerCase();
+  if(ws.categories&&ws.categories[key]){
+    ws.categories[key].repairs.splice(idx,1);
+    const car=S.inventory.find(c=>c.id===curWorkCarId);
+    if(car) car.work=ws;
+    saveWorkState(curWorkCarId);
+    renderCatTabs();
+  }
+}
+
+function openWorkAssign(){
+  openAssign(curWorkCarId);
+}
+
+// ── EMPLOYEE REPAIR ADDITION ──────────────────────────────────────────────────
+async function empAddRepair(taskIdx, value){
+  if(!value.trim()) return;
+  const a=S.assignments.find(x=>x.id===curTaskId);
+  if(!a) return;
+  if(!a.tasks[taskIdx].repairs) a.tasks[taskIdx].repairs=[];
+  a.tasks[taskIdx].repairs.push({text:value,by:me.name,at:new Date().toISOString()});
+  showLoading('Saving...');
+  try{
+    await sbPatch('assignments',a.id,{tasks:a.tasks});
+    sv();
+    const car=S.inventory.find(c=>c.id===a.inventoryId);
+    const allAssignments=S.assignments.filter(x=>x.inventoryId===a.inventoryId&&!x.approved);
+    const notifyIds=new Set();
+    allAssignments.forEach(x=>notifyIds.add(x.employeeId));
+    S.employees.filter(e=>e.role==='manager').forEach(e=>notifyIds.add(e.id));
+    notifyIds.delete(me.id);
+    for(const rid of notifyIds){
+      await createNotification(rid, me.name+' added to '+a.tasks[taskIdx].name+' on '+(car?car.name:'vehicle'), a.id, car?car.name:'');
+    }
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  renderTaskItems(a);
+}
 </script>
+<!-- WORK SCREEN -->
+<div id="work-screen" style="display:none;flex-direction:column;">
+  <div class="ws-header">
+    <button class="ws-back" onclick="closeWorkScreen()">&#x2039;</button>
+    <div>
+      <div class="ws-car-name" id="ws-car-name"></div>
+      <div class="ws-car-sub" id="ws-car-sub"></div>
+    </div>
+  </div>
+  <div class="ws-body">
+    <div class="ws-grid" id="ws-grid"></div>
+    <button class="ws-assign-btn" onclick="openWorkAssign()">Assign to Workers &#x2192;</button>
+  </div>
+</div>
+
+<!-- CATEGORY SCREEN -->
+<div id="cat-screen" style="display:none;flex-direction:column;">
+  <div class="cs-header">
+    <button class="cs-back" onclick="closeCatScreen()">&#x2039;</button>
+    <div class="cs-title" id="cs-title"></div>
+  </div>
+  <div class="cs-tabs">
+    <button class="cs-tab on" id="cs-tab-desc" onclick="switchCatTab('desc')">Description</button>
+    <button class="cs-tab" id="cs-tab-rep" onclick="switchCatTab('rep')">Repairs</button>
+  </div>
+  <div class="cs-body" id="cs-body"></div>
+</div>
 </body>
 </html>
