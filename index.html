@@ -977,7 +977,12 @@ function backToGrid(){showView('emp-home');renderGrid();}
 // ── MANAGER INVENTORY ──────────────────────────────────────────────────────────
 function filterInv(v){invFilter=v.toLowerCase();renderInv();}
 function renderInv(){
-  const items=S.inventory.filter(c=>!invFilter||(c.name+c.stock).toLowerCase().includes(invFilter));
+  const items=S.inventory.filter(c=>!invFilter||(c.name+c.stock).toLowerCase().includes(invFilter)).sort((a,b)=>{
+    const aHas=S.assignments.some(x=>x.inventoryId===a.id&&!x.approved)?1:0;
+    const bHas=S.assignments.some(x=>x.inventoryId===b.id&&!x.approved)?1:0;
+    if(bHas!==aHas) return bHas-aHas;
+    return b.id-a.id;
+  });
   if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
   if(S.syncUrl)document.getElementById('sync-st').textContent='Ready to sync';
   document.getElementById('inv-list').innerHTML=items.map(car=>{
