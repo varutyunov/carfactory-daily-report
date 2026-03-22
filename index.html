@@ -292,7 +292,7 @@ canvas{display:none;}
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
-    <button class="mt" onclick="mgrGo('assigned',this)">Work</button>
+    <button class="mt" onclick="mgrGo('assigned',this)">Tasks</button>
     <button class="mt" onclick="mgrGo('tasks',this)">Review</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
@@ -1086,27 +1086,23 @@ async function doAssign(){
 // ── ASSIGNED VIEW ──────────────────────────────────────────────────────────────
 function renderAssigned(){
   const el=document.getElementById('assigned-list');
-  const assigned=S.inventory.filter(car=>S.assignments.some(a=>a.inventoryId===car.id&&!a.approved));
-  if(!assigned.length){el.innerHTML='<div class="empty"><div class="ei">&#x1F697;</div><div class="et">No vehicles currently assigned</div></div>';return;}
-  el.innerHTML=assigned.map(car=>{
-    const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
-    const pxI=!car.photo&&pxCache[String(car.id)];
-    const th=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const empRows=asgns.map(a=>{
-      const emp=S.employees.find(e=>e.id===a.employeeId);
-      const done=a.tasks.filter(t=>t.done).length;const total=a.tasks.length;
-      const pct=total?Math.round(done/total*100):0;
-      const statusLabel=a.submitted?'<span style="color:#ffd60a;font-size:11px;">● Review</span>':pct===100?'<span style="color:#30d158;font-size:11px;">● Done</span>':`<span style="color:#888;font-size:11px;">${pct}%</span>`;
-      return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #111;cursor:pointer;" onclick="openMgrAssign(${a.id})">
-        <div style="width:28px;height:28px;border-radius:50%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:12px;color:#888;flex-shrink:0;">${emp?emp.name[0]:'?'}</div>
-        <span style="flex:1;font-size:13px;color:#ccc;">${emp?emp.name:'Unknown'}</span>
-        ${statusLabel}
-        <div style="width:60px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${a.submitted?'#ffd60a':'#30d158'};border-radius:2px;"></div></div>
-      </div>`;
-    }).join('');
-    return`<div class="inv-card"><div class="inv-card-top">${th}<div class="inv-info" style="flex:1;"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div></div><button class="inv-btn asgn" onclick="openAssign(${car.id})" style="flex-shrink:0;">+ Assign</button></div>${empRows}</div>`;
-  }).join('');
-  applyPexels(assigned);
+  const allAsgns=S.assignments.filter(a=>!a.approved);
+  if(!allAsgns.length){el.innerHTML='<div class="empty"><div class="ei">&#x1F697;</div><div class="et">No active tasks</div></div>';return;}
+  el.innerHTML='<div class="car-grid">'+allAsgns.map(a=>{
+    const car=S.inventory.find(c=>c.id===a.inventoryId);if(!car)return'';
+    const emp=S.employees.find(e=>e.id===a.employeeId);
+    const done=a.tasks.filter(t=>t.done).length;const total=a.tasks.length;
+    const pct=total?Math.round(done/total*100):0;
+    const status=a.submitted?'review':done===total?'done':'prog';
+    const hasUrgent=a.tasks.some(t=>t.urgent&&!t.done);
+    const badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':`<span class="tile-badge tbp">${done}/${total}</span>`;
+    const urgentBadge=hasUrgent?'<span class="tile-urgent">&#x26A0; Urgent</span>':'';
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} \xB7 ${colorStr}`:vinLast6;
+    return`<div class="car-tile st-${status}" onclick="openMgrAssign(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:11px;color:#64d2ff;margin:2px 0;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
+  }).join('')+'</div>';
+  applyPexels(allAsgns.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
 
 // ── MGR ASSIGN EDIT ────────────────────────────────────────────────────────────
