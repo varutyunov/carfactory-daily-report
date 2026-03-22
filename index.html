@@ -1283,7 +1283,8 @@ document.querySelectorAll('.mb').forEach(m=>{m.addEventListener('click',e=>{if(e
 
 // Service worker registration with forced updates
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sw.js').then(reg=>{
+  navigator.serviceWorker.register('/sw.js', {updateViaCache:'none'}).then(reg=>{
+    reg.update();
     // Force waiting SW to activate immediately
     if(reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
     reg.addEventListener('updatefound',()=>{
