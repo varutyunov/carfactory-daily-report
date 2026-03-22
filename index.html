@@ -293,6 +293,7 @@ canvas{display:none;}
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
     <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
+    <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
     <button class="mt" onclick="mgrGo('tasks',this)" id="tab-review">Review</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
@@ -360,6 +361,8 @@ canvas{display:none;}
     </div>
 
     <div class="view" id="mgr-assigned"><div style="padding:14px;" id="assigned-list"></div></div>
+
+    <div class="view" id="mgr-detail"><div style="padding:14px;" id="mgr-detail-list"></div></div>
 
     <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
 
@@ -774,35 +777,34 @@ document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
 function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
 
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
+  const tabDetail=document.getElementById('tab-detail');
   const tabReview=document.getElementById('tab-review');
-  if(!tabTasks||!tabReview) return;
-  // Count active tasks (non-approved assignments)
+  // Tasks: active non-submitted assignments
   const taskCount=S.assignments.filter(a=>!a.approved&&!a.submitted).length;
-  // Count items pending review: submitted assignments + detail/photos marked done
-  const reviewAssignments=S.assignments.filter(a=>a.submitted&&!a.approved).length;
-  const reviewDetail=S.inventory.filter(car=>{
+  // Detail: cars where detail/photos done but not reviewed
+  const detailCount=S.inventory.filter(car=>{
     const ws=getWorkState(car.id);
     if(!ws.categories) return false;
     return (ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed)||
            (ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed);
   }).length;
-  const reviewCount=reviewAssignments+reviewDetail;
-  // Tasks tab
-  if(taskCount>0){
-    tabTasks.innerHTML='Tasks <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;">'+taskCount+'</span>';
-  }else{
-    tabTasks.textContent='Tasks';
+  // Review: submitted task assignments
+  const reviewCount=S.assignments.filter(a=>a.submitted&&!a.approved).length;
+  function setBadge(el,label,count){
+    if(!el) return;
+    if(count>0){
+      el.innerHTML=label+' <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:2px;">'+count+'</span>';
+    }else{
+      el.textContent=label;
+    }
   }
-  // Review tab
-  if(reviewCount>0){
-    tabReview.innerHTML='Review <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;">'+reviewCount+'</span>';
-  }else{
-    tabReview.textContent='Review';
-  }
+  setBadge(tabTasks,'Tasks',taskCount);
+  setBadge(tabDetail,'Detail',detailCount);
+  setBadge(tabReview,'Review',reviewCount);
 }
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
@@ -1285,6 +1287,70 @@ async function mgrRemoveTask(idx){
 }
 
 // ── REVIEW ─────────────────────────────────────────────────────────────────────
+function renderMgrDetail(){
+  const el=document.getElementById('mgr-detail-list');
+  // All cars assigned to Detail or Photos section pool
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&(
+      (ws.categories.detail&&ws.categories.detail.sectionPool)||
+      (ws.categories.photos&&ws.categories.photos.sectionPool)
+    );
+  });
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No vehicles in Detail queue</div></div>';return;}
+  el.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
+    const photosDone=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool&&ws.categories.photos.done;
+    const detailReviewed=ws.categories&&ws.categories.detail&&ws.categories.detail.reviewed;
+    const photosReviewed=ws.categories&&ws.categories.photos&&ws.categories.photos.reviewed;
+    const needsReview=(detailDone&&!detailReviewed)||(photosDone&&!photosReviewed);
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
+      <div class="rc-head">${photoHTML}<div class="rc-info">
+        <div class="rc-name">${car.name}</div>
+        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
+      </div></div>
+      <div class="rc-tasks-list">
+        ${ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool?`<div class="rc-task"><div class="rc-dot ${detailDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">✨ Detail${detailDone?' — done by '+(ws.categories.detail.doneBy||'employee'):''}</div></div></div>`:''}
+        ${ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool?`<div class="rc-task"><div class="rc-dot ${photosDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📷 Photos${photosDone?' — done by '+(ws.categories.photos.doneBy||'employee'):''}</div></div></div>`:''}
+      </div>
+      ${needsReview?`<div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="rejectDetail(${car.id})">↩ Send Back</button>
+        <button class="rc-btn rc-approve" onclick="approveDetail(${car.id})">✓ Approve</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+  applyPexels(cars);
+}
+async function approveDetail(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.detail&&ws.categories.detail.done) ws.categories.detail.reviewed=true;
+  if(ws.categories.photos&&ws.categories.photos.done) ws.categories.photos.reviewed=true;
+  // Clear from section pool once approved
+  if(ws.categories.detail) ws.categories.detail.sectionPool=false;
+  if(ws.categories.photos) ws.categories.photos.sectionPool=false;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrDetail();
+  updateTabBadges();
+}
+async function rejectDetail(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.detail) ws.categories.detail.done=false;
+  if(ws.categories.photos) ws.categories.photos.done=false;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrDetail();
+  updateTabBadges();
+}
+
 function renderReview(){
   const p=S.assignments.filter(a=>a.submitted&&!a.approved);const el=document.getElementById('rev-list');
   if(!p.length){el.innerHTML='<div class="empty"><div class="ei">&#x2705;</div><div class="et">No tasks pending review</div></div>';return;}
