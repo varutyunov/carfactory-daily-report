@@ -1099,7 +1099,7 @@ function renderAssigned(){
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} \xB7 ${colorStr}`:vinLast6;
-    return`<div class="car-tile st-${status}" onclick="openMgrAssign(${a.id})">${badge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:11px;color:#64d2ff;margin:2px 0;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
+    return`<button class="car-tile st-${status}" onclick="openMgrAssign('${a.id}')" style="text-align:left;width:100%;padding:0;font:inherit;-webkit-tap-highlight-color:transparent;">${badge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:11px;color:#64d2ff;margin:2px 0;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></button>`;
   }).join('')+'</div>';
   applyPexels(allAsgns.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
@@ -1108,7 +1108,7 @@ function renderAssigned(){
 let curMgrAssignId=null;
 function openMgrAssign(assignId){
   curMgrAssignId=assignId;
-  const a=S.assignments.find(x=>x.id===assignId);
+  const a=S.assignments.find(x=>String(x.id)===String(assignId));
   const car=S.inventory.find(c=>c.id===a.inventoryId);
   const emp=S.employees.find(e=>e.id===a.employeeId);
   document.getElementById('mgr-assign-title').textContent=car?car.name:'Vehicle';
@@ -1117,7 +1117,7 @@ function openMgrAssign(assignId){
   openM('m-mgr-assign');
 }
 function renderMgrTaskList(){
-  const a=S.assignments.find(x=>x.id===curMgrAssignId);
+  const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
   document.getElementById('mgr-task-list').innerHTML=a.tasks.map((t,i)=>`
     <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#000;border-radius:10px;margin-bottom:8px;border:1px solid ${t.done?'rgba(48,209,88,.25)':'#1a1a1a'};">
@@ -1128,7 +1128,7 @@ function renderMgrTaskList(){
     </div>`).join('');
 }
 async function mgrToggleTask(taskIdx){
-  const a=S.assignments.find(x=>x.id===curMgrAssignId);
+  const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
   a.tasks[taskIdx].done=!a.tasks[taskIdx].done;
   a.tasks[taskIdx].by=a.tasks[taskIdx].done?me.name:null;
@@ -1149,13 +1149,13 @@ async function mgrToggleTask(taskIdx){
   hideLoading();
 }
 async function mgrEditTask(idx,val){
-  const a=S.assignments.find(x=>x.id===curMgrAssignId);
+  const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a||a.tasks[idx].name===val) return;
   a.tasks[idx].name=val;
   try{await sbPatch('assignments',a.id,{tasks:a.tasks});sv();}catch(e){alert('Error: '+e.message);}
 }
 async function mgrAddTask(){
-  const a=S.assignments.find(x=>x.id===curMgrAssignId);
+  const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
   a.tasks.push({name:'',done:false,urgent:false,note:'',by:null});
   showLoading('Saving...');
@@ -1165,7 +1165,7 @@ async function mgrAddTask(){
   setTimeout(()=>{const inputs=document.querySelectorAll('#mgr-task-list input');if(inputs.length)inputs[inputs.length-1].focus();},100);
 }
 async function mgrRemoveTask(idx){
-  const a=S.assignments.find(x=>x.id===curMgrAssignId);
+  const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
   a.tasks.splice(idx,1);
   showLoading('Saving...');
@@ -1181,20 +1181,20 @@ function renderReview(){
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
     const pxR=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxR?`<img class="rc-img" src="${pxR}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>{const _exp=EXPANDABLE_TASKS.includes(t.name.toLowerCase());return`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note" style="${_exp?'white-space:pre-wrap;color:#888;font-style:normal;':''}">${_exp?t.note:'"'+t.note+'"'}</div>`:''}</div></div>`;}).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack(${a.id})">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve(${a.id})">&#x2713; Approve</button></div></div>`;
+    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>{const _exp=EXPANDABLE_TASKS.includes(t.name.toLowerCase());return`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note" style="${_exp?'white-space:pre-wrap;color:#888;font-style:normal;':''}">${_exp?t.note:'"'+t.note+'"'}</div>`:''}</div></div>`;}).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack('${a.id}')">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve('${a.id}')">&#x2713; Approve</button></div></div>`;
   }).join('');
   applyPexels(p.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
 async function approve(aid){
   showLoading('Approving...');
-  try{await sbPatch('assignments',aid,{approved:true});const a=S.assignments.find(x=>x.id===aid);a.approved=true;sv();}
+  try{await sbPatch('assignments',aid,{approved:true});const a=S.assignments.find(x=>String(x.id)===String(aid));a.approved=true;sv();}
   catch(e){alert('Error: '+e.message);}
   hideLoading();renderReview();
 }
 async function sendBack(aid){
   showLoading('Sending back...');
   try{
-    const a=S.assignments.find(x=>x.id===aid);
+    const a=S.assignments.find(x=>String(x.id)===String(aid));
     a.tasks.forEach(t=>{t.done=false;t.by=null;});
     await sbPatch('assignments',aid,{submitted:false,tasks:a.tasks});
     a.submitted=false;sv();
