@@ -292,8 +292,8 @@ canvas{display:none;}
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
-    <button class="mt" onclick="mgrGo('assigned',this)">Tasks</button>
-    <button class="mt" onclick="mgrGo('tasks',this)">Review</button>
+    <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
+    <button class="mt" onclick="mgrGo('tasks',this)" id="tab-review">Review</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
   <div class="content">
@@ -412,6 +412,13 @@ canvas{display:none;}
     <div id="mgr-task-list" style="margin-top:8px;"></div>
     <button onclick="mgrAddTask()" style="width:100%;padding:12px;background:none;border:1px dashed #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;">+ Add Task</button>
     <button onclick="mgrUnassign()" style="width:100%;padding:12px;background:none;border:1px solid #ff453a;border-radius:10px;color:#ff453a;font-size:14px;cursor:pointer;margin-top:12px;">Unassign Employee</button>
+  </div>
+</div>
+
+<!-- DETAIL DONE MODAL -->
+<div class="mb" id="m-detail-done">
+  <div class="msheet" style="max-width:340px;">
+    <div id="detail-done-body"></div>
   </div>
 </div>
 
@@ -742,7 +749,7 @@ async function doLogin(){
   document.getElementById('ub').textContent=e.name+(e.role==='manager'?' · OWNER':'');
   await syncFromSupabase();
   fetchNotifications();
-  if(e.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
+  if(e.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();updateTabBadges();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
 }
 function doSync(){
@@ -767,7 +774,36 @@ document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
 function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
-function mgrGo(id,btn){document.querySelectorAll('.mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='tasks')renderReview();if(id==='employees')renderTeam();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+
+function updateTabBadges(){
+  const tabTasks=document.getElementById('tab-tasks');
+  const tabReview=document.getElementById('tab-review');
+  if(!tabTasks||!tabReview) return;
+  // Count active tasks (non-approved assignments)
+  const taskCount=S.assignments.filter(a=>!a.approved&&!a.submitted).length;
+  // Count items pending review: submitted assignments + detail/photos marked done
+  const reviewAssignments=S.assignments.filter(a=>a.submitted&&!a.approved).length;
+  const reviewDetail=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    if(!ws.categories) return false;
+    return (ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed)||
+           (ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed);
+  }).length;
+  const reviewCount=reviewAssignments+reviewDetail;
+  // Tasks tab
+  if(taskCount>0){
+    tabTasks.innerHTML='Tasks <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;">'+taskCount+'</span>';
+  }else{
+    tabTasks.textContent='Tasks';
+  }
+  // Review tab
+  if(reviewCount>0){
+    tabReview.innerHTML='Review <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;">'+reviewCount+'</span>';
+  }else{
+    tabReview.textContent='Review';
+  }
+}
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
 function renderGrid(){
@@ -828,10 +864,15 @@ function renderDetailQueue(){
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.vin?car.vin.slice(-6):car.stock;
-    return`<div class="car-tile" onclick="alert('${car.name} — ${tags.map(t=>t.replace(/<[^>]+>/g,'')).join(', ')}')" style="border-color:#1e3a1e;">
+    const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
+    const photosDone=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+    return`<a href="javascript:void(0)" onclick="openDetailDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${(detailDone||photosDone)?'rgba(48,209,88,.4)':'#1e3a1e'};">
       <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags.join(' ')}</div></div>
-    </div>`;
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags.join(' ')}</div>
+      ${detailDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Detail done</div>':''}
+      ${photosDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Photos done</div>':''}
+      </div>
+    </a>`;
   }).join('');
   applyPexels(cars);
 }
@@ -859,6 +900,53 @@ function renderPersonalTab(){
     </div>`;
   }).join('');
   applyPexels(cars);
+}
+
+// ── DETAIL DONE MODAL ─────────────────────────────────────────────────────────
+function openDetailDoneModal(carId){
+  const car=S.inventory.find(c=>c.id===carId);
+  if(!car) return;
+  const ws=getWorkState(carId);
+  const cats=ws.categories||{};
+  const isDetail=cats.detail&&cats.detail.sectionPool;
+  const isPhotos=cats.photos&&cats.photos.sectionPool;
+  const detailDone=cats.detail&&cats.detail.done;
+  const photosDone=cats.photos&&cats.photos.done;
+  let html=`<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:16px;">${car.name}</div>`;
+  if(isDetail){
+    html+=`<button onclick="markDetailDone(${carId},'detail')" style="width:100%;padding:14px;background:${detailDone?'#30d158':'#1a1a1a'};border:1px solid ${detailDone?'#30d158':'#333'};border-radius:10px;color:${detailDone?'#000':'#fff'};font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;">
+      ✨ Detail — ${detailDone?'✓ Done (tap to undo)':'Tap to mark done'}
+    </button>`;
+  }
+  if(isPhotos){
+    html+=`<button onclick="markDetailDone(${carId},'photos')" style="width:100%;padding:14px;background:${photosDone?'#30d158':'#1a1a1a'};border:1px solid ${photosDone?'#30d158':'#333'};border-radius:10px;color:${photosDone?'#000':'#fff'};font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;">
+      📷 Photos — ${photosDone?'✓ Done (tap to undo)':'Tap to mark done'}
+    </button>`;
+  }
+  html+=`<button onclick="closeM('m-detail-done')" style="width:100%;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;">Close</button>`;
+  document.getElementById('detail-done-body').innerHTML=html;
+  openM('m-detail-done');
+}
+async function markDetailDone(carId,section){
+  const ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[section]) ws.categories[section]={selected:false,description:'',repairs:[],sectionPool:true};
+  ws.categories[section].done=!ws.categories[section].done;
+  ws.categories[section].doneBy=ws.categories[section].done?me.name:null;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  saveWorkState(carId);
+  // Notify owner (all managers)
+  if(ws.categories[section].done){
+    const carName=car?car.name:'vehicle';
+    const msg=me.name+' completed '+section+' on '+carName;
+    for(const m of S.employees.filter(e=>e.role==='manager')){
+      try{await createNotification(m.id,msg,null,carName);}catch(e){}
+    }
+  }
+  openDetailDoneModal(carId);
+  renderDetailQueue();
+  updateTabBadges();
 }
 
 // ── TASK VIEW ──────────────────────────────────────────────────────────────────
@@ -1364,7 +1452,7 @@ if(_savedSession){
       document.getElementById('ub').textContent=me.name+(me.role==='manager'?' · OWNER':'');
       syncFromSupabase().then(()=>{
         fetchNotifications();
-        if(me.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();}
+        if(me.role==='manager'){document.getElementById('mtabs').style.display='flex';showView('mgr-inventory');renderInv();updateTabBadges();}
         else{document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
       });
     }
