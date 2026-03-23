@@ -596,6 +596,17 @@ canvas{display:none;}
               <div class="mhome-label">Calendar</div>
             </div>
           </div>
+          <div class="mhome-sq-wrap">
+            <div class="mhome-sq" style="background:linear-gradient(145deg,#1a0010,#4a0030,#7c0055);box-shadow:0 6px 28px rgba(236,72,153,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('paint','Paint')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="rgba(236,72,153,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/>
+                <path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
+                <path d="M14.5 17.5 4.5 15"/>
+              </svg>
+              <div class="mhome-label">Paint</div>
+            </div>
+            <div class="mhome-badge" id="hbadge-paint"></div>
+          </div>
 
         </div>
       </div>
@@ -677,6 +688,7 @@ canvas{display:none;}
         <option value="detail">✨ Detail</option>
         <option value="photos">📷 Photos</option>
         <option value="parts">📦 Parts</option>
+        <option value="paint">🎨 Paint</option>
         <option value="note">📝 Note</option>
       </select>
     </div>
@@ -720,6 +732,8 @@ canvas{display:none;}
     <div class="view" id="mgr-calendar">
       <div id="mgr-calendar-content" style="padding:14px;"></div>
     </div>
+
+    <div class="view" id="mgr-paint"><div style="padding:14px;" id="mgr-paint-list"></div></div>
 
     <div class="view" id="mgr-workflow">
       <div style="padding:14px;" id="mgr-workflow-content">
@@ -2575,6 +2589,7 @@ function mgrGoSection(id, label){
   else if(id==='employees')renderTeam();
   else if(id==='workflow')renderWorkflow();
   else if(id==='calendar')renderCalendar();
+  else if(id==='paint')renderMgrPaint();
   updateTabBadges();
 }
 
@@ -3137,6 +3152,40 @@ async function submitCarAssign(){
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = 'Assign'; }
   }
+}
+
+function renderMgrPaint(){
+  var el=document.getElementById('mgr-paint-list');
+  if(!el)return;
+  var paintAsgns=(S.assignments||[]).filter(function(a){
+    return !a.approved && a.tasks && a.tasks.some(function(t){
+      var txt=typeof t==='object'?t.text:t;
+      return txt && txt.toLowerCase().indexOf('[paint]')!==-1;
+    });
+  });
+  if(!paintAsgns.length){
+    el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;padding:60px 24px;gap:12px;"><div style="font-size:36px;">🎨</div><div style="font-size:16px;color:#444;">No paint tasks assigned yet.</div></div>';
+    return;
+  }
+  var out='';
+  paintAsgns.forEach(function(a){
+    var car=S.inventory.find(function(c){return c.id===a.inventoryId;});
+    var emp=S.employees.find(function(e){return e.id===a.employeeId;});
+    var paintTasks=a.tasks.filter(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;});
+    out+='<div style="background:#0d0d0d;border-radius:14px;border:1px solid #1e1e1e;padding:14px 16px;margin-bottom:12px;">';
+    out+='<div style="font-size:16px;font-weight:700;color:#fff;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">'+(car?car.name:'Unknown Car')+'</div>';
+    out+='<div style="font-size:12px;color:#555;margin-bottom:10px;">&rarr; '+(emp?emp.name:'Unknown')+'</div>';
+    paintTasks.forEach(function(t){
+      var txt=typeof t==='object'?t.text:t;
+      var done=typeof t==='object'?t.done:false;
+      out+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">';
+      out+='<div style="width:8px;height:8px;border-radius:50%;background:'+(done?'#ec4899':'#2a2a2a')+';flex-shrink:0;"></div>';
+      out+='<div style="font-size:13px;color:'+(done?'#555':'#ccc')+';">'+txt+'</div>';
+      out+='</div>';
+    });
+    out+='</div>';
+  });
+  el.innerHTML=out;
 }
 
 </script>
