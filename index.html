@@ -2947,7 +2947,7 @@ function openWfTask(carId){
   document.getElementById('wf-task-assign-all').classList.remove('wf-assign-active');
   // Render employee buttons
   var empBtns = document.getElementById('wf-task-emp-btns');
-  var emps = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; });
+  var emps = (S.employees||[]);
   empBtns.innerHTML = emps.map(function(e){
     return '<button class="wf-emp-btn" data-id="'+e.id+'" onclick="wfToggleEmp(this,'+e.id+')">'+e.name+'</button>';
   }).join('');
@@ -2983,7 +2983,7 @@ async function submitWfTask(){
   var selectedIds = [];
 
   if(assignAll){
-    selectedIds = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; }).map(function(e){ return e.id; });
+    selectedIds = (S.employees||[]).map(function(e){ return e.id; });
   } else {
     document.querySelectorAll('.wf-emp-btn.wf-assign-active').forEach(function(b){
       selectedIds.push(parseInt(b.getAttribute('data-id')));
@@ -3066,7 +3066,7 @@ function openCarAssign(type){
   document.getElementById('ca-assign-note').value = '';
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
   var empBtns = document.getElementById('ca-assign-emp-btns');
-  var emps = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; });
+  var emps = (S.employees||[]);
   empBtns.innerHTML = emps.map(function(e){
     return '<button class="wf-emp-btn" data-id="'+e.id+'" onclick="caToggleEmp(this)">'+e.name+'</button>';
   }).join('');
@@ -3099,7 +3099,7 @@ async function submitCarAssign(){
   var assignAll = document.getElementById('ca-assign-all-btn').classList.contains('wf-assign-active');
   var selectedIds = [];
   if(assignAll){
-    selectedIds = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; }).map(function(e){ return e.id; });
+    selectedIds = (S.employees||[]).map(function(e){ return e.id; });
   } else {
     document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn.wf-assign-active').forEach(function(b){
       selectedIds.push(parseInt(b.getAttribute('data-id')));
