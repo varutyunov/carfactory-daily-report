@@ -2131,6 +2131,21 @@ if(_savedSession){
 }
 ld();
 
+// ── AUTO-SYNC ─────────────────────────────────────────────────────────────────
+// Poll Supabase every 2 minutes while app is open
+setInterval(function(){
+  if(me && document.getElementById('app').style.display!=='none'){
+    syncFromSupabase();
+  }
+}, 2 * 60 * 1000);
+
+// Sync immediately when user comes back to the app (phone switches back to tab)
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && me && document.getElementById('app').style.display!=='none'){
+    syncFromSupabase();
+  }
+});
+
 // ── WORK SCREEN ──────────────────────────────────────────────────────────────
 let curWorkCarId=null, curCatName=null, curCatTab='desc';
 
