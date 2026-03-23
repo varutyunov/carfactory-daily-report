@@ -2,7 +2,7 @@
   "name": "Car Factory",
   "short_name": "Car Factory",
   "description": "Car Factory Employee Portal",
-  "start_url": "/",
+  "start_url": "/?v=2",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
