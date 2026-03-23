@@ -43,8 +43,9 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .so{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:16px;cursor:pointer;padding:6px 10px;border-radius:8px;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 
 /* MGR TABS */
-.mtabs{display:flex;background:#000;border-bottom:1px solid #111;flex-shrink:0;}
-.mt{flex:1;padding:12px 8px;background:none;border:none;color:#444;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;}
+.mtabs{display:flex;flex-wrap:wrap;background:#000;border-bottom:1px solid #111;flex-shrink:0;}
+.emp-tabs{flex-wrap:wrap;}
+.mt{flex:1;min-width:0;padding:10px 6px;background:none;border:none;color:#444;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
 .mt.on{color:#fff;border-bottom-color:#fff;}
 
 /* CONTENT */
@@ -295,6 +296,7 @@ canvas{display:none;}
     <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
     <button class="mt" onclick="mgrGo('photos',this)" id="tab-photos">Photos</button>
+    <button class="mt" onclick="mgrGo('parts',this)" id="tab-parts">Parts</button>
     <button class="mt" onclick="mgrGo('tasks',this)" id="tab-repair">Repair</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
@@ -304,6 +306,7 @@ canvas{display:none;}
       <div class="emp-tabs" id="emp-tabs" style="display:none;">
         <button class="mt on" onclick="empTabGo('detail',this)">Detail</button>
         <button class="mt" onclick="empTabGo('photos',this)" id="emp-tab-photos-btn">Photos</button>
+        <button class="mt" onclick="empTabGo('parts',this)" id="emp-tab-parts-btn">Parts</button>
         <button class="mt" onclick="empTabGo('tasks',this)">Tasks</button>
         <button class="mt" onclick="empTabGo('personal',this)" id="emp-tab-name">Me</button>
       </div>
@@ -316,6 +319,11 @@ canvas{display:none;}
         <div style="padding:14px 0 8px;"><div class="greeting">Photos Queue</div></div>
         <div class="car-grid" id="photos-grid"></div>
         <div class="empty" id="photos-empty" style="display:none;"><div class="ei">📷</div><div class="et">No vehicles in photos queue.</div></div>
+      </div>
+      <div id="emp-tab-parts" style="padding:0 14px 80px;display:none;">
+        <div style="padding:14px 0 8px;"><div class="greeting">Parts Queue</div></div>
+        <div class="car-grid" id="parts-grid"></div>
+        <div class="empty" id="parts-empty" style="display:none;"><div class="ei">📦</div><div class="et">No vehicles in parts queue.</div></div>
       </div>
       <div id="emp-tab-tasks" style="padding:0 14px 80px;display:none;">
         <div style="padding:14px 0 8px;"><div class="greeting" id="greeting">My Cars</div></div>
@@ -372,6 +380,8 @@ canvas{display:none;}
     <div class="view" id="mgr-detail"><div style="padding:14px;" id="mgr-detail-list"></div></div>
 
     <div class="view" id="mgr-photos"><div style="padding:14px;" id="mgr-photos-list"></div></div>
+
+    <div class="view" id="mgr-parts"><div style="padding:14px;" id="mgr-parts-list"></div></div>
 
     <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
 
@@ -786,7 +796,7 @@ document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
 function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
 
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
@@ -844,12 +854,13 @@ function empTabGo(tab,btn){
   curEmpTab=tab;
   document.querySelectorAll('#emp-tabs .mt').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
-  ['detail','photos','tasks','personal'].forEach(t=>{
+  ['detail','photos','parts','tasks','personal'].forEach(t=>{
     const el=document.getElementById('emp-tab-'+t);
     if(el) el.style.display=t===tab?'block':'none';
   });
   if(tab==='detail') renderDetailQueue();
   else if(tab==='photos') renderPhotosQueue();
+  else if(tab==='parts') renderPartsQueue();
   else if(tab==='tasks') renderGrid();
   else if(tab==='personal') renderPersonalTab();
 }
@@ -1475,6 +1486,129 @@ async function removeFromPhotosQueue(carId){
   if(car) car.work=ws;
   await saveWorkState(carId);
   renderMgrPhotos();updateTabBadges();
+}
+
+// ── PARTS QUEUE (mirrors Detail/Photos exactly) ──────────────────────────────
+function renderPartsQueue(){
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;
+  });
+  const grid=document.getElementById('parts-grid');
+  const empty=document.getElementById('parts-empty');
+  if(!cars.length){if(grid)grid.style.display='none';if(empty)empty.style.display='flex';return;}
+  if(grid)grid.style.display='grid';if(empty)empty.style.display='none';
+  grid.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    const repairs=ws.categories.parts.repairs||[];
+    return`<a href="javascript:void(0)" onclick="openPartsDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e2a3a'};">
+      <div class="tile-photo-wrap">${photoHTML}</div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
+      <div style="color:#ff9f0a;font-size:10px;font-weight:600;margin-top:4px;">📦 Parts${repairs.length?' ('+repairs.length+' item'+(repairs.length>1?'s':'')+')':''}</div>
+      ${done?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Done</div>':''}
+      </div>
+    </a>`;
+  }).join('');
+  applyPexels(cars);
+}
+function openPartsDoneModal(carId){
+  const car=S.inventory.find(c=>c.id===carId);
+  if(!car) return;
+  const ws=getWorkState(carId);
+  const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
+  const repairs=(ws.categories&&ws.categories.parts&&ws.categories.parts.repairs)||[];
+  let html=`<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:8px;">${car.name}</div>`;
+  if(repairs.length){
+    html+=`<div style="margin-bottom:12px;">${repairs.map(r=>`<div style="padding:8px;background:#111;border-radius:8px;margin-bottom:4px;font-size:13px;color:#ccc;">📦 ${typeof r==='string'?r:(r.text||r)}</div>`).join('')}</div>`;
+  }
+  html+=`<button onclick="markPartsDone(${carId})" style="width:100%;padding:14px;background:${done?'#30d158':'#1a1a1a'};border:1px solid ${done?'#30d158':'#333'};border-radius:10px;color:${done?'#000':'#fff'};font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;">
+    📦 Parts — ${done?'✓ Done (tap to undo)':'Tap to mark done'}
+  </button>`;
+  html+=`<button onclick="closeM('m-detail-done')" style="width:100%;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;">Close</button>`;
+  document.getElementById('detail-done-body').innerHTML=html;
+  openM('m-detail-done');
+}
+async function markPartsDone(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories.parts) ws.categories.parts={selected:false,description:'',repairs:[],sectionPool:true};
+  ws.categories.parts.done=!ws.categories.parts.done;
+  ws.categories.parts.doneBy=ws.categories.parts.done?me.name:null;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  saveWorkState(carId);
+  if(ws.categories.parts.done){
+    const carName=car?car.name:'vehicle';
+    for(const m of S.employees.filter(e=>e.role==='manager')){
+      try{await createNotification(m.id,me.name+' completed parts on '+carName,null,carName);}catch(e){}
+    }
+  }
+  openPartsDoneModal(carId);
+  renderPartsQueue();
+  updateTabBadges();
+}
+function renderMgrParts(){
+  const el=document.getElementById('mgr-parts-list');
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;
+  });
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📦</div><div class="et">No vehicles in Parts queue</div></div>';return;}
+  el.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
+    const reviewed=ws.categories&&ws.categories.parts&&ws.categories.parts.reviewed;
+    const needsReview=done&&!reviewed;
+    const repairs=(ws.categories.parts.repairs)||[];
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
+      <div class="rc-head">${photoHTML}<div class="rc-info">
+        <div class="rc-name">${car.name}</div>
+        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
+      </div></div>
+      ${repairs.length?`<div style="padding:8px 0;">${repairs.map(r=>`<div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📦 ${typeof r==='string'?r:(r.text||r)}</div></div></div>`).join('')}</div>`:''}
+      <div class="rc-tasks-list"><div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📦 Parts${done?' — done by '+(ws.categories.parts.doneBy||'employee'):''}</div></div></div></div>
+      <div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="removeFromPartsQueue(${car.id})">↩ Remove</button>
+        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectParts(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
+        <button class="rc-btn rc-approve" onclick="approveParts(${car.id})">✓ Approve</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  applyPexels(cars);
+}
+async function approveParts(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.parts){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();
+}
+async function rejectParts(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.parts) ws.categories.parts.done=false;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();
+}
+async function removeFromPartsQueue(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.parts){ws.categories.parts.sectionPool=false;ws.categories.parts.done=false;ws.categories.parts.reviewed=false;}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();
 }
 
 function renderReview(){
