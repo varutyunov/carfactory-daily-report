@@ -3420,9 +3420,10 @@ async function sendAIMessage(){
       aiHideTyping();
 
       if(!resp.ok){
-        var err=await resp.json().catch(function(){ return {}; });
-        var msg=(err.error&&err.error.message)||('API error '+resp.status);
-        if(resp.status===401){ localStorage.removeItem('cf_ai_key'); msg='Invalid API key. It has been cleared — try again.'; }
+        var errText=await resp.text().catch(function(){ return ''; });
+        var msg='HTTP '+resp.status+': '+errText;
+        try{ var errObj=JSON.parse(errText); if(errObj.error) msg='['+resp.status+'] '+(errObj.error.type||'')+' — '+(errObj.error.message||errText); }catch(x){}
+        if(resp.status===401){ localStorage.removeItem('cf_ai_key'); msg='Invalid API key. Cleared — paste a new one.'; }
         aiAddMsg('assistant','⚠️ '+msg);
         break;
       }
