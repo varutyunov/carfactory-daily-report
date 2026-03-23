@@ -1316,10 +1316,11 @@ function renderMgrDetail(){
         ${ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool?`<div class="rc-task"><div class="rc-dot ${detailDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">✨ Detail${detailDone?' — done by '+(ws.categories.detail.doneBy||'employee'):''}</div></div></div>`:''}
         ${ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool?`<div class="rc-task"><div class="rc-dot ${photosDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📷 Photos${photosDone?' — done by '+(ws.categories.photos.doneBy||'employee'):''}</div></div></div>`:''}
       </div>
-      ${needsReview?`<div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="rejectDetail(${car.id})">↩ Send Back</button>
-        <button class="rc-btn rc-approve" onclick="approveDetail(${car.id})">✓ Approve</button>
-      </div>`:''}
+      <div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="removeFromDetailQueue(${car.id})">↩ Remove</button>
+        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectDetail(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
+        <button class="rc-btn rc-approve" onclick="approveDetail(${car.id})">✓ Approve</button>`:''}
+      </div>
     </div>`;
   }).join('');
   applyPexels(cars);
@@ -1343,6 +1344,17 @@ async function rejectDetail(carId){
   if(!ws.categories) return;
   if(ws.categories.detail) ws.categories.detail.done=false;
   if(ws.categories.photos) ws.categories.photos.done=false;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrDetail();
+  updateTabBadges();
+}
+async function removeFromDetailQueue(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.detail){ws.categories.detail.sectionPool=false;ws.categories.detail.done=false;ws.categories.detail.reviewed=false;}
+  if(ws.categories.photos){ws.categories.photos.sectionPool=false;ws.categories.photos.done=false;ws.categories.photos.reviewed=false;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
