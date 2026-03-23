@@ -794,6 +794,24 @@ function _swapPx(id,url){
   if(rc){rc.outerHTML=`<img class="rc-img" src="${url}"/>`;}
 }
 
+// ── BUILD VERSION CHECK — bump APP_BUILD on every deploy ──────────────────────
+const APP_BUILD = '20260323_02';
+(function(){
+  if(localStorage.getItem('cf_build')===APP_BUILD) return;
+  localStorage.setItem('cf_build', APP_BUILD);
+  // Nuke all SWs and caches, then hard reload
+  var nuke = function(){ window.location.replace(window.location.href.split('?')[0]+'?v='+APP_BUILD); };
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      return Promise.all(regs.map(function(r){ return r.unregister(); }));
+    }).then(function(){
+      return 'caches' in window ? caches.keys().then(function(ks){
+        return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+      }) : null;
+    }).then(nuke).catch(nuke);
+  } else { nuke(); }
+})();
+
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
