@@ -549,7 +549,9 @@ canvas{display:none;}
     <!-- MGR SECTION BACK BAR -->
     <div id="mgr-back-bar">
       <button id="mgr-back-bar-btn" onclick="goMgrHome()">&#8592;</button>
-      <span id="mgr-back-bar-title"></span>
+      <span id="mgr-back-bar-title" style="flex:1;"></span>
+      <button onclick="doSync()" title="Sync" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;">&#x21BB;</button>
+      <button onclick="doLogout()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:16px;cursor:pointer;padding:6px 10px;border-radius:8px;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&#x2715;</button>
     </div>
 
     <div class="view" id="mgr-inventory">
@@ -1061,7 +1063,7 @@ function doSync(){
     window.location.reload();
   }
 }
-function doLogout(){me=null;localStorage.removeItem('cf_session');document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
@@ -2373,6 +2375,8 @@ async function empAddRepair(taskIdx, value){
 /* ── MGR HOME NAVIGATION ── */
 function mgrGoSection(id, label){
   showView('mgr-'+id);
+  var tb=document.querySelector('.tb');
+  if(tb) tb.style.display='none';
   var bar=document.getElementById('mgr-back-bar');
   if(bar) bar.style.display='flex';
   var titleEl=document.getElementById('mgr-back-bar-title');
@@ -2395,6 +2399,8 @@ function goMgrHome(){
   document.querySelectorAll('.mgr-section-pad').forEach(function(el){el.classList.remove('mgr-section-pad');});
   var bar=document.getElementById('mgr-back-bar');
   if(bar) bar.style.display='none';
+  var tb=document.querySelector('.tb');
+  if(tb) tb.style.display='';
   showView('mgr-home');
   updateHomeBadges();
 }
