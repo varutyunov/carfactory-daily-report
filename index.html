@@ -362,6 +362,15 @@ canvas{display:none;}
 .upcoming-del:active{color:#ff453a;}
 .wf-emp-btn{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;color:#666;font-size:13px;font-weight:600;padding:8px 16px;cursor:pointer;}
 .wf-assign-active{background:rgba(139,92,246,0.2)!important;border-color:rgba(139,92,246,0.4)!important;color:#a78bfa!important;}
+
+/* ── CAR ACTION SHEET ── */
+.ca-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.ca-tile{border-radius:16px;padding:18px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;position:relative;overflow:hidden;transition:transform .15s;border:1px solid rgba(255,255,255,0.06);}
+.ca-tile:active{transform:scale(0.92);}
+.ca-tile svg{width:30px;height:30px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
+.ca-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#fff;position:relative;z-index:1;}
+.ca-tile::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,0.06),transparent 70%);}
+.ca-wide{grid-column:1/-1;}
 </style>
 <script>
 (function(){
@@ -592,6 +601,65 @@ canvas{display:none;}
       </div>
     </div>
 
+<!-- CAR ACTION SHEET -->
+<div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
+  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;">
+      <div>
+        <div id="ca-car-name" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;"></div>
+        <div id="ca-car-sub" style="font-size:12px;color:#444;margin-top:2px;"></div>
+      </div>
+      <button onclick="closeCarActions()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;">&#x2715;</button>
+    </div>
+    <div class="ca-grid">
+      <div class="ca-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 6px 28px rgba(251,146,60,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('repair')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,146,60,0.9)" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <span class="ca-tile-label">Repair</span>
+      </div>
+      <div class="ca-tile" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 6px 28px rgba(34,197,94,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('task')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(34,197,94,0.9)" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span class="ca-tile-label">Task</span>
+      </div>
+      <div class="ca-tile" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 6px 28px rgba(251,191,36,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('parts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,191,36,0.9)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        <span class="ca-tile-label">Parts</span>
+      </div>
+      <div class="ca-tile" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 6px 28px rgba(192,86,243,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('photos')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(192,86,243,0.9)" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span class="ca-tile-label">Photos</span>
+      </div>
+      <div class="ca-tile ca-wide" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 6px 28px rgba(20,184,166,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="addCarToWorkflow()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.9)" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+        <span class="ca-tile-label">Workflow</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CAR ASSIGN PANEL -->
+<div id="m-car-assign" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:520;align-items:flex-end;justify-content:center;">
+  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;">
+      <div>
+        <div id="ca-assign-title" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;"></div>
+        <div id="ca-assign-sub" style="font-size:12px;color:#444;margin-top:2px;"></div>
+      </div>
+      <button onclick="closeCarAssign()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;">&#x2715;</button>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Note (optional)</div>
+      <textarea id="ca-assign-note" placeholder="Add a note..." style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:70px;font-family:inherit;"></textarea>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Assign To</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button id="ca-assign-all-btn" onclick="caToggleAll()" class="wf-emp-btn" style="background:rgba(255,69,58,0.15);border-color:rgba(255,69,58,0.35);color:#ff453a;">All Employees</button>
+        <div id="ca-assign-emp-btns" style="display:contents;"></div>
+      </div>
+    </div>
+    <button id="ca-assign-submit" onclick="submitCarAssign()" style="width:100%;background:#a78bfa;border:none;border-radius:12px;color:#000;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">Assign</button>
+  </div>
+</div>
 <!-- WORKFLOW TASK MODAL -->
 <div id="m-wf-task" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-end;justify-content:center;">
   <div style="background:#111;border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:24px 20px 40px;border-top:1px solid #222;">
@@ -2216,6 +2284,7 @@ async function saveWorkState(carId){
 }
 
 function openWorkScreen(carId){
+  if(me && me.role==='manager'){ openCarActions(carId); return; }
   curWorkCarId=carId;
   const car=S.inventory.find(c=>c.id===carId);
   if(!car) return;
@@ -2960,6 +3029,114 @@ async function submitWfTask(){
     alert('Error sending task. Please try again.');
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = 'Send Task'; }
+  }
+}
+
+// ── CAR ACTION SHEET ──────────────────────────────────────────────────────────
+var caCarId = null;
+var caAssignType = null;
+
+function openCarActions(carId){
+  caCarId = carId;
+  var car = S.inventory.find(function(c){ return c.id === carId; });
+  if(!car) return;
+  document.getElementById('ca-car-name').textContent = car.name;
+  document.getElementById('ca-car-sub').textContent = (car.vin ? car.vin.slice(-6) : car.stock||'') + (car.color ? ' · ' + car.color : '');
+  document.getElementById('m-car-actions').style.display = 'flex';
+}
+
+function closeCarActions(){
+  document.getElementById('m-car-actions').style.display = 'none';
+  caCarId = null;
+}
+
+function addCarToWorkflow(){
+  if(!caCarId) return;
+  addToWorkflow(caCarId);
+  closeCarActions();
+  renderInv();
+  mgrGoSection('workflow', 'Workflow');
+}
+
+function openCarAssign(type){
+  caAssignType = type;
+  var car = S.inventory.find(function(c){ return c.id === caCarId; });
+  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos'};
+  document.getElementById('ca-assign-title').textContent = labels[type] || type;
+  document.getElementById('ca-assign-sub').textContent = car ? car.name : '';
+  document.getElementById('ca-assign-note').value = '';
+  document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
+  var empBtns = document.getElementById('ca-assign-emp-btns');
+  var emps = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; });
+  empBtns.innerHTML = emps.map(function(e){
+    return '<button class="wf-emp-btn" data-id="'+e.id+'" onclick="caToggleEmp(this)">'+e.name+'</button>';
+  }).join('');
+  document.getElementById('m-car-assign').style.display = 'flex';
+}
+
+function closeCarAssign(){
+  document.getElementById('m-car-assign').style.display = 'none';
+  caAssignType = null;
+}
+
+function caToggleEmp(btn){
+  btn.classList.toggle('wf-assign-active');
+  document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
+}
+
+function caToggleAll(){
+  var btn = document.getElementById('ca-assign-all-btn');
+  btn.classList.toggle('wf-assign-active');
+  document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
+}
+
+async function submitCarAssign(){
+  if(!caCarId || !caAssignType) return;
+  var note = document.getElementById('ca-assign-note').value.trim();
+  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos'};
+  var taskText = '[' + labels[caAssignType] + ']' + (note ? ' ' + note : '');
+  var tasks = [{text: taskText, done: false, urgent: false}];
+
+  var assignAll = document.getElementById('ca-assign-all-btn').classList.contains('wf-assign-active');
+  var selectedIds = [];
+  if(assignAll){
+    selectedIds = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; }).map(function(e){ return e.id; });
+  } else {
+    document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn.wf-assign-active').forEach(function(b){
+      selectedIds.push(parseInt(b.getAttribute('data-id')));
+    });
+  }
+  if(!selectedIds.length){ alert('Select who to assign this to.'); return; }
+
+  var btn = document.getElementById('ca-assign-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending...'; }
+  var car = S.inventory.find(function(c){ return c.id === caCarId; });
+
+  try {
+    for(var i = 0; i < selectedIds.length; i++){
+      var empId = selectedIds[i];
+      var existing = S.assignments.find(function(a){ return a.inventoryId === caCarId && a.employeeId === empId && !a.approved; });
+      if(existing){
+        existing.tasks = (existing.tasks||[]).concat(tasks);
+        await sbPatch('assignments', existing.id, {tasks: existing.tasks});
+      } else {
+        var rows = await sbPost('assignments', {inventory_id: caCarId, employee_id: empId, tasks: tasks, submitted: false, approved: false, photos: []});
+        if(rows && rows[0]){
+          var row = rows[0];
+          S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
+        }
+      }
+      var msg = (assignAll?'New task for everyone: ':'New task: ') + taskText + (car?' — '+car.name:'');
+      await sendNotification(empId, msg, null, car ? car.name : '');
+    }
+    closeCarAssign();
+    closeCarActions();
+    updateTabBadges();
+    updateHomeBadges();
+  } catch(e) {
+    alert('Error sending. Try again.');
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = 'Assign'; }
   }
 }
 
