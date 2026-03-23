@@ -3412,10 +3412,10 @@ async function sendAIMessage(){
   try {
     var continueLoop=true;
     while(continueLoop){
-      var resp=await fetch('/.netlify/functions/ai-proxy',{
+      var resp=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({apiKey:apiKey,model:'claude-3-5-haiku-20241022',max_tokens:1024,system:buildAISystemPrompt(),tools:AI_TOOLS,messages:aiConversation})
+        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-client-side-usage':'true'},
+        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:1024,system:buildAISystemPrompt(),tools:AI_TOOLS,messages:aiConversation})
       });
       aiHideTyping();
 
