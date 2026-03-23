@@ -697,8 +697,8 @@ canvas{display:none;}
       </select>
     </div>
     <div style="margin-bottom:16px;">
-      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Description</div>
-      <textarea id="wf-task-desc" placeholder="Describe the task..." style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:80px;font-family:inherit;"></textarea>
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Note (Optional)</div>
+      <textarea id="wf-task-desc" placeholder="Add a note..." style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:80px;font-family:inherit;"></textarea>
     </div>
     <div style="margin-bottom:20px;">
       <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Assign To</div>
@@ -2978,9 +2978,8 @@ function wfToggleEmp(btn, empId){
 
 function wfToggleAll(){
   var btn = document.getElementById('wf-task-assign-all');
-  var isActive = btn.classList.toggle('wf-assign-active');
-  // Deactivate all individual employee buttons
-  document.querySelectorAll('.wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
+  btn.classList.toggle('wf-assign-active');
+  document.querySelectorAll('#wf-task-emp-btns .wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
 }
 
 function closeWfTask(){
@@ -2993,7 +2992,6 @@ async function submitWfTask(){
   if(!wfTaskCarId) return;
   var taskType = document.getElementById('wf-task-type').value;
   var desc = document.getElementById('wf-task-desc').value.trim();
-  if(!desc){ alert('Please enter a task description.'); return; }
 
   var assignAll = document.getElementById('wf-task-assign-all').classList.contains('wf-assign-active');
   var selectedIds = [];
