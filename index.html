@@ -3389,12 +3389,18 @@ async function sendAIMessage(){
   var text=inp.value.trim();
   if(!text) return;
 
+  // Allow typing key directly: "key: sk-ant-..."
+  if(text.toLowerCase().startsWith('key:')){
+    var k=text.slice(4).trim();
+    if(k){ localStorage.setItem('cf_ai_key',k); inp.value=''; aiAddMsg('assistant','✅ API key saved! You\'re all set — what do you need?'); }
+    return;
+  }
+
   var apiKey=localStorage.getItem('cf_ai_key');
   if(!apiKey){
-    var k=prompt('Enter your Anthropic API key to activate the AI assistant:');
-    if(!k) return;
-    localStorage.setItem('cf_ai_key',k.trim());
-    apiKey=k.trim();
+    inp.value='';
+    aiAddMsg('assistant','🔑 Paste your Anthropic API key to get started:<br><br>Type: <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;">key: sk-ant-...</code>');
+    return;
   }
 
   inp.value='';
