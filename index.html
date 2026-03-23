@@ -1243,7 +1243,7 @@ async function doLogin(){
   document.getElementById('ub').textContent=e.name;
   await syncFromSupabase();
   fetchNotifications();
-  var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=e.role==='manager'?'':'none';
+  var _isOwner=['vlad','tommy'].includes(e.name.toLowerCase());var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=_isOwner?'':'none';
   if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
 }
@@ -2278,6 +2278,7 @@ if(_savedSession){
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
+      var _rOwner=['vlad','tommy'].includes(me.name.toLowerCase());var _rBtn=document.getElementById('ai-brain-btn');if(_rBtn)_rBtn.style.display=_rOwner?'':'none';
       syncFromSupabase().then(()=>{
         fetchNotifications();
         if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
