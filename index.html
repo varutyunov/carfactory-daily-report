@@ -294,6 +294,7 @@ canvas{display:none;}
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
     <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
+    <button class="mt" onclick="mgrGo('photos',this)" id="tab-photos">Photos</button>
     <button class="mt" onclick="mgrGo('tasks',this)" id="tab-repair">Repair</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
@@ -302,6 +303,7 @@ canvas{display:none;}
     <div class="view on" id="emp-home">
       <div class="emp-tabs" id="emp-tabs" style="display:none;">
         <button class="mt on" onclick="empTabGo('detail',this)">Detail</button>
+        <button class="mt" onclick="empTabGo('photos',this)" id="emp-tab-photos-btn">Photos</button>
         <button class="mt" onclick="empTabGo('tasks',this)">Tasks</button>
         <button class="mt" onclick="empTabGo('personal',this)" id="emp-tab-name">Me</button>
       </div>
@@ -309,6 +311,11 @@ canvas{display:none;}
         <div style="padding:14px 0 8px;"><div class="greeting">Detail Queue</div></div>
         <div class="car-grid" id="detail-grid"></div>
         <div class="empty" id="detail-empty" style="display:none;"><div class="ei">✨</div><div class="et">No vehicles in detail queue.</div></div>
+      </div>
+      <div id="emp-tab-photos" style="padding:0 14px 80px;display:none;">
+        <div style="padding:14px 0 8px;"><div class="greeting">Photos Queue</div></div>
+        <div class="car-grid" id="photos-grid"></div>
+        <div class="empty" id="photos-empty" style="display:none;"><div class="ei">📷</div><div class="et">No vehicles in photos queue.</div></div>
       </div>
       <div id="emp-tab-tasks" style="padding:0 14px 80px;display:none;">
         <div style="padding:14px 0 8px;"><div class="greeting" id="greeting">My Cars</div></div>
@@ -363,6 +370,8 @@ canvas{display:none;}
     <div class="view" id="mgr-assigned"><div style="padding:14px;" id="assigned-list"></div></div>
 
     <div class="view" id="mgr-detail"><div style="padding:14px;" id="mgr-detail-list"></div></div>
+
+    <div class="view" id="mgr-photos"><div style="padding:14px;" id="mgr-photos-list"></div></div>
 
     <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
 
@@ -777,11 +786,12 @@ document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
 function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
 
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
   const tabDetail=document.getElementById('tab-detail');
+  const tabPhotos=document.getElementById('tab-photos');
   const tabRepair=document.getElementById('tab-repair');
   function setBadge(el,label,count){
     if(!el) return;
@@ -791,18 +801,18 @@ function updateTabBadges(){
       el.textContent=label;
     }
   }
-  // Tasks: active assignments pending review (submitted but not approved)
   const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved).length;
   setBadge(tabTasks,'Tasks',taskReviewCount);
-  // Detail: cars with detail/photos done but not reviewed
   const detailCount=S.inventory.filter(car=>{
     const ws=getWorkState(car.id);
-    if(!ws.categories) return false;
-    return (ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed)||
-           (ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed);
+    return ws.categories&&ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed;
   }).length;
   setBadge(tabDetail,'Detail',detailCount);
-  // Repair: submitted assignments (same as tasks review count)
+  const photosCount=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed;
+  }).length;
+  setBadge(tabPhotos,'Photos',photosCount);
   setBadge(tabRepair,'Repair',taskReviewCount);
 }
 
@@ -834,22 +844,20 @@ function empTabGo(tab,btn){
   curEmpTab=tab;
   document.querySelectorAll('#emp-tabs .mt').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
-  ['detail','tasks','personal'].forEach(t=>{
+  ['detail','photos','tasks','personal'].forEach(t=>{
     const el=document.getElementById('emp-tab-'+t);
     if(el) el.style.display=t===tab?'block':'none';
   });
   if(tab==='detail') renderDetailQueue();
+  else if(tab==='photos') renderPhotosQueue();
   else if(tab==='tasks') renderGrid();
   else if(tab==='personal') renderPersonalTab();
 }
 function renderDetailQueue(){
-  // Show all cars assigned to Detail section pool (visible to ALL employees)
+  // Show only cars assigned to Detail section pool
   const cars=S.inventory.filter(car=>{
     const ws=getWorkState(car.id);
-    return ws.categories&&(
-      (ws.categories.detail&&ws.categories.detail.sectionPool)||
-      (ws.categories.photos&&ws.categories.photos.sectionPool)
-    );
+    return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;
   });
   const grid=document.getElementById('detail-grid');
   const empty=document.getElementById('detail-empty');
@@ -859,19 +867,15 @@ function renderDetailQueue(){
     const ws=getWorkState(car.id);
     const isDetail=ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;
     const isPhotos=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
-    const tags=[];
-    if(isDetail) tags.push('<span style="color:#30d158;font-size:10px;font-weight:600;">✨ Detail</span>');
-    if(isPhotos) tags.push('<span style="color:#64d2ff;font-size:10px;font-weight:600;">📷 Photos</span>');
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.vin?car.vin.slice(-6):car.stock;
     const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
-    const photosDone=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
-    return`<a href="javascript:void(0)" onclick="openDetailDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${(detailDone||photosDone)?'rgba(48,209,88,.4)':'#1e3a1e'};">
+    return`<a href="javascript:void(0)" onclick="openDetailDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${detailDone?'rgba(48,209,88,.4)':'#1e3a1e'};">
       <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags.join(' ')}</div>
-      ${detailDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Detail done</div>':''}
-      ${photosDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Photos done</div>':''}
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
+      <div style="color:#30d158;font-size:10px;font-weight:600;margin-top:4px;">✨ Detail</div>
+      ${detailDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Done</div>':''}
       </div>
     </a>`;
   }).join('');
@@ -1288,12 +1292,11 @@ async function mgrRemoveTask(idx){
 // ── REVIEW ─────────────────────────────────────────────────────────────────────
 function renderMgrDetail(){
   const el=document.getElementById('mgr-detail-list');
-  // All cars assigned to Detail or Photos section pool
+  // Only cars assigned to Detail section pool
   const cars=S.inventory.filter(car=>{
     const ws=getWorkState(car.id);
     return ws.categories&&(
-      (ws.categories.detail&&ws.categories.detail.sectionPool)||
-      (ws.categories.photos&&ws.categories.photos.sectionPool)
+      (ws.categories.detail&&ws.categories.detail.sectionPool)
     );
   });
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No vehicles in Detail queue</div></div>';return;}
@@ -1313,8 +1316,7 @@ function renderMgrDetail(){
         ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
       </div></div>
       <div class="rc-tasks-list">
-        ${ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool?`<div class="rc-task"><div class="rc-dot ${detailDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">✨ Detail${detailDone?' — done by '+(ws.categories.detail.doneBy||'employee'):''}</div></div></div>`:''}
-        ${ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool?`<div class="rc-task"><div class="rc-dot ${photosDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📷 Photos${photosDone?' — done by '+(ws.categories.photos.doneBy||'employee'):''}</div></div></div>`:''}
+        <div class="rc-task"><div class="rc-dot ${detailDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">✨ Detail${detailDone?' — done by '+(ws.categories.detail.doneBy||'employee'):''}</div></div></div>
       </div>
       <div class="rc-actions">
         <button class="rc-btn rc-back" onclick="removeFromDetailQueue(${car.id})">↩ Remove</button>
@@ -1329,10 +1331,7 @@ async function approveDetail(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
   if(ws.categories.detail&&ws.categories.detail.done) ws.categories.detail.reviewed=true;
-  if(ws.categories.photos&&ws.categories.photos.done) ws.categories.photos.reviewed=true;
-  // Clear from section pool once approved
   if(ws.categories.detail) ws.categories.detail.sectionPool=false;
-  if(ws.categories.photos) ws.categories.photos.sectionPool=false;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -1354,12 +1353,128 @@ async function removeFromDetailQueue(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
   if(ws.categories.detail){ws.categories.detail.sectionPool=false;ws.categories.detail.done=false;ws.categories.detail.reviewed=false;}
-  if(ws.categories.photos){ws.categories.photos.sectionPool=false;ws.categories.photos.done=false;ws.categories.photos.reviewed=false;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
   renderMgrDetail();
   updateTabBadges();
+}
+
+// ── PHOTOS QUEUE (mirrors Detail exactly) ───────────────────────────────────
+function renderPhotosQueue(){
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
+  });
+  const grid=document.getElementById('photos-grid');
+  const empty=document.getElementById('photos-empty');
+  if(!cars.length){if(grid)grid.style.display='none';if(empty)empty.style.display='flex';return;}
+  if(grid)grid.style.display='grid';if(empty)empty.style.display='none';
+  grid.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    return`<a href="javascript:void(0)" onclick="openPhotosDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e3a1e'};">
+      <div class="tile-photo-wrap">${photoHTML}</div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
+      ${done?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Photos done</div>':'<div style="color:#64d2ff;font-size:10px;font-weight:600;margin-top:4px;">📷 Photos</div>'}
+      </div>
+    </a>`;
+  }).join('');
+  applyPexels(cars);
+}
+function openPhotosDoneModal(carId){
+  const car=S.inventory.find(c=>c.id===carId);
+  if(!car) return;
+  const ws=getWorkState(carId);
+  const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+  let html=`<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:16px;">${car.name}</div>`;
+  html+=`<button onclick="markPhotosDone(${carId})" style="width:100%;padding:14px;background:${done?'#30d158':'#1a1a1a'};border:1px solid ${done?'#30d158':'#333'};border-radius:10px;color:${done?'#000':'#fff'};font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;">
+    📷 Photos — ${done?'✓ Done (tap to undo)':'Tap to mark done'}
+  </button>`;
+  html+=`<button onclick="closeM('m-detail-done')" style="width:100%;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;">Close</button>`;
+  document.getElementById('detail-done-body').innerHTML=html;
+  openM('m-detail-done');
+}
+async function markPhotosDone(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories.photos) ws.categories.photos={selected:false,description:'',repairs:[],sectionPool:true};
+  ws.categories.photos.done=!ws.categories.photos.done;
+  ws.categories.photos.doneBy=ws.categories.photos.done?me.name:null;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  saveWorkState(carId);
+  if(ws.categories.photos.done){
+    const carName=car?car.name:'vehicle';
+    for(const m of S.employees.filter(e=>e.role==='manager')){
+      try{await createNotification(m.id,me.name+' completed photos on '+carName,null,carName);}catch(e){}
+    }
+  }
+  openPhotosDoneModal(carId);
+  renderPhotosQueue();
+  updateTabBadges();
+}
+function renderMgrPhotos(){
+  const el=document.getElementById('mgr-photos-list');
+  const cars=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
+  });
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
+  el.innerHTML=cars.map(car=>{
+    const ws=getWorkState(car.id);
+    const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+    const reviewed=ws.categories&&ws.categories.photos&&ws.categories.photos.reviewed;
+    const needsReview=done&&!reviewed;
+    const pxUrl=!car.photo&&pxCache[String(car.id)];
+    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
+      <div class="rc-head">${photoHTML}<div class="rc-info">
+        <div class="rc-name">${car.name}</div>
+        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
+      </div></div>
+      <div class="rc-tasks-list">
+        <div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📷 Photos${done?' — done by '+(ws.categories.photos.doneBy||'employee'):''}</div></div></div>
+      </div>
+      <div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="removeFromPhotosQueue(${car.id})">↩ Remove</button>
+        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectPhotos(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
+        <button class="rc-btn rc-approve" onclick="approvePhotos(${car.id})">✓ Approve</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  applyPexels(cars);
+}
+async function approvePhotos(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.photos){ws.categories.photos.reviewed=true;ws.categories.photos.sectionPool=false;}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrPhotos();updateTabBadges();
+}
+async function rejectPhotos(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.photos) ws.categories.photos.done=false;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrPhotos();updateTabBadges();
+}
+async function removeFromPhotosQueue(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  if(ws.categories.photos){ws.categories.photos.sectionPool=false;ws.categories.photos.done=false;ws.categories.photos.reviewed=false;}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrPhotos();updateTabBadges();
 }
 
 function renderReview(){
