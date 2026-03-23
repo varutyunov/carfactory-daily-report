@@ -649,21 +649,21 @@ OneSignalDeferred.push(async function(OneSignal){
   });
 });
 
-// Call after login to link user + show enable-notifications bar if not yet subscribed
-async function initOneSignalUser(name){
-  try{
-    const externalId = name.toLowerCase().replace(/\s+/g,'_');
-    async function doOSLogin(OS){
-      try{ await OS.login(externalId); }catch(e){ console.log('OS login err:',e); }
-      // Show in-app enable bar if not yet subscribed
-      if(!OS.Notifications.permission){ showNotifEnableBar(); }
-    }
-    if(window.OneSignal && typeof window.OneSignal.login==='function'){
-      await doOSLogin(window.OneSignal);
-    } else {
-      OneSignalDeferred.push(doOSLogin);
-    }
-  }catch(e){ console.log('OneSignal init user failed:',e); }
+// Call after login to link user + show enable bar if needed
+function initOneSignalUser(name){
+  window._osExternalId = name.toLowerCase().replace(/\s+/g,'_');
+  // Use native Notification API — always available, no async needed
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'granted';
+  if(perm !== 'granted'){ showNotifEnableBar(); }
+  // Link user to OneSignal whenever SDK is ready
+  function linkUser(OS){
+    try{ OS.login(window._osExternalId); }catch(e){}
+  }
+  if(window.OneSignal && typeof window.OneSignal.login==='function'){
+    linkUser(window.OneSignal);
+  } else {
+    OneSignalDeferred.push(linkUser);
+  }
 }
 
 function showNotifEnableBar(){
@@ -671,15 +671,22 @@ function showNotifEnableBar(){
   const bar = document.createElement('div');
   bar.id = 'notif-bar';
   bar.style.cssText='position:fixed;bottom:70px;left:0;right:0;z-index:999;background:#1a1a2e;border-top:1px solid #333;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable notifications to get alerts</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
+  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
   document.body.appendChild(bar);
 }
 
 async function enableOSNotifications(){
   try{
-    if(window.OneSignal){
+    // Request via OneSignal if ready, fallback to native API
+    if(window.OneSignal && window.OneSignal.Notifications){
       await window.OneSignal.Notifications.requestPermission();
-      document.getElementById('notif-bar')?.remove();
+    } else {
+      await Notification.requestPermission();
+    }
+    document.getElementById('notif-bar')?.remove();
+    // Link user after granting
+    if(window._osExternalId && window.OneSignal && window.OneSignal.login){
+      window.OneSignal.login(window._osExternalId);
     }
   }catch(e){ console.log('Enable notif err:',e); }
 }
