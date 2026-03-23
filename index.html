@@ -1085,7 +1085,7 @@ async function doLogin(){
   me=e;
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
-  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());}
+  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());localStorage.setItem('cf_saved_pin',document.getElementById('lp').value.trim());}
   initOneSignalUser(e.name);
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -2107,10 +2107,12 @@ async function addCarManually(){
 // Restore session if coming back from a sync reload
 const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
+const _savedPin = localStorage.getItem('cf_saved_pin');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
 Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
-// Pre-fill username if we have one saved
+// Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
+if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
@@ -2118,6 +2120,8 @@ if(_savedSession){
       me = _s;
       // Re-save immediately so session survives even if sync fails
       localStorage.setItem('cf_session', JSON.stringify(me));
+      localStorage.setItem('cf_saved_user', _savedUser||'');
+      localStorage.setItem('cf_saved_pin', _savedPin||'');
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
@@ -2128,6 +2132,9 @@ if(_savedSession){
       });
     }
   }catch(e){}
+} else if(_savedUser && _savedPin) {
+  // Session missing or invalid but credentials saved — auto-login silently
+  setTimeout(function(){ doLogin(); }, 100);
 }
 ld();
 
