@@ -74,7 +74,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .tile-urgent{position:absolute;top:9px;left:9px;background:rgba(255,69,58,.25);color:#ff453a;border:1px solid rgba(255,69,58,.3);font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;z-index:2;}
 .tile-body{padding:10px 11px 12px;}
 .tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;word-break:break-word;}
-.tile-stock{font-size:11px;color:#444;}
+.tile-stock{font-size:11px;color:#666;}
 .tile-pb{height:2px;background:#1a1a1a;border-radius:1px;overflow:hidden;margin-top:8px;}
 .tile-pf{height:100%;border-radius:1px;transition:width .3s;}
 .pfg{background:#30d158;}
@@ -149,7 +149,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .inv-thumb-ph{width:80px;height:58px;border-radius:8px;background:#000;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .inv-info{flex:1;min-width:0;}
 .inv-name{font-size:15px;font-weight:700;word-break:break-word;}
-.inv-meta{font-size:12px;color:#444;margin-top:2px;}
+.inv-meta{font-size:12px;color:#666;margin-top:2px;}
 .inv-assigned-tag{font-size:11px;color:#30d158;margin-top:3px;}
 .inv-btn{background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#ccc;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .inv-btn.asgn{border-color:#1e3a1e;color:#30d158;background:rgba(48,209,88,.05);}
@@ -577,12 +577,16 @@ canvas{display:none;}
           <div class="mhome-sq-wrap">
             <div class="mhome-sq" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 6px 28px rgba(251,191,36,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('parts','Parts')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="9" width="18" height="10" rx="1.5"/>
-                <rect x="6" y="4" width="3" height="6" rx="1"/>
-                <rect x="10.5" y="4" width="3" height="6" rx="1"/>
-                <rect x="15" y="4" width="3" height="6" rx="1"/>
-                <line x1="1" y1="13" x2="3" y2="13"/>
-                <line x1="21" y1="13" x2="23" y2="13"/>
+                <rect x="2" y="7" width="4" height="10" rx="1"/>
+                <rect x="10" y="5" width="4" height="14" rx="1"/>
+                <rect x="18" y="7" width="4" height="10" rx="1"/>
+                <line x1="6" y1="10" x2="10" y2="10"/>
+                <line x1="14" y1="10" x2="18" y2="10"/>
+                <line x1="6" y1="14" x2="10" y2="14"/>
+                <line x1="14" y1="14" x2="18" y2="14"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="4" y1="17" x2="4" y2="20"/>
+                <line x1="20" y1="17" x2="20" y2="20"/>
               </svg>
               <div class="mhome-label">Parts</div>
             </div>
@@ -636,7 +640,7 @@ canvas{display:none;}
         <span class="ca-tile-label">Task</span>
       </div>
       <div class="ca-tile" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 6px 28px rgba(251,191,36,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('parts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,191,36,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="10" rx="1.5"/><rect x="6" y="4" width="3" height="6" rx="1"/><rect x="10.5" y="4" width="3" height="6" rx="1"/><rect x="15" y="4" width="3" height="6" rx="1"/><line x1="1" y1="13" x2="3" y2="13"/><line x1="21" y1="13" x2="23" y2="13"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,191,36,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="4" height="10" rx="1"/><rect x="10" y="5" width="4" height="14" rx="1"/><rect x="18" y="7" width="4" height="10" rx="1"/><line x1="6" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="18" y2="10"/><line x1="6" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="18" y2="14"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4" y1="17" x2="4" y2="20"/><line x1="20" y1="17" x2="20" y2="20"/></svg>
         <span class="ca-tile-label">Parts</span>
       </div>
       <div class="ca-tile" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 6px 28px rgba(192,86,243,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('photos')">
@@ -691,7 +695,7 @@ canvas{display:none;}
         <option value="repair">🔧 Repair</option>
         <option value="detail">✨ Detail</option>
         <option value="photos">📷 Photos</option>
-        <option value="parts">📦 Parts</option>
+        <option value="parts">⚙️ Parts</option>
         <option value="paint">🎨 Paint</option>
         <option value="note">📝 Note</option>
       </select>
@@ -1286,7 +1290,7 @@ function renderGrid(){
     const urgentBadge=hasUrgent?'<span class="tile-urgent">&#x26A0; Urgent</span>':'';
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} · ${colorStr}`:vinLast6;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} · ${colorStr}`:vinLast6;
     return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
   }).join('');
   applyPexels(mine.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
@@ -1324,7 +1328,7 @@ function renderDetailQueue(){
     const isPhotos=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
     return`<a href="javascript:void(0)" onclick="openDetailDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${detailDone?'rgba(48,209,88,.4)':'#1e3a1e'};">
       <div class="tile-photo-wrap">${photoHTML}</div>
@@ -1353,7 +1357,7 @@ function renderPersonalTab(){
     const tags=assigned.map(k=>`<span style="color:#64d2ff;font-size:10px;font-weight:600;">${catIcon(k)} ${k}</span>`).join(' ');
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     return`<div class="car-tile" style="border-color:#1a2a3a;">
       <div class="tile-photo-wrap">${photoHTML}</div>
       <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags}</div></div>
@@ -1426,7 +1430,7 @@ function openTaskView(aid){
       fetchPexels(car).then(url=>{if(url){img.src=url;img.style.display='block';ph.style.display='none';}});}
   }
   document.getElementById('th-name').textContent=car.name;
-  const _vinLast6=car.vin?car.vin.slice(-6):car.stock;const _detailSub=[_vinLast6,car.color].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
+  const _vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const _detailSub=[_vinLast6,car.color].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
   updateProg(a);renderTaskItems(a);
   document.getElementById('photo-grid').innerHTML='';
   updateSubBtn(a);showView('emp-tasks');
@@ -1544,7 +1548,7 @@ function renderInv(){
     const carSel=ws.selected||false;
     const thImg=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.filter(a=>a.tasks&&a.tasks.length>0).map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openWorkScreen(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
+    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openWorkScreen(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
     + `</div></div>`;
   }).join('');
   applyPexels(items);
@@ -1656,7 +1660,7 @@ function renderAssigned(){
     const badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':`<span class="tile-badge tbp">${done}/${total}</span>`;
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} \xB7 ${colorStr}`:vinLast6;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} \xB7 ${colorStr}`:vinLast6;
     return`<a href="javascript:openMgrAssign('${a.id}')" class="car-tile st-${status}" style="display:block;text-decoration:none;color:inherit;">${badge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:11px;color:#64d2ff;margin:2px 0;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></a>`;
   }).join('')+'</div>';
   applyPexels(allAsgns.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
@@ -1783,7 +1787,7 @@ function renderMgrDetail(){
     return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
       <div class="rc-head">${photoHTML}<div class="rc-info">
         <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
         ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
       </div></div>
       <div class="rc-tasks-list">
@@ -1846,7 +1850,7 @@ function renderPhotosQueue(){
     const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     return`<a href="javascript:void(0)" onclick="openPhotosDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e3a1e'};">
       <div class="tile-photo-wrap">${photoHTML}</div>
       <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
@@ -1907,7 +1911,7 @@ function renderMgrPhotos(){
     return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
       <div class="rc-head">${photoHTML}<div class="rc-info">
         <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
         ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
       </div></div>
       <div class="rc-tasks-list">
@@ -1965,7 +1969,7 @@ function renderPartsQueue(){
     const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.vin?car.vin.slice(-6):car.stock;
+    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     const repairs=ws.categories.parts.repairs||[];
     return`<a href="javascript:void(0)" onclick="openPartsDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e2a3a'};">
       <div class="tile-photo-wrap">${photoHTML}</div>
@@ -2033,7 +2037,7 @@ function renderMgrParts(){
     return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
       <div class="rc-head">${photoHTML}<div class="rc-info">
         <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' · '+car.color:''}</div>
+        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
         ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
       </div></div>
       ${repairs.length?`<div style="padding:8px 0;">${repairs.map(r=>`<div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📦 ${typeof r==='string'?r:(r.text||r)}</div></div></div>`).join('')}</div>`:''}
@@ -2082,7 +2086,7 @@ function renderReview(){
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
     const pxR=!car.photo&&pxCache[String(car.id)];
     const th=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxR?`<img class="rc-img" src="${pxR}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>{const _exp=EXPANDABLE_TASKS.includes(t.name.toLowerCase());return`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note" style="${_exp?'white-space:pre-wrap;color:#888;font-style:normal;':''}">${_exp?t.note:'"'+t.note+'"'}</div>`:''}</div></div>`;}).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack('${a.id}')">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve('${a.id}')">&#x2713; Approve</button></div></div>`;
+    return`<div class="rev-card"><div class="rc-head">${th}<div class="rc-info"><div class="rc-name">${car.name}</div><div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' \xB7 '+car.color:''} \xB7 by ${emp?emp.name:'?'}</div></div></div><div class="rc-tasks-list">${a.tasks.map(t=>{const _exp=EXPANDABLE_TASKS.includes(t.name.toLowerCase());return`<div class="rc-task"><div class="rc-dot ${t.done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">${t.name}${t.urgent?' &#x26A0;':''}</div>${t.note?`<div class="rc-tn-note" style="${_exp?'white-space:pre-wrap;color:#888;font-style:normal;':''}">${_exp?t.note:'"'+t.note+'"'}</div>`:''}</div></div>`;}).join('')}</div>${a.photos&&a.photos.length?`<div class="rc-photos-grid">${a.photos.map(p=>`<img class="rc-ph" src="${p}">`).join('')}</div>`:''}<div class="rc-actions"><button class="rc-btn rc-back" onclick="sendBack('${a.id}')">&#x21A9; Send Back</button><button class="rc-btn rc-approve" onclick="approve('${a.id}')">&#x2713; Approve</button></div></div>`;
   }).join('');
   applyPexels(p.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
@@ -2303,7 +2307,7 @@ function openWorkScreen(carId){
   const car=S.inventory.find(c=>c.id===carId);
   if(!car) return;
   document.getElementById('ws-car-name').textContent=car.name;
-  document.getElementById('ws-car-sub').textContent=(car.vin?car.vin.slice(-6):car.stock)+(car.color?' · '+car.color:'');
+  document.getElementById('ws-car-sub').textContent=(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'');
   renderWorkGrid();
   document.getElementById('work-screen').style.display='flex';
 }
@@ -3054,7 +3058,7 @@ function openCarActions(carId){
   var car = S.inventory.find(function(c){ return c.id === carId; });
   if(!car) return;
   document.getElementById('ca-car-name').textContent = car.name;
-  document.getElementById('ca-car-sub').textContent = (car.vin ? car.vin.slice(-6) : car.stock||'') + (car.color ? ' · ' + car.color : '');
+  document.getElementById('ca-car-sub').textContent = (car.stock||(car.vin?car.vin.slice(-6):'')) + (car.color ? ' · ' + car.color : '');
   document.getElementById('m-car-actions').style.display = 'flex';
 }
 
