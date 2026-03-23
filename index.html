@@ -18,6 +18,7 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
@@ -634,6 +635,49 @@ const SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
 const SB_HEADERS = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation'};
 
+/* ── OneSignal Push Notifications ── */
+const OS_APP_ID = 'ff6238d8-1a7b-4415-a589-229cd4059233';
+const OS_API_KEY = 'os_v2_app_75rdrwa2pncbljmjekonibmsgockubkbqhye6s4z4gqacioqkjnikx3h2c4kmvnegu7lrveqk22en7uzkrhw56fqc3cms2jduc2aojq';
+
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(function(OneSignal){
+  OneSignal.init({
+    appId: OS_APP_ID,
+    serviceWorkerPath: '/OneSignalSDKWorker.js',
+    notifyButton: { enable: false },
+    autoPrompt: false
+  });
+});
+
+async function initOneSignalUser(name){
+  try{
+    const externalId = name.toLowerCase().replace(/\s+/g,'_');
+    OneSignalDeferred.push(async function(OneSignal){
+      await OneSignal.login(externalId);
+      const perm = OneSignal.Notifications.permission;
+      if(!perm){ await OneSignal.Notifications.requestPermission(); }
+    });
+  }catch(e){ console.log('OneSignal init user failed:',e); }
+}
+
+async function sendPushNotification(targetNames, title, body){
+  if(!targetNames||targetNames.length===0) return;
+  const externalIds = targetNames.map(n=>n.toLowerCase().replace(/\s+/g,'_'));
+  try{
+    await fetch('https://onesignal.com/api/v1/notifications',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
+      body:JSON.stringify({
+        app_id: OS_APP_ID,
+        include_external_user_ids: externalIds,
+        channel_for_external_user_ids: 'push',
+        headings:{ en: title },
+        contents:{ en: body }
+      })
+    });
+  }catch(e){ console.log('Push failed:',e); }
+}
+
 async function sbGet(table, params='') {
   const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params, {headers:SB_HEADERS});
   if(!r.ok) throw new Error(await r.text());
@@ -766,6 +810,7 @@ async function doLogin(){
   const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
   if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
   me=e;
+  initOneSignalUser(e.name);
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('ub').textContent=e.name;
@@ -956,9 +1001,12 @@ async function markDetailDone(carId,section){
   if(ws.categories[section].done){
     const carName=car?car.name:'vehicle';
     const msg=me.name+' completed '+section+' on '+carName;
-    for(const m of S.employees.filter(e=>e.role==='manager')){
+    const managers=S.employees.filter(e=>e.role==='manager');
+    for(const m of managers){
       try{await createNotification(m.id,msg,null,carName);}catch(e){}
     }
+    const mgrNames=managers.map(m=>m.name);
+    await sendPushNotification(mgrNames,'✅ Detail Ready',me.name+' marked '+carName+' detail as done');
   }
   openDetailDoneModal(carId);
   renderDetailQueue();
@@ -1262,14 +1310,26 @@ async function mgrEditTask(idx,val){
   const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a||a.tasks[idx].name===val) return;
   a.tasks[idx].name=val;
-  try{await sbPatch('assignments',a.id,{tasks:a.tasks});sv();}catch(e){alert('Error: '+e.message);}
+  try{
+    await sbPatch('assignments',a.id,{tasks:a.tasks});sv();
+    if(val){
+      const emp=S.employees.find(e=>e.id===a.employeeId);
+      const car=S.inventory.find(c=>c.id===a.inventoryId);
+      if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 Task Updated',me.name+' updated a task on '+(car?car.name:'a vehicle'));
+    }
+  }catch(e){alert('Error: '+e.message);}
 }
 async function mgrAddTask(){
   const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
   a.tasks.push({name:'',done:false,urgent:false,note:'',by:null});
   showLoading('Saving...');
-  try{await sbPatch('assignments',a.id,{tasks:a.tasks});sv();renderMgrTaskList();}catch(e){alert('Error: '+e.message);}
+  try{
+    await sbPatch('assignments',a.id,{tasks:a.tasks});sv();renderMgrTaskList();
+    const emp=S.employees.find(e=>e.id===a.employeeId);
+    const car=S.inventory.find(c=>c.id===a.inventoryId);
+    if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 New Task Added',me.name+' added a task to '+(car?car.name:'a vehicle'));
+  }catch(e){alert('Error: '+e.message);}
   hideLoading();
   // Focus the new empty input
   setTimeout(()=>{const inputs=document.querySelectorAll('#mgr-task-list input');if(inputs.length)inputs[inputs.length-1].focus();},100);
@@ -1420,9 +1480,11 @@ async function markPhotosDone(carId){
   saveWorkState(carId);
   if(ws.categories.photos.done){
     const carName=car?car.name:'vehicle';
-    for(const m of S.employees.filter(e=>e.role==='manager')){
+    const managers=S.employees.filter(e=>e.role==='manager');
+    for(const m of managers){
       try{await createNotification(m.id,me.name+' completed photos on '+carName,null,carName);}catch(e){}
     }
+    await sendPushNotification(managers.map(m=>m.name),'📸 Photos Ready',me.name+' finished photos on '+carName);
   }
   openPhotosDoneModal(carId);
   renderPhotosQueue();
@@ -1543,9 +1605,11 @@ async function markPartsDone(carId){
   saveWorkState(carId);
   if(ws.categories.parts.done){
     const carName=car?car.name:'vehicle';
-    for(const m of S.employees.filter(e=>e.role==='manager')){
+    const managers=S.employees.filter(e=>e.role==='manager');
+    for(const m of managers){
       try{await createNotification(m.id,me.name+' completed parts on '+carName,null,carName);}catch(e){}
     }
+    await sendPushNotification(managers.map(m=>m.name),'🔩 Parts Ready',me.name+' finished parts on '+carName);
   }
   openPartsDoneModal(carId);
   renderPartsQueue();
