@@ -1085,7 +1085,7 @@ async function doLogin(){
   me=e;
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
-  if(!rememberMe||rememberMe.checked) localStorage.setItem('cf_session',JSON.stringify(me));
+  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());}
   initOneSignalUser(e.name);
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -2106,13 +2106,18 @@ async function addCarManually(){
 
 // Restore session if coming back from a sync reload
 const _savedSession = localStorage.getItem('cf_session');
+const _savedUser = localStorage.getItem('cf_saved_user');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
 Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
+// Pre-fill username if we have one saved
+if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
     if(_s && _s.id){
       me = _s;
+      // Re-save immediately so session survives even if sync fails
+      localStorage.setItem('cf_session', JSON.stringify(me));
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
