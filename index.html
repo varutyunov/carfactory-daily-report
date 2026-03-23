@@ -640,9 +640,10 @@ const OS_APP_ID = 'ff6238d8-1a7b-4415-a589-229cd4059233';
 const OS_API_KEY = 'os_v2_app_75rdrwa2pncbljmjekonibmsgockubkbqhye6s4z4gqacioqkjnikx3h2c4kmvnegu7lrveqk22en7uzkrhw56fqc3cms2jduc2aojq';
 
 window.OneSignalDeferred = window.OneSignalDeferred || [];
-OneSignalDeferred.push(function(OneSignal){
-  OneSignal.init({
+OneSignalDeferred.push(async function(OneSignal){
+  await OneSignal.init({
     appId: OS_APP_ID,
+    safari_web_id: 'web.onesignal.auto.3437296f-1581-4c9c-99a7-ef947df2b18c',
     serviceWorkerPath: '/OneSignalSDKWorker.js',
     notifyButton: { enable: false },
     autoPrompt: false
@@ -652,11 +653,18 @@ OneSignalDeferred.push(function(OneSignal){
 async function initOneSignalUser(name){
   try{
     const externalId = name.toLowerCase().replace(/\s+/g,'_');
-    OneSignalDeferred.push(async function(OneSignal){
-      await OneSignal.login(externalId);
-      const perm = OneSignal.Notifications.permission;
-      if(!perm){ await OneSignal.Notifications.requestPermission(); }
-    });
+    async function doOSLogin(OS){
+      try{
+        await OS.login(externalId);
+        const hasPerm = OS.Notifications.permission;
+        if(!hasPerm){ await OS.Notifications.requestPermission(); }
+      }catch(e){ console.log('OS login err:',e); }
+    }
+    if(window.OneSignal && typeof window.OneSignal.login==='function'){
+      await doOSLogin(window.OneSignal);
+    } else {
+      OneSignalDeferred.push(doOSLogin);
+    }
   }catch(e){ console.log('OneSignal init user failed:',e); }
 }
 
