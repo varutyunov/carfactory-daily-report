@@ -3170,7 +3170,7 @@ function renderMgrPaint(){
     var emp=S.employees.find(function(e){return e.id===a.employeeId;});
     var paintTasks=a.tasks.filter(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;});
     out+='<div style="background:#0d0d0d;border-radius:14px;border:1px solid #1e1e1e;padding:14px 16px;margin-bottom:12px;">';
-    out+='<div style="font-size:16px;font-weight:700;color:#fff;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">'+(car?car.name:'Unknown Car')+'</div>';
+    out+='<div style="font-size:16px;font-weight:700;color:#fff;font-family:Barlow Condensed,sans-serif;letter-spacing:1px;">'+(car?car.name:'Unknown Car')+'</div>';
     out+='<div style="font-size:12px;color:#555;margin-bottom:10px;">&rarr; '+(emp?emp.name:'Unknown')+'</div>';
     paintTasks.forEach(function(t){
       var txt=typeof t==='object'?t.text:t;
