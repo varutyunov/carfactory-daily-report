@@ -294,7 +294,7 @@ canvas{display:none;}
     <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
     <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
-    <button class="mt" onclick="mgrGo('tasks',this)" id="tab-review">Review</button>
+    <button class="mt" onclick="mgrGo('tasks',this)" id="tab-repair">Repair</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
   <div class="content">
@@ -782,18 +782,7 @@ function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.clas
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
   const tabDetail=document.getElementById('tab-detail');
-  const tabReview=document.getElementById('tab-review');
-  // Tasks: active non-submitted assignments
-  const taskCount=S.assignments.filter(a=>!a.approved&&!a.submitted).length;
-  // Detail: cars where detail/photos done but not reviewed
-  const detailCount=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    if(!ws.categories) return false;
-    return (ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed)||
-           (ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed);
-  }).length;
-  // Review: submitted task assignments
-  const reviewCount=S.assignments.filter(a=>a.submitted&&!a.approved).length;
+  const tabRepair=document.getElementById('tab-repair');
   function setBadge(el,label,count){
     if(!el) return;
     if(count>0){
@@ -802,9 +791,19 @@ function updateTabBadges(){
       el.textContent=label;
     }
   }
-  setBadge(tabTasks,'Tasks',taskCount);
+  // Tasks: active assignments pending review (submitted but not approved)
+  const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved).length;
+  setBadge(tabTasks,'Tasks',taskReviewCount);
+  // Detail: cars with detail/photos done but not reviewed
+  const detailCount=S.inventory.filter(car=>{
+    const ws=getWorkState(car.id);
+    if(!ws.categories) return false;
+    return (ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed)||
+           (ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed);
+  }).length;
   setBadge(tabDetail,'Detail',detailCount);
-  setBadge(tabReview,'Review',reviewCount);
+  // Repair: submitted assignments (same as tasks review count)
+  setBadge(tabRepair,'Repair',taskReviewCount);
 }
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
