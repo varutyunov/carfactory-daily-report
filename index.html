@@ -1197,7 +1197,7 @@ async function doLogin(){
   try {
     const emps = await sbGet('employees','select=*');
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-  } catch(e) { ld(); }
+  } catch(e){}
   hideLoading();
   const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
   if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
@@ -2252,9 +2252,6 @@ if(_savedSession){
       });
     }
   }catch(e){}
-} else if(_savedUser && _savedPin) {
-  // Session missing or invalid but credentials saved — auto-login silently
-  setTimeout(function(){ doLogin(); }, 100);
 }
 ld();
 
