@@ -360,6 +360,8 @@ canvas{display:none;}
 .upcoming-notif-badge{display:inline-block;font-size:10px;color:#30d158;background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.2);border-radius:4px;padding:2px 5px;margin-top:4px;}
 .upcoming-del{background:none;border:none;color:#2a2a2a;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;margin-top:2px;}
 .upcoming-del:active{color:#ff453a;}
+.wf-emp-btn{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;color:#666;font-size:13px;font-weight:600;padding:8px 16px;cursor:pointer;}
+.wf-assign-active{background:rgba(139,92,246,0.2)!important;border-color:rgba(139,92,246,0.4)!important;color:#a78bfa!important;}
 </style>
 <script>
 (function(){
@@ -589,6 +591,41 @@ canvas{display:none;}
         </div>
       </div>
     </div>
+
+<!-- WORKFLOW TASK MODAL -->
+<div id="m-wf-task" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-end;justify-content:center;">
+  <div style="background:#111;border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:24px 20px 40px;border-top:1px solid #222;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;">ASSIGN TASK</div>
+        <div id="wf-task-car-name" style="font-size:13px;color:#555;margin-top:2px;"></div>
+      </div>
+      <button onclick="closeWfTask()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;">✕</button>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Task Type</div>
+      <select id="wf-task-type" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;-webkit-appearance:none;">
+        <option value="repair">🔧 Repair</option>
+        <option value="detail">✨ Detail</option>
+        <option value="photos">📷 Photos</option>
+        <option value="parts">📦 Parts</option>
+        <option value="note">📝 Note</option>
+      </select>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Description</div>
+      <textarea id="wf-task-desc" placeholder="Describe the task..." style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:80px;font-family:inherit;"></textarea>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Assign To</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button id="wf-task-assign-all" onclick="wfToggleAll()" class="wf-emp-btn" style="background:rgba(255,69,58,0.15);border-color:rgba(255,69,58,0.35);color:#ff453a;">All Employees</button>
+        <div id="wf-task-emp-btns" style="display:contents;"></div>
+      </div>
+    </div>
+    <button id="wf-task-submit-btn" onclick="submitWfTask()" style="width:100%;background:#a78bfa;border:none;border-radius:12px;color:#000;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">Send Task</button>
+  </div>
+</div>
 
     <!-- MGR SECTION BACK BAR -->
     <div id="mgr-back-bar">
@@ -1421,7 +1458,9 @@ function renderInv(){
     const carSel=ws.selected||false;
     const thImg=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.filter(a=>a.tasks&&a.tasks.length>0).map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openWorkScreen(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button></div></div>`;
+    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openWorkScreen(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.vin?car.vin.slice(-6):car.stock}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
+    + (me && me.role==='manager' ? `<button onclick="event.stopPropagation();toggleWorkflow(${car.id})" style="background:${isInWorkflow(car.id)?'rgba(139,92,246,0.2)':'rgba(255,255,255,0.05)'};border:1px solid ${isInWorkflow(car.id)?'rgba(139,92,246,0.4)':'#222'};border-radius:6px;color:${isInWorkflow(car.id)?'#a78bfa':'#444'};font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;flex-shrink:0;letter-spacing:0.5px;">${isInWorkflow(car.id)?'✓ WF':'+ WF'}</button>` : '')
+    + `</div></div>`;
   }).join('');
   applyPexels(items);
 }
@@ -2504,43 +2543,69 @@ function updateHomeBadges(){
 /* ── WORKFLOW VIEW ── */
 function renderWorkflow(){
   var el=document.getElementById('mgr-workflow-content');
-  if(!el)return;
-  var cars=S.inventory||[];
-  if(!cars.length){el.innerHTML='<p style="color:#555;padding:20px 0;font-size:13px;">No vehicles in inventory.</p>';return;}
-  var STAGES=[
-    {key:'detail',label:'Detail',icon:'&#x2728;'},
-    {key:'photos',label:'Photos',icon:'&#x1F4F7;'},
-    {key:'parts',label:'Parts',icon:'&#x1F527;'},
-    {key:'tasks',label:'Repairs',icon:'&#x1F6E0;'},
-  ];
-  var out='<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:30px;">';
-  for(var i=0;i<cars.length;i++){
-    var car=cars[i];
-    var ws=getWorkState(car.id);
-    var cats=ws.categories||{};
-    out+='<div style="background:#111;border-radius:16px;padding:16px;border:1px solid #1e1e1e;">';
-    out+='<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:14px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">'+car.name+'</div>';
-    out+='<div style="display:flex;gap:8px;">';
-    for(var j=0;j<STAGES.length;j++){
-      var stage=STAGES[j];
-      var s=cats[stage.key];
-      var done=s&&s.done;
-      var reviewed=s&&s.reviewed;
-      var bg=reviewed?'#14532d':done?'#1e3a5f':'#1a1a1a';
-      var borderColor=reviewed?'#22c55e':done?'#3b82f6':'#2a2a2a';
-      var textColor=reviewed?'#4ade80':done?'#60a5fa':'#444';
-      out+='<div style="flex:1;background:'+bg+';border-radius:10px;padding:8px 4px;text-align:center;border:1px solid '+borderColor+';">';
-      out+='<div style="font-size:20px;">'+stage.icon+'</div>';
-      out+='<div style="font-size:10px;color:'+textColor+';font-weight:700;margin-top:4px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:0.5px;text-transform:uppercase;">'+stage.label+'</div>';
-      if(reviewed) out+='<div style="font-size:9px;color:#4ade80;margin-top:2px;">&#x2713; Done</div>';
-      else if(done) out+='<div style="font-size:9px;color:#60a5fa;margin-top:2px;">Review</div>';
-      else out+='<div style="font-size:9px;color:#333;margin-top:2px;">Pending</div>';
-      out+='</div>';
-    }
-    out+='</div></div>';
+  if(!el) return;
+  var wfIds = getWorkflowCars();
+  if(!wfIds.length){
+    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:16px;">' +
+      '<div style="font-size:40px;">📋</div>' +
+      '<div style="font-size:18px;font-weight:700;color:#fff;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">NO CARS IN WORKFLOW</div>' +
+      '<div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">Go to Inventory, tap a car, and tap the WF button to add it here.</div>' +
+    '</div>';
+    return;
   }
-  out+='</div>';
-  el.innerHTML=out;
+  var cars = wfIds.map(function(id){ return S.inventory.find(function(c){ return c.id === id; }); }).filter(Boolean);
+  if(!cars.length){
+    el.innerHTML = '<p style="color:#555;padding:20px;font-size:13px;">Cars not found — they may have been removed from inventory.</p>';
+    return;
+  }
+  var out = '<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:40px;">';
+  for(var i = 0; i < cars.length; i++){
+    var car = cars[i];
+    var asgns = (S.assignments||[]).filter(function(a){ return a.inventoryId === car.id && !a.approved; });
+    var taskCount = asgns.reduce(function(n,a){ return n + (a.tasks ? a.tasks.length : 0); }, 0);
+    out += '<div style="background:#0d0d0d;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;">';
+    // Car header
+    out += '<div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1a1a1a;">';
+    out += '<div>';
+    out += '<div style="font-size:17px;font-weight:700;color:#fff;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">' + car.name + '</div>';
+    out += '<div style="font-size:12px;color:#444;margin-top:2px;">' + (car.stock||'') + (car.color ? ' · ' + car.color : '') + ' · ' + taskCount + ' task' + (taskCount===1?'':'s') + '</div>';
+    out += '</div>';
+    out += '<div style="display:flex;gap:8px;align-items:center;">';
+    out += '<button onclick="openWfTask('+car.id+')" style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 14px;cursor:pointer;">+ Task</button>';
+    out += '<button onclick="removeFromWorkflow('+car.id+');renderWorkflow();renderInv();" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 8px;" title="Remove from workflow">✕</button>';
+    out += '</div>';
+    out += '</div>';
+    // Tasks list
+    if(asgns.length){
+      out += '<div style="padding:10px 16px 14px;">';
+      for(var j = 0; j < asgns.length; j++){
+        var asgn = asgns[j];
+        var emp = S.employees.find(function(e){ return e.id === asgn.employeeId; });
+        var empName = emp ? emp.name : 'Unknown';
+        var empTasks = asgn.tasks || [];
+        if(empTasks.length){
+          out += '<div style="margin-bottom:10px;">';
+          out += '<div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">→ ' + empName + '</div>';
+          for(var k = 0; k < empTasks.length; k++){
+            var t = empTasks[k];
+            var tText = typeof t === 'object' ? t.text : t;
+            var tDone = typeof t === 'object' ? t.done : false;
+            out += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0f0f0f;">';
+            out += '<div style="width:8px;height:8px;border-radius:50%;background:' + (tDone ? '#30d158' : '#333') + ';flex-shrink:0;"></div>';
+            out += '<div style="font-size:13px;color:' + (tDone ? '#555' : '#ccc') + ';' + (tDone ? 'text-decoration:line-through;' : '') + '">' + tText + '</div>';
+            out += '</div>';
+          }
+          out += '</div>';
+        }
+      }
+      out += '</div>';
+    } else {
+      out += '<div style="padding:14px 16px;font-size:13px;color:#333;">No tasks assigned yet.</div>';
+    }
+    out += '</div>';
+  }
+  out += '</div>';
+  el.innerHTML = out;
 }
 
 /* ── CALENDAR VIEW ── */
@@ -2777,7 +2842,126 @@ async function calScheduleNotification(ev){
   }catch(e){console.warn('Notification error',e);}
 }
 
+function getWorkflowCars(){
+  try{ return JSON.parse(localStorage.getItem('cf_workflow_cars')||'[]'); }catch(e){return [];}
+}
+function isInWorkflow(carId){
+  return getWorkflowCars().indexOf(carId) !== -1;
+}
+function addToWorkflow(carId){
+  var wf = getWorkflowCars();
+  if(wf.indexOf(carId) === -1){ wf.push(carId); localStorage.setItem('cf_workflow_cars', JSON.stringify(wf)); }
+}
+function removeFromWorkflow(carId){
+  var wf = getWorkflowCars().filter(function(id){ return id !== carId; });
+  localStorage.setItem('cf_workflow_cars', JSON.stringify(wf));
+}
+function toggleWorkflow(carId){
+  if(isInWorkflow(carId)) removeFromWorkflow(carId);
+  else addToWorkflow(carId);
+  renderInv();
+  // If workflow view is visible, re-render it too
+  var wv = document.getElementById('mgr-workflow');
+  if(wv && wv.classList.contains('on')) renderWorkflow();
+}
 
+// Workflow task modal state
+var wfTaskCarId = null;
+
+function openWfTask(carId){
+  wfTaskCarId = carId;
+  var car = S.inventory.find(function(c){ return c.id === carId; });
+  var el = document.getElementById('m-wf-task');
+  if(!el || !car) return;
+  document.getElementById('wf-task-car-name').textContent = car.name;
+  document.getElementById('wf-task-type').value = 'repair';
+  document.getElementById('wf-task-desc').value = '';
+  document.getElementById('wf-task-assign-all').classList.remove('wf-assign-active');
+  // Render employee buttons
+  var empBtns = document.getElementById('wf-task-emp-btns');
+  var emps = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; });
+  empBtns.innerHTML = emps.map(function(e){
+    return '<button class="wf-emp-btn" data-id="'+e.id+'" onclick="wfToggleEmp(this,'+e.id+')">'+e.name+'</button>';
+  }).join('');
+  el.style.display = 'flex';
+}
+
+function wfToggleEmp(btn, empId){
+  btn.classList.toggle('wf-assign-active');
+  // If individual picked, deactivate "All"
+  document.getElementById('wf-task-assign-all').classList.remove('wf-assign-active');
+}
+
+function wfToggleAll(){
+  var btn = document.getElementById('wf-task-assign-all');
+  var isActive = btn.classList.toggle('wf-assign-active');
+  // Deactivate all individual employee buttons
+  document.querySelectorAll('.wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
+}
+
+function closeWfTask(){
+  var el = document.getElementById('m-wf-task');
+  if(el) el.style.display = 'none';
+  wfTaskCarId = null;
+}
+
+async function submitWfTask(){
+  if(!wfTaskCarId) return;
+  var taskType = document.getElementById('wf-task-type').value;
+  var desc = document.getElementById('wf-task-desc').value.trim();
+  if(!desc){ alert('Please enter a task description.'); return; }
+
+  var assignAll = document.getElementById('wf-task-assign-all').classList.contains('wf-assign-active');
+  var selectedIds = [];
+
+  if(assignAll){
+    selectedIds = (S.employees||[]).filter(function(e){ return e.role !== 'manager'; }).map(function(e){ return e.id; });
+  } else {
+    document.querySelectorAll('.wf-emp-btn.wf-assign-active').forEach(function(b){
+      selectedIds.push(parseInt(b.getAttribute('data-id')));
+    });
+  }
+
+  if(!selectedIds.length){ alert('Please select who to assign this to.'); return; }
+
+  var car = S.inventory.find(function(c){ return c.id === wfTaskCarId; });
+  var taskLabel = taskType.charAt(0).toUpperCase() + taskType.slice(1);
+  var taskText = '['+taskLabel+'] ' + desc;
+  var tasks = [{text: taskText, done: false, urgent: false}];
+
+  var btn = document.getElementById('wf-task-submit-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  try {
+    for(var i = 0; i < selectedIds.length; i++){
+      var empId = selectedIds[i];
+      // Check if assignment already exists for this car/employee
+      var existing = S.assignments.find(function(a){ return a.inventoryId === wfTaskCarId && a.employeeId === empId && !a.approved; });
+      if(existing){
+        // Add task to existing assignment
+        existing.tasks = (existing.tasks||[]).concat(tasks);
+        await sbPatch('assignments', existing.id, {tasks: existing.tasks});
+      } else {
+        var rows = await sbPost('assignments', {inventory_id: wfTaskCarId, employee_id: empId, tasks: tasks, submitted: false, approved: false, photos: []});
+        if(rows && rows[0]){
+          var row = rows[0];
+          S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
+        }
+      }
+      // Send notification
+      var msg = (assignAll ? 'New task for all: ' : 'New task for you: ') + taskText + ' — ' + (car ? car.name : '');
+      await sendNotification(empId, msg, null, car ? car.name : '');
+    }
+    closeWfTask();
+    renderWorkflow();
+    updateTabBadges();
+    updateHomeBadges();
+  } catch(e) {
+    alert('Error sending task. Please try again.');
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = 'Send Task'; }
+  }
+}
 
 </script>
 <!-- WORK SCREEN -->
