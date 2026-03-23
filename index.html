@@ -371,6 +371,29 @@ canvas{display:none;}
 .ca-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#fff;position:relative;z-index:1;}
 .ca-tile::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,0.06),transparent 70%);}
 .ca-wide{grid-column:1/-1;}
+/* ── AI CHAT ── */
+#m-ai-chat{display:none;position:fixed;inset:0;background:#080808;z-index:700;flex-direction:column;}
+.ai-header{padding:14px 16px 12px;border-bottom:1px solid #181818;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.ai-icon{width:34px;height:34px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.ai-title{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:900;color:#fff;letter-spacing:2px;}
+.ai-sub{font-size:11px;color:#444;margin-top:1px;}
+.ai-messages{flex:1;overflow-y:auto;padding:14px 14px 6px;display:flex;flex-direction:column;gap:10px;}
+.ai-msg{display:flex;}
+.ai-msg-user{justify-content:flex-end;}
+.ai-msg-bot{justify-content:flex-start;}
+.ai-bubble{max-width:88%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.5;}
+.ai-msg-user .ai-bubble{background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border-radius:16px 16px 4px 16px;}
+.ai-msg-bot .ai-bubble{background:#141414;color:#ccc;border:1px solid #222;border-radius:16px 16px 16px 4px;}
+.ai-action{background:#0d1a0d;border:1px solid #1a3a1a;color:#4ade80;font-size:12px;padding:8px 12px;border-radius:10px;margin:2px 0;font-family:monospace;max-width:92%;}
+.ai-typing{display:flex;gap:5px;padding:12px 14px;background:#141414;border:1px solid #222;border-radius:16px 16px 16px 4px;width:fit-content;}
+.ai-typing span{width:7px;height:7px;background:#444;border-radius:50%;animation:aiDot 1.1s ease-in-out infinite;}
+.ai-typing span:nth-child(2){animation-delay:.2s;}
+.ai-typing span:nth-child(3){animation-delay:.4s;}
+@keyframes aiDot{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-5px);opacity:1;}}
+.ai-input-bar{padding:10px 14px 30px;border-top:1px solid #181818;display:flex;gap:8px;flex-shrink:0;}
+.ai-input-bar input{flex:1;background:#141414;border:1px solid #282828;border-radius:12px;color:#fff;font-size:15px;padding:11px 14px;outline:none;font-family:inherit;}
+.ai-input-bar input::placeholder{color:#444;}
+.ai-send{background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:12px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 </style>
 <script>
 (function(){
@@ -411,6 +434,7 @@ canvas{display:none;}
     <div class="tb-right">
       <div class="ub" id="ub">Employee</div>
 
+      <button id="ai-brain-btn" onclick="openAIChat()" title="AI Assistant" style="display:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:9px;color:#fff;font-size:16px;cursor:pointer;padding:5px 9px;line-height:1;flex-shrink:0;">🧠</button>
       <button id="sync-btn" onclick="doSync()" title="Sync latest data" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;">&#x21BB;</button>
       <button class="so" onclick="doLogout()">&#x2715;</button>
     </div>
@@ -1219,6 +1243,7 @@ async function doLogin(){
   document.getElementById('ub').textContent=e.name;
   await syncFromSupabase();
   fetchNotifications();
+  var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=e.role==='manager'?'':'none';
   if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
 }
@@ -1239,7 +1264,7 @@ function doSync(){
     window.location.reload();
   }
 }
-function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display='none';closeAIChat();document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
@@ -3191,6 +3216,243 @@ function renderMgrPaint(){
   el.innerHTML=out;
 }
 
+// ── AI BRAIN ─────────────────────────────────────────────────────────────────
+var aiConversation = []; // full API-format message history
+var aiIsLoading = false;
+
+var AI_TOOLS = [
+  {
+    name: 'find_cars',
+    description: 'Search inventory for cars by year, make, model, color, stock number, or VIN',
+    input_schema: { type:'object', properties:{ query:{type:'string',description:'Search terms'} }, required:['query'] }
+  },
+  {
+    name: 'assign_work',
+    description: 'Assign a type of work (repair, task, paint, parts, photos) to a specific employee or all employees for a car. Use find_cars first if you need the car ID.',
+    input_schema: {
+      type:'object',
+      properties:{
+        car_id:{type:'number',description:'Car ID from inventory'},
+        work_type:{type:'string',enum:['repair','task','parts','photos','paint']},
+        employee_id:{type:'number',description:'Employee ID — omit to assign to all'},
+        note:{type:'string',description:'Optional note'}
+      },
+      required:['car_id','work_type']
+    }
+  },
+  {
+    name: 'add_to_workflow',
+    description: 'Add a car to the workflow section',
+    input_schema: { type:'object', properties:{ car_id:{type:'number'} }, required:['car_id'] }
+  },
+  {
+    name: 'navigate',
+    description: 'Navigate to a section of the app',
+    input_schema: { type:'object', properties:{ section:{type:'string',enum:['home','inventory','assigned','tasks','photos','parts','paint','workflow','employees']} }, required:['section'] }
+  },
+  {
+    name: 'get_status',
+    description: 'Get current app status — pending work, by employee, or by car',
+    input_schema: { type:'object', properties:{ filter:{type:'string',description:'Employee name, car name, or "all"'} } }
+  }
+];
+
+function buildAISystemPrompt(){
+  var emps = (S.employees||[]).map(function(e){ return e.name+' (ID:'+e.id+', role:'+e.role+')'; }).join('\n');
+  var inv = (S.inventory||[]).map(function(c){ return '  ID:'+c.id+' | '+c.name+' | stock:'+( c.stock||'?')+' | color:'+(c.color||'?')+' | loc:'+(c.location||'?'); }).join('\n');
+  var pending = (S.assignments||[]).filter(function(a){ return !a.approved; }).length;
+  return 'You are the AI brain for Car Factory, a vehicle workflow management app for a used car dealership. Help managers control the app with natural language.\n\nEMPLOYEES:\n'+emps+'\n\nINVENTORY ('+((S.inventory||[]).length)+' vehicles):\n'+inv+'\n\nPENDING ASSIGNMENTS: '+pending+'\n\nWhen the user gives a command, call the appropriate tool(s) to execute it. Be concise. If something is ambiguous, ask one short clarifying question. Always confirm what was done.';
+}
+
+async function executeAITool(toolName, input){
+  if(toolName === 'find_cars'){
+    var q = (input.query||'').toLowerCase();
+    var hits = (S.inventory||[]).filter(function(c){
+      return (c.name||'').toLowerCase().includes(q)||(c.color||'').toLowerCase().includes(q)||(c.stock||'').toLowerCase().includes(q)||(c.vin||'').toLowerCase().includes(q);
+    });
+    if(!hits.length) return {found:0, message:'No cars found matching "'+input.query+'"'};
+    return {found:hits.length, cars:hits.map(function(c){ return {id:c.id, name:c.name, stock:c.stock, color:c.color, location:c.location}; })};
+  }
+  if(toolName === 'assign_work'){
+    var car = (S.inventory||[]).find(function(c){ return c.id===input.car_id; });
+    if(!car) return {error:'Car ID '+input.car_id+' not found in inventory'};
+    var label = input.work_type.charAt(0).toUpperCase()+input.work_type.slice(1);
+    var taskText = '['+label+']'+(input.note?' '+input.note:'');
+    var tasks = [{text:taskText, done:false, urgent:false}];
+    var empIds = input.employee_id ? [input.employee_id] : (S.employees||[]).map(function(e){ return e.id; });
+    var assigned = [];
+    try{
+      for(var i=0;i<empIds.length;i++){
+        var eid = empIds[i];
+        var existing = (S.assignments||[]).find(function(a){ return a.inventoryId===input.car_id&&a.employeeId===eid&&!a.approved; });
+        if(existing){
+          existing.tasks=(existing.tasks||[]).concat(tasks);
+          await sbPatch('assignments',existing.id,{tasks:existing.tasks});
+        } else {
+          var rows = await sbPost('assignments',{inventory_id:input.car_id,employee_id:eid,tasks:tasks,submitted:false,approved:false,photos:[]});
+          if(rows&&rows[0]){ var r=rows[0]; S.assignments.push({id:r.id,inventoryId:r.inventory_id,employeeId:r.employee_id,tasks:r.tasks,submitted:false,approved:false,photos:[],assignedAt:r.assigned_at}); }
+        }
+        await sendNotification(eid,'New '+label+' task — '+car.name,null,car.name);
+        var emp=(S.employees||[]).find(function(e){ return e.id===eid; });
+        assigned.push(emp?emp.name:'Employee #'+eid);
+      }
+      updateTabBadges(); updateHomeBadges();
+      return {success:true, car:car.name, task:taskText, assigned_to:assigned};
+    } catch(e){ return {error:'Failed: '+e.message}; }
+  }
+  if(toolName === 'add_to_workflow'){
+    var car=(S.inventory||[]).find(function(c){ return c.id===input.car_id; });
+    if(!car) return {error:'Car not found'};
+    addToWorkflow(input.car_id);
+    return {success:true, car:car.name, message:'Added to workflow'};
+  }
+  if(toolName === 'navigate'){
+    var s=input.section;
+    closeAIChat();
+    setTimeout(function(){
+      if(s==='home'){ goMgrHome(); }
+      else {
+        var sectionLabels={inventory:'Inventory',assigned:'Assigned',tasks:'Tasks',photos:'Photos',parts:'Parts',paint:'Paint',workflow:'Workflow',employees:'Team'};
+        var tabSections=['inventory','assigned','tasks','photos','parts','employees'];
+        if(tabSections.includes(s)){
+          var btn=document.querySelector('#mtabs .mt[onclick*="\''+s+'\'"]')||document.querySelector('#mtabs .mt[onclick*=\'"'+s+'"\']');
+          if(btn) btn.click();
+        } else {
+          mgrGoSection(s, sectionLabels[s]||s);
+        }
+      }
+    }, 200);
+    return {success:true, navigated_to:s};
+  }
+  if(toolName === 'get_status'){
+    var q=(input.filter||'all').toLowerCase();
+    var pending=(S.assignments||[]).filter(function(a){ return !a.approved; });
+    if(q==='all'||!q){
+      return {pending_assignments:pending.length, cars_in_progress:[...new Set(pending.map(function(a){ return a.inventoryId; }))].length, active_employees:[...new Set(pending.map(function(a){ return a.employeeId; }))].length};
+    }
+    var emp=(S.employees||[]).find(function(e){ return e.name.toLowerCase().includes(q); });
+    if(emp){
+      var ew=pending.filter(function(a){ return a.employeeId===emp.id; });
+      return {employee:emp.name, open_assignments:ew.length, cars:ew.map(function(a){ var c=(S.inventory||[]).find(function(x){ return x.id===a.inventoryId; }); return c?c.name:'Unknown'; })};
+    }
+    var car=(S.inventory||[]).find(function(c){ return c.name.toLowerCase().includes(q); });
+    if(car){
+      var cw=pending.filter(function(a){ return a.inventoryId===car.id; });
+      return {car:car.name, open_assignments:cw.length, assignees:cw.map(function(a){ var e=(S.employees||[]).find(function(x){ return x.id===a.employeeId; }); return e?e.name:'Unknown'; })};
+    }
+    return {message:'Nothing found matching "'+input.filter+'"'};
+  }
+  return {error:'Unknown tool: '+toolName};
+}
+
+function aiAddMsg(role, html, isAction){
+  var container=document.getElementById('ai-messages');
+  if(!container) return;
+  var wrap=document.createElement('div');
+  if(isAction){
+    wrap.className='ai-msg ai-msg-bot';
+    wrap.innerHTML='<div class="ai-action">'+html+'</div>';
+  } else {
+    wrap.className='ai-msg '+(role==='user'?'ai-msg-user':'ai-msg-bot');
+    var bub=document.createElement('div');
+    bub.className='ai-bubble';
+    bub.innerHTML=html;
+    wrap.appendChild(bub);
+  }
+  container.appendChild(wrap);
+  container.scrollTop=container.scrollHeight;
+}
+
+function aiShowTyping(){
+  var container=document.getElementById('ai-messages');
+  if(!container) return;
+  var el=document.createElement('div');
+  el.className='ai-msg ai-msg-bot'; el.id='ai-typing';
+  el.innerHTML='<div class="ai-typing"><span></span><span></span><span></span></div>';
+  container.appendChild(el);
+  container.scrollTop=container.scrollHeight;
+}
+function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.remove(); }
+
+function openAIChat(){
+  var panel=document.getElementById('m-ai-chat');
+  if(panel){ panel.style.display='flex'; }
+  setTimeout(function(){ var inp=document.getElementById('ai-input'); if(inp) inp.focus(); },150);
+}
+function closeAIChat(){ var panel=document.getElementById('m-ai-chat'); if(panel) panel.style.display='none'; }
+
+async function sendAIMessage(){
+  if(aiIsLoading) return;
+  var inp=document.getElementById('ai-input');
+  if(!inp) return;
+  var text=inp.value.trim();
+  if(!text) return;
+
+  var apiKey=localStorage.getItem('cf_ai_key');
+  if(!apiKey){
+    var k=prompt('Enter your Anthropic API key to activate the AI assistant:');
+    if(!k) return;
+    localStorage.setItem('cf_ai_key',k.trim());
+    apiKey=k.trim();
+  }
+
+  inp.value='';
+  aiAddMsg('user', text.replace(/</g,'&lt;'));
+  aiConversation.push({role:'user', content:text});
+  aiIsLoading=true;
+  aiShowTyping();
+
+  try {
+    var continueLoop=true;
+    while(continueLoop){
+      var resp=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-client-side-usage':'true'},
+        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:1024,system:buildAISystemPrompt(),tools:AI_TOOLS,messages:aiConversation})
+      });
+      aiHideTyping();
+
+      if(!resp.ok){
+        var err=await resp.json().catch(function(){ return {}; });
+        var msg=(err.error&&err.error.message)||('API error '+resp.status);
+        if(resp.status===401){ localStorage.removeItem('cf_ai_key'); msg='Invalid API key. It has been cleared — try again.'; }
+        aiAddMsg('assistant','⚠️ '+msg);
+        break;
+      }
+
+      var data=await resp.json();
+      var toolUses=data.content.filter(function(b){ return b.type==='tool_use'; });
+      var texts=data.content.filter(function(b){ return b.type==='text'; });
+
+      // Add assistant turn to history
+      aiConversation.push({role:'assistant', content:data.content});
+
+      if(data.stop_reason==='tool_use'&&toolUses.length){
+        var toolResults=[];
+        for(var j=0;j<toolUses.length;j++){
+          var tu=toolUses[j];
+          var actionLabel=tu.name+': '+JSON.stringify(tu.input).replace(/"/g,'').replace(/\{|\}/g,'').replace(/,/g,' | ');
+          aiAddMsg('bot','⚡ '+actionLabel,true);
+          var result=await executeAITool(tu.name,tu.input);
+          toolResults.push({type:'tool_result',tool_use_id:tu.id,content:JSON.stringify(result)});
+        }
+        aiConversation.push({role:'user', content:toolResults});
+        aiShowTyping();
+        // loop continues to get final response
+      } else {
+        if(texts.length) aiAddMsg('assistant',texts.map(function(b){ return b.text.replace(/</g,'&lt;'); }).join('<br>'));
+        continueLoop=false;
+      }
+    }
+  } catch(e){
+    aiHideTyping();
+    aiAddMsg('assistant','⚠️ Connection error. Check your internet and try again.');
+  }
+
+  aiIsLoading=false;
+}
+
+
 </script>
 <!-- WORK SCREEN -->
 <div id="work-screen" style="display:none;flex-direction:column;">
@@ -3233,6 +3495,26 @@ function renderMgrPaint(){
     </div>
     <button class="cal-save-btn" onclick="calSaveEvent()">Save Event</button>
     <span class="cal-cancel-link" onclick="calCloseModal()">Cancel</span>
+  </div>
+</div>
+<!-- AI CHAT PANEL -->
+<div id="m-ai-chat" style="display:none;position:fixed;inset:0;background:#080808;z-index:700;flex-direction:column;">
+  <div class="ai-header">
+    <div class="ai-icon">🧠</div>
+    <div>
+      <div class="ai-title">AI ASSISTANT</div>
+      <div class="ai-sub">Car Factory Brain</div>
+    </div>
+    <button onclick="closeAIChat()" style="margin-left:auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;">&#x2715;</button>
+  </div>
+  <div class="ai-messages" id="ai-messages">
+    <div class="ai-msg ai-msg-bot">
+      <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, add to paint or workflow, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
+    </div>
+  </div>
+  <div class="ai-input-bar">
+    <input id="ai-input" placeholder="Tell me what to do..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" />
+    <button class="ai-send" onclick="sendAIMessage()">&#x2191;</button>
   </div>
 </div>
 </body>
