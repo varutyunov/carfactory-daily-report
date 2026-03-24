@@ -655,13 +655,14 @@ canvas{display:none;}
             </div>
           </div>
 
-          <!-- WORKFLOW (160°) -->
+          <!-- PROGRESS (160°) -->
           <div class="orbit-tw" style="transform:rotate(160deg) translateY(-169px) rotate(-160deg);">
-            <div class="orbit-tile" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 4px 20px rgba(20,184,166,0.25);" onclick="mgrGoSection('workflow','Workflow')">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 4px 20px rgba(20,184,166,0.25);" onclick="mgrGoSection('progress','Progress')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
               </svg>
-              <div class="orbit-tile-label">Workflow</div>
+              <div class="orbit-tile-label">Progress</div>
+              <span class="orbit-badge" id="hbadge-progress"></span>
             </div>
           </div>
 
@@ -714,7 +715,7 @@ canvas{display:none;}
       <div id="mgr-home-chat">
         <div class="ai-messages" id="ai-messages">
           <div class="ai-msg ai-msg-bot">
-            <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, add to paint or workflow, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
+            <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, track progress, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
           </div>
         </div>
         <div class="ai-input-bar" style="padding-bottom:env(safe-area-inset-bottom,20px);">
@@ -751,9 +752,9 @@ canvas{display:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(192,86,243,0.9)" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         <span class="ca-tile-label">Photos</span>
       </div>
-      <div class="ca-tile ca-wide" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 6px 28px rgba(20,184,166,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="addCarToWorkflow()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.9)" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
-        <span class="ca-tile-label">Workflow</span>
+      <div class="ca-tile ca-wide" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 6px 28px rgba(20,184,166,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('progress')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.9)" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span class="ca-tile-label">Progress</span>
       </div>
     </div>
   </div>
@@ -847,9 +848,9 @@ canvas{display:none;}
 
     <div class="view" id="mgr-paint"><div style="padding:14px;" id="mgr-paint-list"></div></div>
 
-    <div class="view" id="mgr-workflow">
-      <div style="padding:14px;" id="mgr-workflow-content">
-        <p style="color:#555;font-size:13px;padding:20px 0;">Loading workflow...</p>
+    <div class="view" id="mgr-progress">
+      <div style="padding:14px;" id="mgr-progress-content">
+        <p style="color:#555;font-size:13px;padding:20px 0;">Loading progress...</p>
       </div>
     </div>
 
@@ -1348,7 +1349,13 @@ function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=documen
 // Enter key handled by <form> submit
 
 // ── NAV ────────────────────────────────────────────────────────────────────────
-function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById(id).classList.add('on');}
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  // #mgr-home has display:flex from ID CSS which overrides .view{display:none} — hide it explicitly when not active
+  var mh=document.getElementById('mgr-home');
+  if(mh) mh.style.display=(id==='mgr-home')?'':'none';
+}
 function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
 
 function updateTabBadges(){
@@ -2816,7 +2823,7 @@ function mgrGoSection(id, label){
   else if(id==='parts')renderMgrParts();
   else if(id==='tasks')renderReview();
   else if(id==='employees')renderTeam();
-  else if(id==='workflow')renderWorkflow();
+  else if(id==='progress')renderProgress();
   else if(id==='calendar')renderCalendar();
   else if(id==='paint')renderMgrPaint();
   updateTabBadges();
@@ -2844,92 +2851,110 @@ function goMgrHome(){
 }
 
 function updateHomeBadges(){
-  var taskCount=S.assignments?S.assignments.filter(function(a){return !a.approved;}).length:0;
-  var hbt=document.getElementById('hbadge-tasks');
-  if(hbt){hbt.textContent=taskCount;hbt.style.display=taskCount>0?'block':'none';}
-  var detailCount=S.inventory?S.inventory.filter(function(c){var w=getWorkState(c.id);return w.categories&&w.categories.detail&&w.categories.detail.done&&!w.categories.detail.reviewed;}).length:0;
-  var hbd=document.getElementById('hbadge-detail');
-  if(hbd){hbd.textContent=detailCount;hbd.style.display=detailCount>0?'block':'none';}
-  var photosCount=S.inventory?S.inventory.filter(function(c){var w=getWorkState(c.id);return w.categories&&w.categories.photos&&w.categories.photos.done&&!w.categories.photos.reviewed;}).length:0;
-  var hbp=document.getElementById('hbadge-photos');
-  if(hbp){hbp.textContent=photosCount;hbp.style.display=photosCount>0?'block':'none';}
+  var asgns=(S.assignments||[]).filter(function(a){return !a.approved;});
+  function hasTag(tag){return function(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('['+tag+']')!==-1;};}
+  function carsWithTag(){
+    var tags=[].slice.call(arguments);
+    var seen={};
+    asgns.forEach(function(a){
+      if(!seen[a.inventoryId]&&(a.tasks||[]).some(function(t){return tags.some(function(tag){return hasTag(tag)(t);});}))seen[a.inventoryId]=1;
+    });
+    return Object.keys(seen).length;
+  }
+  // All cars with any active assignment
+  var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
+  var allCount=Object.keys(allSeen).length;
+
+  var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=allCount;hbt.style.display=allCount>0?'block':'none';}
+  var rc=carsWithTag('repair','parts'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
+  var dc=carsWithTag('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
+  var pc=carsWithTag('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
+  var pac=carsWithTag('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
+  var paintc=carsWithTag('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
+  var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
 }
 
-/* ── WORKFLOW VIEW ── */
-function renderWorkflow(){
-  var el=document.getElementById('mgr-workflow-content');
+/* ── PROGRESS VIEW ── */
+function renderProgress(){
+  var el=document.getElementById('mgr-progress-content');
   if(!el) return;
-  var wfIds = getWorkflowCars();
-  if(!wfIds.length){
-    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:16px;">' +
-      '<div style="font-size:40px;">📋</div>' +
-      '<div style="font-size:18px;font-weight:700;color:#fff;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">NO CARS IN WORKFLOW</div>' +
-      '<div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">Go to Inventory, tap a car, then tap the Workflow tile to add it here.</div>' +
+  // All cars with active (non-approved) assignments — auto-tracked
+  var seen={}, activeCars=[];
+  (S.assignments||[]).forEach(function(a){
+    if(!a.approved&&!seen[a.inventoryId]){seen[a.inventoryId]=1;activeCars.push(a.inventoryId);}
+  });
+  // Also include explicitly-pinned progress cars
+  getProgressCars().forEach(function(id){if(!seen[id]){seen[id]=1;activeCars.push(id);}});
+  if(!activeCars.length){
+    el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:16px;">'+
+      '<div style="font-size:40px;">📊</div>'+
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:1px;">NO CARS IN PROGRESS</div>'+
+      '<div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">Assign a task to an employee to start tracking a car\'s progress here.</div>'+
     '</div>';
     return;
   }
-  // Auto-remove cars where all tasks are done
-  var _changed = false;
-  wfIds.forEach(function(carId){
-    var asgns = (S.assignments||[]).filter(function(a){ return a.inventoryId === carId && !a.approved; });
-    if(!asgns.length) return; // no tasks yet — keep in workflow
-    var allDone = asgns.every(function(a){ return a.tasks && a.tasks.length && a.tasks.every(function(t){ return typeof t==='object' ? t.done : false; }); });
-    if(allDone){ removeFromWorkflow(carId); _changed = true; }
+  // Category colours
+  var catColors={repair:'#f97316',paint:'#ec4899',task:'#22c55e',detail:'#818cf8'};
+  var catLabels={repair:'Repair',paint:'Paint',task:'Tasks',detail:'Detail'};
+  var out='<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:40px;">';
+  activeCars.forEach(function(carId){
+    var car=S.inventory.find(function(c){return c.id===carId;});
+    if(!car) return;
+    var asgns=(S.assignments||[]).filter(function(a){return a.inventoryId===carId&&!a.approved;});
+    // Tally each category — parts feeds into repair
+    var cats={repair:{t:0,d:0},paint:{t:0,d:0},task:{t:0,d:0},detail:{t:0,d:0}};
+    asgns.forEach(function(a){
+      (a.tasks||[]).forEach(function(tk){
+        var txt=(typeof tk==='object'?tk.text:tk)||'';
+        var lo=txt.toLowerCase();
+        var done=typeof tk==='object'?!!tk.done:false;
+        var cat=null;
+        if(lo.indexOf('[repair]')!==-1||lo.indexOf('[parts]')!==-1) cat='repair';
+        else if(lo.indexOf('[paint]')!==-1) cat='paint';
+        else if(lo.indexOf('[task]')!==-1) cat='task';
+        else if(lo.indexOf('[detail]')!==-1) cat='detail';
+        if(cat){cats[cat].t++;if(done)cats[cat].d++;}
+      });
+    });
+    var totalT=cats.repair.t+cats.paint.t+cats.task.t+cats.detail.t;
+    var totalD=cats.repair.d+cats.paint.d+cats.task.d+cats.detail.d;
+    var pct=totalT?Math.round(totalD/totalT*100):0;
+    var pctColor=pct===100?'#30d158':pct>=50?'#2dd4bf':'#a78bfa';
+    out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;">';
+    // Header
+    out+='<div style="padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;">';
+    out+='<div style="flex:1;min-width:0;">';
+    out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    out+='<div style="font-size:12px;color:#444;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
+    out+='</div>';
+    out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:'+pctColor+';margin-left:12px;flex-shrink:0;">'+pct+'%</div>';
+    out+='</div>';
+    // Overall progress bar
+    out+='<div style="margin:0 16px 10px;height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden;">';
+    out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width 0.4s;"></div>';
+    out+='</div>';
+    // Category pills — only show categories with tasks
+    var pills='';
+    ['repair','paint','task','detail'].forEach(function(cat){
+      var c=cats[cat];
+      if(!c.t) return;
+      var cpct=Math.round(c.d/c.t*100);
+      var col=catColors[cat];
+      pills+='<div style="display:flex;align-items:center;gap:6px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:5px 10px;">';
+      pills+='<div style="width:6px;height:6px;border-radius:50%;background:'+col+';flex-shrink:0;"></div>';
+      pills+='<span style="font-size:12px;color:#888;">'+catLabels[cat]+'</span>';
+      pills+='<span style="font-size:12px;font-weight:600;color:'+col+';">'+c.d+'/'+c.t+'</span>';
+      pills+='</div>';
+    });
+    if(pills) out+='<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px;">'+pills+'</div>';
+    // Assign task button
+    out+='<div style="padding:0 16px 14px;border-top:1px solid #111;padding-top:10px;margin-top:2px;">';
+    out+='<button onclick="openWfTask('+car.id+')" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 16px;cursor:pointer;width:100%;">+ Assign Task</button>';
+    out+='</div>';
+    out+='</div>';
   });
-  if(_changed){ wfIds = getWorkflowCars(); }
-  var cars = wfIds.map(function(id){ return S.inventory.find(function(c){ return c.id === id; }); }).filter(Boolean);
-  if(!cars.length){
-    el.innerHTML = '<p style="color:#555;padding:20px;font-size:13px;">Cars not found — they may have been removed from inventory.</p>';
-    return;
-  }
-  var out = '<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:40px;">';
-  for(var i = 0; i < cars.length; i++){
-    var car = cars[i];
-    var asgns = (S.assignments||[]).filter(function(a){ return a.inventoryId === car.id && !a.approved; });
-    var taskCount = asgns.reduce(function(n,a){ return n + (a.tasks ? a.tasks.length : 0); }, 0);
-    out += '<div style="background:#0d0d0d;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;">';
-    // Car header
-    out += '<div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1a1a1a;">';
-    out += '<div>';
-    out += '<div style="font-size:17px;font-weight:700;color:#fff;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">' + car.name + '</div>';
-    out += '<div style="font-size:12px;color:#444;margin-top:2px;">' + (car.stock||'') + (car.color ? ' · ' + car.color : '') + ' · ' + taskCount + ' task' + (taskCount===1?'':'s') + '</div>';
-    out += '</div>';
-    out += '<div style="display:flex;gap:8px;align-items:center;">';
-    out += '<button onclick="openWfTask('+car.id+')" style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 14px;cursor:pointer;">+ Task</button>';
-    out += '<button onclick="removeFromWorkflow('+car.id+');renderWorkflow();renderInv();" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 8px;" title="Remove from workflow">✕</button>';
-    out += '</div>';
-    out += '</div>';
-    // Tasks list
-    if(asgns.length){
-      out += '<div style="padding:10px 16px 14px;">';
-      for(var j = 0; j < asgns.length; j++){
-        var asgn = asgns[j];
-        var emp = S.employees.find(function(e){ return e.id === asgn.employeeId; });
-        var empName = emp ? emp.name : 'Unknown';
-        var empTasks = asgn.tasks || [];
-        if(empTasks.length){
-          out += '<div style="margin-bottom:10px;">';
-          out += '<div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">→ ' + empName + '</div>';
-          for(var k = 0; k < empTasks.length; k++){
-            var t = empTasks[k];
-            var tText = typeof t === 'object' ? t.text : t;
-            var tDone = typeof t === 'object' ? t.done : false;
-            out += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0f0f0f;">';
-            out += '<div style="width:8px;height:8px;border-radius:50%;background:' + (tDone ? '#30d158' : '#333') + ';flex-shrink:0;"></div>';
-            out += '<div style="font-size:13px;color:' + (tDone ? '#555' : '#ccc') + ';' + (tDone ? 'text-decoration:line-through;' : '') + '">' + tText + '</div>';
-            out += '</div>';
-          }
-          out += '</div>';
-        }
-      }
-      out += '</div>';
-    } else {
-      out += '<div style="padding:14px 16px;font-size:13px;color:#333;">No tasks assigned yet.</div>';
-    }
-    out += '</div>';
-  }
-  out += '</div>';
-  el.innerHTML = out;
+  out+='</div>';
+  el.innerHTML=out;
 }
 
 /* ── CALENDAR VIEW ── */
@@ -3166,28 +3191,26 @@ async function calScheduleNotification(ev){
   }catch(e){console.warn('Notification error',e);}
 }
 
-function getWorkflowCars(){
+function getProgressCars(){
   try{ return JSON.parse(localStorage.getItem('cf_workflow_cars')||'[]'); }catch(e){return [];}
 }
-function isInWorkflow(carId){
-  return getWorkflowCars().indexOf(carId) !== -1;
+function isInProgress(carId){ return getProgressCars().indexOf(carId)!==-1; }
+function addToProgress(carId){
+  var wf=getProgressCars();
+  if(wf.indexOf(carId)===-1){wf.push(carId);localStorage.setItem('cf_workflow_cars',JSON.stringify(wf));}
 }
-function addToWorkflow(carId){
-  var wf = getWorkflowCars();
-  if(wf.indexOf(carId) === -1){ wf.push(carId); localStorage.setItem('cf_workflow_cars', JSON.stringify(wf)); }
+function removeFromProgress(carId){
+  var wf=getProgressCars().filter(function(id){return id!==carId;});
+  localStorage.setItem('cf_workflow_cars',JSON.stringify(wf));
 }
-function removeFromWorkflow(carId){
-  var wf = getWorkflowCars().filter(function(id){ return id !== carId; });
-  localStorage.setItem('cf_workflow_cars', JSON.stringify(wf));
-}
-function toggleWorkflow(carId){
-  if(isInWorkflow(carId)) removeFromWorkflow(carId);
-  else addToWorkflow(carId);
+function toggleProgress(carId){
+  if(isInProgress(carId)) removeFromProgress(carId); else addToProgress(carId);
   renderInv();
-  // If workflow view is visible, re-render it too
-  var wv = document.getElementById('mgr-workflow');
-  if(wv && wv.classList.contains('on')) renderWorkflow();
+  var pv=document.getElementById('mgr-progress');
+  if(pv&&pv.classList.contains('on')) renderProgress();
 }
+// Legacy aliases for any remaining references
+var getWorkflowCars=getProgressCars,addToWorkflow=addToProgress,removeFromWorkflow=removeFromProgress,isInWorkflow=isInProgress,toggleWorkflow=toggleProgress;
 
 // Workflow task modal state
 var wfTaskCarId = null;
@@ -3275,8 +3298,9 @@ async function submitWfTask(){
       var msg = (assignAll ? 'New task for all: ' : 'New task for you: ') + taskText + ' — ' + (car ? car.name : '');
       await sendNotification(empId, msg, null, car ? car.name : '');
     }
+    addToProgress(wfTaskCarId);
     closeWfTask();
-    renderWorkflow();
+    renderProgress();
     updateTabBadges();
     updateHomeBadges();
   } catch(e) {
@@ -3304,18 +3328,19 @@ function closeCarActions(){
   caCarId = null;
 }
 
-function addCarToWorkflow(){
+function addCarToProgress(){
   if(!caCarId) return;
-  addToWorkflow(caCarId);
+  addToProgress(caCarId);
   closeCarActions();
   renderInv();
-  mgrGoSection('workflow', 'Workflow');
+  mgrGoSection('progress', 'Progress');
 }
+var addCarToWorkflow=addCarToProgress;
 
 function openCarAssign(type){
   caAssignType = type;
   var car = S.inventory.find(function(c){ return c.id === caCarId; });
-  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos'};
+  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos', progress:'Progress'};
   document.getElementById('ca-assign-title').textContent = labels[type] || type;
   document.getElementById('ca-assign-sub').textContent = car ? car.name : '';
   document.getElementById('ca-assign-note').value = '';
@@ -3347,8 +3372,8 @@ function caToggleAll(){
 async function submitCarAssign(){
   if(!caCarId || !caAssignType) return;
   var note = document.getElementById('ca-assign-note').value.trim();
-  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos'};
-  var taskText = '[' + labels[caAssignType] + ']' + (note ? ' ' + note : '');
+  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos', progress:'Progress'};
+  var taskText = '[' + (labels[caAssignType]||caAssignType) + ']' + (note ? ' ' + note : '');
   var tasks = [{text: taskText, done: false, urgent: false}];
 
   var assignAll = document.getElementById('ca-assign-all-btn').classList.contains('wf-assign-active');
@@ -3383,6 +3408,7 @@ async function submitCarAssign(){
       var msg = (assignAll?'New task for everyone: ':'New task: ') + taskText + (car?' — '+car.name:'');
       await sendNotification(empId, msg, null, car ? car.name : '');
     }
+    addToProgress(caCarId); // auto-track in progress whenever any task is assigned
     closeCarAssign();
     closeCarActions();
     updateTabBadges();
@@ -3453,14 +3479,14 @@ var AI_TOOLS = [
     }
   },
   {
-    name: 'add_to_workflow',
-    description: 'Add a car to the workflow section',
+    name: 'add_to_progress',
+    description: 'Add a car to the Progress tracking section',
     input_schema: { type:'object', properties:{ car_id:{type:'number'} }, required:['car_id'] }
   },
   {
     name: 'navigate',
     description: 'Navigate to a section of the app',
-    input_schema: { type:'object', properties:{ section:{type:'string',enum:['home','inventory','assigned','tasks','photos','parts','paint','workflow','employees']} }, required:['section'] }
+    input_schema: { type:'object', properties:{ section:{type:'string',enum:['home','inventory','assigned','tasks','photos','parts','paint','progress','employees']} }, required:['section'] }
   },
   {
     name: 'get_status',
@@ -3508,15 +3534,17 @@ async function executeAITool(toolName, input){
         var emp=(S.employees||[]).find(function(e){ return e.id===eid; });
         assigned.push(emp?emp.name:'Employee #'+eid);
       }
+      addToProgress(input.car_id);
       updateTabBadges(); updateHomeBadges();
       return {success:true, car:car.name, task:taskText, assigned_to:assigned};
     } catch(e){ return {error:'Failed: '+e.message}; }
   }
-  if(toolName === 'add_to_workflow'){
+  if(toolName === 'add_to_progress'){
     var car=(S.inventory||[]).find(function(c){ return c.id===input.car_id; });
     if(!car) return {error:'Car not found'};
-    addToWorkflow(input.car_id);
-    return {success:true, car:car.name, message:'Added to workflow'};
+    addToProgress(input.car_id);
+    updateHomeBadges();
+    return {success:true, car:car.name, message:'Added to progress'};
   }
   if(toolName === 'navigate'){
     var s=input.section;
@@ -3524,7 +3552,7 @@ async function executeAITool(toolName, input){
     setTimeout(function(){
       if(s==='home'){ goMgrHome(); }
       else {
-        var sectionLabels={inventory:'Inventory',assigned:'Assigned',tasks:'Tasks',photos:'Photos',parts:'Parts',paint:'Paint',workflow:'Workflow',employees:'Team'};
+        var sectionLabels={inventory:'Inventory',assigned:'Assigned',tasks:'Tasks',photos:'Photos',parts:'Parts',paint:'Paint',progress:'Progress',employees:'Team'};
         var tabSections=['inventory','assigned','tasks','photos','parts','employees'];
         if(tabSections.includes(s)){
           var btn=document.querySelector('#mtabs .mt[onclick*="\''+s+'\'"]')||document.querySelector('#mtabs .mt[onclick*=\'"'+s+'"\']');
