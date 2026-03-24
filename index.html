@@ -960,8 +960,6 @@ canvas{display:none;}
     <input class="mfi" id="ac-stock" placeholder="e.g. CF-1005" />
     <label class="fl2">VIN (optional)</label>
     <input class="mfi" id="ac-vin" placeholder="17-character VIN" />
-    <label class="fl2">Miles (optional)</label>
-    <input class="mfi" id="ac-miles" placeholder="e.g. 42000" type="number" inputmode="numeric" />
     <label class="fl2">Location</label>
     <select class="msel" id="ac-loc">
       <option value="DeBary">DeBary</option>
@@ -2409,8 +2407,8 @@ async function importFromReport(){
   }
 }
 
-async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');imp.forEach(c=>{if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}if(!ex.has(c.stock)){S.inventory.push(c);added++;}});localStorage.setItem('cf_colormap',JSON.stringify(colorMap));S.inventory.forEach(c=>{if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
-function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const color=row['color']||row['colorexterior']||row['ext color']||row['exterior color']||row['ext. color']||'';const loc=row['location']||'DeBary';if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,color,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
+async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');imp.forEach(c=>{if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}const exist=S.inventory.find(x=>x.stock===c.stock);if(exist){if(c.color)exist.color=c.color;if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}}else{S.inventory.push(c);if(c.miles!=null)saveCarMilesLocal(c.id,c.miles);added++;}});localStorage.setItem('cf_colormap',JSON.stringify(colorMap));S.inventory.forEach(c=>{if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
+function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const color=row['color']||row['colorexterior']||row['ext color']||row['exterior color']||row['ext. color']||'';const loc=row['location']||'DeBary';const milesRaw=row['miles']||row['mileage']||row['odometer']||row['mi']||row['miles in']||'';const miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,color,miles,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
 
 // ── MODALS ─────────────────────────────────────────────────────────────────────
@@ -2448,20 +2446,19 @@ async function addCarManually(){
   const name = document.getElementById('ac-name').value.trim();
   const stock = document.getElementById('ac-stock').value.trim();
   const vin = document.getElementById('ac-vin').value.trim();
-  const miles = document.getElementById('ac-miles').value.trim();
   const loc = document.getElementById('ac-loc').value;
   if(!name || !stock){ alert('Name and Stock # required'); return; }
   if(S.inventory.find(c => c.stock === stock)){ alert('Stock # already exists'); return; }
   showLoading('Adding vehicle...');
   try{
-    const rows=await sbPost('inventory',{name,stock,vin,miles:miles?parseInt(miles):null,location:loc,photo:null});
+    const rows=await sbPost('inventory',{name,stock,vin,location:loc,photo:null});
     const row=rows[0];
-    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:row.miles||null,location:row.location,photo:null});
+    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:null,location:row.location,photo:null});
     sv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
   closeM('m-add-car');
-  ['ac-name','ac-stock','ac-vin','ac-miles'].forEach(id => document.getElementById(id).value = '');
+  ['ac-name','ac-stock','ac-vin'].forEach(id => document.getElementById(id).value = '');
   renderInv();
 }
 
@@ -3353,7 +3350,7 @@ function openCarActions(carId){
   if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button data-vin="'+car.vin+'" onclick="event.stopPropagation();copyVin(this)" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;-webkit-tap-highlight-color:transparent;">Copy</button></span>');
   if(car.color) rows.push('<span style="font-size:12px;color:#666;">Color <span style="color:#aaa;font-weight:600;">'+car.color+'</span></span>');
   var milesVal=car.miles!=null?car.miles:getCarMiles(car.id);
-  rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">Miles <input id="ca-miles-input" type="text" inputmode="numeric" value="'+(milesVal||'')+'" placeholder="Enter miles" oninput="onCarMilesChange(this)" style="background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#aaa;font-weight:600;font-size:12px;font-family:inherit;width:90px;outline:none;padding:1px 2px;" /></span>');
+  if(milesVal) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(milesVal).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
   document.getElementById('ca-car-info').innerHTML = rows.join('');
   document.getElementById('m-car-actions').style.display = 'flex';
