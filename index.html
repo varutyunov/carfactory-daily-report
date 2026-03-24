@@ -1284,7 +1284,7 @@ async function syncFromSupabase(){
     S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
-    var _keepAiKey=localStorage.getItem('cf_ai_key');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
+    var _keepAiKey=localStorage.getItem('cf_ai_key');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
@@ -2534,6 +2534,14 @@ async function saveWorkState(carId){
   try{localStorage.setItem('cf_work_'+carId, JSON.stringify(ws));}catch(e){}
   try{await sbPatch('inventory',carId,{work:ws});}catch(e){}
 }
+function getCarMiles(carId){try{return localStorage.getItem('cf_miles_'+carId)||null;}catch(e){return null;}}
+function saveCarMilesLocal(carId,val){try{if(val)localStorage.setItem('cf_miles_'+carId,String(val));else localStorage.removeItem('cf_miles_'+carId);}catch(e){}}
+function onCarMilesChange(input){
+  var val=input.value.replace(/\D/g,'');
+  saveCarMilesLocal(caCarId,val);
+  var car=S.inventory.find(function(c){return c.id===caCarId;});
+  if(car) car.miles=val?parseInt(val):null;
+}
 
 function openWorkScreen(carId){
   if(me && me.role==='manager'){ openCarActions(carId); return; }
@@ -3344,7 +3352,8 @@ function openCarActions(carId){
   if(car.stock) rows.push('<span style="font-size:12px;color:#666;">Stock # <span style="color:#aaa;font-weight:600;">'+car.stock+'</span></span>');
   if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button data-vin="'+car.vin+'" onclick="event.stopPropagation();copyVin(this)" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;-webkit-tap-highlight-color:transparent;">Copy</button></span>');
   if(car.color) rows.push('<span style="font-size:12px;color:#666;">Color <span style="color:#aaa;font-weight:600;">'+car.color+'</span></span>');
-  if(car.miles!=null) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(car.miles).toLocaleString()+'</span></span>');
+  var milesVal=car.miles!=null?car.miles:getCarMiles(car.id);
+  rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">Miles <input id="ca-miles-input" type="text" inputmode="numeric" value="'+(milesVal||'')+'" placeholder="Enter miles" oninput="onCarMilesChange(this)" style="background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#aaa;font-weight:600;font-size:12px;font-family:inherit;width:90px;outline:none;padding:1px 2px;" /></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
   document.getElementById('ca-car-info').innerHTML = rows.join('');
   document.getElementById('m-car-actions').style.display = 'flex';
