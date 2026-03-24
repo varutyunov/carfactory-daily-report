@@ -960,6 +960,8 @@ canvas{display:none;}
     <input class="mfi" id="ac-stock" placeholder="e.g. CF-1005" />
     <label class="fl2">VIN (optional)</label>
     <input class="mfi" id="ac-vin" placeholder="17-character VIN" />
+    <label class="fl2">Miles (optional)</label>
+    <input class="mfi" id="ac-miles" placeholder="e.g. 42000" type="number" inputmode="numeric" />
     <label class="fl2">Location</label>
     <select class="msel" id="ac-loc">
       <option value="DeBary">DeBary</option>
@@ -1279,7 +1281,7 @@ async function syncFromSupabase(){
     S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
     const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     const pxSaved=localStorage.getItem('px_cache');
-    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null,work:c.work||{}}));
+    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
     var _keepAiKey=localStorage.getItem('cf_ai_key');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
@@ -2446,19 +2448,20 @@ async function addCarManually(){
   const name = document.getElementById('ac-name').value.trim();
   const stock = document.getElementById('ac-stock').value.trim();
   const vin = document.getElementById('ac-vin').value.trim();
+  const miles = document.getElementById('ac-miles').value.trim();
   const loc = document.getElementById('ac-loc').value;
   if(!name || !stock){ alert('Name and Stock # required'); return; }
   if(S.inventory.find(c => c.stock === stock)){ alert('Stock # already exists'); return; }
   showLoading('Adding vehicle...');
   try{
-    const rows=await sbPost('inventory',{name,stock,vin,location:loc,photo:null});
+    const rows=await sbPost('inventory',{name,stock,vin,miles:miles?parseInt(miles):null,location:loc,photo:null});
     const row=rows[0];
-    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',location:row.location,photo:null});
+    S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:row.miles||null,location:row.location,photo:null});
     sv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
   closeM('m-add-car');
-  ['ac-name','ac-stock','ac-vin'].forEach(id => document.getElementById(id).value = '');
+  ['ac-name','ac-stock','ac-vin','ac-miles'].forEach(id => document.getElementById(id).value = '');
   renderInv();
 }
 
@@ -3334,6 +3337,7 @@ function openCarActions(carId){
   if(car.stock) rows.push('<span style="font-size:12px;color:#666;">Stock # <span style="color:#aaa;font-weight:600;">'+car.stock+'</span></span>');
   if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button id="ca-vin-copy-btn" onclick="copyVin(\''+car.vin+'\')" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;">Copy</button></span>');
   if(car.color) rows.push('<span style="font-size:12px;color:#666;">Color <span style="color:#aaa;font-weight:600;">'+car.color+'</span></span>');
+  if(car.miles!=null) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(car.miles).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
   document.getElementById('ca-car-info').innerHTML = rows.join('');
   document.getElementById('m-car-actions').style.display = 'flex';
