@@ -438,7 +438,7 @@ canvas{display:none;}
   <div class="logo-sub">Employee Portal</div>
   <div class="lf">
     <input class="lfi" id="lu" placeholder="Username" autocomplete="username" />
-    <input class="lfi" id="lp" type="password" placeholder="PIN" maxlength="4" inputmode="numeric" />
+    <input class="lfi" id="lp" type="password" placeholder="PIN" maxlength="4" inputmode="numeric" autocomplete="current-password" />
     <div style="display:flex;align-items:center;gap:10px;padding:4px 0;"><input type="checkbox" id="remember-me" style="width:18px;height:18px;accent-color:#fff;cursor:pointer;flex-shrink:0;" checked /><label for="remember-me" style="font-size:13px;color:#555;cursor:pointer;">Keep me signed in</label></div>
     <button class="lbtn" onclick="doLogin()">Sign In</button>
     <div class="lerr" id="lerr"></div>
@@ -1279,6 +1279,8 @@ async function doLogin(){
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
   if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());localStorage.setItem('cf_saved_pin',document.getElementById('lp').value.trim());}
+  // Store credential for Face ID / biometric autofill
+  if(window.PasswordCredential){try{navigator.credentials.store(new PasswordCredential({id:u,password:p,name:e.name}));}catch(_){}}
   initOneSignalUser(e.name);
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -2328,6 +2330,17 @@ if(_savedSession){
       });
     }
   }catch(e){}
+} else {
+  // No saved session — try Face ID / biometric credential autofill
+  if(window.PasswordCredential){
+    navigator.credentials.get({password:true,mediation:'optional'}).then(function(cred){
+      if(cred&&cred.id&&cred.password){
+        document.getElementById('lu').value=cred.id;
+        document.getElementById('lp').value=cred.password;
+        doLogin();
+      }
+    }).catch(function(){});
+  }
 }
 ld();
 
