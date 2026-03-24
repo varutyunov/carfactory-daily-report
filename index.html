@@ -3077,12 +3077,13 @@ async function submitWfTask(){
   if(assignAll){
     selectedIds = (S.employees||[]).map(function(e){ return e.id; });
   } else {
-    document.querySelectorAll('.wf-emp-btn.wf-assign-active').forEach(function(b){
+    document.querySelectorAll('#wf-task-emp-btns .wf-emp-btn.wf-assign-active').forEach(function(b){
       selectedIds.push(parseInt(b.getAttribute('data-id')));
     });
   }
 
-  if(!selectedIds.length){ alert('Please select who to assign this to.'); return; }
+  // Include owners as possible assignees
+  if(!selectedIds.length && !assignAll){ alert('Please select who to assign this to.'); return; }
 
   var car = S.inventory.find(function(c){ return c.id === wfTaskCarId; });
   var taskLabel = taskType.charAt(0).toUpperCase() + taskType.slice(1);
