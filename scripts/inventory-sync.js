@@ -50,12 +50,15 @@ async function main() {
     const lot = r['lotno'];
     const location = lot === '2' ? 'DeLand' : 'DeBary';
 
+    const milesRaw = r['currentmiles'] || '';
+    const miles = milesRaw ? parseInt(milesRaw.replace(/[^0-9]/g, '')) || null : null;
     csvCars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
       stock: r['stockno'],
       vin: r['vin'] || '',
       location,
-      color
+      color,
+      miles
     });
     csvStocks.add(r['stockno']);
   }
@@ -88,6 +91,23 @@ async function main() {
       else { console.error('Insert batch error:', await res.text()); }
     }
   }
+
+  // --- UPDATE EXISTING CARS (miles + color) ---
+  const toUpdate = csvCars.filter(c => existingByStock.has(c.stock));
+  let updated = 0;
+  for (const c of toUpdate) {
+    const ex = existingByStock.get(c.stock);
+    const patch = {};
+    if (c.color) patch.color = c.color;
+    if (c.miles != null) patch.miles = c.miles;
+    if (!Object.keys(patch).length) continue;
+    const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
+      method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
+    });
+    if (res.ok) updated++;
+    else console.error('Update error for', c.stock, ':', await res.text());
+  }
+  console.log('Updated:', updated);
 
   // --- REMOVE SOLD CARS ---
   // Cars in Supabase whose stock number is NOT in the CSV INSTOCK list

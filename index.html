@@ -2418,8 +2418,74 @@ async function importFromReport(){
   }
 }
 
-async function syncNow(){if(!S.syncUrl){openM('m-sync');return;}document.getElementById('sync-st').textContent='Syncing...';try{const r=await fetch(S.syncUrl+'?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const csv=await r.text();const imp=parseCSV(csv);if(!imp.length)throw new Error('No vehicles found');const ex=new Set(S.inventory.map(c=>c.stock));let added=0;const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');imp.forEach(c=>{if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}const exist=S.inventory.find(x=>x.stock===c.stock);if(exist){if(c.color)exist.color=c.color;if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}}else{S.inventory.push(c);if(c.miles!=null)saveCarMilesLocal(c.id,c.miles);added++;}});localStorage.setItem('cf_colormap',JSON.stringify(colorMap));S.inventory.forEach(c=>{if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});S.lastSync=Date.now();sv();document.getElementById('sync-st').textContent=`Synced! ${added} new vehicle${added!==1?'s':''} added.`;document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();renderInv();}catch(e){document.getElementById('sync-st').textContent='Sync failed: '+e.message;}}
-function parseCSV(csv){const lines=csv.trim().split('\n');if(lines.length<2)return[];const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const cars=[];for(let i=1;i<lines.length;i++){const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));const row={};hdr.forEach((h,j)=>row[h]=vals[j]||'');const stock=row['stock']||row['stock #']||row['stockno']||'';const year=row['year']||'';const make=row['make']||'';const model=row['model']||'';const vin=row['vin']||'';const color=row['color']||row['colorexterior']||row['ext color']||row['exterior color']||row['ext. color']||'';const loc=row['location']||'DeBary';const milesRaw=row['miles']||row['mileage']||row['odometer']||row['mi']||row['miles in']||'';const miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;if(!stock&&!vin)continue;cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock||vin.slice(-6),vin,color,miles,location:loc.toLowerCase().includes('land')?'DeLand':'DeBary',photo:null});}return cars;}
+async function syncNow(){
+  var MASTER_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+  var url=S.syncUrl||MASTER_URL;
+  var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
+  stEl.textContent='Syncing...';
+  try{
+    var r=await fetch(url+'?t='+Date.now());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var csv=await r.text();
+    var imp=parseCSV(csv);
+    if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
+    var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+    var csvStocks=new Set(imp.map(function(c){return c.stock;}));
+    var added=0,updated=0,removed=0;
+    // Add new + update existing
+    imp.forEach(function(c){
+      if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
+      var exist=S.inventory.find(function(x){return x.stock===c.stock;});
+      if(exist){
+        if(c.color) exist.color=c.color;
+        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
+        updated++;
+      } else {
+        S.inventory.push(c);
+        if(c.miles!=null) saveCarMilesLocal(c.id,c.miles);
+        added++;
+      }
+    });
+    // Remove sold cars (not in INSTOCK list and no active assignments)
+    var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
+    S.inventory=S.inventory.filter(function(c){
+      if(!c.stock) return true; // keep manually added (no stock#)
+      if(csvStocks.has(c.stock)) return true; // still in stock
+      if(activeIds.has(c.id)) return true; // has active work, keep
+      removed++;
+      return false;
+    });
+    localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
+    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
+    S.lastSync=Date.now();sv();
+    stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
+    tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
+    renderInv();
+  }catch(e){stEl.textContent='Sync failed: '+e.message;}
+}
+function parseCSV(csv){
+  var lines=csv.trim().split('\n');if(lines.length<2)return[];
+  var hdr=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').toLowerCase();});
+  var cars=[];
+  for(var i=1;i<lines.length;i++){
+    var vals=lines[i].split(',').map(function(v){return v.trim().replace(/^"|"$/g,'');});
+    var row={};hdr.forEach(function(h,j){row[h]=vals[j]||'';});
+    var stock=row['stockno']||row['stock']||row['stock #']||'';
+    var make=row['make']||'';
+    var status=row['status']||'';
+    // Match GitHub Action filter: must be INSTOCK with a make and stock number
+    if(status&&status!=='INSTOCK') continue;
+    if(!stock) continue;
+    var year=row['year']||'';var model=row['model']||'';var vin=row['vin']||'';
+    var color=row['colorexterior']||row['color']||row['extcolor']||row['ext color']||row['exterior color']||'';
+    var lot=row['lotno']||'';
+    var location=lot==='2'?'DeLand':'DeBary';
+    var milesRaw=row['currentmiles']||row['miles']||row['mileage']||row['odometer']||'';
+    var miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;
+    cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,photo:null});
+  }
+  return cars;
+}
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
 
 // ── MODALS ─────────────────────────────────────────────────────────────────────
