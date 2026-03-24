@@ -282,16 +282,18 @@ canvas{display:none;}
 .orbit-tw{position:absolute;top:50%;left:50%;width:70px;height:70px;margin:-35px 0 0 -35px;z-index:5;}
 .orbit-tile{width:70px;height:70px;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s;position:relative;
-  border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);overflow:hidden;}
+  border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);}
+.orbit-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
+  background:linear-gradient(to bottom,rgba(255,255,255,0.06),transparent);border-radius:20px 20px 0 0;pointer-events:none;}
 .orbit-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
   background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);border-radius:20px 20px 0 0;pointer-events:none;}
 .orbit-tile:active{transform:scale(0.85);}
 .orbit-tile svg{width:26px;height:26px;margin-bottom:4px;position:relative;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
 .orbit-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:8.5px;font-weight:800;color:#fff;letter-spacing:1.5px;
   text-transform:uppercase;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
-.orbit-badge{position:absolute;top:-3px;right:-3px;z-index:10;background:#ef4444;color:#fff;border-radius:10px;
-  font-size:10px;font-weight:700;padding:1px 6px;min-width:18px;text-align:center;line-height:16px;display:none;
-  box-shadow:0 0 10px rgba(239,68,68,0.6);}
+.orbit-badge{position:absolute;top:-6px;right:-6px;z-index:10;background:#ef4444;color:#fff;border-radius:10px;
+  font-size:10px;font-weight:700;padding:2px 6px;min-width:18px;text-align:center;line-height:14px;display:none;
+  box-shadow:0 2px 8px rgba(239,68,68,0.6),0 0 0 2px #000;}
 
 /* Stagger entrance */
 @keyframes orbitIn{from{opacity:0;transform:scale(0.5);}to{opacity:1;transform:scale(1);}}
@@ -454,7 +456,6 @@ canvas{display:none;}
     <div class="tb-right">
       <div class="ub" id="ub">Employee</div>
 
-      <button id="ai-brain-btn" onclick="openAIChat()" title="AI Assistant" style="display:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:9px;color:#fff;font-size:16px;cursor:pointer;padding:5px 9px;line-height:1;flex-shrink:0;">🧠</button>
       <button id="sync-btn" onclick="doSync()" title="Sync latest data" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;">&#x21BB;</button>
       <button class="so" onclick="doLogout()">&#x2715;</button>
     </div>
