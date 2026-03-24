@@ -251,8 +251,8 @@ canvas{display:none;}
 .cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 
 /* ── MGR HOME — ORBITAL COMMAND CENTER ── */
-#mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);}
-.orbit-wrap{padding:60px 0 60px;display:flex;flex-direction:column;align-items:center;}
+#mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;justify-content:center;min-height:100%;}
+.orbit-wrap{padding:20px 0;display:flex;flex-direction:column;align-items:center;}
 .orbit-container{position:relative;width:442px;height:442px;margin:0 auto;}
 /* Scale orbit down on smaller screens so it always fits */
 @media(max-width:380px){.orbit-wrap{transform:scale(0.80);transform-origin:center center;}}
@@ -606,7 +606,7 @@ canvas{display:none;}
               <circle cx="32" cy="28" r="18" stroke="#7c3aed" stroke-width="0.4" opacity="0.2" stroke-dasharray="3 3"/>
               <defs><linearGradient id="bg1" x1="0" y1="0" x2="64" y2="64"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
             </svg>
-            <div class="orbit-brain-label">Factory<br>Brain</div>
+            <div class="orbit-brain-label">Factory<br>AI</div>
           </div>
 
           <!-- Orbit tiles — 9 at 40° intervals -->
@@ -3708,7 +3708,7 @@ async function sendAIMessage(){
     <div class="ai-icon">🧠</div>
     <div>
       <div class="ai-title">AI ASSISTANT</div>
-      <div class="ai-sub">Car Factory Brain</div>
+      <div class="ai-sub">Car Factory AI</div>
     </div>
     <button onclick="closeAIChat()" style="margin-left:auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;">&#x2715;</button>
   </div>
