@@ -254,6 +254,10 @@ canvas{display:none;}
 #mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);}
 .orbit-wrap{padding:60px 0 60px;display:flex;flex-direction:column;align-items:center;}
 .orbit-container{position:relative;width:442px;height:442px;margin:0 auto;}
+/* Scale orbit down on smaller screens so it always fits */
+@media(max-width:380px){.orbit-wrap{transform:scale(0.80);transform-origin:center center;}}
+@media(min-width:381px) and (max-width:415px){.orbit-wrap{transform:scale(0.84);transform-origin:center center;}}
+@media(min-width:416px) and (max-width:459px){.orbit-wrap{transform:scale(0.95);transform-origin:center center;}}
 
 /* Brain center */
 .orbit-brain{position:absolute;top:50%;left:50%;width:125px;height:125px;margin:-63px 0 0 -63px;border-radius:29px;
