@@ -250,41 +250,58 @@ canvas{display:none;}
 .cs-repair-rm{background:none;border:none;color:#333;font-size:18px;cursor:pointer;flex-shrink:0;}
 .cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 
-/* ── MGR HOME GRID ── */
-#mgr-home{overflow-y:auto;background:#000;}
-.mhome-wrap{padding:24px 18px 60px;display:flex;flex-direction:column;align-items:center;}
-.mhome-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;max-width:420px;}
-.mhome-sq-wrap{position:relative;}
-.mhome-sq{
-  aspect-ratio:1;border-radius:24px;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
-  transition:transform .13s,box-shadow .13s;
-  padding:10px;overflow:hidden;position:relative;
-  border-top:1px solid rgba(255,255,255,0.10);
-  border-left:1px solid rgba(255,255,255,0.05);
-}
-.mhome-sq::after{
-  content:'';position:absolute;top:0;left:0;right:0;height:45%;
-  background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);
-  border-radius:24px 24px 0 0;pointer-events:none;
-}
-.mhome-sq:active{transform:scale(0.88);}
-.mhome-sq svg{width:36px;height:36px;margin-bottom:7px;position:relative;z-index:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));}
-.mhome-label{
-  font-size:10px;font-weight:800;color:#fff;
-  font-family:'Barlow Condensed',sans-serif;
-  letter-spacing:2px;text-transform:uppercase;text-align:center;
-  position:relative;z-index:1;
-  text-shadow:0 1px 6px rgba(0,0,0,0.7);
-}
-.mhome-badge{
-  position:absolute;top:7px;right:7px;z-index:10;
-  background:#ef4444;color:#fff;border-radius:10px;
-  font-size:11px;font-weight:700;padding:1px 7px;
-  min-width:20px;text-align:center;line-height:18px;display:none;
-  box-shadow:0 2px 10px rgba(239,68,68,0.7);
-}
+/* ── MGR HOME — ORBITAL COMMAND CENTER ── */
+#mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);}
+.orbit-wrap{padding:20px 0 60px;display:flex;flex-direction:column;align-items:center;}
+.orbit-container{position:relative;width:340px;height:340px;margin:0 auto;}
+
+/* Brain center */
+.orbit-brain{position:absolute;top:50%;left:50%;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;
+  background:conic-gradient(from 0deg,#4f46e5,#7c3aed,#a855f7,#6366f1,#4f46e5);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10;
+  box-shadow:0 0 50px rgba(124,58,237,0.5),0 0 100px rgba(99,102,241,0.15),inset 0 0 30px rgba(0,0,0,0.3);
+  animation:brainGlow 4s ease-in-out infinite;-webkit-tap-highlight-color:transparent;}
+.orbit-brain::before{content:'';position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#1a1040,#0d0820);z-index:-1;}
+.orbit-brain:active{transform:scale(0.92);}
+.orbit-brain-emoji{font-size:36px;line-height:1;filter:drop-shadow(0 0 10px rgba(167,139,250,0.6));}
+.orbit-brain-label{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:900;color:rgba(167,139,250,0.9);letter-spacing:3px;text-transform:uppercase;margin-top:3px;}
+@keyframes brainGlow{0%,100%{box-shadow:0 0 50px rgba(124,58,237,0.5),0 0 100px rgba(99,102,241,0.15),inset 0 0 30px rgba(0,0,0,0.3);}50%{box-shadow:0 0 70px rgba(124,58,237,0.7),0 0 140px rgba(99,102,241,0.3),inset 0 0 30px rgba(0,0,0,0.3);}}
+
+/* Orbit ring */
+.orbit-ring{position:absolute;top:50%;left:50%;width:260px;height:260px;margin:-130px 0 0 -130px;border:1px solid rgba(124,58,237,0.08);border-radius:50%;pointer-events:none;}
+.orbit-ring::after{content:'';position:absolute;inset:-1px;border-radius:50%;border:1px dashed rgba(124,58,237,0.05);}
+
+/* Connection lines */
+.orbit-line{position:absolute;top:50%;left:50%;width:1px;height:130px;transform-origin:0 0;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(124,58,237,0.15),rgba(124,58,237,0.03),transparent);}
+
+/* Orbit tiles */
+.orbit-tw{position:absolute;top:50%;left:50%;width:70px;height:70px;margin:-35px 0 0 -35px;z-index:5;}
+.orbit-tile{width:70px;height:70px;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s;position:relative;
+  border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);overflow:hidden;}
+.orbit-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
+  background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);border-radius:20px 20px 0 0;pointer-events:none;}
+.orbit-tile:active{transform:scale(0.85);}
+.orbit-tile svg{width:26px;height:26px;margin-bottom:4px;position:relative;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
+.orbit-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:8.5px;font-weight:800;color:#fff;letter-spacing:1.5px;
+  text-transform:uppercase;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
+.orbit-badge{position:absolute;top:-3px;right:-3px;z-index:10;background:#ef4444;color:#fff;border-radius:10px;
+  font-size:10px;font-weight:700;padding:1px 6px;min-width:18px;text-align:center;line-height:16px;display:none;
+  box-shadow:0 0 10px rgba(239,68,68,0.6);}
+
+/* Stagger entrance */
+@keyframes orbitIn{from{opacity:0;transform:scale(0.5);}to{opacity:1;transform:scale(1);}}
+.orbit-tile{animation:orbitIn 0.4s ease-out both;}
+.orbit-tw:nth-child(1) .orbit-tile{animation-delay:0.05s;}
+.orbit-tw:nth-child(2) .orbit-tile{animation-delay:0.10s;}
+.orbit-tw:nth-child(3) .orbit-tile{animation-delay:0.15s;}
+.orbit-tw:nth-child(4) .orbit-tile{animation-delay:0.20s;}
+.orbit-tw:nth-child(5) .orbit-tile{animation-delay:0.25s;}
+.orbit-tw:nth-child(6) .orbit-tile{animation-delay:0.30s;}
+.orbit-tw:nth-child(7) .orbit-tile{animation-delay:0.35s;}
+.orbit-tw:nth-child(8) .orbit-tile{animation-delay:0.40s;}
+.orbit-tw:nth-child(9) .orbit-tile{animation-delay:0.45s;}
 /* ── MGR SECTION BACK BAR ── */
 #mgr-back-bar{display:none;position:fixed;top:0;left:0;right:0;z-index:300;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;align-items:center;padding:0 16px;gap:14px;}
 #mgr-back-bar-btn{background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;}
@@ -517,127 +534,123 @@ canvas{display:none;}
 
     <!-- MGR HOME GRID -->
     <div class="view" id="mgr-home">
-      <div class="mhome-wrap">
-        <div class="mhome-grid">
+      <div class="orbit-wrap">
+        <div class="orbit-container">
+          <!-- Decorative ring -->
+          <div class="orbit-ring"></div>
 
-          <!-- INVENTORY -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#071524,#0d2d55,#1a4a8a);box-shadow:0 6px 28px rgba(59,130,246,0.30),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('inventory','Inventory')">
+          <!-- Neural connection lines -->
+          <div class="orbit-line" style="transform:rotate(0deg);"></div>
+          <div class="orbit-line" style="transform:rotate(40deg);"></div>
+          <div class="orbit-line" style="transform:rotate(80deg);"></div>
+          <div class="orbit-line" style="transform:rotate(120deg);"></div>
+          <div class="orbit-line" style="transform:rotate(160deg);"></div>
+          <div class="orbit-line" style="transform:rotate(200deg);"></div>
+          <div class="orbit-line" style="transform:rotate(240deg);"></div>
+          <div class="orbit-line" style="transform:rotate(280deg);"></div>
+          <div class="orbit-line" style="transform:rotate(320deg);"></div>
+
+          <!-- Brain center -->
+          <div class="orbit-brain" id="orbit-brain-btn" onclick="openAIChat()">
+            <div class="orbit-brain-emoji">🧠</div>
+            <div class="orbit-brain-label">AI Brain</div>
+          </div>
+
+          <!-- Orbit tiles — 9 at 40° intervals -->
+          <!-- INVENTORY (0°/top) -->
+          <div class="orbit-tw" style="transform:rotate(0deg) translateY(-130px) rotate(0deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#071524,#0d2d55,#1a4a8a);box-shadow:0 4px 20px rgba(59,130,246,0.3);" onclick="mgrGoSection('inventory','Inventory')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 17H3v-4l2.5-6.5h13L21 13v4h-2"/>
-                <circle cx="7.5" cy="17.5" r="2.5"/>
-                <circle cx="16.5" cy="17.5" r="2.5"/>
-                <path d="M5 13h14"/>
+                <path d="M5 17H3v-4l2.5-6.5h13L21 13v4h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/><path d="M5 13h14"/>
               </svg>
-              <div class="mhome-label">Inventory</div>
+              <div class="orbit-tile-label">Inventory</div>
             </div>
           </div>
 
-          <!-- TASKS -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 6px 28px rgba(34,197,94,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('assigned','Tasks')">
+          <!-- TASKS (40°) -->
+          <div class="orbit-tw" style="transform:rotate(40deg) translateY(-130px) rotate(-40deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 4px 20px rgba(34,197,94,0.25);" onclick="mgrGoSection('assigned','Tasks')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 11l3 3 5-5"/>
-                <rect x="3" y="5" width="18" height="16" rx="3"/>
-                <path d="M8 3v4M16 3v4"/>
+                <path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/>
               </svg>
-              <div class="mhome-label">Tasks</div>
+              <div class="orbit-tile-label">Tasks</div>
+              <span class="orbit-badge" id="hbadge-tasks"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-tasks"></div>
           </div>
 
-          <!-- REPAIRS -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 6px 28px rgba(251,146,60,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('tasks','Repairs')">
+          <!-- REPAIRS (80°) -->
+          <div class="orbit-tw" style="transform:rotate(80deg) translateY(-130px) rotate(-80deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 4px 20px rgba(251,146,60,0.25);" onclick="mgrGoSection('tasks','Repairs')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
               </svg>
-              <div class="mhome-label">Repairs</div>
+              <div class="orbit-tile-label">Repairs</div>
+              <span class="orbit-badge" id="hbadge-repair"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-repair"></div>
           </div>
 
-          <!-- DETAIL -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 6px 28px rgba(129,140,248,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('detail','Detail')">
+          <!-- DETAIL (120°) -->
+          <div class="orbit-tw" style="transform:rotate(120deg) translateY(-130px) rotate(-120deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 4px 20px rgba(129,140,248,0.25);" onclick="mgrGoSection('detail','Detail')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/>
-                <circle cx="5" cy="4" r="1"/>
-                <circle cx="19" cy="20" r="1"/>
-                <circle cx="19" cy="4" r="1"/>
               </svg>
-              <div class="mhome-label">Detail</div>
+              <div class="orbit-tile-label">Detail</div>
+              <span class="orbit-badge" id="hbadge-detail"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-detail"></div>
           </div>
 
-          <!-- WORKFLOW -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 6px 28px rgba(20,184,166,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('workflow','Workflow')">
+          <!-- WORKFLOW (160°) -->
+          <div class="orbit-tw" style="transform:rotate(160deg) translateY(-130px) rotate(-160deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 4px 20px rgba(20,184,166,0.25);" onclick="mgrGoSection('workflow','Workflow')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="17 1 21 5 17 9"/>
-                <path d="M3 11V9a4 4 0 014-4h14"/>
-                <polyline points="7 23 3 19 7 15"/>
-                <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
               </svg>
-              <div class="mhome-label">Workflow</div>
+              <div class="orbit-tile-label">Workflow</div>
             </div>
           </div>
 
-          <!-- PHOTOS -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 6px 28px rgba(192,86,243,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('photos','Photos')">
+          <!-- PHOTOS (200°) -->
+          <div class="orbit-tw" style="transform:rotate(200deg) translateY(-130px) rotate(-200deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 4px 20px rgba(192,86,243,0.25);" onclick="mgrGoSection('photos','Photos')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#d946ef" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-                <circle cx="18.5" cy="9.5" r="1"/>
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
               </svg>
-              <div class="mhome-label">Photos</div>
+              <div class="orbit-tile-label">Photos</div>
+              <span class="orbit-badge" id="hbadge-photos"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-photos"></div>
           </div>
 
-          <!-- PARTS -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 6px 28px rgba(251,191,36,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('parts','Parts')">
+          <!-- PARTS (240°) -->
+          <div class="orbit-tw" style="transform:rotate(240deg) translateY(-130px) rotate(-240deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 4px 20px rgba(251,191,36,0.25);" onclick="mgrGoSection('parts','Parts')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="7" width="4" height="10" rx="1"/>
-                <rect x="10" y="5" width="4" height="14" rx="1"/>
-                <rect x="18" y="7" width="4" height="10" rx="1"/>
-                <line x1="6" y1="10" x2="10" y2="10"/>
-                <line x1="14" y1="10" x2="18" y2="10"/>
-                <line x1="6" y1="14" x2="10" y2="14"/>
-                <line x1="14" y1="14" x2="18" y2="14"/>
-                <line x1="12" y1="19" x2="12" y2="22"/>
-                <line x1="4" y1="17" x2="4" y2="20"/>
-                <line x1="20" y1="17" x2="20" y2="20"/>
+                <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/>
               </svg>
-              <div class="mhome-label">Parts</div>
+              <div class="orbit-tile-label">Parts</div>
+              <span class="orbit-badge" id="hbadge-parts"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-parts"></div>
           </div>
 
-          <!-- CALENDAR -->
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#001524,#003050,#004d7a);box-shadow:0 6px 28px rgba(56,189,248,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('calendar','Calendar')">
+          <!-- CALENDAR (280°) -->
+          <div class="orbit-tw" style="transform:rotate(280deg) translateY(-130px) rotate(-280deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#001524,#003050,#004d7a);box-shadow:0 4px 20px rgba(56,189,248,0.25);" onclick="mgrGoSection('calendar','Calendar')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="3"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-                <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+                <rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
               </svg>
-              <div class="mhome-label">Calendar</div>
+              <div class="orbit-tile-label">Calendar</div>
             </div>
           </div>
-          <div class="mhome-sq-wrap">
-            <div class="mhome-sq" style="background:linear-gradient(145deg,#1a0010,#4a0030,#7c0055);box-shadow:0 6px 28px rgba(236,72,153,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="mgrGoSection('paint','Paint')">
+
+          <!-- PAINT (320°) -->
+          <div class="orbit-tw" style="transform:rotate(320deg) translateY(-130px) rotate(-320deg);">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0010,#4a0030,#7c0055);box-shadow:0 4px 20px rgba(236,72,153,0.25);" onclick="mgrGoSection('paint','Paint')">
               <svg viewBox="0 0 24 24" fill="none" stroke="rgba(236,72,153,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/>
-                <path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
-                <path d="M14.5 17.5 4.5 15"/>
+                <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
               </svg>
-              <div class="mhome-label">Paint</div>
+              <div class="orbit-tile-label">Paint</div>
+              <span class="orbit-badge" id="hbadge-paint"></span>
             </div>
-            <div class="mhome-badge" id="hbadge-paint"></div>
           </div>
 
         </div>
@@ -2640,6 +2653,9 @@ function goMgrHome(){
   if(tb) tb.style.display='';
   showView('mgr-home');
   updateHomeBadges();
+  // Brain center visibility — Vlad/Tommy only
+  var ob=document.getElementById('orbit-brain-btn');
+  if(ob){var isOwner=me&&['vlad','tommy'].includes(me.name.toLowerCase());ob.style.display=isOwner?'':'none';}
 }
 
 function updateHomeBadges(){
