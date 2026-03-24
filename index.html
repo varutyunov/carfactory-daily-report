@@ -831,8 +831,19 @@ canvas{display:none;}
     <div class="view" id="mgr-inventory">
       <div style="padding:14px;">
         <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
+        <div style="margin-bottom:12px;">
+          <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
+          <div class="sync-btns">
+            <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
+            <button class="sync-btn" onclick="importFromReport()">↓ Import Report</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+            <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
+            <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
+          </div>
+        </div>
         <div id="inv-list"></div>
-              <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
+        <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
       </div>
     </div>
 
