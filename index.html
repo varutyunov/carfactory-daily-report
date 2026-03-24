@@ -1242,7 +1242,7 @@ async function syncFromSupabase(){
     S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
-    Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&k!=="cf_ai_key").forEach(k=>localStorage.removeItem(k));
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
@@ -2303,7 +2303,7 @@ const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
 const _savedPin = localStorage.getItem('cf_saved_pin');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));
+Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&k!=="cf_ai_key").forEach(k=>localStorage.removeItem(k));
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
