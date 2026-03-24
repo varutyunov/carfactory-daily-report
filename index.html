@@ -1781,7 +1781,7 @@ function renderInv(){
     return b.id-a.id;
   });
   if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
-  if(S.syncUrl)document.getElementById('sync-st').textContent='Ready to sync';
+  var _stEl=document.getElementById('sync-st');if(_stEl)_stEl.textContent='Ready to sync  ·  v Mar-24';
   document.getElementById('inv-list').innerHTML=items.map(car=>{
     const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
     const pxI=!car.photo&&pxCache[String(car.id)];

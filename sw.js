@@ -1,4 +1,4 @@
-const CACHE = 'cf-cache-v9';
+const CACHE = 'cf-cache-v10';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
@@ -41,7 +41,7 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// Message handler for SKIP_WAITING
+// Message handler — always skip waiting so new SW takes over immediately
 self.addEventListener('message', e => {
-  if (e.data === 'SKIP_WAITING') self.skipWaiting();
+  self.skipWaiting();
 });
