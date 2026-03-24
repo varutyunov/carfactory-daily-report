@@ -253,10 +253,10 @@ canvas{display:none;}
 /* ── MGR HOME — ORBITAL COMMAND CENTER ── */
 #mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);}
 .orbit-wrap{padding:60px 0 60px;display:flex;flex-direction:column;align-items:center;}
-.orbit-container{position:relative;width:340px;height:340px;margin:0 auto;}
+.orbit-container{position:relative;width:442px;height:442px;margin:0 auto;}
 
 /* Brain center */
-.orbit-brain{position:absolute;top:50%;left:50%;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:22px;
+.orbit-brain{position:absolute;top:50%;left:50%;width:125px;height:125px;margin:-63px 0 0 -63px;border-radius:29px;
   background:linear-gradient(145deg,#0e0530,#1a0a50,#2d1480);
   box-shadow:0 6px 28px rgba(124,58,237,0.35),0 10px 40px rgba(0,0,0,0.7);
   display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10;
@@ -264,32 +264,32 @@ canvas{display:none;}
   overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform .13s;
   animation:brainGlow 4s ease-in-out infinite;}
 .orbit-brain::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
-  background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);border-radius:22px 22px 0 0;pointer-events:none;}
+  background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);border-radius:29px 29px 0 0;pointer-events:none;}
 .orbit-brain:active{transform:scale(0.88);}
 @keyframes brainGlow{0%,100%{box-shadow:0 6px 28px rgba(124,58,237,0.35),0 10px 40px rgba(0,0,0,0.7);}50%{box-shadow:0 6px 40px rgba(124,58,237,0.55),0 10px 60px rgba(99,102,241,0.2);}}
-.orbit-brain-icon{width:42px;height:42px;position:relative;z-index:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));}
-.orbit-brain-label{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;margin-top:3px;line-height:1.2;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
+.orbit-brain-icon{width:55px;height:55px;position:relative;z-index:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));}
+.orbit-brain-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;margin-top:3px;line-height:1.2;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
 @keyframes brainGlow{0%,100%{box-shadow:0 0 50px rgba(124,58,237,0.5),0 0 100px rgba(99,102,241,0.15),inset 0 0 30px rgba(0,0,0,0.3);}50%{box-shadow:0 0 70px rgba(124,58,237,0.7),0 0 140px rgba(99,102,241,0.3),inset 0 0 30px rgba(0,0,0,0.3);}}
 
 /* Orbit ring */
-.orbit-ring{position:absolute;top:50%;left:50%;width:260px;height:260px;margin:-130px 0 0 -130px;border:1px solid rgba(124,58,237,0.06);border-radius:50%;pointer-events:none;}
+.orbit-ring{position:absolute;top:50%;left:50%;width:338px;height:338px;margin:-169px 0 0 -169px;border:1px solid rgba(124,58,237,0.06);border-radius:50%;pointer-events:none;}
 
 /* Connection lines */
-.orbit-line{position:absolute;top:50%;left:50%;width:1px;height:130px;transform-origin:0 0;pointer-events:none;
+.orbit-line{position:absolute;top:50%;left:50%;width:1px;height:169px;transform-origin:0 0;pointer-events:none;
   background:linear-gradient(to bottom,rgba(124,58,237,0.15),rgba(124,58,237,0.03),transparent);}
 
 /* Orbit tiles */
-.orbit-tw{position:absolute;top:50%;left:50%;width:70px;height:70px;margin:-35px 0 0 -35px;z-index:5;}
-.orbit-tile{width:70px;height:70px;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+.orbit-tw{position:absolute;top:50%;left:50%;width:91px;height:91px;margin:-46px 0 0 -46px;z-index:5;}
+.orbit-tile{width:91px;height:91px;border-radius:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s;position:relative;
   border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);}
 .orbit-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
-  background:linear-gradient(to bottom,rgba(255,255,255,0.06),transparent);border-radius:20px 20px 0 0;pointer-events:none;}
+  background:linear-gradient(to bottom,rgba(255,255,255,0.06),transparent);border-radius:26px 26px 0 0;pointer-events:none;}
 .orbit-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;
   background:linear-gradient(to bottom,rgba(255,255,255,0.07),transparent);border-radius:20px 20px 0 0;pointer-events:none;}
 .orbit-tile:active{transform:scale(0.85);}
-.orbit-tile svg{width:26px;height:26px;margin-bottom:4px;position:relative;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
-.orbit-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:8.5px;font-weight:800;color:#fff;letter-spacing:1.5px;
+.orbit-tile svg{width:34px;height:34px;margin-bottom:4px;position:relative;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
+.orbit-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;
   text-transform:uppercase;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
 .orbit-badge{position:absolute;top:-6px;right:-6px;z-index:10;background:#ef4444;color:#fff;border-radius:10px;
   font-size:10px;font-weight:700;padding:2px 6px;min-width:18px;text-align:center;line-height:14px;display:none;
@@ -607,7 +607,7 @@ canvas{display:none;}
 
           <!-- Orbit tiles — 9 at 40° intervals -->
           <!-- INVENTORY (0°/top) -->
-          <div class="orbit-tw" style="transform:rotate(0deg) translateY(-130px) rotate(0deg);">
+          <div class="orbit-tw" style="transform:rotate(0deg) translateY(-169px) rotate(0deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#071524,#0d2d55,#1a4a8a);box-shadow:0 4px 20px rgba(59,130,246,0.3);" onclick="mgrGoSection('inventory','Inventory')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 17H3v-4l2.5-6.5h13L21 13v4h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/><path d="M5 13h14"/>
@@ -617,7 +617,7 @@ canvas{display:none;}
           </div>
 
           <!-- TASKS (40°) -->
-          <div class="orbit-tw" style="transform:rotate(40deg) translateY(-130px) rotate(-40deg);">
+          <div class="orbit-tw" style="transform:rotate(40deg) translateY(-169px) rotate(-40deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 4px 20px rgba(34,197,94,0.25);" onclick="mgrGoSection('assigned','Tasks')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/>
@@ -628,7 +628,7 @@ canvas{display:none;}
           </div>
 
           <!-- REPAIRS (80°) -->
-          <div class="orbit-tw" style="transform:rotate(80deg) translateY(-130px) rotate(-80deg);">
+          <div class="orbit-tw" style="transform:rotate(80deg) translateY(-169px) rotate(-80deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 4px 20px rgba(251,146,60,0.25);" onclick="mgrGoSection('tasks','Repairs')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
@@ -639,7 +639,7 @@ canvas{display:none;}
           </div>
 
           <!-- DETAIL (120°) -->
-          <div class="orbit-tw" style="transform:rotate(120deg) translateY(-130px) rotate(-120deg);">
+          <div class="orbit-tw" style="transform:rotate(120deg) translateY(-169px) rotate(-120deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 4px 20px rgba(129,140,248,0.25);" onclick="mgrGoSection('detail','Detail')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/>
@@ -650,7 +650,7 @@ canvas{display:none;}
           </div>
 
           <!-- WORKFLOW (160°) -->
-          <div class="orbit-tw" style="transform:rotate(160deg) translateY(-130px) rotate(-160deg);">
+          <div class="orbit-tw" style="transform:rotate(160deg) translateY(-169px) rotate(-160deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 4px 20px rgba(20,184,166,0.25);" onclick="mgrGoSection('workflow','Workflow')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
@@ -660,7 +660,7 @@ canvas{display:none;}
           </div>
 
           <!-- PHOTOS (200°) -->
-          <div class="orbit-tw" style="transform:rotate(200deg) translateY(-130px) rotate(-200deg);">
+          <div class="orbit-tw" style="transform:rotate(200deg) translateY(-169px) rotate(-200deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 4px 20px rgba(192,86,243,0.25);" onclick="mgrGoSection('photos','Photos')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#d946ef" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
@@ -671,7 +671,7 @@ canvas{display:none;}
           </div>
 
           <!-- PARTS (240°) -->
-          <div class="orbit-tw" style="transform:rotate(240deg) translateY(-130px) rotate(-240deg);">
+          <div class="orbit-tw" style="transform:rotate(240deg) translateY(-169px) rotate(-240deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0a00,#4a2000,#7a3800);box-shadow:0 4px 20px rgba(251,191,36,0.25);" onclick="mgrGoSection('parts','Parts')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/>
@@ -682,7 +682,7 @@ canvas{display:none;}
           </div>
 
           <!-- CALENDAR (280°) -->
-          <div class="orbit-tw" style="transform:rotate(280deg) translateY(-130px) rotate(-280deg);">
+          <div class="orbit-tw" style="transform:rotate(280deg) translateY(-169px) rotate(-280deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#001524,#003050,#004d7a);box-shadow:0 4px 20px rgba(56,189,248,0.25);" onclick="mgrGoSection('calendar','Calendar')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
@@ -692,7 +692,7 @@ canvas{display:none;}
           </div>
 
           <!-- PAINT (320°) -->
-          <div class="orbit-tw" style="transform:rotate(320deg) translateY(-130px) rotate(-320deg);">
+          <div class="orbit-tw" style="transform:rotate(320deg) translateY(-169px) rotate(-320deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0010,#4a0030,#7c0055);box-shadow:0 4px 20px rgba(236,72,153,0.25);" onclick="mgrGoSection('paint','Paint')">
               <svg viewBox="0 0 24 24" fill="none" stroke="rgba(236,72,153,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
