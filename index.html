@@ -3317,16 +3317,23 @@ async function submitWfTask(){
 var caCarId = null;
 var caAssignType = null;
 
-function copyVin(vin){
+function copyVin(btn){
+  var vin=btn.getAttribute('data-vin');
   if(!vin) return;
-  navigator.clipboard.writeText(vin).then(function(){
-    var el=document.getElementById('ca-vin-copy-btn');
-    if(el){var orig=el.textContent;el.textContent='Copied!';el.style.color='#30d158';setTimeout(function(){el.textContent=orig;el.style.color='#555';},1500);}
-  }).catch(function(){
-    var ta=document.createElement('textarea');ta.value=vin;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-    var el=document.getElementById('ca-vin-copy-btn');
-    if(el){var orig=el.textContent;el.textContent='Copied!';el.style.color='#30d158';setTimeout(function(){el.textContent=orig;el.style.color='#555';},1500);}
-  });
+  function showDone(){btn.textContent='Copied!';btn.style.color='#30d158';setTimeout(function(){btn.textContent='Copy';btn.style.color='#555';},1600);}
+  // iOS-safe copy: use an input element with setSelectionRange
+  try{
+    var inp=document.createElement('input');
+    inp.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px;';
+    inp.value=vin;
+    document.body.appendChild(inp);
+    inp.focus();inp.setSelectionRange(0,vin.length);
+    var ok=document.execCommand('copy');
+    document.body.removeChild(inp);
+    if(ok){showDone();return;}
+  }catch(e){}
+  // Modern clipboard API fallback
+  if(navigator.clipboard){navigator.clipboard.writeText(vin).then(showDone).catch(function(){});}
 }
 function openCarActions(carId){
   caCarId = carId;
@@ -3335,7 +3342,7 @@ function openCarActions(carId){
   document.getElementById('ca-car-name').textContent = car.name;
   var rows = [];
   if(car.stock) rows.push('<span style="font-size:12px;color:#666;">Stock # <span style="color:#aaa;font-weight:600;">'+car.stock+'</span></span>');
-  if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button id="ca-vin-copy-btn" onclick="copyVin(\''+car.vin+'\')" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;">Copy</button></span>');
+  if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button data-vin="'+car.vin+'" onclick="event.stopPropagation();copyVin(this)" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;-webkit-tap-highlight-color:transparent;">Copy</button></span>');
   if(car.color) rows.push('<span style="font-size:12px;color:#666;">Color <span style="color:#aaa;font-weight:600;">'+car.color+'</span></span>');
   if(car.miles!=null) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(car.miles).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
