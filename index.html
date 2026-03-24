@@ -2715,6 +2715,15 @@ function renderWorkflow(){
     '</div>';
     return;
   }
+  // Auto-remove cars where all tasks are done
+  var _changed = false;
+  wfIds.forEach(function(carId){
+    var asgns = (S.assignments||[]).filter(function(a){ return a.inventoryId === carId && !a.approved; });
+    if(!asgns.length) return; // no tasks yet — keep in workflow
+    var allDone = asgns.every(function(a){ return a.tasks && a.tasks.length && a.tasks.every(function(t){ return typeof t==='object' ? t.done : false; }); });
+    if(allDone){ removeFromWorkflow(carId); _changed = true; }
+  });
+  if(_changed){ wfIds = getWorkflowCars(); }
   var cars = wfIds.map(function(id){ return S.inventory.find(function(c){ return c.id === id; }); }).filter(Boolean);
   if(!cars.length){
     el.innerHTML = '<p style="color:#555;padding:20px;font-size:13px;">Cars not found — they may have been removed from inventory.</p>';
