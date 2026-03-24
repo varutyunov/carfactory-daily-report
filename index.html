@@ -475,6 +475,7 @@ canvas{display:none;}
   <div class="content">
 
     <div class="view on" id="emp-home">
+      <!-- hidden legacy emp-tabs for JS compat -->
       <div class="emp-tabs" id="emp-tabs" style="display:none;">
         <button class="mt on" onclick="empTabGo('detail',this)">Detail</button>
         <button class="mt" onclick="empTabGo('photos',this)" id="emp-tab-photos-btn">Photos</button>
@@ -482,6 +483,19 @@ canvas{display:none;}
         <button class="mt" onclick="empTabGo('tasks',this)">Tasks</button>
         <button class="mt" onclick="empTabGo('personal',this)" id="emp-tab-name">Me</button>
       </div>
+
+      <!-- EMPLOYEE TILE HOME -->
+      <div id="emp-orbit-home" style="padding:24px 16px;">
+        <div id="emp-tile-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:400px;margin:0 auto;"></div>
+        <div id="emp-tile-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:16px;">
+          <div style="font-size:40px;">&#x2615;</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">NO TASKS YET</div>
+          <div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">You're all caught up. New tasks will appear here when assigned.</div>
+        </div>
+      </div>
+
+      <!-- EMPLOYEE SECTION CONTENT (shown when tile is tapped) -->
+      <div id="emp-section-content" style="display:none;">
       <div id="emp-tab-detail" style="padding:0 14px 80px;">
         <div style="padding:14px 0 8px;"><div class="greeting">Detail Queue</div></div>
         <div class="car-grid" id="detail-grid"></div>
@@ -507,6 +521,7 @@ canvas{display:none;}
         <div style="padding:14px 0 8px;"><div class="greeting" id="personal-greeting">My Assignments</div></div>
         <div class="car-grid" id="personal-grid"></div>
         <div class="empty" id="personal-empty" style="display:none;"><div class="ei">👤</div><div class="et">No personal assignments yet.</div></div>
+      </div>
       </div>
     </div>
 
@@ -1290,7 +1305,7 @@ async function doLogin(){
   fetchNotifications();
   var _isOwner=['vlad','tommy'].includes(e.name.toLowerCase());var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=_isOwner?'':'none';
   if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
-  else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
+  else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
 }
 function doSync(){
   const btn=document.getElementById('sync-btn');
@@ -1368,6 +1383,73 @@ function renderGrid(){
 
 // ── EMPLOYEE TABS ─────────────────────────────────────────────────────────────
 let curEmpTab='detail';
+function empOrbitGo(section){
+  var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
+  var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
+  var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='block';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
+  var bar=document.getElementById('mgr-back-bar');if(bar){bar.style.display='flex';document.getElementById('mgr-back-bar-title').textContent=labels[section]||section;document.getElementById('mgr-back-bar-btn').setAttribute('onclick','goEmpHome()');}
+  // repair/paint/tasks all go to the tasks tab
+  var tab=(section==='repair'||section==='paint')?'tasks':section;
+  empTabGo(tab, null);
+}
+function goEmpHome(){
+  var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='';
+  var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='none';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
+  var bar=document.getElementById('mgr-back-bar');if(bar)bar.style.display='none';
+  var backBtn=document.getElementById('mgr-back-bar-btn');if(backBtn)backBtn.setAttribute('onclick','goMgrHome()');
+  renderEmpHome();
+}
+function renderEmpHome(){
+  var grid=document.getElementById('emp-tile-grid');
+  var empty=document.getElementById('emp-tile-empty');
+  if(!grid)return;
+  var myId=me?me.id:0;
+  var mine=(S.assignments||[]).filter(function(a){return a.employeeId===myId&&!a.approved;});
+  // Count by category based on task text prefix
+  var counts={detail:0,photos:0,parts:0,repair:0,paint:0,tasks:0};
+  var carSets={detail:new Set(),photos:new Set(),parts:new Set(),repair:new Set(),paint:new Set(),tasks:new Set()};
+  mine.forEach(function(a){
+    (a.tasks||[]).forEach(function(t){
+      var txt=(typeof t==='object'?t.text:t)||'';
+      var lower=txt.toLowerCase();
+      if(lower.indexOf('[detail]')!==-1){carSets.detail.add(a.inventoryId);}
+      else if(lower.indexOf('[photos]')!==-1){carSets.photos.add(a.inventoryId);}
+      else if(lower.indexOf('[parts]')!==-1){carSets.parts.add(a.inventoryId);}
+      else if(lower.indexOf('[repair]')!==-1){carSets.repair.add(a.inventoryId);}
+      else if(lower.indexOf('[paint]')!==-1){carSets.paint.add(a.inventoryId);}
+      else{carSets.tasks.add(a.inventoryId);}
+    });
+  });
+  // Also count detail/photos/parts from work state pools
+  (S.inventory||[]).forEach(function(car){
+    var ws=getWorkState(car.id);
+    if(ws.categories){
+      if(ws.categories.detail&&ws.categories.detail.sectionPool) carSets.detail.add(car.id);
+      if(ws.categories.photos&&ws.categories.photos.sectionPool) carSets.photos.add(car.id);
+    }
+  });
+  var tiles=[
+    {id:'detail',label:'Detail',count:carSets.detail.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/></svg>',bg:'linear-gradient(145deg,#0e0620,#251050,#3730a3)',glow:'rgba(129,140,248,0.25)'},
+    {id:'photos',label:'Photos',count:carSets.photos.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M3 9h2l1-2h12l1 2h2"/></svg>',bg:'linear-gradient(145deg,#1a0025,#3d0060,#6b008a)',glow:'rgba(192,86,243,0.25)'},
+    {id:'parts',label:'Parts',count:carSets.parts.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/></svg>',bg:'linear-gradient(145deg,#1a0a00,#4a2000,#7a3800)',glow:'rgba(251,191,36,0.25)'},
+    {id:'repair',label:'Repairs',count:carSets.repair.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',bg:'linear-gradient(145deg,#1c0800,#4a1500,#7c2800)',glow:'rgba(251,146,60,0.25)'},
+    {id:'paint',label:'Paint',count:carSets.paint.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 3H5a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M12 11v6"/><path d="M8 17h8a2 2 0 012 2H6a2 2 0 012-2z"/></svg>',bg:'linear-gradient(145deg,#1a0010,#4a0030,#7c0055)',glow:'rgba(236,72,153,0.25)'},
+    {id:'tasks',label:'Tasks',count:carSets.tasks.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/></svg>',bg:'linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a)',glow:'rgba(34,197,94,0.25)'}
+  ];
+  var visible=tiles.filter(function(t){return t.count>0;});
+  if(!visible.length){grid.style.display='none';empty.style.display='flex';return;}
+  grid.style.display='grid';empty.style.display='none';
+  grid.innerHTML=visible.map(function(t){
+    return '<div onclick="empOrbitGo(\''+t.id+'\')" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;">' +
+      '<div style="width:36px;height:36px;">'+t.icon+'</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;line-height:1;">'+t.count+'</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">car'+(t.count===1?'':'s')+'</div>' +
+    '</div>';
+  }).join('');
+}
 function empTabGo(tab,btn){
   curEmpTab=tab;
   document.querySelectorAll('#emp-tabs .mt').forEach(b=>b.classList.remove('on'));
@@ -2327,7 +2409,7 @@ if(_savedSession){
       syncFromSupabase().then(()=>{
         fetchNotifications();
         if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
-        else{document.getElementById('emp-tabs').style.display='flex';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');empTabGo('detail',document.querySelector('#emp-tabs .mt'));}
+        else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
       });
     }
   }catch(e){}
