@@ -1631,7 +1631,9 @@ function openTaskView(aid){
 const EXPANDABLE_TASKS=['repairs','parts'];
 function renderTaskItems(a){
   document.getElementById('task-list').innerHTML=a.tasks.map((t,i)=>{
-    const isExpand=EXPANDABLE_TASKS.includes(t.name.toLowerCase());
+    // Support both {name} (old assign) and {text} (workflow) task formats
+    const tname=t.name||(t.text?t.text.replace(/^\[.*?\]\s*/,''):'')||'Task';
+    const isExpand=EXPANDABLE_TASKS.includes(tname.toLowerCase());
     const expanded=t.editingNote||false;
     if(isExpand){
       // Expandable task: tap name to toggle textarea
@@ -1639,11 +1641,11 @@ function renderTaskItems(a){
       <div class="ti-left"><div class="chk ${t.done?'on':''}" onclick="togTask(${a.id},${i})"><span class="chk-m">&#x2713;</span></div></div>
       <div class="ti-main">
         <div class="ti-top">
-          <span class="ti-name ${t.done?'dn':''}" onclick="toggleNote(${a.id},${i})" style="cursor:pointer;">${t.name}</span>
+          <span class="ti-name ${t.done?'dn':''}" onclick="toggleNote(${a.id},${i})" style="cursor:pointer;">${tname}</span>
           <span style="color:#444;font-size:12px;margin-left:6px;" onclick="toggleNote(${a.id},${i})">${expanded?'▲':'▼'}</span>
           ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
         </div>
-        ${expanded?`<textarea class="ti-note-input" rows="3" placeholder="Describe ${t.name.toLowerCase()}..." onblur="saveNote(${a.id},${i},this.value)" autofocus>${t.note||''}</textarea>`
+        ${expanded?`<textarea class="ti-note-input" rows="3" placeholder="Describe ${tname.toLowerCase()}..." onblur="saveNote(${a.id},${i},this.value)" autofocus>${t.note||''}</textarea>`
           :t.note?`<div class="ti-note" onclick="toggleNote(${a.id},${i})">${t.note}</div>`:''}
         ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
         ${(t.repairs&&t.repairs.length)?t.repairs.map(r=>`<div class="ti-note" style="margin-top:4px;">+ ${r.text} <span style="color:#444;font-size:10px;">— ${r.by}</span></div>`).join(''):''}
@@ -1658,12 +1660,12 @@ function renderTaskItems(a){
       </div>
     </div>`;
     } else {
-      // Simple checkbox task (Detail, Photos)
+      // Simple checkbox task
       return`<div class="ti">
       <div class="ti-left"><div class="chk ${t.done?'on':''}" onclick="togTask(${a.id},${i})"><span class="chk-m">&#x2713;</span></div></div>
       <div class="ti-main">
         <div class="ti-top">
-          <span class="ti-name ${t.done?'dn':''}" onclick="togTask(${a.id},${i})">${t.name}</span>
+          <span class="ti-name ${t.done?'dn':''}" onclick="togTask(${a.id},${i})">${tname}</span>
           ${t.urgent?'<span class="ti-urgent-flag">&#x26A0; Urgent</span>':''}
         </div>
         ${t.by?`<div class="ti-by">Done by ${t.by}</div>`:''}
