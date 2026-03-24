@@ -251,13 +251,15 @@ canvas{display:none;}
 .cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 
 /* ── MGR HOME — ORBITAL COMMAND CENTER ── */
-#mgr-home{overflow-y:auto;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;justify-content:center;min-height:100%;padding-bottom:61px;}
-.orbit-wrap{padding:20px 0;display:flex;flex-direction:column;align-items:center;}
+#mgr-home{overflow:hidden;background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;height:100%;}
+.orbit-wrap{padding:10px 0 4px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
 .orbit-container{position:relative;width:442px;height:442px;}
-/* Scale orbit down on smaller screens so it always fits */
-@media(max-width:380px){.orbit-wrap{transform:scale(0.80);transform-origin:center center;}}
-@media(min-width:381px) and (max-width:415px){.orbit-wrap{transform:scale(0.84);transform-origin:center center;}}
-@media(min-width:416px) and (max-width:459px){.orbit-wrap{transform:scale(0.95);transform-origin:center center;}}
+/* Scale orbit down on smaller screens — origin:top so layout collapses with negative margin */
+@media(max-width:380px){.orbit-wrap{transform:scale(0.80);transform-origin:top center;margin-bottom:-91px;}}
+@media(min-width:381px) and (max-width:415px){.orbit-wrap{transform:scale(0.84);transform-origin:top center;margin-bottom:-73px;}}
+@media(min-width:416px) and (max-width:459px){.orbit-wrap{transform:scale(0.95);transform-origin:top center;margin-bottom:-23px;}}
+/* Inline home chat */
+#mgr-home-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;border-top:1px solid #0e0e1e;}
 
 /* Brain center */
 .orbit-brain{position:absolute;top:50%;left:50%;width:125px;height:125px;margin:-63px 0 0 -63px;border-radius:29px;
@@ -706,6 +708,18 @@ canvas{display:none;}
             </div>
           </div>
 
+        </div>
+      </div>
+      <!-- Inline AI Chat -->
+      <div id="mgr-home-chat">
+        <div class="ai-messages" id="ai-messages">
+          <div class="ai-msg ai-msg-bot">
+            <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, add to paint or workflow, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
+          </div>
+        </div>
+        <div class="ai-input-bar" style="padding-bottom:env(safe-area-inset-bottom,20px);">
+          <input id="ai-input" placeholder="Ask Factory AI..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" />
+          <button class="ai-send" onclick="sendAIMessage()">&#x2191;</button>
         </div>
       </div>
     </div>
@@ -3573,11 +3587,10 @@ function aiShowTyping(){
 function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.remove(); }
 
 function openAIChat(){
-  var panel=document.getElementById('m-ai-chat');
-  if(panel){ panel.style.display='flex'; }
+  // Chat is now inline on home — just focus the input
   setTimeout(function(){ var inp=document.getElementById('ai-input'); if(inp) inp.focus(); },150);
 }
-function closeAIChat(){ var panel=document.getElementById('m-ai-chat'); if(panel) panel.style.display='none'; }
+function closeAIChat(){}
 
 async function sendAIMessage(){
   if(aiIsLoading) return;
@@ -3702,25 +3715,7 @@ async function sendAIMessage(){
     <span class="cal-cancel-link" onclick="calCloseModal()">Cancel</span>
   </div>
 </div>
-<!-- AI CHAT PANEL -->
-<div id="m-ai-chat" style="display:none;position:fixed;inset:0;background:#080808;z-index:700;flex-direction:column;">
-  <div class="ai-header">
-    <div class="ai-icon">🧠</div>
-    <div>
-      <div class="ai-title">AI ASSISTANT</div>
-      <div class="ai-sub">Car Factory AI</div>
-    </div>
-    <button onclick="closeAIChat()" style="margin-left:auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;">&#x2715;</button>
-  </div>
-  <div class="ai-messages" id="ai-messages">
-    <div class="ai-msg ai-msg-bot">
-      <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, add to paint or workflow, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
-    </div>
-  </div>
-  <div class="ai-input-bar">
-    <input id="ai-input" placeholder="Tell me what to do..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" />
-    <button class="ai-send" onclick="sendAIMessage()">&#x2191;</button>
-  </div>
-</div>
+<!-- AI CHAT PANEL (legacy — chat is now inline on mgr home) -->
+<div id="m-ai-chat" style="display:none;"></div>
 </body>
 </html>
