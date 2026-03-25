@@ -1540,12 +1540,15 @@ function renderEmpHome(){
       else{carSets.tasks.add(a.inventoryId);}
     });
   });
-  // Also count detail/photos/parts from work state pools
+  // Count all tab types from work state sectionPool (covers unassigned cars too)
   (S.inventory||[]).forEach(function(car){
     var ws=getWorkState(car.id);
     if(ws.categories){
       if(ws.categories.detail&&ws.categories.detail.sectionPool) carSets.detail.add(car.id);
       if(ws.categories.photos&&ws.categories.photos.sectionPool) carSets.photos.add(car.id);
+      if(ws.categories.paint&&ws.categories.paint.sectionPool) carSets.paint.add(car.id);
+      if(ws.categories.repair&&ws.categories.repair.sectionPool) carSets.repair.add(car.id);
+      if(ws.categories.parts&&ws.categories.parts.sectionPool) carSets.parts.add(car.id);
     }
   });
   var tiles=[
@@ -1583,8 +1586,26 @@ function renderEmpCatCars(section){
       return lower.indexOf('['+section+']')!==-1;
     });
   });
-  if(!filtered.length){container.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 24px;color:#555;font-size:14px;">No cars in this category</div>';return;}
-  container.innerHTML=filtered.map(function(a){
+
+  // Also include unassigned sectionPool cars (not covered by assignments above)
+  var assignedCarIds=new Set(filtered.map(function(a){return a.inventoryId;}));
+  var poolCars=[];
+  if(section!=='tasks'){
+    (S.inventory||[]).forEach(function(car){
+      if(assignedCarIds.has(car.id)) return;
+      var ws=getWorkState(car.id);
+      if(ws.categories&&ws.categories[section]&&ws.categories[section].sectionPool){
+        poolCars.push(car);
+      }
+    });
+  }
+
+  if(!filtered.length&&!poolCars.length){
+    container.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 24px;color:#555;font-size:14px;">No cars in this category</div>';
+    return;
+  }
+
+  var assignedHTML=filtered.map(function(a){
     var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
     var done=(a.tasks||[]).filter(function(t){return typeof t==='object'?t.done:false;}).length;
     var total=(a.tasks||[]).length;
@@ -1597,7 +1618,21 @@ function renderEmpCatCars(section){
     var sub=vinLast6+(car.color?' · '+car.color:'');
     return '<div class="car-tile st-'+status+'" onclick="openTaskView('+a.id+')" style="cursor:pointer;">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div><div class="tile-pb"><div class="tile-pf '+(status==='done'||status==='review'?'pfg':'pfw')+'" style="width:'+pct+'%"></div></div><div class="tile-pct">'+pct+'% complete</div></div></div>';
   }).join('');
-  applyPexels(filtered.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).filter(Boolean));
+
+  var poolHTML=poolCars.map(function(car){
+    var ws=getWorkState(car.id);
+    var catWs=(ws.categories&&ws.categories[section])||{};
+    var notes=catWs.notes||'';
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
+    var sub=vinLast6+(car.color?' · '+car.color:'');
+    return '<div class="car-tile st-prog"><span class="tile-badge tbp">Queued</span><div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div>'+(notes?'<div style="font-size:12px;color:#999;font-style:italic;margin-top:4px;">"'+notes+'"</div>':'')+'</div></div>';
+  }).join('');
+
+  container.innerHTML=assignedHTML+poolHTML;
+  var allCars=filtered.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).concat(poolCars).filter(Boolean);
+  applyPexels(allCars);
 }
 function empTabGo(tab,btn){
   curEmpTab=tab;
