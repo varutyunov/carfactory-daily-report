@@ -1355,7 +1355,7 @@ async function syncFromSupabase(){
     S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
-    var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
+    var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
@@ -2930,8 +2930,18 @@ async function addCarManually(){
 const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
 const _savedPin = localStorage.getItem('cf_saved_pin');
+
+// ── AI key cookie helpers (cookies outlive iOS localStorage wipes) ──────────
+function _getAiKeyCookie(){var m=document.cookie.match(/(?:^|;\s*)cf_ai_key=([^;]*)/);return m?decodeURIComponent(m[1]):null;}
+function _setAiKeyCookie(k){document.cookie='cf_ai_key='+encodeURIComponent(k)+'; max-age=31536000; path=/; SameSite=Strict';}
+function _clearAiKeyCookie(){document.cookie='cf_ai_key=; max-age=0; path=/; SameSite=Strict';}
+function getAiKey(){var k=localStorage.getItem('cf_ai_key')||_getAiKeyCookie();if(k)localStorage.setItem('cf_ai_key',k);return k;}
+function saveAiKey(k){localStorage.setItem('cf_ai_key',k);_setAiKeyCookie(k);}
+function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
+// ───────────────────────────────────────────────────────────────────────────
+
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
+var _keepAiKey=getAiKey();var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -4337,9 +4347,9 @@ async function sendAIMessage(){
   var _detectedKey = null;
   if(_rawKey.toLowerCase().startsWith('key:')) _detectedKey = _rawKey.slice(4).trim();
   else if(_rawKey.startsWith('sk-ant-')) _detectedKey = _rawKey;
-  if(_detectedKey){ localStorage.setItem('cf_ai_key',_detectedKey); inp.value=''; aiAddMsg('assistant','✅ API key saved! You\'re all set — what do you need?'); return; }
+  if(_detectedKey){ saveAiKey(_detectedKey); inp.value=''; aiAddMsg('assistant','✅ API key saved! You\'re all set — what do you need?'); return; }
 
-  var apiKey=localStorage.getItem('cf_ai_key');
+  var apiKey=getAiKey();
   if(!apiKey){
     inp.value='';
     inp.placeholder='Paste sk-ant-... key here';
@@ -4368,7 +4378,7 @@ async function sendAIMessage(){
         var errText=await resp.text().catch(function(){ return ''; });
         var msg='HTTP '+resp.status+': '+errText;
         try{ var errObj=JSON.parse(errText); if(errObj.error) msg='['+resp.status+'] '+(errObj.error.type||'')+' — '+(errObj.error.message||errText); }catch(x){}
-        if(resp.status===401){ localStorage.removeItem('cf_ai_key'); msg='Invalid API key. Cleared — paste a new one.'; }
+        if(resp.status===401){ clearAiKey(); msg='Invalid API key. Cleared — paste a new one.'; }
         aiAddMsg('assistant','⚠️ '+msg);
         break;
       }
