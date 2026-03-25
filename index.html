@@ -2506,24 +2506,28 @@ function renderMgrParts(){
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📦</div><div class="et">No vehicles in Parts queue</div></div>';return;}
   el.innerHTML=cars.map(car=>{
     const ws=getWorkState(car.id);
-    const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
-    const reviewed=ws.categories&&ws.categories.parts&&ws.categories.parts.reviewed;
-    const needsReview=done&&!reviewed;
     const repairs=(ws.categories.parts.repairs)||[];
+    const allBought=repairs.length>0&&repairs.every(r=>typeof r==='object'?r.bought:false);
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
+    const repairRows=repairs.map((r,i)=>{
+      const txt=typeof r==='string'?r:(r.text||'');
+      const bought=typeof r==='object'?!!r.bought:false;
+      return`<div class="rc-task" style="align-items:center;">
+        <div class="rc-dot ${bought?'dot-on':'dot-off'}" style="cursor:pointer;flex-shrink:0;" onclick="togglePartItem(${car.id},${i})"></div>
+        <div class="rc-tn" style="flex:1;"><div class="rc-tn-name" style="${bought?'text-decoration:line-through;color:#555;':''}">📦 ${txt}</div></div>
+        <button onclick="removePartItem(${car.id},${i})" style="background:none;border:none;color:#555;font-size:15px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>
+      </div>`;
+    }).join('');
+    return`<div class="rev-card">
       <div class="rc-head">${photoHTML}<div class="rc-info">
         <div class="rc-name">${car.name}</div>
         <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
+        ${allBought?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:4px;">✓ All parts bought</div>':''}
       </div></div>
-      ${repairs.length?`<div style="padding:8px 0;">${repairs.map(r=>`<div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📦 ${typeof r==='string'?r:(r.text||r)}</div></div></div>`).join('')}</div>`:''}
-      <div class="rc-tasks-list"><div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📦 Parts${done?' — done by '+(ws.categories.parts.doneBy||'employee'):''}</div></div></div></div>
+      ${repairRows?`<div style="padding:8px 0;">${repairRows}</div>`:'<div style="padding:8px;color:#555;font-size:13px;">No parts listed</div>'}
       <div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="removeFromPartsQueue(${car.id})">↩ Remove</button>
-        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectParts(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
-        <button class="rc-btn rc-approve" onclick="approveParts(${car.id})">✓ Approve</button>`:''}
+        <button class="rc-btn rc-back" onclick="removeFromPartsQueue(${car.id})">↩ Clear &amp; Remove</button>
       </div>
     </div>`;
   }).join('');
@@ -2550,7 +2554,33 @@ async function rejectParts(carId){
 async function removeFromPartsQueue(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
-  if(ws.categories.parts){ws.categories.parts.sectionPool=false;ws.categories.parts.done=false;ws.categories.parts.reviewed=false;}
+  if(ws.categories.parts){ws.categories.parts.sectionPool=false;ws.categories.parts.done=false;ws.categories.parts.reviewed=false;ws.categories.parts.repairs=[];}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();
+}
+async function togglePartItem(carId,idx){
+  const ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.parts) return;
+  const repairs=ws.categories.parts.repairs||[];
+  if(idx<0||idx>=repairs.length) return;
+  const r=repairs[idx];
+  const txt=typeof r==='string'?r:(r.text||'');
+  const bought=typeof r==='object'?!!r.bought:false;
+  repairs[idx]={text:txt,bought:!bought};
+  ws.categories.parts.repairs=repairs;
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();
+}
+async function removePartItem(carId,idx){
+  const ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.parts) return;
+  const repairs=ws.categories.parts.repairs||[];
+  repairs.splice(idx,1);
+  ws.categories.parts.repairs=repairs;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -3244,7 +3274,7 @@ function updateHomeBadges(){
   var rc=carsWithTag('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
   var dc=carsWithTag('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
   var pc=carsWithTag('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
-  var pac=carsWithTag('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
+  var pac=(S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;}).length; var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
   var paintc=carsWithTag('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
 }
