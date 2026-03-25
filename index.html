@@ -1423,7 +1423,7 @@ function updateTabBadges(){
       el.textContent=label;
     }
   }
-  const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved).length;
+  const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved&&!isQueueAssignment(a)).length;
   setBadge(tabTasks,'Tasks',taskReviewCount);
   const detailCount=S.inventory.filter(car=>{
     const ws=getWorkState(car.id);
@@ -2027,9 +2027,21 @@ async function doAssign(){
 }
 
 // ── ASSIGNED VIEW ──────────────────────────────────────────────────────────────
+// Returns true if assignment only contains queue-specific tasks (paint/detail)
+// that have their own dedicated tabs — exclude from general Tasks/Assigned views
+function isQueueAssignment(a){
+  var tasks=a.tasks||[];
+  if(!tasks.length) return false;
+  return tasks.every(function(t){
+    var txt=(typeof t==='object'?t.text:t)||'';
+    var lo=txt.toLowerCase();
+    return lo.indexOf('[paint]')!==-1||lo.indexOf('[detail]')!==-1;
+  });
+}
+
 function renderAssigned(){
   const el=document.getElementById('assigned-list');
-  const allAsgns=S.assignments.filter(a=>!a.approved);
+  const allAsgns=S.assignments.filter(a=>!a.approved&&!isQueueAssignment(a));
   if(!allAsgns.length){el.innerHTML='<div class="empty"><div class="ei">&#x1F697;</div><div class="et">No active tasks</div></div>';return;}
   el.innerHTML='<div class="car-grid">'+allAsgns.map(a=>{
     const car=S.inventory.find(c=>c.id===a.inventoryId);if(!car)return'';
@@ -2460,7 +2472,7 @@ async function removeFromPartsQueue(carId){
 }
 
 function renderReview(){
-  const p=S.assignments.filter(a=>a.submitted&&!a.approved);const el=document.getElementById('rev-list');
+  const p=S.assignments.filter(a=>a.submitted&&!a.approved&&!isQueueAssignment(a));const el=document.getElementById('rev-list');
   if(!p.length){el.innerHTML='<div class="empty"><div class="ei">&#x2705;</div><div class="et">No tasks pending review</div></div>';return;}
   el.innerHTML=p.map(a=>{
     const car=S.inventory.find(c=>c.id===a.inventoryId);const emp=S.employees.find(e=>e.id===a.employeeId);
@@ -3740,6 +3752,7 @@ async function submitCarAssign(){
         await sendNotification(empId, msg, null, car ? car.name : '');
       }
     }
+    addToProgress(caCarId); // always track in Progress when any tab is assigned
     closeCarAssign();
     closeCarActions();
     updateTabBadges();
