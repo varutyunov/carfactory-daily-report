@@ -733,8 +733,8 @@ canvas{display:none;}
             <div class="ai-bubble">Hey! I'm your Car Factory AI. I can find cars, assign tasks, track progress, and more.<br><br>Try: <em>"Find the black Jetta and add it to paint"</em> or <em>"Assign a repair on the Camry to Ricky"</em></div>
           </div>
         </div>
-        <div class="ai-input-bar" style="padding-bottom:env(safe-area-inset-bottom,20px);">
-          <input id="ai-input" placeholder="Ask Factory AI..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" />
+        <div class="ai-input-bar" id="ai-input-bar" style="padding-bottom:env(safe-area-inset-bottom,20px);">
+          <input id="ai-input" placeholder="Ask Factory AI..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}" onfocus="_aiKbOpen()" onblur="_aiKbClose()" />
           <button class="ai-send" onclick="sendAIMessage()">&#x2191;</button>
         </div>
       </div>
@@ -4287,6 +4287,44 @@ function openAIChat(){
 }
 function closeAIChat(){}
 
+/* ── iOS keyboard lift for AI chat input ──────────────────────────────────── */
+var _aiKbTimer=null;
+function _aiKbOpen(){
+  // On iOS PWA, visualViewport shrinks when keyboard opens — slide input bar up
+  if(!window.visualViewport) return;
+  clearTimeout(_aiKbTimer);
+  _aiKbTimer=setTimeout(function(){
+    var bar=document.getElementById('ai-input-bar');
+    if(!bar) return;
+    var kbH=window.innerHeight-window.visualViewport.height-(window.visualViewport.offsetTop||0);
+    if(kbH>80){
+      bar.style.transform='translateY(-'+kbH+'px)';
+      // Scroll messages to bottom so latest is visible
+      var msgs=document.getElementById('ai-messages');
+      if(msgs) msgs.scrollTop=msgs.scrollHeight;
+    }
+  },350); // wait for keyboard animation to finish
+  if(window.visualViewport._aiKbBound) return;
+  window.visualViewport._aiKbBound=true;
+  window.visualViewport.addEventListener('resize',function(){
+    var bar=document.getElementById('ai-input-bar');
+    if(!bar) return;
+    var focused=document.activeElement&&document.activeElement.id==='ai-input';
+    if(!focused){bar.style.transform='';return;}
+    var kbH=window.innerHeight-window.visualViewport.height-(window.visualViewport.offsetTop||0);
+    bar.style.transform=kbH>80?'translateY(-'+kbH+'px)':'';
+    var msgs=document.getElementById('ai-messages');
+    if(msgs) msgs.scrollTop=msgs.scrollHeight;
+  });
+}
+function _aiKbClose(){
+  clearTimeout(_aiKbTimer);
+  setTimeout(function(){
+    var bar=document.getElementById('ai-input-bar');
+    if(bar) bar.style.transform='';
+  },100);
+}
+
 async function sendAIMessage(){
   if(aiIsLoading) return;
   var inp=document.getElementById('ai-input');
@@ -4304,7 +4342,9 @@ async function sendAIMessage(){
   var apiKey=localStorage.getItem('cf_ai_key');
   if(!apiKey){
     inp.value='';
-    aiAddMsg('assistant','🔑 Paste your Anthropic API key to activate the AI:<br><br>Just paste it directly and hit send.');
+    inp.placeholder='Paste sk-ant-... key here';
+    setTimeout(function(){inp.placeholder='Ask Factory AI...';},8000);
+    aiAddMsg('assistant','🔑 <strong>API key needed.</strong> iOS clears storage after a few days of inactivity.<br><br>Paste your <code>sk-ant-...</code> key directly into the box below and hit send — it\'ll save instantly.');
     return;
   }
 
