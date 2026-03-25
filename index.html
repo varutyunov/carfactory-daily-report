@@ -785,6 +785,7 @@ canvas{display:none;}
     <div style="margin-bottom:20px;">
       <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Assign To</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button id="ca-unassigned-btn" onclick="caToggleUnassigned()" class="wf-emp-btn">Unassigned</button>
         <button id="ca-assign-all-btn" onclick="caToggleAll()" class="wf-emp-btn">All Employees</button>
         <div id="ca-assign-emp-btns" style="display:contents;"></div>
       </div>
@@ -3645,6 +3646,7 @@ function openCarAssign(type){
   document.getElementById('ca-assign-sub').textContent = car ? car.name : '';
   document.getElementById('ca-assign-note').value = '';
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
+  document.getElementById('ca-unassigned-btn').classList.remove('wf-assign-active');
   var empBtns = document.getElementById('ca-assign-emp-btns');
   var emps = (S.employees||[]);
   empBtns.innerHTML = emps.map(function(e){
@@ -3661,11 +3663,20 @@ function closeCarAssign(){
 function caToggleEmp(btn){
   btn.classList.toggle('wf-assign-active');
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
+  document.getElementById('ca-unassigned-btn').classList.remove('wf-assign-active');
 }
 
 function caToggleAll(){
   var btn = document.getElementById('ca-assign-all-btn');
   btn.classList.toggle('wf-assign-active');
+  document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
+  document.getElementById('ca-unassigned-btn').classList.remove('wf-assign-active');
+}
+
+function caToggleUnassigned(){
+  var btn = document.getElementById('ca-unassigned-btn');
+  btn.classList.toggle('wf-assign-active');
+  document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
   document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
 }
 
@@ -3677,23 +3688,26 @@ async function submitCarAssign(){
   var tasks = [{text: taskText, done: false, urgent: false}];
 
   var assignAll = document.getElementById('ca-assign-all-btn').classList.contains('wf-assign-active');
+  var isUnassigned = document.getElementById('ca-unassigned-btn').classList.contains('wf-assign-active');
   var selectedIds = [];
   if(assignAll){
     selectedIds = (S.employees||[]).map(function(e){ return e.id; });
-  } else {
+  } else if(!isUnassigned){
     document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn.wf-assign-active').forEach(function(b){
       selectedIds.push(parseInt(b.getAttribute('data-id')));
     });
+    // If nothing selected and unassigned not explicitly chosen, treat as unassigned
+    if(!selectedIds.length) isUnassigned = true;
   }
-  if(!selectedIds.length){ alert('Select who to assign this to.'); return; }
 
   var btn = document.getElementById('ca-assign-submit');
   if(btn){ btn.disabled = true; btn.textContent = 'Sending...'; }
   var car = S.inventory.find(function(c){ return c.id === caCarId; });
 
   try {
-    for(var i = 0; i < selectedIds.length; i++){
-      var empId = selectedIds[i];
+    var empIdsList = isUnassigned ? [null] : selectedIds;
+    for(var i = 0; i < empIdsList.length; i++){
+      var empId = empIdsList[i];
       var existing = S.assignments.find(function(a){ return a.inventoryId === caCarId && a.employeeId === empId && !a.approved; });
       if(existing){
         existing.tasks = (existing.tasks||[]).concat(tasks);
@@ -3705,8 +3719,10 @@ async function submitCarAssign(){
           S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
         }
       }
-      var msg = (assignAll?'New task for everyone: ':'New task: ') + taskText + (car?' — '+car.name:'');
-      await sendNotification(empId, msg, null, car ? car.name : '');
+      if(empId != null){
+        var msg = (assignAll?'New task for everyone: ':'New task: ') + taskText + (car?' — '+car.name:'');
+        await sendNotification(empId, msg, null, car ? car.name : '');
+      }
     }
     addToProgress(caCarId); // auto-track in progress whenever any task is assigned
     closeCarAssign();
