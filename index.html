@@ -1442,7 +1442,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();if(id==='paint')renderMgrPaint();updateTabBadges();}
 
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
@@ -4008,6 +4008,12 @@ async function submitCarAssign(){
     addToProgress(caCarId); // always track in Progress when any tab is assigned
     closeCarAssign();
     closeCarActions();
+    renderMgrPaint();
+    renderMgrRepair();
+    renderMgrDetail();
+    renderMgrPhotos();
+    renderMgrParts();
+    renderInv();
     updateTabBadges();
     updateHomeBadges();
   } catch(e) {
