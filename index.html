@@ -450,6 +450,7 @@ canvas{display:none;}
     <div style="display:flex;align-items:center;gap:10px;padding:4px 0;"><input type="checkbox" id="remember-me" style="width:18px;height:18px;accent-color:#fff;cursor:pointer;flex-shrink:0;" checked /><label for="remember-me" style="font-size:13px;color:#555;cursor:pointer;">Keep me signed in</label></div>
     <button class="lbtn" type="submit">Sign In</button>
     </form>
+    <button id="faceid-btn" type="button" onclick="loginWithFaceId()" style="display:none;width:100%;padding:17px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;color:#fff;font-size:17px;font-weight:600;cursor:pointer;margin-top:10px;letter-spacing:.3px;">🔒 Sign in with Face ID</button>
     <div class="lerr" id="lerr"></div>
   </div>
 </div>
@@ -1314,6 +1315,17 @@ window.addEventListener('offline',()=>{document.getElementById('offline-notice')
 if(!navigator.onLine) document.getElementById('offline-notice').style.display='block';
 
 // ── AUTH ───────────────────────────────────────────────────────────────────────
+async function loginWithFaceId(){
+  if(!navigator.credentials) return;
+  try{
+    const cred=await navigator.credentials.get({password:true,mediation:'required'});
+    if(cred){
+      document.getElementById('lu').value=cred.id;
+      document.getElementById('lp').value=cred.password;
+      await doLogin();
+    }
+  }catch(e){}
+}
 async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value.trim();
@@ -2625,6 +2637,9 @@ if(_savedSession){
 }
 // Try Face ID / saved credential when no active session
 if(!_savedSession&&navigator.credentials){
+  // Show the Face ID button (works via user gesture in PWA home screen)
+  var _fb=document.getElementById('faceid-btn');if(_fb)_fb.style.display='block';
+  // Also attempt silent/optional autofill for Safari (no gesture needed there)
   (async function(){
     try{
       const cred=await navigator.credentials.get({password:true,mediation:'optional'});

@@ -1,4 +1,4 @@
-const CACHE = 'cf-cache-v14';
+const CACHE = 'cf-cache-v15';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
