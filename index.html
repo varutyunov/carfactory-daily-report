@@ -3223,9 +3223,10 @@ function renderProgress(){
       pills+='</div>';
     });
     if(pills) out+='<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px;">'+pills+'</div>';
-    // Assign task button
-    out+='<div style="padding:0 16px 14px;border-top:1px solid #111;padding-top:10px;margin-top:2px;">';
-    out+='<button onclick="openWfTask('+car.id+')" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 16px;cursor:pointer;width:100%;">+ Assign Task</button>';
+    // Assign task + unassign buttons
+    out+='<div style="padding:0 16px 14px;border-top:1px solid #111;padding-top:10px;margin-top:2px;display:flex;gap:8px;">';
+    out+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 16px;cursor:pointer;">+ Assign Task</button>';
+    out+='<button onclick="removeCarFromProgress('+car.id+')" style="background:rgba(255,255,255,0.05);border:1px solid #2a2a2a;color:#888;font-size:13px;font-weight:600;border-radius:10px;padding:8px 14px;cursor:pointer;white-space:nowrap;">↩ Remove</button>';
     out+='</div>';
     out+='</div>';
   });
@@ -3479,6 +3480,21 @@ function removeFromProgress(carId){
   var wf=getProgressCars().filter(function(id){return id!==carId;});
   localStorage.setItem('cf_workflow_cars',JSON.stringify(wf));
 }
+async function removeCarFromProgress(carId){
+  showLoading('Removing...');
+  try{
+    var toRemove=(S.assignments||[]).filter(function(a){return a.inventoryId===carId&&!a.approved;});
+    for(var i=0;i<toRemove.length;i++){
+      await sbDelete('assignments',toRemove[i].id);
+    }
+    S.assignments=S.assignments.filter(function(a){return!(a.inventoryId===carId&&!a.approved);});
+    removeFromProgress(carId);
+    renderProgress();
+    updateTabBadges();
+    updateHomeBadges();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+}
 function toggleProgress(carId){
   if(isInProgress(carId)) removeFromProgress(carId); else addToProgress(carId);
   renderInv();
@@ -3724,7 +3740,6 @@ async function submitCarAssign(){
         await sendNotification(empId, msg, null, car ? car.name : '');
       }
     }
-    addToProgress(caCarId); // auto-track in progress whenever any task is assigned
     closeCarAssign();
     closeCarActions();
     updateTabBadges();
@@ -3765,6 +3780,9 @@ function renderMgrPaint(){
       out+='<div style="font-size:13px;color:'+(done?'#555':'#ccc')+';">'+txt+'</div>';
       out+='</div>';
     });
+    out+='<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:10px;">';
+    out+='<button onclick="removeFromPaintQueue('+(car?car.id:a.inventoryId)+');renderMgrPaint();" style="background:rgba(255,255,255,0.05);border:1px solid #2a2a2a;color:#888;font-size:12px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;">↩ Unassign</button>';
+    out+='</div>';
     out+='</div>';
   });
   el.innerHTML=out;
