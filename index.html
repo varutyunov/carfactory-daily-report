@@ -841,6 +841,7 @@ canvas{display:none;}
             <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
             <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
           </div>
+          <button onclick="clearAllQueues()" style="margin-top:10px;width:100%;padding:10px;background:none;border:1px solid #2a1010;border-radius:10px;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.5px;">✕ Clear All Queues</button>
         </div>
         <div id="inv-list"></div>
         <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
@@ -2462,6 +2463,35 @@ async function syncNow(){
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
     renderInv();
   }catch(e){stEl.textContent='Sync failed: '+e.message;}
+}
+async function clearAllQueues(){
+  if(!confirm('Clear ALL cars from ALL tabs?\n\nThis removes all active assignments and resets Detail / Photos / Parts queues.\n\nThis cannot be undone.')) return;
+  showLoading('Clearing queues...');
+  try{
+    // Delete all unapproved assignments
+    var toDelete=(S.assignments||[]).filter(function(a){return !a.approved;});
+    for(var i=0;i<toDelete.length;i++){
+      await sbDelete('assignments',toDelete[i].id);
+    }
+    S.assignments=(S.assignments||[]).filter(function(a){return a.approved;});
+    // Reset sectionPool flags on all cars in Supabase + localStorage
+    var emptyWork={selected:false,categories:{}};
+    for(var j=0;j<(S.inventory||[]).length;j++){
+      var car=S.inventory[j];
+      var ws=car.work;
+      var hasPool=ws&&ws.categories&&Object.keys(ws.categories).some(function(k){return ws.categories[k]&&ws.categories[k].sectionPool;});
+      if(hasPool){
+        try{await sbPatch('inventory',car.id,{work:emptyWork});}catch(e){}
+        car.work=emptyWork;
+      }
+      try{localStorage.removeItem('cf_work_'+car.id);}catch(e){}
+    }
+    sv();renderInv();updateTabBadges();updateHomeBadges();
+    document.getElementById('sync-st').textContent='All queues cleared.';
+  }catch(e){
+    document.getElementById('sync-st').textContent='Error: '+e.message;
+  }
+  hideLoading();
 }
 function parseCSV(csv){
   var lines=csv.trim().split('\n');if(lines.length<2)return[];
