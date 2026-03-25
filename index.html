@@ -2718,7 +2718,7 @@ const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
 const _savedPin = localStorage.getItem('cf_saved_pin');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
+var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
