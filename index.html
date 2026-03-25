@@ -4244,20 +4244,7 @@ function toggleVoiceAI(){
       var wave=document.getElementById('voice-wave');
       if(wave) wave.style.display='none';
       var transcript=(event.results[0][0].transcript||'').trim();
-      if(transcript){
-        var inp=document.getElementById('ai-input');
-        if(inp){
-          inp.value=transcript;
-          sendAIMessage();
-          // Scroll chat into view so user sees the response
-          setTimeout(function(){
-            var msgs=document.getElementById('ai-messages');
-            if(msgs) msgs.scrollTop=msgs.scrollHeight;
-            var chat=document.getElementById('mgr-home-chat');
-            if(chat) chat.scrollIntoView({behavior:'smooth',block:'end'});
-          },200);
-        }
-      }
+      if(transcript) sendAIVoice(transcript);
     };
     _voiceRecog.onerror=function(event){
       stopVoiceAI();
@@ -4413,6 +4400,85 @@ async function sendAIMessage(){
   }
 
   aiIsLoading=false;
+}
+
+async function sendAIVoice(text){
+  if(!text) return;
+  if(aiIsLoading) return;
+
+  // Make sure AI chat panel is visible
+  var chatPanel=document.getElementById('mgr-home-chat');
+  if(chatPanel && chatPanel.style.display==='none') chatPanel.style.display='flex';
+
+  var apiKey=getAiKey();
+  if(!apiKey){
+    aiAddMsg('assistant','🔑 <strong>API key needed.</strong> Open the chat and paste your <code>sk-ant-...</code> key.');
+    return;
+  }
+
+  aiAddMsg('user', text.replace(/</g,'&lt;'));
+  aiConversation.push({role:'user', content:text});
+  aiIsLoading=true;
+  aiShowTyping();
+
+  // Scroll to show new message
+  setTimeout(function(){
+    var msgs=document.getElementById('ai-messages');
+    if(msgs) msgs.scrollTop=msgs.scrollHeight;
+  },100);
+
+  try {
+    var continueLoop=true;
+    while(continueLoop){
+      var resp=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:buildAISystemPrompt(),tools:AI_TOOLS,messages:aiConversation})
+      });
+      aiHideTyping();
+
+      if(!resp.ok){
+        var errText=await resp.text().catch(function(){ return ''; });
+        var msg='HTTP '+resp.status+': '+errText;
+        try{ var errObj=JSON.parse(errText); if(errObj.error) msg='['+resp.status+'] '+(errObj.error.type||'')+' — '+(errObj.error.message||errText); }catch(x){}
+        if(resp.status===401){ clearAiKey(); msg='Invalid API key. Cleared — paste a new one.'; }
+        aiAddMsg('assistant','⚠️ '+msg);
+        break;
+      }
+
+      var data=await resp.json();
+      var toolUses=data.content.filter(function(b){ return b.type==='tool_use'; });
+      var texts=data.content.filter(function(b){ return b.type==='text'; });
+
+      aiConversation.push({role:'assistant', content:data.content});
+
+      if(data.stop_reason==='tool_use'&&toolUses.length){
+        var toolResults=[];
+        for(var j=0;j<toolUses.length;j++){
+          var tu=toolUses[j];
+          var actionLabel=tu.name+': '+JSON.stringify(tu.input).replace(/"/g,'').replace(/\{|\}/g,'').replace(/,/g,' | ');
+          aiAddMsg('bot','⚡ '+actionLabel,true);
+          var result=await executeAITool(tu.name,tu.input);
+          toolResults.push({type:'tool_result',tool_use_id:tu.id,content:JSON.stringify(result)});
+        }
+        aiConversation.push({role:'user', content:toolResults});
+        aiShowTyping();
+      } else {
+        if(texts.length) aiAddMsg('assistant',texts.map(function(b){ return b.text.replace(/</g,'&lt;'); }).join('<br>'));
+        continueLoop=false;
+      }
+    }
+  } catch(e){
+    aiHideTyping();
+    aiAddMsg('assistant','⚠️ Error: '+String(e));
+  }
+
+  aiIsLoading=false;
+  // Scroll to bottom after response
+  setTimeout(function(){
+    var msgs=document.getElementById('ai-messages');
+    if(msgs) msgs.scrollTop=msgs.scrollHeight;
+  },150);
 }
 
 
