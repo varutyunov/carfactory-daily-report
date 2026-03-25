@@ -2448,13 +2448,16 @@ async function syncNow(){
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
     var added=0,updated=0,removed=0;
+    var sbPatches=[]; // collect Supabase patches so miles persist across auto-sync
     // Add new + update existing
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
       var exist=S.inventory.find(function(x){return x.stock===c.stock;});
       if(exist){
-        if(c.color) exist.color=c.color;
-        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
+        var patch={};
+        if(c.color){exist.color=c.color;patch.color=c.color;}
+        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
+        if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
         S.inventory.push(c);
@@ -2462,6 +2465,10 @@ async function syncNow(){
         added++;
       }
     });
+    // Write miles + color back to Supabase so auto-sync doesn't wipe them
+    if(sbPatches.length){
+      await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
+    }
     // Remove sold cars (not in INSTOCK list and no active assignments)
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     S.inventory=S.inventory.filter(function(c){
