@@ -639,7 +639,7 @@ canvas{display:none;}
 
           <!-- REPAIRS (80°) -->
           <div class="orbit-tw" style="transform:rotate(80deg) translateY(-169px) rotate(-80deg);">
-            <div class="orbit-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 4px 20px rgba(251,146,60,0.25);" onclick="mgrGoSection('tasks','Repairs')">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 4px 20px rgba(251,146,60,0.25);" onclick="mgrGoSection('repair','Repairs')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
               </svg>
@@ -883,6 +883,8 @@ canvas{display:none;}
     </div>
 
     <div class="view" id="mgr-assigned"><div style="padding:14px;" id="assigned-list"></div></div>
+
+    <div class="view" id="mgr-repair"><div style="padding:14px;" id="mgr-repair-list"></div></div>
 
     <div class="view" id="mgr-detail"><div style="padding:14px;" id="mgr-detail-list"></div></div>
 
@@ -1432,7 +1434,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();updateTabBadges();}
 
 function updateTabBadges(){
   const tabTasks=document.getElementById('tab-tasks');
@@ -2059,7 +2061,7 @@ function isQueueAssignment(a){
   return tasks.every(function(t){
     var txt=(typeof t==='object'?t.text:t)||'';
     var lo=txt.toLowerCase();
-    return lo.indexOf('[paint]')!==-1||lo.indexOf('[detail]')!==-1;
+    return lo.indexOf('[paint]')!==-1||lo.indexOf('[detail]')!==-1||lo.indexOf('[repair]')!==-1;
   });
 }
 
@@ -2435,6 +2437,66 @@ async function markPartsDone(carId){
   renderPartsQueue();
   updateTabBadges();
 }
+// ── REPAIR QUEUE ────────────────────────────────────────────────────────────
+function renderMgrRepair(){
+  var el=document.getElementById('mgr-repair-list');
+  if(!el) return;
+  function hasRepairTag(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('[repair]')!==-1;}
+  var repairAsgns=(S.assignments||[]).filter(function(a){return !a.approved&&(a.tasks||[]).some(hasRepairTag);});
+  if(!repairAsgns.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div></div>';return;}
+  var carMap={};
+  repairAsgns.forEach(function(a){if(!carMap[a.inventoryId])carMap[a.inventoryId]=[];carMap[a.inventoryId].push(a);});
+  el.innerHTML=Object.keys(carMap).map(function(carId){
+    var car=S.inventory.find(function(c){return c.id===parseInt(carId);});
+    if(!car) return '';
+    var asgns=carMap[carId];
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    var taskLines=asgns.map(function(a){
+      var emp=S.employees.find(function(e){return e.id===a.employeeId;});
+      return (a.tasks||[]).filter(hasRepairTag).map(function(t){
+        var txt=(typeof t==='object'?t.text:t)||'';
+        var done=typeof t==='object'?!!t.done:false;
+        var label=txt.replace(/\[repair\]\s*/i,'').trim()||'Repair';
+        return`<div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">🔧 ${label}</div>${emp?`<div class="rc-tn-note">→ ${emp.name}</div>`:''}</div></div>`;
+      }).join('');
+    }).join('');
+    return`<div class="rev-card">
+      <div class="rc-head">${photoHTML}<div class="rc-info">
+        <div class="rc-name">${car.name}</div>
+        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
+      </div></div>
+      ${taskLines?`<div class="rc-tasks-list">${taskLines}</div>`:''}
+      <div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="removeFromRepairQueue(${car.id})">↩ Unassign</button>
+      </div>
+    </div>`;
+  }).join('');
+  applyPexels(Object.keys(carMap).map(function(id){return S.inventory.find(function(c){return c.id===parseInt(id);});}).filter(Boolean));
+}
+async function removeFromRepairQueue(carId){
+  showLoading('Removing...');
+  try{
+    function hasRepairTag(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('[repair]')!==-1;}
+    var toRemove=(S.assignments||[]).filter(function(a){return !a.approved&&a.inventoryId===carId&&(a.tasks||[]).some(hasRepairTag);});
+    for(var i=0;i<toRemove.length;i++){
+      var a=toRemove[i];
+      var nonRepair=(a.tasks||[]).filter(function(t){return !hasRepairTag(t);});
+      if(!nonRepair.length){
+        await sbDelete('assignments',a.id);
+        S.assignments=S.assignments.filter(function(x){return x.id!==a.id;});
+      } else {
+        a.tasks=nonRepair;
+        await sbPatch('assignments',a.id,{tasks:nonRepair});
+      }
+    }
+    sv();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  renderMgrRepair();
+  updateTabBadges();
+}
+
 function renderMgrParts(){
   const el=document.getElementById('mgr-parts-list');
   const cars=S.inventory.filter(car=>{
@@ -3130,6 +3192,7 @@ function mgrGoSection(id, label){
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
   if(id==='inventory'){invTab='all';['all','paint','detail'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
+  else if(id==='repair')renderMgrRepair();
   else if(id==='detail')renderMgrDetail();
   else if(id==='photos')renderMgrPhotos();
   else if(id==='parts')renderMgrParts();
@@ -3173,12 +3236,12 @@ function updateHomeBadges(){
     });
     return Object.keys(seen).length;
   }
-  // All cars with any active assignment
+  // All cars with any active assignment (for progress)
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
   var allCount=Object.keys(allSeen).length;
 
-  var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=allCount;hbt.style.display=allCount>0?'block':'none';}
-  var rc=carsWithTag('repair','parts'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
+  var tc=carsWithTag('task'); var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=tc;hbt.style.display=tc>0?'block':'none';}
+  var rc=carsWithTag('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
   var dc=carsWithTag('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
   var pc=carsWithTag('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
   var pac=carsWithTag('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
