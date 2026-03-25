@@ -790,6 +790,10 @@ canvas{display:none;}
         <div id="ca-assign-emp-btns" style="display:contents;"></div>
       </div>
     </div>
+    <div id="ca-parts-wrap" style="display:none;margin-bottom:16px;">
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Also Queue</div>
+      <button id="ca-parts-btn" onclick="caToggleParts()" class="wf-emp-btn" style="width:100%;justify-content:center;padding:13px;gap:8px;">📦 Add to Parts Queue</button>
+    </div>
     <button id="ca-assign-submit" onclick="submitCarAssign()" style="width:100%;background:#a78bfa;border:none;border-radius:12px;color:#000;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">Assign</button>
   </div>
 </div>
@@ -1175,6 +1179,23 @@ function initOneSignalUser(name){
   } else {
     OneSignalDeferred.push(linkUser);
   }
+}
+
+// Send a push notification to all subscribed employees
+async function sendNotification(empId, message, subtitle, carName){
+  try{
+    var payload={
+      app_id:OS_APP_ID,
+      headings:{en:carName||'Car Factory'},
+      contents:{en:message},
+      included_segments:['All']
+    };
+    await fetch('https://onesignal.com/api/v1/notifications',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
+      body:JSON.stringify(payload)
+    });
+  }catch(e){console.warn('Notification error',e);}
 }
 
 function showNotifEnableBar(){
@@ -3675,6 +3696,11 @@ function openCarAssign(type){
   document.getElementById('ca-assign-note').value = '';
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
   document.getElementById('ca-unassigned-btn').classList.remove('wf-assign-active');
+  // Show Parts toggle only for Repair
+  var partsWrap = document.getElementById('ca-parts-wrap');
+  if(partsWrap) partsWrap.style.display = type === 'repair' ? 'block' : 'none';
+  var partsBtn = document.getElementById('ca-parts-btn');
+  if(partsBtn) partsBtn.classList.remove('wf-assign-active');
   var empBtns = document.getElementById('ca-assign-emp-btns');
   var emps = (S.employees||[]);
   empBtns.innerHTML = emps.map(function(e){
@@ -3706,6 +3732,11 @@ function caToggleUnassigned(){
   btn.classList.toggle('wf-assign-active');
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
   document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn').forEach(function(b){ b.classList.remove('wf-assign-active'); });
+}
+
+function caToggleParts(){
+  var btn = document.getElementById('ca-parts-btn');
+  if(btn) btn.classList.toggle('wf-assign-active');
 }
 
 async function submitCarAssign(){
@@ -3747,11 +3778,25 @@ async function submitCarAssign(){
           S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
         }
       }
-      if(empId != null){
-        var msg = (assignAll?'New task for everyone: ':'New task: ') + taskText + (car?' — '+car.name:'');
-        await sendNotification(empId, msg, null, car ? car.name : '');
-      }
     }
+    // Broadcast notification to everyone for any assignment
+    var notifMsg = taskText + (car ? ' — ' + car.name : '');
+    await sendNotification(null, notifMsg, null, car ? car.name : 'Car Factory');
+
+    // If Repair + Parts toggle active, also add to Parts queue
+    var partsBtn = document.getElementById('ca-parts-btn');
+    if(caAssignType === 'repair' && partsBtn && partsBtn.classList.contains('wf-assign-active')){
+      var ws = getWorkState(caCarId);
+      if(!ws.categories) ws.categories = {};
+      if(!ws.categories.parts) ws.categories.parts = {selected:false, description:'', repairs:[]};
+      ws.categories.parts.sectionPool = true;
+      var partscar = S.inventory.find(function(c){ return c.id === caCarId; });
+      if(partscar) partscar.work = ws;
+      await saveWorkState(caCarId);
+      var partsNotif = '[Parts] queued — ' + (car ? car.name : '');
+      await sendNotification(null, partsNotif, null, car ? car.name : 'Car Factory');
+    }
+
     addToProgress(caCarId); // always track in Progress when any tab is assigned
     closeCarAssign();
     closeCarActions();
