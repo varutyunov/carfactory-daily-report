@@ -279,6 +279,16 @@ canvas{display:none;}
 .orbit-brain-icon{width:55px;height:55px;position:relative;z-index:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));}
 .orbit-brain-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;margin-top:3px;line-height:1.2;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
 @keyframes brainGlow{0%,100%{box-shadow:0 0 50px rgba(124,58,237,0.5),0 0 100px rgba(99,102,241,0.15),inset 0 0 30px rgba(0,0,0,0.3);}50%{box-shadow:0 0 70px rgba(124,58,237,0.7),0 0 140px rgba(99,102,241,0.3),inset 0 0 30px rgba(0,0,0,0.3);}}
+.orbit-brain.listening{animation:brainListen 0.7s ease-in-out infinite!important;background:linear-gradient(145deg,#1a0010,#3d0020,#6b0030)!important;}
+@keyframes brainListen{0%,100%{box-shadow:0 0 40px rgba(255,50,80,0.55),0 0 80px rgba(255,0,40,0.18),inset 0 0 20px rgba(0,0,0,0.4);}50%{box-shadow:0 0 70px rgba(255,50,80,0.9),0 0 140px rgba(255,0,40,0.35),inset 0 0 20px rgba(0,0,0,0.4);}}
+.voice-wave{display:flex;gap:3px;align-items:center;justify-content:center;height:18px;margin-top:4px;position:relative;z-index:1;}
+.voice-wave span{width:3px;background:rgba(255,110,130,0.95);border-radius:2px;animation:voiceBar 0.55s ease-in-out infinite;}
+.voice-wave span:nth-child(1){height:6px;animation-delay:0s;}
+.voice-wave span:nth-child(2){height:13px;animation-delay:0.1s;}
+.voice-wave span:nth-child(3){height:9px;animation-delay:0.2s;}
+.voice-wave span:nth-child(4){height:16px;animation-delay:0.15s;}
+.voice-wave span:nth-child(5){height:7px;animation-delay:0.05s;}
+@keyframes voiceBar{0%,100%{transform:scaleY(0.35);opacity:0.55;}50%{transform:scaleY(1);opacity:1;}}
 
 /* Orbit ring */
 .orbit-ring{position:absolute;top:50%;left:50%;width:338px;height:338px;margin:-169px 0 0 -169px;border:1px solid rgba(124,58,237,0.06);border-radius:50%;pointer-events:none;}
@@ -585,8 +595,8 @@ canvas{display:none;}
           <div class="orbit-line" style="transform:rotate(320deg);"></div>
 
           <!-- Brain center -->
-          <div class="orbit-brain" id="orbit-brain-btn" onclick="openAIChat()">
-            <svg class="orbit-brain-icon" viewBox="0 0 64 64" fill="none">
+          <div class="orbit-brain" id="orbit-brain-btn" onclick="toggleVoiceAI()">
+            <svg class="orbit-brain-icon" id="orbit-brain-icon" viewBox="0 0 64 64" fill="none">
               <!-- Circuit brain -->
               <circle cx="32" cy="28" r="14" stroke="url(#bg1)" stroke-width="1.5" fill="none"/>
               <path d="M24 22c0-3 2-5 5-5s5 2 5 5" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/>
@@ -612,7 +622,8 @@ canvas{display:none;}
               <circle cx="32" cy="28" r="18" stroke="#7c3aed" stroke-width="0.4" opacity="0.2" stroke-dasharray="3 3"/>
               <defs><linearGradient id="bg1" x1="0" y1="0" x2="64" y2="64"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
             </svg>
-            <div class="orbit-brain-label">Factory<br>AI</div>
+            <div id="orbit-brain-label" class="orbit-brain-label">Factory<br>AI</div>
+            <div id="voice-wave" class="voice-wave" style="display:none;"><span></span><span></span><span></span><span></span><span></span></div>
           </div>
 
           <!-- Orbit tiles — 9 at 40° intervals -->
@@ -4186,6 +4197,64 @@ function aiShowTyping(){
   container.scrollTop=container.scrollHeight;
 }
 function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.remove(); }
+
+/* ── VOICE AI ──────────────────────────────────────────────────────────────── */
+var _voiceRecog=null;
+var _voiceListening=false;
+
+function toggleVoiceAI(){
+  if(_voiceListening){ stopVoiceAI(); return; }
+  var SpeechRecog=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecog){ openAIChat(); return; }          // fallback: just open chat
+  // Ensure we're on the home screen with chat visible
+  var homeEl=document.getElementById('mgr-home');
+  if(homeEl&&homeEl.style.display==='none'){
+    showView('mgr-home');
+    document.querySelectorAll('#mtabs .mt').forEach(function(b){b.classList.remove('on');});
+  }
+  _voiceRecog=new SpeechRecog();
+  _voiceRecog.lang='en-US';
+  _voiceRecog.continuous=false;
+  _voiceRecog.interimResults=false;
+  _voiceRecog.maxAlternatives=1;
+  _voiceRecog.onstart=function(){
+    _voiceListening=true;
+    var btn=document.getElementById('orbit-brain-btn');
+    if(btn) btn.classList.add('listening');
+    var lbl=document.getElementById('orbit-brain-label');
+    if(lbl) lbl.innerHTML='🎤<br>Listening';
+    var wave=document.getElementById('voice-wave');
+    if(wave) wave.style.display='flex';
+  };
+  _voiceRecog.onresult=function(event){
+    var transcript=(event.results[0][0].transcript||'').trim();
+    stopVoiceAI();
+    if(transcript){
+      var inp=document.getElementById('ai-input');
+      if(inp){ inp.value=transcript; sendAIMessage(); }
+    }
+  };
+  _voiceRecog.onerror=function(event){
+    stopVoiceAI();
+    if(event.error==='not-allowed'||event.error==='permission-denied'){
+      var inp=document.getElementById('ai-input');
+      if(inp){ inp.placeholder='Mic blocked — check browser permissions'; setTimeout(function(){inp.placeholder='Ask Factory AI...';},4000); }
+    }
+  };
+  _voiceRecog.onend=function(){ if(_voiceListening) stopVoiceAI(); };
+  try{ _voiceRecog.start(); }catch(e){ stopVoiceAI(); }
+}
+
+function stopVoiceAI(){
+  _voiceListening=false;
+  if(_voiceRecog){ try{_voiceRecog.stop();}catch(e){} _voiceRecog=null; }
+  var btn=document.getElementById('orbit-brain-btn');
+  if(btn) btn.classList.remove('listening');
+  var lbl=document.getElementById('orbit-brain-label');
+  if(lbl) lbl.innerHTML='Factory<br>AI';
+  var wave=document.getElementById('voice-wave');
+  if(wave) wave.style.display='none';
+}
 
 function openAIChat(){
   // Chat is now inline on home — just focus the input
