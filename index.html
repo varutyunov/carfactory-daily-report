@@ -760,7 +760,7 @@ canvas{display:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(236,72,153,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
         <span class="ca-tile-label">Paint</span>
       </div>
-      <div class="ca-tile" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 6px 28px rgba(129,140,248,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="quickAddToDetail()">
+      <div class="ca-tile" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 6px 28px rgba(129,140,248,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('detail')">
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(167,139,250,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/></svg>
         <span class="ca-tile-label">Detail</span>
       </div>
@@ -791,11 +791,8 @@ canvas{display:none;}
       </div>
     </div>
     <div id="ca-parts-wrap" style="display:none;margin-bottom:16px;">
-      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Also Queue</div>
-      <button id="ca-parts-btn" onclick="caToggleParts()" class="wf-emp-btn" style="width:100%;justify-content:center;padding:13px;gap:8px;">📦 Add to Parts Queue</button>
-      <div id="ca-parts-desc-wrap" style="display:none;margin-top:10px;">
-        <textarea id="ca-parts-desc" placeholder="Describe parts needed..." style="width:100%;background:#1a1a1a;border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:70px;font-family:inherit;box-sizing:border-box;"></textarea>
-      </div>
+      <div style="font-size:11px;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📦 Parts Needed <span style="color:#555;font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;">(auto-added to Parts tab)</span></div>
+      <textarea id="ca-parts-desc" placeholder="Describe parts needed..." style="width:100%;background:#1a1a1a;border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fff;font-size:15px;padding:12px 14px;outline:none;resize:none;height:70px;font-family:inherit;box-sizing:border-box;"></textarea>
     </div>
     <button id="ca-assign-submit" onclick="submitCarAssign()" style="width:100%;background:#a78bfa;border:none;border-radius:12px;color:#000;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">Assign</button>
   </div>
@@ -1902,18 +1899,24 @@ function renderInvDetailTab(){
 async function removeFromPaintQueue(carId){
   showLoading('Removing...');
   try{
+    var wsRP=getWorkState(carId);
+    if(!wsRP.categories) wsRP.categories={};
+    if(wsRP.categories.paint) wsRP.categories.paint.sectionPool=false;
+    var cRP=S.inventory.find(function(c){return c.id===carId;});
+    if(cRP) cRP.work=wsRP;
+    await saveWorkState(carId);
     var toRemove=(S.assignments||[]).filter(function(a){
       return a.inventoryId===carId&&!a.approved&&(a.tasks||[]).some(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;});
     });
     for(var i=0;i<toRemove.length;i++){
-      // Remove only paint tasks; delete assignment if no tasks left
       var remaining=(toRemove[i].tasks||[]).filter(function(t){var txt=typeof t==='object'?t.text:t;return!(txt&&txt.toLowerCase().indexOf('[paint]')!==-1);});
       if(remaining.length){await sbPatch('assignments',toRemove[i].id,{tasks:remaining});toRemove[i].tasks=remaining;}
       else{await sbDelete('assignments',toRemove[i].id);S.assignments=S.assignments.filter(function(a){return a.id!==toRemove[i].id;});}
     }
-    sv();renderInvPaintTab();updateTabBadges();updateHomeBadges();
+    sv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
+  renderMgrPaint();updateTabBadges();updateHomeBadges();renderInv();
 }
 async function quickAddToDetail(){
   var id=caCarId;if(!id)return;
@@ -1954,7 +1957,10 @@ function renderInv(){
     const carSel=ws.selected||false;
     const thImg=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const tags=asgns.filter(a=>a.tasks&&a.tasks.length>0).map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
-    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openWorkScreen(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openWorkScreen(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' \xB7 '+car.color:''}</div>${tags}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
+    const _tabChip={paint:{e:'🎨',c:'#ec4899'},detail:{e:'✨',c:'#a78bfa'},repair:{e:'🔧',c:'#fb923c'},photos:{e:'📷',c:'#c056f3'},parts:{e:'📦',c:'#fbbf24'}};
+    const statusChips=Object.keys(_tabChip).filter(k=>ws.categories&&ws.categories[k]&&ws.categories[k].sectionPool).map(k=>`<span style="font-size:10px;background:${_tabChip[k].c}22;color:${_tabChip[k].c};border:1px solid ${_tabChip[k].c}44;border-radius:4px;padding:2px 5px;font-weight:700;">${_tabChip[k].e} ${k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join('');
+    const statusRow=statusChips?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;">${statusChips}</div>`:'';
+    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openCarActions(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openCarActions(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' \xB7 '+car.color:''}</div>${tags}${statusRow}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
     + `</div></div>`;
   }).join('');
   applyPexels(items);
@@ -2441,60 +2447,107 @@ async function markPartsDone(carId){
 function renderMgrRepair(){
   var el=document.getElementById('mgr-repair-list');
   if(!el) return;
-  function hasRepairTag(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('[repair]')!==-1;}
-  var repairAsgns=(S.assignments||[]).filter(function(a){return !a.approved&&(a.tasks||[]).some(hasRepairTag);});
-  if(!repairAsgns.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div></div>';return;}
-  var carMap={};
-  repairAsgns.forEach(function(a){if(!carMap[a.inventoryId])carMap[a.inventoryId]=[];carMap[a.inventoryId].push(a);});
-  el.innerHTML=Object.keys(carMap).map(function(carId){
-    var car=S.inventory.find(function(c){return c.id===parseInt(carId);});
-    if(!car) return '';
-    var asgns=carMap[carId];
+  var cars=S.inventory.filter(function(car){
+    var ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;
+  });
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div></div>';return;}
+  el.innerHTML=cars.map(function(car){
+    var ws=getWorkState(car.id);
+    var rd=ws.categories.repair||{};
+    var notes=rd.notes||'';
+    var items=rd.items||[];
+    var assignedTo=rd.assignedTo||[];
+    var empNames=assignedTo.map(function(id){var e=S.employees.find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    var taskLines=asgns.map(function(a){
-      var emp=S.employees.find(function(e){return e.id===a.employeeId;});
-      return (a.tasks||[]).filter(hasRepairTag).map(function(t){
-        var txt=(typeof t==='object'?t.text:t)||'';
-        var done=typeof t==='object'?!!t.done:false;
-        var label=txt.replace(/\[repair\]\s*/i,'').trim()||'Repair';
-        return`<div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">🔧 ${label}</div>${emp?`<div class="rc-tn-note">→ ${emp.name}</div>`:''}</div></div>`;
-      }).join('');
+    var itemRows=items.map(function(item,i){
+      var txt=typeof item==='string'?item:(item.text||'');
+      var done=typeof item==='object'?!!item.done:false;
+      return`<div class="rc-task" style="align-items:center;"><div class="rc-dot ${done?'dot-on':'dot-off'}" style="cursor:pointer;flex-shrink:0;" onclick="toggleRepairItem(${car.id},${i})"></div><div class="rc-tn" style="flex:1;"><div class="rc-tn-name" style="${done?'text-decoration:line-through;color:#555;':''}">🔧 ${txt}</div></div><button onclick="removeRepairItem(${car.id},${i})" style="background:none;border:none;color:#555;font-size:15px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button></div>`;
     }).join('');
     return`<div class="rev-card">
       <div class="rc-head">${photoHTML}<div class="rc-info">
         <div class="rc-name">${car.name}</div>
         <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
+        ${empNames.length?`<div style="font-size:11px;color:#666;margin-top:3px;">→ ${empNames.join(', ')}</div>`:''}
       </div></div>
-      ${taskLines?`<div class="rc-tasks-list">${taskLines}</div>`:''}
-      <div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="removeFromRepairQueue(${car.id})">↩ Unassign</button>
+      ${notes?`<div style="padding:5px 0 2px;font-size:13px;color:#888;font-style:italic;">"${notes}"</div>`:''}
+      ${itemRows?`<div style="padding:4px 0;">${itemRows}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+        <input id="ri-${car.id}" placeholder="Add repair item..." style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;padding:9px 12px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addRepairItem(${car.id})"/>
+        <button onclick="addRepairItem(${car.id})" style="background:#fb923c;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;flex-shrink:0;">+</button>
+      </div>
+      <div class="rc-actions" style="margin-top:8px;">
+        <button class="rc-btn rc-back" onclick="removeFromRepairQueue(${car.id})">↩ Remove</button>
       </div>
     </div>`;
   }).join('');
-  applyPexels(Object.keys(carMap).map(function(id){return S.inventory.find(function(c){return c.id===parseInt(id);});}).filter(Boolean));
+  applyPexels(cars);
 }
 async function removeFromRepairQueue(carId){
   showLoading('Removing...');
   try{
+    var wsRR=getWorkState(carId);
+    if(!wsRR.categories) wsRR.categories={};
+    if(wsRR.categories.repair) wsRR.categories.repair.sectionPool=false;
+    var cRR=S.inventory.find(function(c){return c.id===carId;});
+    if(cRR) cRR.work=wsRR;
+    await saveWorkState(carId);
     function hasRepairTag(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('[repair]')!==-1;}
     var toRemove=(S.assignments||[]).filter(function(a){return !a.approved&&a.inventoryId===carId&&(a.tasks||[]).some(hasRepairTag);});
     for(var i=0;i<toRemove.length;i++){
       var a=toRemove[i];
       var nonRepair=(a.tasks||[]).filter(function(t){return !hasRepairTag(t);});
-      if(!nonRepair.length){
-        await sbDelete('assignments',a.id);
-        S.assignments=S.assignments.filter(function(x){return x.id!==a.id;});
-      } else {
-        a.tasks=nonRepair;
-        await sbPatch('assignments',a.id,{tasks:nonRepair});
-      }
+      if(!nonRepair.length){await sbDelete('assignments',a.id);S.assignments=S.assignments.filter(function(x){return x.id!==a.id;});}
+      else{a.tasks=nonRepair;await sbPatch('assignments',a.id,{tasks:nonRepair});}
     }
     sv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
+  renderMgrRepair();updateTabBadges();updateHomeBadges();renderInv();
+}
+async function addRepairItem(carId){
+  var inp=document.getElementById('ri-'+carId);
+  if(!inp) return;
+  var txt=inp.value.trim();
+  if(!txt) return;
+  var wsAR=getWorkState(carId);
+  if(!wsAR.categories) wsAR.categories={};
+  if(!wsAR.categories.repair) wsAR.categories.repair={sectionPool:true,items:[]};
+  if(!wsAR.categories.repair.items) wsAR.categories.repair.items=[];
+  wsAR.categories.repair.items.push({text:txt,done:false});
+  var cAR=S.inventory.find(function(c){return c.id===carId;});
+  if(cAR) cAR.work=wsAR;
+  inp.value='';
+  await saveWorkState(carId);
   renderMgrRepair();
-  updateTabBadges();
+}
+async function toggleRepairItem(carId,idx){
+  var wsTR=getWorkState(carId);
+  if(!wsTR.categories||!wsTR.categories.repair) return;
+  var items=wsTR.categories.repair.items||[];
+  if(idx<0||idx>=items.length) return;
+  var it=items[idx];
+  var txt=typeof it==='string'?it:(it.text||'');
+  var done=typeof it==='object'?!!it.done:false;
+  items[idx]={text:txt,done:!done};
+  wsTR.categories.repair.items=items;
+  var cTR=S.inventory.find(function(c){return c.id===carId;});
+  if(cTR) cTR.work=wsTR;
+  await saveWorkState(carId);
+  renderMgrRepair();
+}
+async function removeRepairItem(carId,idx){
+  var wsRRi=getWorkState(carId);
+  if(!wsRRi.categories||!wsRRi.categories.repair) return;
+  var items=wsRRi.categories.repair.items||[];
+  items.splice(idx,1);
+  wsRRi.categories.repair.items=items;
+  var cRRi=S.inventory.find(function(c){return c.id===carId;});
+  if(cRRi) cRRi.work=wsRRi;
+  await saveWorkState(carId);
+  renderMgrRepair();
 }
 
 function renderMgrParts(){
@@ -2525,8 +2578,12 @@ function renderMgrParts(){
         <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
         ${allBought?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:4px;">✓ All parts bought</div>':''}
       </div></div>
-      ${repairRows?`<div style="padding:8px 0;">${repairRows}</div>`:'<div style="padding:8px;color:#555;font-size:13px;">No parts listed</div>'}
-      <div class="rc-actions">
+      ${repairRows?`<div style="padding:8px 0;">${repairRows}</div>`:'<div style="padding:6px 0;color:#555;font-size:13px;">No parts listed yet</div>'}
+      <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+        <input id="pi-${car.id}" placeholder="Add part..." style="flex:1;background:#1a1a1a;border:1px solid rgba(251,191,36,0.25);border-radius:8px;color:#fff;font-size:13px;padding:9px 12px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addPartItem(${car.id})"/>
+        <button onclick="addPartItem(${car.id})" style="background:#fbbf24;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;flex-shrink:0;">+</button>
+      </div>
+      <div class="rc-actions" style="margin-top:8px;">
         <button class="rc-btn rc-back" onclick="removeFromPartsQueue(${car.id})">↩ Clear &amp; Remove</button>
       </div>
     </div>`;
@@ -2584,7 +2641,23 @@ async function removePartItem(carId,idx){
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrParts();updateTabBadges();
+  renderMgrParts();updateTabBadges();updateHomeBadges();
+}
+async function addPartItem(carId){
+  var inp=document.getElementById('pi-'+carId);
+  if(!inp) return;
+  var txt=inp.value.trim();
+  if(!txt) return;
+  var wsAP=getWorkState(carId);
+  if(!wsAP.categories) wsAP.categories={};
+  if(!wsAP.categories.parts) wsAP.categories.parts={sectionPool:true,repairs:[]};
+  if(!wsAP.categories.parts.repairs) wsAP.categories.parts.repairs=[];
+  wsAP.categories.parts.repairs.push({text:txt,bought:false});
+  var cAP=S.inventory.find(function(c){return c.id===carId;});
+  if(cAP) cAP.work=wsAP;
+  inp.value='';
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();updateHomeBadges();
 }
 
 function renderReview(){
@@ -3270,12 +3343,13 @@ function updateHomeBadges(){
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
   var allCount=Object.keys(allSeen).length;
 
+  function spCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
   var tc=carsWithTag('task'); var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=tc;hbt.style.display=tc>0?'block':'none';}
-  var rc=carsWithTag('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
-  var dc=carsWithTag('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
-  var pc=carsWithTag('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
-  var pac=(S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;}).length; var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
-  var paintc=carsWithTag('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
+  var rc=spCount('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
+  var dc=spCount('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
+  var pc=spCount('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
+  var pac=spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
+  var paintc=spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
 }
 
@@ -3786,19 +3860,15 @@ var addCarToWorkflow=addCarToProgress;
 function openCarAssign(type){
   caAssignType = type;
   var car = S.inventory.find(function(c){ return c.id === caCarId; });
-  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos', progress:'Progress'};
+  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos', progress:'Progress', paint:'Paint', detail:'Detail'};
   document.getElementById('ca-assign-title').textContent = labels[type] || type;
   document.getElementById('ca-assign-sub').textContent = car ? car.name : '';
   document.getElementById('ca-assign-note').value = '';
   document.getElementById('ca-assign-all-btn').classList.remove('wf-assign-active');
   document.getElementById('ca-unassigned-btn').classList.remove('wf-assign-active');
-  // Show Parts toggle only for Repair
+  // Show Parts textarea only for Repair (auto-queued)
   var partsWrap = document.getElementById('ca-parts-wrap');
   if(partsWrap) partsWrap.style.display = type === 'repair' ? 'block' : 'none';
-  var partsBtn = document.getElementById('ca-parts-btn');
-  if(partsBtn) partsBtn.classList.remove('wf-assign-active');
-  var partsDw = document.getElementById('ca-parts-desc-wrap');
-  if(partsDw) partsDw.style.display = 'none';
   var partsD = document.getElementById('ca-parts-desc');
   if(partsD) partsD.value = '';
   var empBtns = document.getElementById('ca-assign-emp-btns');
@@ -3888,23 +3958,31 @@ async function submitCarAssign(){
     var notifMsg = taskText + (car ? ' — ' + car.name : '');
     await sendNotification(null, notifMsg, null, car ? car.name : 'Car Factory');
 
-    // If Repair + Parts toggle active, also add to Parts queue
-    var partsBtn = document.getElementById('ca-parts-btn');
-    if(caAssignType === 'repair' && partsBtn && partsBtn.classList.contains('wf-assign-active')){
-      var partsDescVal = (document.getElementById('ca-parts-desc')||{}).value || '';
-      partsDescVal = partsDescVal.trim();
-      var ws = getWorkState(caCarId);
-      if(!ws.categories) ws.categories = {};
-      if(!ws.categories.parts) ws.categories.parts = {selected:false, description:'', repairs:[]};
-      if(!ws.categories.parts.repairs) ws.categories.parts.repairs = [];
-      ws.categories.parts.sectionPool = true;
-      if(partsDescVal) ws.categories.parts.repairs.push(partsDescVal);
-      var partscar = S.inventory.find(function(c){ return c.id === caCarId; });
-      if(partscar) partscar.work = ws;
-      await saveWorkState(caCarId);
-      var partsNotif = '[Parts] queued' + (partsDescVal ? ': ' + partsDescVal : '') + ' — ' + (car ? car.name : '');
+    // Write queue membership to work state for all tab types
+    var wsq = getWorkState(caCarId);
+    if(!wsq.categories) wsq.categories = {};
+    var qType = caAssignType;
+    var _tabTypes = ['paint','detail','repair','photos','parts','task'];
+    if(_tabTypes.indexOf(qType) !== -1){
+      if(!wsq.categories[qType]) wsq.categories[qType] = {};
+      wsq.categories[qType].sectionPool = true;
+      wsq.categories[qType].notes = note;
+      wsq.categories[qType].assignedTo = isUnassigned ? [] : selectedIds.slice();
+      wsq.categories[qType].addedAt = new Date().toISOString();
+    }
+    // Repair always auto-creates a Parts queue entry
+    if(qType === 'repair'){
+      if(!wsq.categories.parts) wsq.categories.parts = {sectionPool:false, repairs:[]};
+      wsq.categories.parts.sectionPool = true;
+      if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
+      var partsDescVal = ((document.getElementById('ca-parts-desc')||{}).value||'').trim();
+      if(partsDescVal) wsq.categories.parts.repairs.push({text:partsDescVal, bought:false});
+      var partsNotif = '[Parts] queued'+(partsDescVal?': '+partsDescVal:'')+' — '+(car?car.name:'');
       await sendNotification(null, partsNotif, null, car ? car.name : 'Car Factory');
     }
+    var wsqCar = S.inventory.find(function(c){ return c.id === caCarId; });
+    if(wsqCar) wsqCar.work = wsq;
+    await saveWorkState(caCarId);
 
     addToProgress(caCarId); // always track in Progress when any tab is assigned
     closeCarAssign();
@@ -3920,39 +3998,33 @@ async function submitCarAssign(){
 
 function renderMgrPaint(){
   var el=document.getElementById('mgr-paint-list');
-  if(!el)return;
-  var paintAsgns=(S.assignments||[]).filter(function(a){
-    return !a.approved && a.tasks && a.tasks.some(function(t){
-      var txt=typeof t==='object'?t.text:t;
-      return txt && txt.toLowerCase().indexOf('[paint]')!==-1;
-    });
+  if(!el) return;
+  var cars=S.inventory.filter(function(car){
+    var ws=getWorkState(car.id);
+    return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;
   });
-  if(!paintAsgns.length){
-    el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;padding:60px 24px;gap:12px;"><div style="font-size:36px;">🎨</div><div style="font-size:16px;color:#444;">No paint tasks assigned yet.</div></div>';
-    return;
-  }
-  var out='';
-  paintAsgns.forEach(function(a){
-    var car=S.inventory.find(function(c){return c.id===a.inventoryId;});
-    var emp=S.employees.find(function(e){return e.id===a.employeeId;});
-    var paintTasks=a.tasks.filter(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;});
-    out+='<div style="background:#0d0d0d;border-radius:14px;border:1px solid #1e1e1e;padding:14px 16px;margin-bottom:12px;">';
-    out+='<div style="font-size:16px;font-weight:700;color:#fff;font-family:Barlow Condensed,sans-serif;letter-spacing:1px;">'+(car?car.name:'Unknown Car')+'</div>';
-    out+='<div style="font-size:12px;color:#555;margin-bottom:10px;">&rarr; '+(emp?emp.name:'Unknown')+'</div>';
-    paintTasks.forEach(function(t){
-      var txt=typeof t==='object'?t.text:t;
-      var done=typeof t==='object'?t.done:false;
-      out+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">';
-      out+='<div style="width:8px;height:8px;border-radius:50%;background:'+(done?'#ec4899':'#2a2a2a')+';flex-shrink:0;"></div>';
-      out+='<div style="font-size:13px;color:'+(done?'#555':'#ccc')+';">'+txt+'</div>';
-      out+='</div>';
-    });
-    out+='<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:10px;">';
-    out+='<button onclick="removeFromPaintQueue('+(car?car.id:a.inventoryId)+');renderMgrPaint();" style="background:rgba(255,255,255,0.05);border:1px solid #2a2a2a;color:#888;font-size:12px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;">↩ Unassign</button>';
-    out+='</div>';
-    out+='</div>';
-  });
-  el.innerHTML=out;
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No vehicles in Paint queue</div></div>';return;}
+  el.innerHTML=cars.map(function(car){
+    var ws=getWorkState(car.id);
+    var pd=ws.categories.paint||{};
+    var notes=pd.notes||'';
+    var assignedTo=pd.assignedTo||[];
+    var empNames=assignedTo.map(function(id){var e=S.employees.find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return`<div class="rev-card">
+      <div class="rc-head">${photoHTML}<div class="rc-info">
+        <div class="rc-name">${car.name}</div>
+        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
+        ${empNames.length?`<div style="font-size:11px;color:#666;margin-top:3px;">→ ${empNames.join(', ')}</div>`:''}
+      </div></div>
+      ${notes?`<div style="padding:5px 0 2px;font-size:13px;color:#888;font-style:italic;">"${notes}"</div>`:''}
+      <div class="rc-actions">
+        <button class="rc-btn rc-back" onclick="removeFromPaintQueue(${car.id})">↩ Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+  applyPexels(cars);
 }
 
 // ── AI BRAIN ─────────────────────────────────────────────────────────────────
