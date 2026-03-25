@@ -139,6 +139,9 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .sync-st{font-size:14px;color:#666;margin-bottom:10px;}
 .sync-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .sync-btn{padding:11px;border-radius:10px;border:1px solid #1e1e1e;background:none;color:#888;font-size:13px;font-weight:600;cursor:pointer;}
+.inv-tabs{display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;margin-bottom:12px;}
+.inv-tab{flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.3px;}
+.inv-tab.on{background:#fff;color:#000;}
 .sync-tm{font-size:11px;color:#333;margin-top:8px;}
 .inv-search{width:100%;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#fff;padding:13px 16px;font-size:15px;margin-bottom:12px;}
 .inv-search:focus{outline:none;border-color:#333;}
@@ -656,17 +659,6 @@ canvas{display:none;}
             </div>
           </div>
 
-          <!-- PROGRESS (160°) -->
-          <div class="orbit-tw" style="transform:rotate(160deg) translateY(-169px) rotate(-160deg);">
-            <div class="orbit-tile" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 4px 20px rgba(20,184,166,0.25);" onclick="mgrGoSection('progress','Progress')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-              </svg>
-              <div class="orbit-tile-label">Progress</div>
-              <span class="orbit-badge" id="hbadge-progress"></span>
-            </div>
-          </div>
-
           <!-- PHOTOS (200°) -->
           <div class="orbit-tw" style="transform:rotate(200deg) translateY(-169px) rotate(-200deg);">
             <div class="orbit-tile" style="background:linear-gradient(145deg,#1a0325,#420a5a,#6b0f8a);box-shadow:0 4px 20px rgba(192,86,243,0.25);" onclick="mgrGoSection('photos','Photos')">
@@ -753,9 +745,13 @@ canvas{display:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(192,86,243,0.9)" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         <span class="ca-tile-label">Photos</span>
       </div>
-      <div class="ca-tile ca-wide" style="background:linear-gradient(145deg,#011a18,#05403c,#086b65);box-shadow:0 6px 28px rgba(20,184,166,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('progress')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.9)" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        <span class="ca-tile-label">Progress</span>
+      <div class="ca-tile" style="background:linear-gradient(145deg,#1a0010,#4a0030,#7c0055);box-shadow:0 6px 28px rgba(236,72,153,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('paint')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(236,72,153,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
+        <span class="ca-tile-label">Paint</span>
+      </div>
+      <div class="ca-tile" style="background:linear-gradient(145deg,#0e0620,#251050,#3730a3);box-shadow:0 6px 28px rgba(129,140,248,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="quickAddToDetail()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(167,139,250,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/></svg>
+        <span class="ca-tile-label">Detail</span>
       </div>
     </div>
   </div>
@@ -831,21 +827,39 @@ canvas{display:none;}
 
     <div class="view" id="mgr-inventory">
       <div style="padding:14px;">
-        <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
-        <div style="margin-bottom:12px;">
-          <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
-          <div class="sync-btns">
-            <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
-            <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
-            <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
-            <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
-          </div>
-          <button onclick="clearAllQueues()" style="margin-top:10px;width:100%;padding:10px;background:none;border:1px solid #2a1010;border-radius:10px;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.5px;">✕ Clear All Queues</button>
+        <!-- Inventory tab bar -->
+        <div class="inv-tabs">
+          <button id="inv-tab-all"    class="inv-tab on" onclick="switchInvTab('all')">All</button>
+          <button id="inv-tab-recent" class="inv-tab"    onclick="switchInvTab('recent')">🕐 Recent</button>
+          <button id="inv-tab-paint"  class="inv-tab"    onclick="switchInvTab('paint')">🎨 Paint</button>
+          <button id="inv-tab-detail" class="inv-tab"    onclick="switchInvTab('detail')">✨ Detail</button>
         </div>
-        <div id="inv-list"></div>
-        <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
+        <!-- All / Recent content -->
+        <div id="inv-pane-all">
+          <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
+          <div style="margin-bottom:12px;">
+            <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
+            <div class="sync-btns">
+              <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
+              <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+              <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
+              <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
+            </div>
+            <button onclick="clearAllQueues()" style="margin-top:10px;width:100%;padding:10px;background:none;border:1px solid #2a1010;border-radius:10px;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.5px;">✕ Clear All Queues</button>
+          </div>
+          <div id="inv-list"></div>
+          <button class="add-btn" style="margin-top:0;" onclick="openM('m-add-car')">+ Add Vehicle Manually</button>
+        </div>
+        <!-- Paint queue content -->
+        <div id="inv-pane-paint" style="display:none;">
+          <div id="inv-paint-list" style="padding-top:4px;"></div>
+        </div>
+        <!-- Detail queue content -->
+        <div id="inv-pane-detail" style="display:none;">
+          <div id="inv-detail-list" style="padding-top:4px;"></div>
+        </div>
       </div>
     </div>
 
@@ -1262,7 +1276,7 @@ const DEFAULT_TASKS=[{name:'Repairs',urgent:false},{name:'Parts',urgent:false},{
 
 // S holds local cache - Supabase is the source of truth
 let S={employees:[],inventory:[],assignments:[],notifications:[],calendarEvents:[]};
-let me=null,curAssign=null,curTaskId=null,uploadedPhotos=[],pendingCarPhoto=null,invFilter='',invRecentOnly=false,customTasksForAssign=[];
+let me=null,curAssign=null,curTaskId=null,uploadedPhotos=[],pendingCarPhoto=null,invFilter='',invRecentOnly=false,invTab='all',customTasksForAssign=[];
 
 // Local cache save/load (fallback + session persistence)
 function sv(){try{localStorage.setItem('cf_sb2',JSON.stringify(S));}catch(e){}}
@@ -1793,6 +1807,89 @@ function toggleRecentFilter(){
   var btn=document.getElementById('recent-btn');
   if(btn){btn.style.background=invRecentOnly?'#fff':'';btn.style.color=invRecentOnly?'#000':'';btn.style.borderColor=invRecentOnly?'#fff':'';}
   renderInv();
+}
+function switchInvTab(tab){
+  invTab=tab;
+  ['all','recent','paint','detail'].forEach(function(t){
+    var tabBtn=document.getElementById('inv-tab-'+t);
+    var pane=document.getElementById('inv-pane-'+(t==='recent'?'all':t));
+    if(tabBtn) tabBtn.classList.toggle('on',t===tab);
+    if(pane) pane.style.display=(t===tab||(tab==='recent'&&t==='all'))?'block':'none';
+  });
+  // Hide pane-all when on paint/detail
+  if(tab==='paint'||tab==='detail'){
+    var ap=document.getElementById('inv-pane-all');if(ap)ap.style.display='none';
+  }
+  // Reset recent filter when leaving All/Recent
+  if(tab==='paint'||tab==='detail'){
+    invRecentOnly=false;
+    var rb=document.getElementById('recent-btn');
+    if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}
+  }
+  if(tab==='all') renderInv();
+  else if(tab==='recent'){invRecentOnly=true;renderInv();var rb=document.getElementById('recent-btn');if(rb){rb.style.background='#fff';rb.style.color='#000';rb.style.borderColor='#fff';}}
+  else if(tab==='paint') renderInvPaintTab();
+  else if(tab==='detail') renderInvDetailTab();
+}
+function renderInvPaintTab(){
+  var el=document.getElementById('inv-paint-list');if(!el)return;
+  var seen={};
+  var paintCars=(S.assignments||[]).filter(function(a){
+    if(a.approved||seen[a.inventoryId]) return false;
+    if(!(a.tasks||[]).some(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;})) return false;
+    seen[a.inventoryId]=true;return true;
+  });
+  if(!paintCars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No cars in Paint queue</div></div>';return;}
+  el.innerHTML=paintCars.map(function(a){
+    var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div></div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPaintQueue('+car.id+')">↩ Unassign</button></div></div>';
+  }).join('');
+  applyPexels(paintCars.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).filter(Boolean));
+}
+function renderInvDetailTab(){
+  var el=document.getElementById('inv-detail-list');if(!el)return;
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;});
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No cars in Detail queue</div></div>';return;}
+  el.innerHTML=cars.map(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromDetailQueue('+car.id+');renderInvDetailTab();">↩ Unassign</button></div></div>';
+  }).join('');
+  applyPexels(cars);
+}
+async function removeFromPaintQueue(carId){
+  showLoading('Removing...');
+  try{
+    var toRemove=(S.assignments||[]).filter(function(a){
+      return a.inventoryId===carId&&!a.approved&&(a.tasks||[]).some(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;});
+    });
+    for(var i=0;i<toRemove.length;i++){
+      // Remove only paint tasks; delete assignment if no tasks left
+      var remaining=(toRemove[i].tasks||[]).filter(function(t){var txt=typeof t==='object'?t.text:t;return!(txt&&txt.toLowerCase().indexOf('[paint]')!==-1);});
+      if(remaining.length){await sbPatch('assignments',toRemove[i].id,{tasks:remaining});toRemove[i].tasks=remaining;}
+      else{await sbDelete('assignments',toRemove[i].id);S.assignments=S.assignments.filter(function(a){return a.id!==toRemove[i].id;});}
+    }
+    sv();renderInvPaintTab();updateTabBadges();updateHomeBadges();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+}
+async function quickAddToDetail(){
+  var id=caCarId;if(!id)return;
+  var ws=getWorkState(id);
+  if(!ws.categories)ws.categories={};
+  if(!ws.categories.detail)ws.categories.detail={selected:false,description:'',repairs:[]};
+  ws.categories.detail.sectionPool=true;
+  var car=S.inventory.find(function(c){return c.id===id;});
+  if(car)car.work=ws;
+  showLoading('Adding to Detail...');
+  try{await saveWorkState(id);}catch(e){}
+  hideLoading();
+  closeCarActions();
+  updateTabBadges();updateHomeBadges();
 }
 function renderInv(){
   const cutoff=Date.now()-14*24*60*60*1000;
@@ -2983,7 +3080,7 @@ function mgrGoSection(id, label){
   if(titleEl) titleEl.textContent=label||id;
   var view=document.getElementById('mgr-'+id);
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
-  if(id==='inventory')renderInv();
+  if(id==='inventory'){invTab='all';['all','paint','detail'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
   else if(id==='detail')renderMgrDetail();
   else if(id==='photos')renderMgrPhotos();
