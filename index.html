@@ -4205,44 +4205,69 @@ var _voiceListening=false;
 function toggleVoiceAI(){
   if(_voiceListening){ stopVoiceAI(); return; }
   var SpeechRecog=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SpeechRecog){ openAIChat(); return; }          // fallback: just open chat
-  // Ensure we're on the home screen with chat visible
-  var homeEl=document.getElementById('mgr-home');
-  if(homeEl&&homeEl.style.display==='none'){
-    showView('mgr-home');
-    document.querySelectorAll('#mtabs .mt').forEach(function(b){b.classList.remove('on');});
-  }
-  _voiceRecog=new SpeechRecog();
-  _voiceRecog.lang='en-US';
-  _voiceRecog.continuous=false;
-  _voiceRecog.interimResults=false;
-  _voiceRecog.maxAlternatives=1;
-  _voiceRecog.onstart=function(){
-    _voiceListening=true;
-    var btn=document.getElementById('orbit-brain-btn');
-    if(btn) btn.classList.add('listening');
-    var lbl=document.getElementById('orbit-brain-label');
-    if(lbl) lbl.innerHTML='🎤<br>Listening';
-    var wave=document.getElementById('voice-wave');
-    if(wave) wave.style.display='flex';
-  };
-  _voiceRecog.onresult=function(event){
-    var transcript=(event.results[0][0].transcript||'').trim();
-    stopVoiceAI();
-    if(transcript){
-      var inp=document.getElementById('ai-input');
-      if(inp){ inp.value=transcript; sendAIMessage(); }
-    }
-  };
-  _voiceRecog.onerror=function(event){
-    stopVoiceAI();
-    if(event.error==='not-allowed'||event.error==='permission-denied'){
-      var inp=document.getElementById('ai-input');
-      if(inp){ inp.placeholder='Mic blocked — check browser permissions'; setTimeout(function(){inp.placeholder='Ask Factory AI...';},4000); }
-    }
-  };
-  _voiceRecog.onend=function(){ if(_voiceListening) stopVoiceAI(); };
-  try{ _voiceRecog.start(); }catch(e){ stopVoiceAI(); }
+  if(!SpeechRecog){ openAIChat(); return; }  // fallback: focus text input
+  try{
+    var _gotResult=false;
+    _voiceRecog=new SpeechRecog();
+    _voiceRecog.lang='en-US';
+    _voiceRecog.continuous=false;
+    _voiceRecog.interimResults=false;
+    _voiceRecog.maxAlternatives=1;
+    _voiceRecog.onstart=function(){
+      _voiceListening=true;
+      var btn=document.getElementById('orbit-brain-btn');
+      if(btn) btn.classList.add('listening');
+      var lbl=document.getElementById('orbit-brain-label');
+      if(lbl) lbl.innerHTML='🎤<br>Listening';
+      var wave=document.getElementById('voice-wave');
+      if(wave) wave.style.display='flex';
+    };
+    _voiceRecog.onresult=function(event){
+      _gotResult=true;
+      // Reset UI directly — avoid calling .stop() during callback (iOS bug)
+      _voiceListening=false;
+      _voiceRecog=null;
+      var btn=document.getElementById('orbit-brain-btn');
+      if(btn) btn.classList.remove('listening');
+      var lbl=document.getElementById('orbit-brain-label');
+      if(lbl) lbl.innerHTML='Factory<br>AI';
+      var wave=document.getElementById('voice-wave');
+      if(wave) wave.style.display='none';
+      var transcript=(event.results[0][0].transcript||'').trim();
+      if(transcript){
+        var inp=document.getElementById('ai-input');
+        if(inp){
+          inp.value=transcript;
+          sendAIMessage();
+          // Scroll chat into view so user sees the response
+          setTimeout(function(){
+            var msgs=document.getElementById('ai-messages');
+            if(msgs) msgs.scrollTop=msgs.scrollHeight;
+            var chat=document.getElementById('mgr-home-chat');
+            if(chat) chat.scrollIntoView({behavior:'smooth',block:'end'});
+          },200);
+        }
+      }
+    };
+    _voiceRecog.onerror=function(event){
+      stopVoiceAI();
+      if(event.error==='not-allowed'||event.error==='permission-denied'){
+        var lbl=document.getElementById('orbit-brain-label');
+        if(lbl){ lbl.innerHTML='Mic<br>Blocked'; setTimeout(function(){lbl.innerHTML='Factory<br>AI';},3000); }
+      }
+    };
+    _voiceRecog.onend=function(){
+      if(_voiceListening){
+        stopVoiceAI();
+        if(!_gotResult){
+          // iOS silently ended without capturing speech — show hint
+          var lbl=document.getElementById('orbit-brain-label');
+          if(lbl){ lbl.innerHTML='Try<br>Again'; setTimeout(function(){lbl.innerHTML='Factory<br>AI';},2000); }
+        }
+      }
+    };
+    _voiceRecog.start();
+  }catch(e){ stopVoiceAI(); }
 }
 
 function stopVoiceAI(){
