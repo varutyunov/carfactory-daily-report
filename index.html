@@ -1137,9 +1137,9 @@ OneSignalDeferred.push(async function(OneSignal){
 // Call after login to link user + show enable bar if needed
 function initOneSignalUser(name){
   window._osExternalId = name.toLowerCase().replace(/\s+/g,'_');
-  // Use native Notification API — always available, no async needed
   const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'granted';
-  if(perm !== 'granted'){ showNotifEnableBar(); }
+  // Only prompt once — skip if already granted, already denied, or user dismissed before
+  if(perm === 'default' && !localStorage.getItem('cf_notif_dismissed')){ showNotifEnableBar(); }
   // Link user to OneSignal whenever SDK is ready
   function linkUser(OS){
     try{ OS.login(window._osExternalId); }catch(e){}
@@ -1156,7 +1156,7 @@ function showNotifEnableBar(){
   const bar = document.createElement('div');
   bar.id = 'notif-bar';
   bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-bottom:1px solid #4f46e5;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
+  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="localStorage.setItem(\'cf_notif_dismissed\',\'1\');document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
   document.body.appendChild(bar);
 }
 
@@ -1295,7 +1295,7 @@ async function syncFromSupabase(){
     S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
     S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
     // Wipe localStorage completely and save fresh Supabase data
-    var _keepAiKey=localStorage.getItem('cf_ai_key');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
+    var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
     if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     if(pxSaved) localStorage.setItem('px_cache',pxSaved);
     sv();
@@ -2610,7 +2610,7 @@ const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
 const _savedPin = localStorage.getItem('cf_saved_pin');
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=localStorage.getItem('cf_ai_key');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
+var _keepAiKey=localStorage.getItem('cf_ai_key');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
