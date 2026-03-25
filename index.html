@@ -835,7 +835,7 @@ canvas{display:none;}
           <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
           <div class="sync-btns">
             <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
-            <button class="sync-btn" onclick="importFromReport()">↓ Import Report</button>
+            <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
             <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
@@ -1261,7 +1261,7 @@ const DEFAULT_TASKS=[{name:'Repairs',urgent:false},{name:'Parts',urgent:false},{
 
 // S holds local cache - Supabase is the source of truth
 let S={employees:[],inventory:[],assignments:[],notifications:[],calendarEvents:[]};
-let me=null,curAssign=null,curTaskId=null,uploadedPhotos=[],pendingCarPhoto=null,invFilter='',customTasksForAssign=[];
+let me=null,curAssign=null,curTaskId=null,uploadedPhotos=[],pendingCarPhoto=null,invFilter='',invRecentOnly=false,customTasksForAssign=[];
 
 // Local cache save/load (fallback + session persistence)
 function sv(){try{localStorage.setItem('cf_sb2',JSON.stringify(S));}catch(e){}}
@@ -1774,15 +1774,30 @@ function backToGrid(){
 
 // ── MANAGER INVENTORY ──────────────────────────────────────────────────────────
 function filterInv(v){invFilter=v.toLowerCase();renderInv();}
+function toggleRecentFilter(){
+  invRecentOnly=!invRecentOnly;
+  var btn=document.getElementById('recent-btn');
+  if(btn){btn.style.background=invRecentOnly?'#fff':'';btn.style.color=invRecentOnly?'#000':'';btn.style.borderColor=invRecentOnly?'#fff':'';}
+  renderInv();
+}
 function renderInv(){
-  const items=S.inventory.filter(c=>!invFilter||(c.name+c.stock).toLowerCase().includes(invFilter)).sort((a,b)=>{
+  const cutoff=Date.now()-14*24*60*60*1000;
+  const items=S.inventory.filter(function(c){
+    if(invFilter&&!(c.name+c.stock).toLowerCase().includes(invFilter)) return false;
+    if(invRecentOnly){if(!c.created_at||new Date(c.created_at).getTime()<cutoff) return false;}
+    return true;
+  }).sort((a,b)=>{
     const aHas=S.assignments.some(x=>x.inventoryId===a.id&&!x.approved)?1:0;
     const bHas=S.assignments.some(x=>x.inventoryId===b.id&&!x.approved)?1:0;
     if(bHas!==aHas) return bHas-aHas;
     return b.id-a.id;
   });
   if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
-  var _stEl=document.getElementById('sync-st');if(_stEl)_stEl.textContent='Ready to sync  ·  v Mar-24';
+  var _stEl=document.getElementById('sync-st');
+  if(_stEl){
+    if(invRecentOnly) _stEl.textContent='Showing '+items.length+' vehicle'+(items.length===1?'':'s')+' added in the last 2 weeks';
+    else _stEl.textContent='Ready to sync  ·  v Mar-24';
+  }
   document.getElementById('inv-list').innerHTML=items.map(car=>{
     const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
     const pxI=!car.photo&&pxCache[String(car.id)];
