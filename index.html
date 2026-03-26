@@ -795,6 +795,25 @@ canvas{display:none;}
   </div>
 </div>
 
+<!-- DEAL CALCULATOR MODAL -->
+<div id="m-deal-calc" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:530;align-items:flex-end;justify-content:center;">
+  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 48px;border-top:1px solid #1e1e1e;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:1.5px;">💵 DEAL CALCULATOR</div>
+      <button onclick="closeDealCalc()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:20px;cursor:pointer;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;">×</button>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Sale Price</label>
+      <input id="dc-sale-price" type="number" inputmode="decimal" placeholder="e.g. 12500" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcUpdate()"/>
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Down Payment <span style="color:#333;font-weight:400;text-transform:none;font-size:11px;">— leave blank for cash deal</span></label>
+      <input id="dc-down-payment" type="number" inputmode="decimal" placeholder="e.g. 1000  (or $0)" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcUpdate()"/>
+    </div>
+    <div id="dc-result" style="display:none;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;"></div>
+  </div>
+</div>
+
 <!-- CAR ASSIGN PANEL -->
 <div id="m-car-assign" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:520;align-items:flex-end;justify-content:center;">
   <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;">
@@ -1581,9 +1600,10 @@ function renderEmpHome(){
     {id:'tasks',label:'Tasks',count:carSets.tasks.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/></svg>',bg:'linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a)',glow:'rgba(34,197,94,0.25)'}
   ];
   var visible=tiles.filter(function(t){return t.count>0;});
-  if(!visible.length){grid.style.display='none';empty.style.display='flex';return;}
+  var isDealUser=me&&['manny','scott'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  if(!visible.length&&!isDealUser){grid.style.display='none';empty.style.display='flex';return;}
   grid.style.display='grid';empty.style.display='none';
-  grid.innerHTML=visible.map(function(t){
+  var tileHTML=visible.map(function(t){
     return '<div onclick="empOrbitGo(\''+t.id+'\')" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;">' +
       '<div style="width:36px;height:36px;">'+t.icon+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
@@ -1591,6 +1611,14 @@ function renderEmpHome(){
       '<div style="font-size:10px;color:rgba(255,255,255,0.4);">car'+(t.count===1?'':'s')+'</div>' +
     '</div>';
   }).join('');
+  if(isDealUser){
+    tileHTML+='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 6px 28px rgba(34,197,94,0.28),0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;min-height:120px;">' +
+      '<div style="font-size:30px;line-height:1;">💵</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">Deal Calc</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">cash &amp; finance</div>' +
+    '</div>';
+  }
+  grid.innerHTML=tileHTML;
 }
 function renderEmpCatCars(section){
   var container=document.getElementById('emp-cat-car-list');
@@ -4691,6 +4719,92 @@ async function sendAIVoice(text){
     var msgs=document.getElementById('ai-messages');
     if(msgs) msgs.scrollTop=msgs.scrollHeight;
   },150);
+}
+
+/* ── DEAL CALCULATOR ── */
+function openDealCalc(){
+  document.getElementById('dc-sale-price').value='';
+  document.getElementById('dc-down-payment').value='';
+  document.getElementById('dc-result').style.display='none';
+  document.getElementById('m-deal-calc').style.display='flex';
+  setTimeout(function(){document.getElementById('dc-sale-price').focus();},200);
+}
+function closeDealCalc(){
+  document.getElementById('m-deal-calc').style.display='none';
+}
+function _dcFmt(n){
+  return '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+function _dcRow(label,value,col,isBold){
+  return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;">' +
+    '<span style="font-size:13px;color:#666;">'+label+'</span>' +
+    '<span style="font-size:13px;font-weight:'+(isBold?'700':'400')+';color:'+(col||'#ccc')+';">'+value+'</span>' +
+  '</div>';
+}
+function _dcDiv(){return '<div style="height:1px;background:#1e1e1e;margin:6px 0;"></div>';}
+function _dcHeader(label,col){
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:800;color:'+(col||'#fff')+';letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #1e1e1e;">'+label+'</div>';
+}
+function _dcBig(label,value,col){
+  return '<div style="background:rgba(48,209,88,0.07);border:1px solid rgba(48,209,88,0.18);border-radius:12px;padding:14px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;">' +
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#777;letter-spacing:1px;text-transform:uppercase;">'+label+'</span>' +
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:'+(col||'#30d158')+';">'+value+'</span>' +
+  '</div>';
+}
+function dcUpdate(){
+  var sp=parseFloat((document.getElementById('dc-sale-price').value||'').trim());
+  var dpStr=(document.getElementById('dc-down-payment').value||'').trim();
+  var el=document.getElementById('dc-result');
+  if(!sp||sp<=0){el.style.display='none';return;}
+  var hasDown=dpStr!=='';
+  var dp=hasDown?Math.max(0,parseFloat(dpStr)||0):0;
+  var html='';
+  if(hasDown){
+    // FINANCE DEAL
+    var financeFee=500,dealerFee=399,docFee=150;
+    var taxSub=sp+financeFee+dealerFee+docFee;
+    var tax=taxSub*0.065;
+    var titleFee=78,regFee=20;
+    var totalDue=taxSub+tax+titleFee+regFee;
+    var amtFin=totalDue-dp;
+    var biweekly=amtFin/13;
+    html=_dcHeader('Finance Deal','#fbbf24')+
+      _dcRow('Sale Price',_dcFmt(sp))+
+      _dcRow('Finance Fee',_dcFmt(financeFee))+
+      _dcRow('Dealer Fee',_dcFmt(dealerFee))+
+      _dcRow('Doc Fee',_dcFmt(docFee))+
+      _dcDiv()+
+      _dcRow('Taxable Subtotal',_dcFmt(taxSub),'#888')+
+      _dcRow('Sales Tax (6.5%)',_dcFmt(tax))+
+      _dcRow('Title Fee',_dcFmt(titleFee))+
+      _dcRow('Registration Fee',_dcFmt(regFee))+
+      _dcDiv()+
+      _dcRow('Total Amount Due',_dcFmt(totalDue),'#fff',true)+
+      _dcRow('Down Payment','−'+_dcFmt(dp),'#ff453a')+
+      _dcDiv()+
+      _dcRow('Amount Financed',_dcFmt(amtFin),'#a78bfa',true)+
+      _dcBig('Biweekly (13 payments)',_dcFmt(biweekly),'#fbbf24');
+  } else {
+    // CASH DEAL
+    var dealerFee=399,docFee=150;
+    var taxSub=sp+dealerFee+docFee;
+    var tax=taxSub*0.065;
+    var titleFee=78,regFee=20;
+    var totalDue=taxSub+tax+titleFee+regFee;
+    html=_dcHeader('Cash Deal','#30d158')+
+      _dcRow('Sale Price',_dcFmt(sp))+
+      _dcRow('Dealer Fee',_dcFmt(dealerFee))+
+      _dcRow('Doc Fee',_dcFmt(docFee))+
+      _dcDiv()+
+      _dcRow('Taxable Subtotal',_dcFmt(taxSub),'#888')+
+      _dcRow('Sales Tax (6.5%)',_dcFmt(tax))+
+      _dcRow('Title Fee',_dcFmt(titleFee))+
+      _dcRow('Registration Fee',_dcFmt(regFee))+
+      _dcDiv()+
+      _dcBig('Total Cash Due',_dcFmt(totalDue),'#30d158');
+  }
+  el.innerHTML=html;
+  el.style.display='block';
 }
 
 
