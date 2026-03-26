@@ -4848,13 +4848,14 @@ function dcUpdate(){
 // ═══════════════════════════════════════════════════════════════════
 // LANGUAGE / TRANSLATION SYSTEM — Spanish ↔ English
 // ═══════════════════════════════════════════════════════════════════
-// Design: NO MutationObserver. Translation is called explicitly after
-// each render/navigation. Fully synchronous — zero async in DOM walk.
-// API calls only for note elements, batched in background.
+// NO MutationObserver. NO location.reload(). NO async in DOM walk.
+// Translation called explicitly after render/navigation.
+// Word-boundary regex prevents "Me"→"Yo" corrupting "Message".
+// Switching back to EN re-renders visible content (no reload needed).
 window._lang = localStorage.getItem('cf-lang') || 'en';
 window._txCache = {};
 
-// Comprehensive EN→ES static dictionary
+// EN→ES dictionary
 var ES_DICT = {
   'Inventory':'Inventario','Tasks':'Tareas','Detail':'Detalle','Photos':'Fotos',
   'Parts':'Partes','Repair':'Reparación','Repairs':'Reparaciones','Paint':'Pintura',
@@ -4868,7 +4869,6 @@ var ES_DICT = {
   'All Employees':'Todos los Empleados','Unassigned':'Sin Asignar',
   'Sign In':'Iniciar Sesión','Sync':'Sincronizar',
   'Add Vehicle Manually':'Agregar Vehículo Manualmente',
-  'Assign to Workers →':'Asignar a Trabajadores →',
   'Keep me signed in':'Mantenerme conectado',
   'Add photos':'Agregar fotos',
   'In Review':'En Revisión','Confirmed':'Confirmado','Complete':'Completo',
@@ -4879,43 +4879,53 @@ var ES_DICT = {
   'Finance Deal':'Trato Financiado','Cash Deal':'Trato al Contado',
   'Finance Fee':'Cargo por Financiamiento','Dealer Fee':'Cargo del Distribuidor',
   'Doc Fee':'Cargo de Documentación','Taxable Subtotal':'Subtotal Gravable',
-  'Sales Tax (6.5%)':'Impuesto (6.5%)','Title Fee':'Cargo de Título',
+  'Title Fee':'Cargo de Título',
   'Registration Fee':'Cargo de Registro','Total Amount Due':'Total a Pagar',
   'Amount Financed':'Monto Financiado',
-  'Biweekly (13 payments)':'Quincenal (13 pagos)','Total Cash Due':'Total al Contado',
+  'Total Cash Due':'Total al Contado',
   'Tools':'Herramientas','Notes':'Notas','Note':'Nota','Task':'Tarea',
   'Employee Portal':'Portal del Empleado','Username':'Usuario',
-  'No cars in Paint queue':'Sin autos en cola de Pintura',
-  'No tasks pending review':'Sin tareas pendientes de revisión',
-  'No tasks yet':'Aún no hay tareas',
-  'Loading…':'Cargando…','Loading':'Cargando',
-  'Signing in...':'Iniciando sesión...',
-  'Invalid username or PIN':'Usuario o PIN incorrecto',
-  'No cars here yet':'Aún no hay autos',
-  'Assign workers first':'Asigna trabajadores primero',
-  'Event title *':'Título del evento *','Notes (optional)':'Notas (opcional)',
-  'Send push notification':'Enviar notificación push',
-  'Paint queue':'Cola de pintura','Detail queue':'Cola de detalle',
-  'Photos queue':'Cola de fotos','Parts queue':'Cola de partes',
-  'Repair queue':'Cola de reparaciones',
+  'NO TASKS YET':'SIN TAREAS AÚN',
+  'Detail Queue':'Cola de Detalle','Paint Queue':'Cola de Pintura',
+  'Photos Queue':'Cola de Fotos','Parts Queue':'Cola de Partes',
+  'Repair Queue':'Cola de Reparaciones',
 };
 
-// Apply dict to one string synchronously
+// Pre-compile regex patterns: longest keys first, word-boundary for alpha keys
+var _txRules = [];
+(function(){
+  var keys = Object.keys(ES_DICT).sort(function(a,b){ return b.length - a.length; });
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Use \b word boundaries for entries that are purely word chars / spaces
+    if (/^[\w\s]+$/.test(k)) {
+      _txRules.push({val: ES_DICT[k], re: new RegExp('\\b' + escaped + '\\b', 'g')});
+    } else {
+      // Entries with special chars (→, …, %, etc.) — literal match
+      _txRules.push({val: ES_DICT[k], re: new RegExp(escaped, 'g')});
+    }
+  }
+})();
+
+// Apply dict to one string — synchronous, uses pre-compiled regexes
 function _txApplyDict(raw) {
   var trimmed = raw.trim();
   if (!trimmed || !/[a-zA-Z]/.test(trimmed)) return raw;
+  // Exact match shortcut (most text nodes are single labels)
   if (ES_DICT[trimmed]) return raw.replace(trimmed, ES_DICT[trimmed]);
-  var result = raw, keys = Object.keys(ES_DICT);
-  for (var k = 0; k < keys.length; k++) {
-    if (result.indexOf(keys[k]) !== -1) result = result.split(keys[k]).join(ES_DICT[keys[k]]);
+  // Regex pass with word boundaries — safe from substring corruption
+  var result = raw;
+  for (var k = 0; k < _txRules.length; k++) {
+    result = result.replace(_txRules[k].re, _txRules[k].val);
   }
   return result;
 }
 
-// Walk a DOM subtree and apply dict — 100% synchronous, zero network, safe to call anytime
+// Walk a DOM subtree and apply dict — 100% synchronous, zero network
 function applySpanish(root) {
   if (window._lang !== 'es') return;
-  root = root || document.body;
+  if (!root) return;
   var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: function(n) {
       var tag = n.parentElement && n.parentElement.tagName;
@@ -4937,72 +4947,69 @@ function applySpanish(root) {
     var ph = inputs[j].getAttribute('placeholder');
     if (ph) { var tph = _txApplyDict(ph); if (tph !== ph) inputs[j].setAttribute('placeholder', tph); }
   }
-  // Translate note elements via API in background — non-blocking, no loops
-  _txNotes();
+  // Translate note elements via API in background
+  _txNotes(root);
 }
 
-// Translate user-entered notes via API — parallel fetch, stores in cache keyed by English original
-function _txNotes() {
+// Translate user-entered notes via API — non-blocking
+function _txNotes(root) {
   if (window._lang !== 'es') return;
-  var els = document.querySelectorAll('.eq-note,.ti-note,.rc-tn-note');
-  var jobs = [];
+  var els = (root||document).querySelectorAll('.eq-note,.ti-note,.rc-tn-note');
+  if (!els.length) return;
   for (var i = 0; i < els.length; i++) {
-    var raw = els[i].textContent.trim().replace(/^"|"$/g,'');
-    // Only translate if looks like English (not already translated)
-    if (raw && /[a-zA-Z]{3}/.test(raw) && !els[i].getAttribute('data-tx')) {
-      jobs.push({el: els[i], text: raw});
-    }
+    var el = els[i];
+    if (el.getAttribute('data-tx')) continue;
+    var raw = el.textContent.trim().replace(/^"|"$/g,'');
+    if (!raw || !/[a-zA-Z]{3}/.test(raw)) continue;
+    el.setAttribute('data-tx','1');
+    if (window._txCache[raw]) { el.textContent = '"' + window._txCache[raw] + '"'; continue; }
+    (function(theEl, theRaw){
+      fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(theRaw))
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          var out = (j[0]||[]).map(function(x){ return (x&&x[0])||''; }).join('');
+          if (out && out !== theRaw && window._lang === 'es' && theEl.parentNode) {
+            window._txCache[theRaw] = out;
+            theEl.textContent = '"' + out + '"';
+          }
+        }).catch(function(){});
+    })(el, raw);
   }
-  if (!jobs.length) return;
-  jobs.forEach(function(job) {
-    // Mark so we don't re-translate on next applySpanish call
-    job.el.setAttribute('data-tx','1');
-    if (window._txCache[job.text]) {
-      job.el.textContent = '"' + window._txCache[job.text] + '"';
-      return;
-    }
-    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(job.text))
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        var out = (j[0]||[]).map(function(x){ return (x&&x[0])||''; }).join('');
-        if (out && out !== job.text && window._lang === 'es' && job.el.parentNode) {
-          window._txCache[job.text] = out;
-          job.el.textContent = '"' + out + '"';
-        }
-      })
-      .catch(function(){});
-  });
 }
 
-// Called at end of every render/navigation that shows new employee content
+// Called after render/navigation to translate new employee content
 function _txOnRender(el) {
-  if (window._lang === 'es') applySpanish(el || document.body);
+  if (window._lang === 'es') applySpanish(el);
 }
 
-// Toggle — safe to spam
+// Toggle language — NO reload, safe to tap rapidly
 function toggleLang() {
   if (window._lang === 'en') {
     window._lang = 'es';
     localStorage.setItem('cf-lang', 'es');
-    applySpanish(document.body);
+    // Translate only the visible employee areas
+    applySpanish(document.getElementById('emp-orbit-home'));
+    applySpanish(document.getElementById('emp-widget-dock'));
+    applySpanish(document.getElementById('mgr-back-bar'));
+    if (empActiveCat) applySpanish(document.getElementById('emp-section-content'));
   } else {
     window._lang = 'en';
     localStorage.setItem('cf-lang', 'en');
-    window.location.reload();
+    // Re-render visible content — produces fresh English, no reload needed
+    goEmpHome();
+    // Reset the static "Tools" label in dock (not JS-rendered)
+    var ts = document.querySelector('#emp-widget-dock span');
+    if (ts) ts.textContent = 'Tools';
   }
-  _txUpdateBtn();
-}
-
-function _txUpdateBtn() {
-  var btn = document.getElementById('lang-toggle-btn');
-  if (!btn) return;
-  btn.innerHTML = window._lang === 'es'
-    ? '<div style="font-size:18px;line-height:1;">🇺🇸</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">English</div>'
-    : '<div style="font-size:18px;line-height:1;">🇲🇽</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">Español</div>';
 }
 
 function _txInit() {
-  if (window._lang === 'es') setTimeout(function(){ applySpanish(document.body); }, 300);
+  if (window._lang === 'es') {
+    setTimeout(function(){
+      applySpanish(document.getElementById('emp-orbit-home'));
+      applySpanish(document.getElementById('emp-widget-dock'));
+    }, 300);
+  }
 }
 
 
