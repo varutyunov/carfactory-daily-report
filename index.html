@@ -1206,6 +1206,9 @@ function _swapPx(id,url){
   // Review card
   const rc=document.querySelector(`.rc-img-ph[data-px="${id}"]`);
   if(rc){rc.outerHTML=`<img class="rc-img" src="${url}"/>`;}
+  // Employee queue card thumb
+  const eq=document.querySelector(`.eq-thumb-ph[data-px="${id}"]`);
+  if(eq){eq.outerHTML=`<img class="eq-thumb" src="${url}"/>`;}
 }
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
