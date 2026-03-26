@@ -4155,18 +4155,20 @@ async function submitCarAssign(){
   var car = S.inventory.find(function(c){ return c.id === caCarId; });
 
   try {
-    var empIdsList = isUnassigned ? [null] : selectedIds;
-    for(var i = 0; i < empIdsList.length; i++){
-      var empId = empIdsList[i];
-      var existing = S.assignments.find(function(a){ return a.inventoryId === caCarId && a.employeeId === empId && !a.approved; });
-      if(existing){
-        existing.tasks = (existing.tasks||[]).concat(tasks);
-        await sbPatch('assignments', existing.id, {tasks: existing.tasks});
-      } else {
-        var rows = await sbPost('assignments', {inventory_id: caCarId, employee_id: empId, tasks: tasks, submitted: false, approved: false, photos: []});
-        if(rows && rows[0]){
-          var row = rows[0];
-          S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
+    // Only create assignment records when assigned to specific employees
+    if(!isUnassigned && selectedIds.length){
+      for(var i = 0; i < selectedIds.length; i++){
+        var empId = selectedIds[i];
+        var existing = S.assignments.find(function(a){ return a.inventoryId === caCarId && a.employeeId === empId && !a.approved; });
+        if(existing){
+          existing.tasks = (existing.tasks||[]).concat(tasks);
+          await sbPatch('assignments', existing.id, {tasks: existing.tasks});
+        } else {
+          var rows = await sbPost('assignments', {inventory_id: caCarId, employee_id: empId, tasks: tasks, submitted: false, approved: false, photos: []});
+          if(rows && rows[0]){
+            var row = rows[0];
+            S.assignments.push({id:row.id, inventoryId:row.inventory_id, employeeId:row.employee_id, tasks:row.tasks, submitted:false, approved:false, photos:[], assignedAt:row.assigned_at});
+          }
         }
       }
     }
@@ -4212,7 +4214,8 @@ async function submitCarAssign(){
     updateTabBadges();
     updateHomeBadges();
   } catch(e) {
-    alert('Error sending. Try again.');
+    console.error('submitCarAssign error:', e);
+    alert('Error: ' + (e && e.message ? e.message : String(e)));
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = 'Assign'; }
   }
