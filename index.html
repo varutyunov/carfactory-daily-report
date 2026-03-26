@@ -521,15 +521,23 @@ canvas{display:none;}
       </div>
 
       <!-- EMPLOYEE TILE HOME -->
-      <div id="emp-orbit-home" style="padding:24px 16px;">
+      <div id="emp-orbit-home" style="padding:24px 16px 180px;">
         <div id="emp-tile-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:400px;margin:0 auto;"></div>
         <div id="emp-tile-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:16px;">
           <div style="font-size:40px;">&#x2615;</div>
           <div style="font-size:18px;font-weight:700;color:#fff;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">NO TASKS YET</div>
           <div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">You're all caught up. New tasks will appear here when assigned.</div>
         </div>
-        <!-- Widget bar — extra tools shown at bottom for specific users -->
-        <div id="emp-widget-bar" style="max-width:400px;margin:18px auto 0;display:none;flex-wrap:wrap;gap:12px;"></div>
+      </div>
+
+      <!-- FIXED WIDGET DOCK — tools pinned to bottom, separate from work tiles -->
+      <div id="emp-widget-dock" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:rgba(0,0,0,0.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid #1a1a1a;padding:14px 18px env(safe-area-inset-bottom,16px);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="flex:1;height:1px;background:#1a1a1a;"></div>
+          <span style="font-size:9px;font-weight:700;color:#333;letter-spacing:2px;text-transform:uppercase;">Tools</span>
+          <div style="flex:1;height:1px;background:#1a1a1a;"></div>
+        </div>
+        <div id="emp-widget-bar" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;"></div>
       </div>
 
       <!-- EMPLOYEE SECTION CONTENT (shown when tile is tapped) -->
@@ -1543,6 +1551,7 @@ function empOrbitGo(section){
   empActiveCat=section;
   var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
+  var dock=document.getElementById('emp-widget-dock');if(dock)dock.style.display='none';
   var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='block';
   // Hide old tab sections, show unified cat list
   ['detail','photos','parts','tasks','personal'].forEach(function(t){var el=document.getElementById('emp-tab-'+t);if(el)el.style.display='none';});
@@ -1560,6 +1569,7 @@ function goEmpHome(){
   var bar=document.getElementById('mgr-back-bar');if(bar)bar.style.display='none';
   var backBtn=document.getElementById('mgr-back-bar-btn');if(backBtn)backBtn.setAttribute('onclick','goMgrHome()');
   renderEmpHome();
+  // Dock visibility handled by renderEmpHome
 }
 function renderEmpHome(){
   var grid=document.getElementById('emp-tile-grid');
@@ -1614,19 +1624,21 @@ function renderEmpHome(){
       '<div style="font-size:10px;color:rgba(255,255,255,0.4);">car'+(t.count===1?'':'s')+'</div>' +
     '</div>';
   }).join('');
-  // Widget bar — rendered separately below the tile grid
+  // Widget dock — fixed at bottom of screen for deal users
+  var dock=document.getElementById('emp-widget-dock');
   var wb=document.getElementById('emp-widget-bar');
-  if(wb){
-    if(isDealUser){
+  if(isDealUser){
+    if(dock) dock.style.display='block';
+    if(wb){
       wb.style.display='flex';
       wb.innerHTML='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
         '<div style="font-size:22px;line-height:1;">💵</div>' +
         '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
       '</div>';
-    } else {
-      wb.style.display='none';
-      wb.innerHTML='';
     }
+  } else {
+    if(dock) dock.style.display='none';
+    if(wb){ wb.style.display='none'; wb.innerHTML=''; }
   }
 }
 function renderEmpCatCars(section){
