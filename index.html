@@ -3002,7 +3002,7 @@ async function clearAllQueues(){
       var hasPool=ws&&ws.categories&&Object.keys(ws.categories).some(function(k){return ws.categories[k]&&ws.categories[k].sectionPool;});
       if(hasPool){
         try{await sbPatch('inventory',car.id,{work:emptyWork});}catch(e){}
-        car.work=emptyWork;
+        car.work={selected:false,categories:{}};
       }
       try{localStorage.removeItem('cf_work_'+car.id);}catch(e){}
     }
