@@ -1308,7 +1308,7 @@ async function sendPushNotification(targetNames, title, body){
 }
 
 async function sbGet(table, params='') {
-  const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params, {headers:SB_HEADERS});
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params+'&_t='+Date.now(), {headers:SB_HEADERS, cache:'no-store'});
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
@@ -1481,28 +1481,21 @@ async function doLogin(){
   // Start translation system if previously in Spanish mode
   if(typeof _txInit==='function') _txInit();
 }
-async function doSync(){
+function doSync(){
   const btn=document.getElementById('sync-btn');
   btn.style.color='#30d158';
   btn.style.pointerEvents='none';
   btn.style.animation='spin 1s linear infinite';
   // Save session so user stays logged in after reload
   if(me) localStorage.setItem('cf_session', JSON.stringify(me));
+  if(_savedUser) localStorage.setItem('cf_saved_user', _savedUser);
+  if(_savedPin) localStorage.setItem('cf_saved_pin', _savedPin);
   // Tell SW to skip waiting so new app code activates on next load
   if('serviceWorker' in navigator && navigator.serviceWorker.controller){
     navigator.serviceWorker.controller.postMessage('SYNC');
   }
-  // Fetch fresh data from Supabase and re-render (no reload needed)
-  try{
-    await syncFromSupabase();
-    // Re-render current view with fresh data
-    if(me && me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
-    else{goEmpHome();}
-    fetchNotifications();
-  }catch(e){console.error('doSync error:',e);}
-  btn.style.color='#555';
-  btn.style.pointerEvents='';
-  btn.style.animation='';
+  // Full page reload — guarantees fresh HTML + fresh Supabase data
+  setTimeout(function(){ window.location.reload(); }, 800);
 }
 function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display='none';closeAIChat();document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
 // Enter key handled by <form> submit
