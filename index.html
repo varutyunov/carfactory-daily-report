@@ -4259,14 +4259,16 @@ async function submitCarAssign(){
       wsq.categories[qType].notes = note;
       wsq.categories[qType].assignedTo = isUnassigned ? [] : selectedIds.slice();
       wsq.categories[qType].addedAt = new Date().toISOString();
-      // Repair auto-creates Parts entry
+      // Only queue Parts if something was actually typed in the parts box
       if(qType === 'repair'){
-        if(!wsq.categories.parts) wsq.categories.parts = {sectionPool:false, repairs:[]};
-        wsq.categories.parts.sectionPool = true;
-        if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
         var partsDescVal = ((document.getElementById('ca-parts-desc')||{}).value||'').trim();
-        if(partsDescVal) wsq.categories.parts.repairs.push({text:partsDescVal, bought:false});
-        await sendNotification(null, '[Parts] queued'+(partsDescVal?': '+partsDescVal:'')+' — '+(car?car.name:''), null, car?car.name:'Car Factory');
+        if(partsDescVal){
+          if(!wsq.categories.parts) wsq.categories.parts = {sectionPool:false, repairs:[]};
+          wsq.categories.parts.sectionPool = true;
+          if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
+          wsq.categories.parts.repairs.push({text:partsDescVal, bought:false});
+          await sendNotification(null, '[Parts] queued: '+partsDescVal+' — '+(car?car.name:''), null, car?car.name:'Car Factory');
+        }
       }
       var wsqCar = S.inventory.find(function(c){ return c.id === caCarId; });
       if(wsqCar) wsqCar.work = wsq;
