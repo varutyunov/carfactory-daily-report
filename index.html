@@ -1561,6 +1561,7 @@ function empOrbitGo(section){
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   var bar=document.getElementById('mgr-back-bar');if(bar){bar.style.display='flex';document.getElementById('mgr-back-bar-title').textContent=labels[section]||section;document.getElementById('mgr-back-bar-btn').setAttribute('onclick','goEmpHome()');}
   renderEmpCatCars(section);
+  _txOnRender(document.getElementById('emp-section-content'));
 }
 function goEmpHome(){
   empActiveCat=null;
@@ -1571,7 +1572,7 @@ function goEmpHome(){
   var bar=document.getElementById('mgr-back-bar');if(bar)bar.style.display='none';
   var backBtn=document.getElementById('mgr-back-bar-btn');if(backBtn)backBtn.setAttribute('onclick','goMgrHome()');
   renderEmpHome();
-  // Dock visibility handled by renderEmpHome
+  _txOnRender(document.getElementById('emp-orbit-home'));
 }
 function renderEmpHome(){
   var grid=document.getElementById('emp-tile-grid');
@@ -4847,13 +4848,11 @@ function dcUpdate(){
 // ═══════════════════════════════════════════════════════════════════
 // LANGUAGE / TRANSLATION SYSTEM — Spanish ↔ English
 // ═══════════════════════════════════════════════════════════════════
-// Design: main DOM walk is 100% synchronous (dict only, zero async).
-// API translation runs separately, only for user-entered note elements.
-// Observer only fires the sync walk — no async in mutation callbacks.
+// Design: NO MutationObserver. Translation is called explicitly after
+// each render/navigation. Fully synchronous — zero async in DOM walk.
+// API calls only for note elements, batched in background.
 window._lang = localStorage.getItem('cf-lang') || 'en';
 window._txCache = {};
-window._txObserver = null;
-window._txTimer = null;
 
 // Comprehensive EN→ES static dictionary
 var ES_DICT = {
@@ -4901,27 +4900,22 @@ var ES_DICT = {
   'Repair queue':'Cola de reparaciones',
 };
 
-// Apply dict to a single string — pure synchronous, no network
+// Apply dict to one string synchronously
 function _txApplyDict(raw) {
   var trimmed = raw.trim();
   if (!trimmed || !/[a-zA-Z]/.test(trimmed)) return raw;
   if (ES_DICT[trimmed]) return raw.replace(trimmed, ES_DICT[trimmed]);
-  var result = raw;
-  var keys = Object.keys(ES_DICT);
+  var result = raw, keys = Object.keys(ES_DICT);
   for (var k = 0; k < keys.length; k++) {
     if (result.indexOf(keys[k]) !== -1) result = result.split(keys[k]).join(ES_DICT[keys[k]]);
   }
   return result;
 }
 
-// Walk DOM and apply dict translation synchronously — NEVER awaits anything
+// Walk a DOM subtree and apply dict — 100% synchronous, zero network, safe to call anytime
 function applySpanish(root) {
   if (window._lang !== 'es') return;
   root = root || document.body;
-
-  // Disconnect observer before touching DOM, null it out so _txStartObserver works correctly
-  if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
-
   var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: function(n) {
       var tag = n.parentElement && n.parentElement.tagName;
@@ -4938,75 +4932,60 @@ function applySpanish(root) {
     var tx = _txApplyDict(orig);
     if (tx !== orig) node.textContent = tx;
   }
-  // Placeholders
   var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
   for (var j = 0; j < inputs.length; j++) {
     var ph = inputs[j].getAttribute('placeholder');
     if (ph) { var tph = _txApplyDict(ph); if (tph !== ph) inputs[j].setAttribute('placeholder', tph); }
   }
-
-  // Restart observer now that DOM changes are done
-  if (window._lang === 'es') _txStartObserver();
-
-  // Fire async API translation for note/description elements only (runs in background, non-blocking)
-  _txTranslateNotes();
+  // Translate note elements via API in background — non-blocking, no loops
+  _txNotes();
 }
 
-// Translate only user-entered content (notes, task text) via API — runs async in background
-function _txTranslateNotes() {
+// Translate user-entered notes via API — parallel fetch, stores in cache keyed by English original
+function _txNotes() {
   if (window._lang !== 'es') return;
-  var sel = '.eq-note, .ti-note, .rc-tn-note';
-  var els = document.querySelectorAll(sel);
-  if (!els.length) return;
-  var noteTexts = [];
+  var els = document.querySelectorAll('.eq-note,.ti-note,.rc-tn-note');
+  var jobs = [];
   for (var i = 0; i < els.length; i++) {
-    var t = els[i].textContent.trim().replace(/^"|"$/g,'');
-    if (t && /[a-zA-Z]{3}/.test(t) && !window._txCache[t]) noteTexts.push({el:els[i], text:t});
+    var raw = els[i].textContent.trim().replace(/^"|"$/g,'');
+    // Only translate if looks like English (not already translated)
+    if (raw && /[a-zA-Z]{3}/.test(raw) && !els[i].getAttribute('data-tx')) {
+      jobs.push({el: els[i], text: raw});
+    }
   }
-  if (!noteTexts.length) return;
-  // Batch all API calls concurrently (not sequential) — much faster and non-blocking
-  Promise.all(noteTexts.map(function(item){
-    return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(item.text))
+  if (!jobs.length) return;
+  jobs.forEach(function(job) {
+    // Mark so we don't re-translate on next applySpanish call
+    job.el.setAttribute('data-tx','1');
+    if (window._txCache[job.text]) {
+      job.el.textContent = '"' + window._txCache[job.text] + '"';
+      return;
+    }
+    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(job.text))
       .then(function(r){ return r.json(); })
       .then(function(j){
-        var out = (j[0]||[]).map(function(x){return (x&&x[0])||'';}).join('');
-        if (out && out !== item.text) {
-          window._txCache[item.text] = out;
-          if (window._lang === 'es' && item.el.parentNode) item.el.textContent = '"' + out + '"';
+        var out = (j[0]||[]).map(function(x){ return (x&&x[0])||''; }).join('');
+        if (out && out !== job.text && window._lang === 'es' && job.el.parentNode) {
+          window._txCache[job.text] = out;
+          job.el.textContent = '"' + out + '"';
         }
       })
       .catch(function(){});
-  }));
-}
-
-// MutationObserver: fires synchronous dict translation on new element nodes
-function _txStartObserver() {
-  if (window._txObserver) return;
-  window._txObserver = new MutationObserver(function(mutations) {
-    if (window._lang !== 'es') return;
-    var hasNew = false;
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(nd){ if (nd.nodeType === 1) hasNew = true; });
-    });
-    if (!hasNew) return;
-    clearTimeout(window._txTimer);
-    window._txTimer = setTimeout(function(){ applySpanish(document.body); }, 80);
   });
-  window._txObserver.observe(document.body, { childList: true, subtree: true });
-}
-function _txStopObserver() {
-  clearTimeout(window._txTimer);
-  if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
 }
 
-// Toggle between EN and ES — safe to tap repeatedly
+// Called at end of every render/navigation that shows new employee content
+function _txOnRender(el) {
+  if (window._lang === 'es') applySpanish(el || document.body);
+}
+
+// Toggle — safe to spam
 function toggleLang() {
   if (window._lang === 'en') {
     window._lang = 'es';
     localStorage.setItem('cf-lang', 'es');
     applySpanish(document.body);
   } else {
-    _txStopObserver();
     window._lang = 'en';
     localStorage.setItem('cf-lang', 'en');
     window.location.reload();
@@ -5014,7 +4993,6 @@ function toggleLang() {
   _txUpdateBtn();
 }
 
-// Refresh toggle button label
 function _txUpdateBtn() {
   var btn = document.getElementById('lang-toggle-btn');
   if (!btn) return;
@@ -5023,11 +5001,8 @@ function _txUpdateBtn() {
     : '<div style="font-size:18px;line-height:1;">🇲🇽</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">Español</div>';
 }
 
-// Init: restore Spanish on page load if previously set
 function _txInit() {
-  if (window._lang === 'es') {
-    setTimeout(function(){ applySpanish(document.body); }, 400);
-  }
+  if (window._lang === 'es') setTimeout(function(){ applySpanish(document.body); }, 300);
 }
 
 
