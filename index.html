@@ -75,6 +75,22 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .tile-body{padding:10px 11px 12px;}
 .tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;word-break:break-word;}
 .tile-stock{font-size:11px;color:#666;}
+/* Compact employee queue cards */
+.eq-list{display:flex;flex-direction:column;gap:10px;padding:0 14px 80px;}
+.eq-card{display:flex;align-items:center;gap:12px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:10px 12px;}
+.eq-card.eq-done{border-color:rgba(48,209,88,0.3);}
+.eq-card.eq-review{border-color:rgba(255,214,10,0.3);}
+.eq-card.eq-confirmed{border-color:rgba(48,209,88,0.5);}
+.eq-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#111;}
+.eq-thumb-ph{width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#161616;flex-shrink:0;font-size:22px;}
+.eq-info{flex:1;min-width:0;}
+.eq-name{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eq-sub{font-size:11px;color:#555;margin-top:1px;}
+.eq-note{font-size:11px;color:#777;font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eq-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0;align-items:flex-end;}
+.eq-mark-btn{background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:9px;padding:6px 12px;cursor:pointer;}
+.eq-review-badge{background:rgba(255,214,10,0.12);border:1px solid rgba(255,214,10,0.3);color:#ffd60a;font-size:10px;font-weight:700;border-radius:8px;padding:5px 10px;text-align:center;}
+.eq-confirmed-badge{background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:10px;font-weight:700;border-radius:8px;padding:5px 10px;text-align:center;}
 .tile-pb{height:2px;background:#1a1a1a;border-radius:1px;overflow:hidden;margin-top:8px;}
 .tile-pf{height:100%;border-radius:1px;transition:width .3s;}
 .pfg{background:#30d158;}
@@ -517,7 +533,7 @@ canvas{display:none;}
       <!-- EMPLOYEE SECTION CONTENT (shown when tile is tapped) -->
       <div id="emp-section-content" style="display:none;">
       <!-- Category car list (new unified view) -->
-      <div id="emp-cat-car-list" class="car-grid" style="display:none;padding:0 14px 80px;"></div>
+      <div id="emp-cat-car-list" style="display:none;"></div>
       <div id="emp-tab-detail" style="padding:0 14px 80px;">
         <div style="padding:14px 0 8px;"><div class="greeting">Detail Queue</div></div>
         <div class="car-grid" id="detail-grid"></div>
@@ -1591,8 +1607,7 @@ function renderEmpCatCars(section){
       return lower.indexOf('['+section+']')!==-1;
     });
   });
-
-  // Also include unassigned sectionPool cars (not covered by assignments above)
+  // Also include unassigned sectionPool cars
   var assignedCarIds=new Set(filtered.map(function(a){return a.inventoryId;}));
   var poolCars=[];
   if(section!=='tasks'){
@@ -1604,40 +1619,70 @@ function renderEmpCatCars(section){
       }
     });
   }
-
   if(!filtered.length&&!poolCars.length){
-    container.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 24px;color:#555;font-size:14px;">No cars in this category</div>';
+    container.innerHTML='<div style="text-align:center;padding:60px 24px;color:#555;font-size:14px;">No cars in this category</div>';
     return;
   }
-
+  function makeThumb(car){
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    if(car.photo) return '<img class="eq-thumb" src="'+car.photo+'"/>';
+    if(pxUrl) return '<img class="eq-thumb" src="'+pxUrl+'"/>';
+    return '<div class="eq-thumb-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+  }
   var assignedHTML=filtered.map(function(a){
     var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
-    var done=(a.tasks||[]).filter(function(t){return typeof t==='object'?t.done:false;}).length;
-    var total=(a.tasks||[]).length;
-    var pct=total?Math.round(done/total*100):0;
-    var status=a.submitted?'review':done===total&&total>0?'done':'prog';
-    var badge=status==='review'?'<span class="tile-badge tbr">Review</span>':status==='done'?'<span class="tile-badge tbd">Done</span>':'<span class="tile-badge tbp">'+done+'/'+total+'</span>';
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var ws=getWorkState(car.id);
+    var catWs=(ws.categories&&ws.categories[section])||{};
+    var isDone=catWs.done||false;
+    var isPending=catWs.pendingReview||false;
+    var isConfirmed=catWs.confirmed||false;
+    var cardCls='eq-card'+(isConfirmed?' eq-confirmed':isPending?' eq-review':isDone?' eq-done':'');
+    var actHTML='';
+    if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
+    else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
+    else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
+    else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
     var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     var sub=vinLast6+(car.color?' · '+car.color:'');
-    return '<div class="car-tile st-'+status+'" onclick="openTaskView('+a.id+')" style="cursor:pointer;">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div><div class="tile-pb"><div class="tile-pf '+(status==='done'||status==='review'?'pfg':'pfw')+'" style="width:'+pct+'%"></div></div><div class="tile-pct">'+pct+'% complete</div></div></div>';
+    return '<div class="'+cardCls+'">'+makeThumb(car)+'<div class="eq-info"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div></div><div class="eq-actions">'+actHTML+'</div></div>';
   }).join('');
-
   var poolHTML=poolCars.map(function(car){
     var ws=getWorkState(car.id);
     var catWs=(ws.categories&&ws.categories[section])||{};
     var notes=catWs.notes||'';
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var isDone=catWs.done||false;
+    var isPending=catWs.pendingReview||false;
+    var isConfirmed=catWs.confirmed||false;
+    var cardCls='eq-card'+(isConfirmed?' eq-confirmed':isPending?' eq-review':isDone?' eq-done':'');
+    var actHTML='';
+    if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
+    else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
+    else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
+    else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
     var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     var sub=vinLast6+(car.color?' · '+car.color:'');
-    return '<div class="car-tile st-prog"><span class="tile-badge tbp">Queued</span><div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div>'+(notes?'<div style="font-size:12px;color:#999;font-style:italic;margin-top:4px;">"'+notes+'"</div>':'')+'</div></div>';
+    return '<div class="'+cardCls+'">'+makeThumb(car)+'<div class="eq-info"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div>'+(notes?'<div class="eq-note">"'+notes+'"</div>':'')+'</div><div class="eq-actions">'+actHTML+'</div></div>';
   }).join('');
-
-  container.innerHTML=assignedHTML+poolHTML;
+  container.innerHTML='<div class="eq-list">'+assignedHTML+poolHTML+'</div>';
   var allCars=filtered.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).concat(poolCars).filter(Boolean);
   applyPexels(allCars);
+}
+async function empMarkDone(carId, section){
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[section]) ws.categories[section]={sectionPool:true};
+  ws.categories[section].done=true;
+  ws.categories[section].pendingReview=true;
+  ws.categories[section].confirmed=false;
+  ws.categories[section].doneBy=me?me.name:'Employee';
+  ws.categories[section].doneAt=new Date().toISOString();
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  var sectionLabel={paint:'Paint',detail:'Detail',repair:'Repair',photos:'Photos',parts:'Parts'}[section]||section;
+  var carName=car?car.name:'Car';
+  try{await sendNotification(null,'✅ '+sectionLabel+' marked done on '+carName+' — needs review',null,carName);}catch(e){}
+  renderEmpCatCars(empActiveCat);
 }
 function empTabGo(tab,btn){
   curEmpTab=tab;
@@ -3426,84 +3471,182 @@ function updateHomeBadges(){
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
 }
 
+/* ── PROGRESS REVIEW ACTIONS ── */
+var _progressExpanded=new Set();
+function toggleProgressExpand(carId){
+  if(_progressExpanded.has(carId))_progressExpanded.delete(carId);
+  else _progressExpanded.add(carId);
+  renderProgress();
+}
+async function mgrConfirmCatDone(carId,section){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[section]) return;
+  ws.categories[section].confirmed=true;
+  ws.categories[section].pendingReview=false;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderProgress();updateTabBadges();updateHomeBadges();
+}
+async function mgrSendCatBack(carId,section){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[section]) return;
+  ws.categories[section].done=false;
+  ws.categories[section].pendingReview=false;
+  ws.categories[section].confirmed=false;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  var sectionLabel={paint:'Paint',detail:'Detail',repair:'Repair',photos:'Photos',parts:'Parts'}[section]||section;
+  var carName=car?car.name:'Car';
+  try{await sendNotification(null,'↩ '+sectionLabel+' sent back for redo on '+carName,null,carName);}catch(e){}
+  renderProgress();
+}
+async function mgrMarkCatDone(carId,section){
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[section]) ws.categories[section]={sectionPool:true};
+  ws.categories[section].done=true;
+  ws.categories[section].confirmed=true;
+  ws.categories[section].pendingReview=false;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderProgress();updateTabBadges();
+}
+async function mgrMarkCarComplete(carId){
+  showLoading('Completing...');
+  try{
+    var ws=getWorkState(carId);
+    ws.completed=true;
+    ws.completedAt=new Date().toISOString();
+    if(ws.categories){
+      Object.keys(ws.categories).forEach(function(k){
+        if(ws.categories[k]) ws.categories[k].sectionPool=false;
+      });
+    }
+    var car=S.inventory.find(function(c){return c.id===carId;});
+    if(car) car.work=ws;
+    await saveWorkState(carId);
+    removeFromProgress(carId);
+    _progressExpanded.delete(carId);
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
+  renderProgress();renderInv();updateTabBadges();updateHomeBadges();
+  renderMgrPaint();renderMgrRepair();renderMgrDetail();renderMgrPhotos();renderMgrParts();
+}
+
 /* ── PROGRESS VIEW ── */
 function renderProgress(){
   var el=document.getElementById('mgr-progress-content');
   if(!el) return;
-  // All cars with active (non-approved) assignments — auto-tracked
-  var seen={}, activeCars=[];
-  (S.assignments||[]).forEach(function(a){
-    if(!a.approved&&!seen[a.inventoryId]){seen[a.inventoryId]=1;activeCars.push(a.inventoryId);}
+  // Collect all cars with any active sectionPool category
+  var tabTypes=['paint','detail','repair','photos','parts'];
+  var carIdSet=new Set();
+  (S.inventory||[]).forEach(function(car){
+    var ws=getWorkState(car.id);
+    if(ws.categories){
+      tabTypes.forEach(function(t){
+        if(ws.categories[t]&&ws.categories[t].sectionPool) carIdSet.add(car.id);
+      });
+    }
   });
-  // Also include explicitly-pinned progress cars
-  getProgressCars().forEach(function(id){if(!seen[id]){seen[id]=1;activeCars.push(id);}});
+  // Also include assignment-based and pinned cars
+  (S.assignments||[]).forEach(function(a){if(!a.approved) carIdSet.add(a.inventoryId);});
+  getProgressCars().forEach(function(id){carIdSet.add(id);});
+  var activeCars=Array.from(carIdSet).map(function(id){return S.inventory.find(function(c){return c.id===id;});}).filter(Boolean);
   if(!activeCars.length){
     el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:16px;">'+
       '<div style="font-size:40px;">📊</div>'+
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:1px;">NO CARS IN PROGRESS</div>'+
-      '<div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">Assign a task to an employee to start tracking a car\'s progress here.</div>'+
+      '<div style="font-size:13px;color:#444;text-align:center;line-height:1.5;">Assign a car to a tab to start tracking progress here.</div>'+
     '</div>';
     return;
   }
-  // Category colours
-  var catColors={repair:'#f97316',paint:'#ec4899',task:'#22c55e',detail:'#818cf8'};
-  var catLabels={repair:'Repair',paint:'Paint',task:'Tasks',detail:'Detail'};
-  var out='<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:40px;">';
-  activeCars.forEach(function(carId){
-    var car=S.inventory.find(function(c){return c.id===carId;});
-    if(!car) return;
-    var asgns=(S.assignments||[]).filter(function(a){return a.inventoryId===carId&&!a.approved;});
-    // Tally each category — parts feeds into repair
-    var cats={repair:{t:0,d:0},paint:{t:0,d:0},task:{t:0,d:0},detail:{t:0,d:0}};
-    asgns.forEach(function(a){
-      (a.tasks||[]).forEach(function(tk){
-        var txt=(typeof tk==='object'?tk.text:tk)||'';
-        var lo=txt.toLowerCase();
-        var done=typeof tk==='object'?!!tk.done:false;
-        var cat=null;
-        if(lo.indexOf('[repair]')!==-1||lo.indexOf('[parts]')!==-1) cat='repair';
-        else if(lo.indexOf('[paint]')!==-1) cat='paint';
-        else if(lo.indexOf('[task]')!==-1) cat='task';
-        else if(lo.indexOf('[detail]')!==-1) cat='detail';
-        if(cat){cats[cat].t++;if(done)cats[cat].d++;}
-      });
-    });
-    var totalT=cats.repair.t+cats.paint.t+cats.task.t+cats.detail.t;
-    var totalD=cats.repair.d+cats.paint.d+cats.task.d+cats.detail.d;
-    var pct=totalT?Math.round(totalD/totalT*100):0;
-    var pctColor=pct===100?'#30d158':pct>=50?'#2dd4bf':'#a78bfa';
-    out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;">';
-    // Header
-    out+='<div style="padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;">';
+  var catMeta={
+    paint:{label:'Paint',icon:'🎨',color:'#ec4899'},
+    detail:{label:'Detail',icon:'✨',color:'#a78bfa'},
+    repair:{label:'Repair',icon:'🔧',color:'#fb923c'},
+    photos:{label:'Photos',icon:'📷',color:'#c084fc'},
+    parts:{label:'Parts',icon:'📦',color:'#fbbf24'}
+  };
+  var out='<div style="display:flex;flex-direction:column;gap:14px;padding:14px 14px 80px;">';
+  activeCars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var cats=ws.categories||{};
+    var activeTabs=tabTypes.filter(function(t){return cats[t]&&cats[t].sectionPool;});
+    var totalCats=activeTabs.length;
+    var confirmedCats=activeTabs.filter(function(t){return cats[t]&&(cats[t].confirmed||false);}).length;
+    var pendingReview=activeTabs.filter(function(t){return cats[t]&&cats[t].pendingReview&&!cats[t].confirmed;}).length;
+    var pct=totalCats?Math.round(confirmedCats/totalCats*100):0;
+    var pctColor=pct===100?'#30d158':pendingReview?'#ffd60a':'#a78bfa';
+    var isExpanded=_progressExpanded.has(car.id);
+    var allConfirmed=totalCats>0&&confirmedCats===totalCats;
+    // Status summary chips
+    var summaryChips=activeTabs.map(function(t){
+      var c=cats[t];
+      var col=c.confirmed?'#30d158':c.pendingReview?'#ffd60a':catMeta[t].color;
+      var icon=c.confirmed?'✓':c.pendingReview?'⏳':catMeta[t].icon;
+      return '<span style="font-size:10px;background:'+col+'18;color:'+col+';border:1px solid '+col+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+icon+' '+catMeta[t].label+'</span>';
+    }).join('');
+    out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;">';
+    // Header row (tap to expand)
+    out+='<div onclick="toggleProgressExpand('+car.id+')" style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;cursor:pointer;">';
     out+='<div style="flex:1;min-width:0;">';
     out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    out+='<div style="font-size:12px;color:#444;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
+    out+='<div style="font-size:11px;color:#444;margin-top:1px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
+    if(summaryChips) out+='<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">'+summaryChips+'</div>';
     out+='</div>';
-    out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:'+pctColor+';margin-left:12px;flex-shrink:0;">'+pct+'%</div>';
+    out+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">';
+    out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:'+pctColor+';">'+pct+'%</div>';
+    out+='<div style="font-size:16px;color:#333;">'+(isExpanded?'▲':'▼')+'</div>';
     out+='</div>';
-    // Overall progress bar
-    out+='<div style="margin:0 16px 10px;height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden;">';
-    out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width 0.4s;"></div>';
     out+='</div>';
-    // Category pills — only show categories with tasks
-    var pills='';
-    ['repair','paint','task','detail'].forEach(function(cat){
-      var c=cats[cat];
-      if(!c.t) return;
-      var cpct=Math.round(c.d/c.t*100);
-      var col=catColors[cat];
-      pills+='<div style="display:flex;align-items:center;gap:6px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:5px 10px;">';
-      pills+='<div style="width:6px;height:6px;border-radius:50%;background:'+col+';flex-shrink:0;"></div>';
-      pills+='<span style="font-size:12px;color:#888;">'+catLabels[cat]+'</span>';
-      pills+='<span style="font-size:12px;font-weight:600;color:'+col+';">'+c.d+'/'+c.t+'</span>';
-      pills+='</div>';
-    });
-    if(pills) out+='<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px;">'+pills+'</div>';
-    // Assign task + unassign buttons
-    out+='<div style="padding:0 16px 14px;border-top:1px solid #111;padding-top:10px;margin-top:2px;display:flex;gap:8px;">';
-    out+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:8px 16px;cursor:pointer;">+ Assign Task</button>';
-    out+='<button onclick="removeCarFromProgress('+car.id+')" style="background:rgba(255,255,255,0.05);border:1px solid #2a2a2a;color:#888;font-size:13px;font-weight:600;border-radius:10px;padding:8px 14px;cursor:pointer;white-space:nowrap;">↩ Remove</button>';
+    // Progress bar
+    out+='<div style="margin:0 16px 10px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;">';
+    out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:2px;transition:width 0.4s;"></div>';
     out+='</div>';
+    // Expanded detail
+    if(isExpanded){
+      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:8px;">';
+      activeTabs.forEach(function(t){
+        var c=cats[t];
+        var meta=catMeta[t];
+        var isConf=c.confirmed||false;
+        var isPend=c.pendingReview&&!isConf;
+        var isDone=c.done||false;
+        var rowBg=isConf?'rgba(48,209,88,0.06)':isPend?'rgba(255,214,10,0.06)':'rgba(255,255,255,0.02)';
+        out+='<div style="background:'+rowBg+';border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">';
+        out+='<div style="font-size:16px;">'+meta.icon+'</div>';
+        out+='<div style="flex:1;min-width:0;">';
+        out+='<div style="font-size:13px;font-weight:700;color:#fff;">'+meta.label+'</div>';
+        if(c.doneBy) out+='<div style="font-size:11px;color:#555;margin-top:1px;">by '+c.doneBy+(c.doneAt?' · '+new Date(c.doneAt).toLocaleDateString():'')+'</div>';
+        if(c.notes) out+='<div style="font-size:11px;color:#666;font-style:italic;margin-top:2px;">"'+c.notes+'"</div>';
+        out+='</div>';
+        // Action buttons
+        out+='<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;">';
+        if(isConf){
+          out+='<span style="font-size:11px;font-weight:700;color:#30d158;">✓ Done</span>';
+        } else if(isPend){
+          out+='<button onclick="mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
+          out+='<button onclick="mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
+        } else {
+          out+='<button onclick="mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
+        }
+        out+='</div>';
+        out+='</div>';
+      });
+      out+='</div>';
+      // Bottom actions
+      out+='<div style="padding:0 16px 14px;display:flex;gap:8px;">';
+      if(allConfirmed){
+        out+='<button onclick="mgrMarkCarComplete('+car.id+')" style="flex:1;background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.4);color:#30d158;font-size:13px;font-weight:700;border-radius:10px;padding:10px 16px;cursor:pointer;letter-spacing:0.5px;">🏁 Mark Car Complete</button>';
+      } else {
+        out+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;cursor:pointer;">+ Assign Task</button>';
+        out+='<button onclick="removeCarFromProgress('+car.id+')" style="background:rgba(255,255,255,0.04);border:1px solid #222;color:#666;font-size:13px;font-weight:600;border-radius:10px;padding:10px 14px;cursor:pointer;white-space:nowrap;">↩ Remove</button>';
+      }
+      out+='</div>';
+    }
     out+='</div>';
   });
   out+='</div>';
