@@ -1308,7 +1308,8 @@ async function sendPushNotification(targetNames, title, body){
 }
 
 async function sbGet(table, params='') {
-  const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params+'&_t='+Date.now(), {headers:SB_HEADERS, cache:'no-store'});
+  const hdrs = Object.assign({}, SB_HEADERS, {'Cache-Control':'no-cache','Pragma':'no-cache'});
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params, {headers:hdrs, cache:'no-store'});
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
