@@ -860,6 +860,7 @@ canvas{display:none;}
           <button id="inv-tab-recent" class="inv-tab"    onclick="switchInvTab('recent')">🕐 Recent</button>
           <button id="inv-tab-paint"  class="inv-tab"    onclick="switchInvTab('paint')">🎨 Paint</button>
           <button id="inv-tab-detail" class="inv-tab"    onclick="switchInvTab('detail')">✨ Detail</button>
+          <button id="inv-tab-photos" class="inv-tab"    onclick="switchInvTab('photos')">📷 Photos</button>
         </div>
         <!-- All / Recent content -->
         <div id="inv-pane-all">
@@ -886,6 +887,10 @@ canvas{display:none;}
         <!-- Detail queue content -->
         <div id="inv-pane-detail" style="display:none;">
           <div id="inv-detail-list" style="padding-top:4px;"></div>
+        </div>
+        <!-- Photos queue content -->
+        <div id="inv-pane-photos" style="display:none;">
+          <div id="inv-photos-list" style="padding-top:4px;"></div>
         </div>
       </div>
     </div>
@@ -1891,18 +1896,19 @@ function toggleRecentFilter(){
 }
 function switchInvTab(tab){
   invTab=tab;
-  ['all','recent','paint','detail'].forEach(function(t){
+  var queueTabs=['paint','detail','photos'];
+  ['all','recent','paint','detail','photos'].forEach(function(t){
     var tabBtn=document.getElementById('inv-tab-'+t);
     var pane=document.getElementById('inv-pane-'+(t==='recent'?'all':t));
     if(tabBtn) tabBtn.classList.toggle('on',t===tab);
     if(pane) pane.style.display=(t===tab||(tab==='recent'&&t==='all'))?'block':'none';
   });
-  // Hide pane-all when on paint/detail
-  if(tab==='paint'||tab==='detail'){
+  // Hide pane-all when on a queue tab
+  if(queueTabs.indexOf(tab)!==-1){
     var ap=document.getElementById('inv-pane-all');if(ap)ap.style.display='none';
   }
   // Reset recent filter when leaving All/Recent
-  if(tab==='paint'||tab==='detail'){
+  if(queueTabs.indexOf(tab)!==-1){
     invRecentOnly=false;
     var rb=document.getElementById('recent-btn');
     if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}
@@ -1911,23 +1917,34 @@ function switchInvTab(tab){
   else if(tab==='recent'){invRecentOnly=true;renderInv();var rb=document.getElementById('recent-btn');if(rb){rb.style.background='#fff';rb.style.color='#000';rb.style.borderColor='#fff';}}
   else if(tab==='paint') renderInvPaintTab();
   else if(tab==='detail') renderInvDetailTab();
+  else if(tab==='photos') renderInvPhotosTab();
 }
 function renderInvPaintTab(){
   var el=document.getElementById('inv-paint-list');if(!el)return;
-  var seen={};
-  var paintCars=(S.assignments||[]).filter(function(a){
-    if(a.approved||seen[a.inventoryId]) return false;
-    if(!(a.tasks||[]).some(function(t){var txt=typeof t==='object'?t.text:t;return txt&&txt.toLowerCase().indexOf('[paint]')!==-1;})) return false;
-    seen[a.inventoryId]=true;return true;
-  });
-  if(!paintCars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No cars in Paint queue</div></div>';return;}
-  el.innerHTML=paintCars.map(function(a){
-    var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;});
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No cars in Paint queue</div></div>';return;}
+  el.innerHTML=cars.map(function(car){
+    var ws=getWorkState(car.id);
+    var notes=(ws.categories.paint||{}).notes||'';
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div></div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPaintQueue('+car.id+')">↩ Unassign</button></div></div>';
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPaintQueue('+car.id+');renderInvPaintTab();">↩ Remove</button></div></div>';
   }).join('');
-  applyPexels(paintCars.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).filter(Boolean));
+  applyPexels(cars);
+}
+function renderInvPhotosTab(){
+  var el=document.getElementById('inv-photos-list');if(!el)return;
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No cars in Photos queue</div></div>';return;}
+  el.innerHTML=cars.map(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+    var notes=(ws.categories.photos||{}).notes||'';
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPhotosQueue('+car.id+');renderInvPhotosTab();">↩ Remove</button></div></div>';
+  }).join('');
+  applyPexels(cars);
 }
 function renderInvDetailTab(){
   var el=document.getElementById('inv-detail-list');if(!el)return;
@@ -3349,7 +3366,7 @@ function mgrGoSection(id, label){
   if(titleEl) titleEl.textContent=label||id;
   var view=document.getElementById('mgr-'+id);
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
-  if(id==='inventory'){invTab='all';['all','paint','detail'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
+  if(id==='inventory'){invTab='all';['all','paint','detail','photos'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
   else if(id==='repair')renderMgrRepair();
   else if(id==='detail')renderMgrDetail();
