@@ -1481,6 +1481,8 @@ async function doLogin(){
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
   // Start translation system if previously in Spanish mode
   if(typeof _txInit==='function') _txInit();
+  // Auto-sync CSV in background to catch any new/removed cars not yet in Supabase
+  setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 500);
 }
 function doSync(){
   const btn=document.getElementById('sync-btn');
@@ -2951,7 +2953,7 @@ async function syncNow(){
   var MASTER_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
   var url=S.syncUrl||MASTER_URL;
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
-  stEl.textContent='Syncing...';
+  stEl.textContent='Syncing with CSV + Supabase...';
   try{
     var r=await fetch(url+'?t='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -2960,12 +2962,19 @@ async function syncNow(){
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
+    // Build lookup of existing inventory by stock AND vin
+    var existByStock={};var existByVin={};
+    S.inventory.forEach(function(c){
+      if(c.stock) existByStock[c.stock]=c;
+      if(c.vin) existByVin[c.vin]=c;
+    });
     var added=0,updated=0,removed=0;
-    var sbPatches=[]; // collect Supabase patches so miles persist across auto-sync
+    var sbPatches=[];
+    var toInsertSB=[]; // new cars to POST to Supabase
     // Add new + update existing
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
-      var exist=S.inventory.find(function(x){return x.stock===c.stock;});
+      var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
       if(exist){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
@@ -2973,24 +2982,45 @@ async function syncNow(){
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        S.inventory.push(c);
-        if(c.miles!=null) saveCarMilesLocal(c.id,c.miles);
+        // New car — queue for Supabase insert
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin,color:c.color,miles:c.miles,location:c.location,photo:null});
         added++;
       }
     });
-    // Write miles + color back to Supabase so auto-sync doesn't wipe them
+    // POST new cars to Supabase so they persist across page loads
+    if(toInsertSB.length){
+      stEl.textContent='Adding '+toInsertSB.length+' new cars to database...';
+      for(var i=0;i<toInsertSB.length;i+=50){
+        var batch=toInsertSB.slice(i,i+50);
+        try{
+          var inserted=await sbPost('inventory',batch);
+          if(Array.isArray(inserted)){
+            inserted.forEach(function(row){
+              S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
+            });
+          }
+        }catch(e){console.error('Insert batch error:',e);}
+      }
+    }
+    // Write miles + color updates to Supabase
     if(sbPatches.length){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     }
-    // Remove sold cars (not in INSTOCK list and no active assignments)
+    // Remove sold cars from local state AND Supabase
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
+    var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
-      if(!c.stock) return true; // keep manually added (no stock#)
-      if(csvStocks.has(c.stock)) return true; // still in stock
-      if(activeIds.has(c.id)) return true; // has active work, keep
+      if(!c.stock) return true;
+      if(csvStocks.has(c.stock)) return true;
+      if(activeIds.has(c.id)) return true;
+      toRemoveDB.push(c.id);
       removed++;
       return false;
     });
+    // DELETE sold cars from Supabase
+    for(var d=0;d<toRemoveDB.length;d++){
+      try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){console.error('Delete error:',e);}
+    }
     localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
     S.lastSync=Date.now();sv();
@@ -3140,6 +3170,8 @@ if(_savedSession){
         fetchNotifications();
         if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
         else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
+        // Auto-sync CSV in background to catch any new/removed cars not yet in Supabase
+        setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 500);
       });
     }
   }catch(e){}
