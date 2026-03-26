@@ -4133,8 +4133,9 @@ function caToggleParts(){
 async function submitCarAssign(){
   if(!caCarId || !caAssignType) return;
   var note = document.getElementById('ca-assign-note').value.trim();
-  var labels = {repair:'Repair', task:'Task', parts:'Parts', photos:'Photos', progress:'Progress'};
-  var taskText = '[' + (labels[caAssignType]||caAssignType) + ']' + (note ? ' ' + note : '');
+  var qType = caAssignType;
+  var labelMap = {paint:'Paint',detail:'Detail',repair:'Repair',photos:'Photos',parts:'Parts',task:'Task'};
+  var taskText = '[' + (labelMap[qType]||qType) + ']' + (note ? ' ' + note : '');
   var tasks = [{text: taskText, done: false, urgent: false}];
 
   var assignAll = document.getElementById('ca-assign-all-btn').classList.contains('wf-assign-active');
@@ -4146,8 +4147,13 @@ async function submitCarAssign(){
     document.querySelectorAll('#ca-assign-emp-btns .wf-emp-btn.wf-assign-active').forEach(function(b){
       selectedIds.push(parseInt(b.getAttribute('data-id')));
     });
-    // If nothing selected and unassigned not explicitly chosen, treat as unassigned
     if(!selectedIds.length) isUnassigned = true;
+  }
+
+  // Tasks MUST be assigned to someone — they have no sectionPool tab
+  if(qType === 'task' && isUnassigned){
+    alert('Please select an employee (or All) to assign this task to.');
+    return;
   }
 
   var btn = document.getElementById('ca-assign-submit');
@@ -4155,7 +4161,7 @@ async function submitCarAssign(){
   var car = S.inventory.find(function(c){ return c.id === caCarId; });
 
   try {
-    // Only create assignment records when assigned to specific employees
+    // Create assignment DB records for specific employees (not for unassigned tab cars)
     if(!isUnassigned && selectedIds.length){
       for(var i = 0; i < selectedIds.length; i++){
         var empId = selectedIds[i];
@@ -4172,53 +4178,55 @@ async function submitCarAssign(){
         }
       }
     }
-    // Broadcast notification to everyone for any assignment
+
+    // Broadcast notification
     var notifMsg = taskText + (car ? ' — ' + car.name : '');
     await sendNotification(null, notifMsg, null, car ? car.name : 'Car Factory');
 
-    // Write queue membership to work state for all tab types
-    var wsq = getWorkState(caCarId);
-    if(!wsq.categories) wsq.categories = {};
-    var qType = caAssignType;
-    var _tabTypes = ['paint','detail','repair','photos','parts','task'];
-    if(_tabTypes.indexOf(qType) !== -1){
+    // Write sectionPool to work state (all tab types except task — task lives in assignments)
+    var tabQueueTypes = ['paint','detail','repair','photos','parts'];
+    if(tabQueueTypes.indexOf(qType) !== -1){
+      var wsq = getWorkState(caCarId);
+      if(!wsq.categories) wsq.categories = {};
       if(!wsq.categories[qType]) wsq.categories[qType] = {};
       wsq.categories[qType].sectionPool = true;
       wsq.categories[qType].notes = note;
       wsq.categories[qType].assignedTo = isUnassigned ? [] : selectedIds.slice();
       wsq.categories[qType].addedAt = new Date().toISOString();
+      // Repair auto-creates Parts entry
+      if(qType === 'repair'){
+        if(!wsq.categories.parts) wsq.categories.parts = {sectionPool:false, repairs:[]};
+        wsq.categories.parts.sectionPool = true;
+        if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
+        var partsDescVal = ((document.getElementById('ca-parts-desc')||{}).value||'').trim();
+        if(partsDescVal) wsq.categories.parts.repairs.push({text:partsDescVal, bought:false});
+        await sendNotification(null, '[Parts] queued'+(partsDescVal?': '+partsDescVal:'')+' — '+(car?car.name:''), null, car?car.name:'Car Factory');
+      }
+      var wsqCar = S.inventory.find(function(c){ return c.id === caCarId; });
+      if(wsqCar) wsqCar.work = wsq;
+      await saveWorkState(caCarId);
     }
-    // Repair always auto-creates a Parts queue entry
-    if(qType === 'repair'){
-      if(!wsq.categories.parts) wsq.categories.parts = {sectionPool:false, repairs:[]};
-      wsq.categories.parts.sectionPool = true;
-      if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
-      var partsDescVal = ((document.getElementById('ca-parts-desc')||{}).value||'').trim();
-      if(partsDescVal) wsq.categories.parts.repairs.push({text:partsDescVal, bought:false});
-      var partsNotif = '[Parts] queued'+(partsDescVal?': '+partsDescVal:'')+' — '+(car?car.name:'');
-      await sendNotification(null, partsNotif, null, car ? car.name : 'Car Factory');
-    }
-    var wsqCar = S.inventory.find(function(c){ return c.id === caCarId; });
-    if(wsqCar) wsqCar.work = wsq;
-    await saveWorkState(caCarId);
 
-    addToProgress(caCarId); // always track in Progress when any tab is assigned
-    closeCarAssign();
-    closeCarActions();
-    renderMgrPaint();
-    renderMgrRepair();
-    renderMgrDetail();
-    renderMgrPhotos();
-    renderMgrParts();
-    renderInv();
-    updateTabBadges();
-    updateHomeBadges();
+    addToProgress(caCarId);
   } catch(e) {
     console.error('submitCarAssign error:', e);
-    alert('Error: ' + (e && e.message ? e.message : String(e)));
-  } finally {
     if(btn){ btn.disabled = false; btn.textContent = 'Assign'; }
+    alert('Error: ' + (e && e.message ? e.message : String(e)));
+    return;
   }
+
+  // Render updates outside try so render errors don't mask DB errors
+  if(btn){ btn.disabled = false; btn.textContent = 'Assign'; }
+  closeCarAssign();
+  closeCarActions();
+  renderMgrPaint();
+  renderMgrRepair();
+  renderMgrDetail();
+  renderMgrPhotos();
+  renderMgrParts();
+  renderInv();
+  updateTabBadges();
+  updateHomeBadges();
 }
 
 function renderMgrPaint(){
