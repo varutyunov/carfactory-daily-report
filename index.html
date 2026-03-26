@@ -1646,9 +1646,12 @@ function renderEmpHome(){
     {id:'tasks',label:'Tasks',count:carSets.tasks.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/></svg>',bg:'linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a)',glow:'rgba(34,197,94,0.25)'}
   ];
   var visible=tiles.filter(function(t){return t.count>0;});
-  var isDealUser=me&&['manny','scott'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  var isDealUser=me&&['manny','scott','jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isLangUser=me&&['manny','ricky'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  var isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var hasDock=isDealUser||isLangUser;
+  // Widget-only users (e.g. Jesse) — skip vehicle tiles entirely
+  if(isWidgetOnly) visible=[];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
