@@ -4883,14 +4883,8 @@ function _dcCalcTax(taxSub){
   return {tax:taxLow+taxHigh, label:'Sales Tax (6.5% / 6%)'};
 }
 function _dcTaxRows(taxSub){
-  if(taxSub<=5000){
-    return _dcRow('Sales Tax (6.5%)',_dcFmt(taxSub*0.065));
-  }
-  var taxLow=5000*0.065;
-  var taxHigh=(taxSub-5000)*0.06;
-  return _dcRow('Tax on first $5k (6.5%)',_dcFmt(taxLow))+
-    _dcRow('Tax on remainder (6%)',_dcFmt(taxHigh))+
-    _dcRow('Total Sales Tax',_dcFmt(taxLow+taxHigh),'#888');
+  var t=_dcCalcTax(taxSub);
+  return _dcRow('Sales Tax',_dcFmt(t.tax));
 }
 var _dcAmtFin=0; // stored so adjustment inputs can reference it
 function dcUpdate(){
