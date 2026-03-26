@@ -3173,7 +3173,20 @@ setInterval(function(){
 // Sync immediately when user comes back to the app (phone switches back to tab)
 document.addEventListener('visibilitychange', function(){
   if(!document.hidden && me && document.getElementById('app').style.display!=='none'){
-    syncFromSupabase();
+    syncFromSupabase().then(function(){
+      // Re-render visible view with fresh data
+      if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
+      else{goEmpHome();}
+    });
+  }
+});
+// Also handle iOS bfcache restore (PWA resume from suspension)
+window.addEventListener('pageshow', function(e){
+  if(e.persisted && me && document.getElementById('app').style.display!=='none'){
+    syncFromSupabase().then(function(){
+      if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
+      else{goEmpHome();}
+    });
   }
 });
 
