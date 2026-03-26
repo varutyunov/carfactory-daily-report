@@ -76,7 +76,7 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;word-break:break-word;}
 .tile-stock{font-size:11px;color:#666;}
 /* Compact employee queue cards */
-.eq-list{display:flex;flex-direction:column;gap:10px;padding:0 14px 80px;}
+.eq-list{display:flex;flex-direction:column;gap:10px;padding:0 14px 80px;padding-top:0;}
 .eq-card{display:flex;align-items:center;gap:12px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:10px 12px;}
 .eq-card.eq-done{border-color:rgba(48,209,88,0.3);}
 .eq-card.eq-review{border-color:rgba(255,214,10,0.3);}
@@ -1525,7 +1525,7 @@ function empOrbitGo(section){
   var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='block';
   // Hide old tab sections, show unified cat list
   ['detail','photos','parts','tasks','personal'].forEach(function(t){var el=document.getElementById('emp-tab-'+t);if(el)el.style.display='none';});
-  var catList=document.getElementById('emp-cat-car-list');if(catList)catList.style.display='block';
+  var catList=document.getElementById('emp-cat-car-list');if(catList){catList.style.display='block';catList.style.paddingTop='66px';}
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   var bar=document.getElementById('mgr-back-bar');if(bar){bar.style.display='flex';document.getElementById('mgr-back-bar-title').textContent=labels[section]||section;document.getElementById('mgr-back-bar-btn').setAttribute('onclick','goEmpHome()');}
   renderEmpCatCars(section);
