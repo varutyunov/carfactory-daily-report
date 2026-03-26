@@ -821,6 +821,20 @@ canvas{display:none;}
       <input id="dc-down-payment" type="number" inputmode="decimal" placeholder="e.g. 1000  (or $0)" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcUpdate()"/>
     </div>
     <div id="dc-result" style="display:none;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;"></div>
+    <div id="dc-adjust" style="display:none;margin-top:14px;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#a78bfa;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #1e1e1e;">⚙ Payment Adjustment</div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label style="font-size:10px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Payment Amount</label>
+          <input id="dc-pay-amt" type="number" inputmode="decimal" step="0.01" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fbbf24;font-size:18px;font-weight:700;padding:10px 12px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcAdjustAmt()"/>
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:10px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;"># of Payments</label>
+          <input id="dc-pay-count" type="number" inputmode="numeric" step="1" min="1" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#a78bfa;font-size:18px;font-weight:700;padding:10px 12px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcAdjustCount()"/>
+        </div>
+      </div>
+      <div id="dc-adjust-summary" style="margin-top:12px;"></div>
+    </div>
   </div>
 </div>
 
@@ -4831,6 +4845,11 @@ function openDealCalc(){
   document.getElementById('dc-sale-price').value='';
   document.getElementById('dc-down-payment').value='';
   document.getElementById('dc-result').style.display='none';
+  document.getElementById('dc-adjust').style.display='none';
+  document.getElementById('dc-pay-amt').value='';
+  document.getElementById('dc-pay-count').value='';
+  document.getElementById('dc-adjust-summary').innerHTML='';
+  _dcAmtFin=0;
   document.getElementById('m-deal-calc').style.display='flex';
   setTimeout(function(){document.getElementById('dc-sale-price').focus();},200);
 }
@@ -4856,11 +4875,13 @@ function _dcBig(label,value,col){
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:'+(col||'#30d158')+';">'+value+'</span>' +
   '</div>';
 }
+var _dcAmtFin=0; // stored so adjustment inputs can reference it
 function dcUpdate(){
   var sp=parseFloat((document.getElementById('dc-sale-price').value||'').trim());
   var dpStr=(document.getElementById('dc-down-payment').value||'').trim();
   var el=document.getElementById('dc-result');
-  if(!sp||sp<=0){el.style.display='none';return;}
+  var adjEl=document.getElementById('dc-adjust');
+  if(!sp||sp<=0){el.style.display='none';adjEl.style.display='none';return;}
   var hasDown=dpStr!=='';
   var dp=hasDown?Math.max(0,parseFloat(dpStr)||0):0;
   var html='';
@@ -4871,8 +4892,8 @@ function dcUpdate(){
     var tax=taxSub*0.065;
     var titleFee=78,regFee=20;
     var totalDue=taxSub+tax+titleFee+regFee;
-    var amtFin=totalDue-dp;
-    var biweekly=amtFin/13;
+    _dcAmtFin=totalDue-dp;
+    var biweekly=_dcAmtFin/13;
     html=_dcHeader('Finance Deal','#fbbf24')+
       _dcRow('Sale Price',_dcFmt(sp))+
       _dcRow('Finance Fee',_dcFmt(financeFee))+
@@ -4887,10 +4908,16 @@ function dcUpdate(){
       _dcRow('Total Amount Due',_dcFmt(totalDue),'#fff',true)+
       _dcRow('Down Payment','−'+_dcFmt(dp),'#ff453a')+
       _dcDiv()+
-      _dcRow('Amount Financed',_dcFmt(amtFin),'#a78bfa',true)+
+      _dcRow('Amount Financed',_dcFmt(_dcAmtFin),'#a78bfa',true)+
       _dcBig('Biweekly (13 payments)',_dcFmt(biweekly),'#fbbf24');
+    // Populate adjustment fields with defaults
+    document.getElementById('dc-pay-amt').value=biweekly.toFixed(2);
+    document.getElementById('dc-pay-count').value='13';
+    document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(biweekly,13);
+    adjEl.style.display='block';
   } else {
-    // CASH DEAL
+    // CASH DEAL — no payment adjustment
+    _dcAmtFin=0;
     var dealerFee=399,docFee=150;
     var taxSub=sp+dealerFee+docFee;
     var tax=taxSub*0.065;
@@ -4907,9 +4934,38 @@ function dcUpdate(){
       _dcRow('Registration Fee',_dcFmt(regFee))+
       _dcDiv()+
       _dcBig('Total Cash Due',_dcFmt(totalDue),'#30d158');
+    adjEl.style.display='none';
   }
   el.innerHTML=html;
   el.style.display='block';
+}
+// User changed Payment Amount → recalculate # of Payments
+function dcAdjustAmt(){
+  if(_dcAmtFin<=0) return;
+  var amt=parseFloat(document.getElementById('dc-pay-amt').value);
+  if(!amt||amt<=0) return;
+  var count=Math.ceil(_dcAmtFin/amt);
+  document.getElementById('dc-pay-count').value=count;
+  document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(amt,count);
+}
+// User changed # of Payments → recalculate Payment Amount
+function dcAdjustCount(){
+  if(_dcAmtFin<=0) return;
+  var count=parseInt(document.getElementById('dc-pay-count').value);
+  if(!count||count<=0) return;
+  var amt=_dcAmtFin/count;
+  document.getElementById('dc-pay-amt').value=amt.toFixed(2);
+  document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(amt,count);
+}
+// Summary display for adjusted payments
+function _dcAdjustSummary(amt,count){
+  var total=amt*count;
+  var diff=total-_dcAmtFin;
+  var overUnder=diff>0.01?'<span style="color:#ff453a;">+'+_dcFmt(diff)+' over</span>':diff<-0.01?'<span style="color:#30d158;">'+_dcFmt(Math.abs(diff))+' under</span>':'<span style="color:#30d158;">exact</span>';
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #1e1e1e;">' +
+    '<span style="font-size:12px;color:#666;">'+count+' × '+_dcFmt(amt)+'</span>' +
+    '<span style="font-size:12px;color:#888;">= '+_dcFmt(total)+' ('+overUnder+')</span>' +
+  '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4950,6 +5006,7 @@ var ES_DICT = {
   'Registration Fee':'Cargo de Registro','Total Amount Due':'Total a Pagar',
   'Amount Financed':'Monto Financiado',
   'Total Cash Due':'Total al Contado',
+  'Payment Adjustment':'Ajuste de Pago','Payment Amount':'Monto del Pago','# of Payments':'# de Pagos',
   'Tools':'Herramientas','Notes':'Notas','Note':'Nota','Task':'Tarea',
   'Employee Portal':'Portal del Empleado','Username':'Usuario',
   'NO TASKS YET':'SIN TAREAS AÚN',
