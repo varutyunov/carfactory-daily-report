@@ -4850,6 +4850,8 @@ function dcUpdate(){
 window._lang = localStorage.getItem('cf-lang') || 'en';
 window._txCache = {};
 window._txObserver = null;
+window._txVer = 0;       // incremented on every toggle — aborts stale async runs
+window._txTimer = null;  // debounce timer for observer-triggered translations
 
 // Comprehensive EN→ES static dictionary
 var ES_DICT = {
@@ -4883,7 +4885,7 @@ var ES_DICT = {
   'Doc Fee':'Cargo de Documentación','Taxable Subtotal':'Subtotal Gravable',
   'Sales Tax (6.5%)':'Impuesto (6.5%)','Title Fee':'Cargo de Título',
   'Registration Fee':'Cargo de Registro','Total Amount Due':'Total a Pagar',
-  'Down Payment':'Pago Inicial','Amount Financed':'Monto Financiado',
+  'Amount Financed':'Monto Financiado',
   'Biweekly (13 payments)':'Quincenal (13 pagos)','Total Cash Due':'Total al Contado',
   // Labels & misc
   'Tools':'Herramientas','Notes':'Notas','Note':'Nota','Task':'Tarea',
@@ -4899,14 +4901,12 @@ var ES_DICT = {
   'Assign workers first':'Asigna trabajadores primero',
   'Event title *':'Título del evento *','Notes (optional)':'Notas (opcional)',
   'Send push notification':'Enviar notificación push',
-  'Español':'Español','English':'English',
-  // Category screen terms
   'Paint queue':'Cola de pintura','Detail queue':'Cola de detalle',
   'Photos queue':'Cola de fotos','Parts queue':'Cola de partes',
   'Repair queue':'Cola de reparaciones',
 };
 
-// Call Google Translate free endpoint for text not in dictionary
+// Google Translate free endpoint — only called for dynamic content not in dict
 async function _txApi(text) {
   if (!text || !text.trim() || !/[a-zA-Z]{2}/.test(text)) return text;
   var key = text.trim();
@@ -4921,20 +4921,16 @@ async function _txApi(text) {
   } catch(e) { return key; }
 }
 
-// Translate a single text string using dict first, then API fallback
+// Translate one string: dict first, then API for longer dynamic content
 async function _txStr(raw) {
   var trimmed = raw.trim();
   if (!trimmed) return raw;
-  // Exact match
   if (ES_DICT[trimmed]) return raw.replace(trimmed, ES_DICT[trimmed]);
-  // Partial replacements
-  var result = raw;
-  var changed = false;
+  var result = raw, changed = false;
   Object.keys(ES_DICT).forEach(function(en){
     if (result.indexOf(en) !== -1) { result = result.split(en).join(ES_DICT[en]); changed = true; }
   });
   if (changed) return result;
-  // API for longer content (notes, task descriptions, etc.)
   if (trimmed.length > 6 && /[a-zA-Z]{3}/.test(trimmed)) {
     var api = await _txApi(trimmed);
     if (api && api !== trimmed) return raw.replace(trimmed, api);
@@ -4942,69 +4938,95 @@ async function _txStr(raw) {
   return raw;
 }
 
-// Walk DOM and translate all text nodes and placeholders
+// Walk a DOM subtree and translate text nodes + placeholders.
+// Disconnects the observer first to prevent mutation feedback loops,
+// then reconnects when done. Aborts early if _txVer changed (rapid toggle).
 async function applySpanish(root) {
   if (window._lang !== 'es') return;
+  var myVer = window._txVer;
   root = root || document.body;
-  // Text nodes
-  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: function(n) {
-      var tag = n.parentElement && n.parentElement.tagName;
-      if (!tag || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
+
+  // Pause observer BEFORE touching the DOM — prevents infinite mutation loops
+  if (window._txObserver) window._txObserver.disconnect();
+
+  try {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(n) {
+        var tag = n.parentElement && n.parentElement.tagName;
+        if (!tag || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    }, false);
+    var nodes = [];
+    var n;
+    while ((n = walker.nextNode())) nodes.push(n);
+
+    for (var i = 0; i < nodes.length; i++) {
+      if (window._txVer !== myVer) return; // language toggled — abort
+      var node = nodes[i];
+      if (!node.parentNode) continue;      // node removed from DOM
+      var orig = node.textContent;
+      if (!orig || !orig.trim() || !/[a-zA-Z]/.test(orig)) continue;
+      var translated = await _txStr(orig);
+      if (window._txVer !== myVer) return; // check again after await
+      if (translated !== orig && node.parentNode) node.textContent = translated;
     }
-  }, false);
-  var nodes = [];
-  var n;
-  while ((n = walker.nextNode())) nodes.push(n);
-  for (var i = 0; i < nodes.length; i++) {
-    var node = nodes[i];
-    var orig = node.textContent;
-    if (!orig || !orig.trim() || !/[a-zA-Z]/.test(orig)) continue;
-    var translated = await _txStr(orig);
-    if (translated !== orig) node.textContent = translated;
-  }
-  // Input/textarea placeholders
-  var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
-  for (var j = 0; j < inputs.length; j++) {
-    var ph = inputs[j].getAttribute('placeholder');
-    if (ph && /[a-zA-Z]/.test(ph)) {
-      var tph = await _txStr(ph);
-      if (tph !== ph) inputs[j].setAttribute('placeholder', tph);
+
+    // Placeholders
+    var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
+    for (var j = 0; j < inputs.length; j++) {
+      if (window._txVer !== myVer) return;
+      var ph = inputs[j].getAttribute('placeholder');
+      if (ph && /[a-zA-Z]/.test(ph)) {
+        var tph = await _txStr(ph);
+        if (window._txVer !== myVer) return;
+        if (tph !== ph) inputs[j].setAttribute('placeholder', tph);
+      }
     }
+  } finally {
+    // Always reconnect observer (if still in ES mode and version unchanged)
+    if (window._lang === 'es' && window._txVer === myVer) _txStartObserver();
   }
 }
 
-// Set up MutationObserver so new rendered content auto-translates
+// Debounced wrapper — collapses rapid observer firings into one translation pass
+function _txSchedule(root) {
+  clearTimeout(window._txTimer);
+  window._txTimer = setTimeout(function(){ applySpanish(root); }, 120);
+}
+
+// MutationObserver: only reacts to added ELEMENT nodes, ignores text node changes
 function _txStartObserver() {
-  if (window._txObserver) return;
+  if (window._txObserver) return; // already running
   window._txObserver = new MutationObserver(function(mutations) {
     if (window._lang !== 'es') return;
+    var hasNew = false;
     mutations.forEach(function(m) {
       m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1) applySpanish(node);
+        if (node.nodeType === 1) hasNew = true; // element node added
       });
     });
+    if (hasNew) _txSchedule(document.body);
   });
   window._txObserver.observe(document.body, { childList: true, subtree: true });
 }
 function _txStopObserver() {
+  clearTimeout(window._txTimer);
   if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
 }
 
 // Toggle between EN and ES
 function toggleLang() {
+  window._txVer++;           // invalidate any in-flight async translation
+  _txStopObserver();         // stop observer immediately
   if (window._lang === 'en') {
     window._lang = 'es';
     localStorage.setItem('cf-lang', 'es');
-    _txStartObserver();
-    applySpanish(document.body);
+    applySpanish(document.body); // observer restarted inside applySpanish when done
   } else {
     window._lang = 'en';
     localStorage.setItem('cf-lang', 'en');
-    _txStopObserver();
-    // Reload to restore all original English text
-    window.location.reload();
+    window.location.reload(); // fastest way to restore all original English
   }
   _txUpdateBtn();
 }
@@ -5021,8 +5043,7 @@ function _txUpdateBtn() {
 // Init: if user was in ES mode before, start observer and translate on login
 function _txInit() {
   if (window._lang === 'es') {
-    _txStartObserver();
-    setTimeout(function(){ applySpanish(document.body); }, 400);
+    setTimeout(function(){ applySpanish(document.body); }, 400); // observer started inside applySpanish
   }
 }
 
