@@ -1412,8 +1412,8 @@ async function syncFromSupabase(){
       const pxSaved=localStorage.getItem('px_cache');
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
-      // Wipe localStorage completely and save fresh Supabase data
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
+      // Wipe stale localStorage but preserve session + settings
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -3166,29 +3166,34 @@ ld();
 // Poll Supabase every 2 minutes while app is open
 setInterval(function(){
   if(me && document.getElementById('app').style.display!=='none'){
-    syncFromSupabase();
+    syncFromSupabase().then(function(){
+      if(me.role==='manager'){updateTabBadges();updateHomeBadges();}
+    });
   }
 }, 2 * 60 * 1000);
 
-// Sync immediately when user comes back to the app (phone switches back to tab)
+// Full re-sync when app resumes from background (iOS PWA suspension)
+function _resumeSync(){
+  if(!me || document.getElementById('app').style.display==='none') return;
+  showLoading('Refreshing...');
+  syncFromSupabase().then(function(){
+    if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
+    else{goEmpHome();}
+  });
+}
 document.addEventListener('visibilitychange', function(){
-  if(!document.hidden && me && document.getElementById('app').style.display!=='none'){
-    syncFromSupabase().then(function(){
-      // Re-render visible view with fresh data
-      if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
-      else{goEmpHome();}
-    });
-  }
+  if(!document.hidden) _resumeSync();
 });
-// Also handle iOS bfcache restore (PWA resume from suspension)
 window.addEventListener('pageshow', function(e){
-  if(e.persisted && me && document.getElementById('app').style.display!=='none'){
-    syncFromSupabase().then(function(){
-      if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
-      else{goEmpHome();}
-    });
-  }
+  if(e.persisted) _resumeSync();
 });
+// Detect iOS PWA resume via timer gap (visibilitychange doesn't always fire)
+var _lastTick=Date.now();
+setInterval(function(){
+  var now=Date.now();
+  if(now-_lastTick>10000) _resumeSync(); // gap > 10s = app was suspended
+  _lastTick=now;
+}, 3000);
 
 // ── WORK SCREEN ──────────────────────────────────────────────────────────────
 let curWorkCarId=null, curCatName=null, curCatTab='desc';
