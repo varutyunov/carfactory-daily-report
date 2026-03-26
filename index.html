@@ -1463,6 +1463,8 @@ async function doLogin(){
   var _isOwner=['vlad','tommy'].includes(e.name.toLowerCase());var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=_isOwner?'':'none';
   if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');updateTabBadges();updateHomeBadges();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
+  // Start translation system if previously in Spanish mode
+  if(typeof _txInit==='function') _txInit();
 }
 function doSync(){
   const btn=document.getElementById('sync-btn');
@@ -1613,7 +1615,9 @@ function renderEmpHome(){
   ];
   var visible=tiles.filter(function(t){return t.count>0;});
   var isDealUser=me&&['manny','scott'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
-  if(!visible.length&&!isDealUser){grid.style.display='none';empty.style.display='flex';}
+  var isLangUser=me&&['manny','ricky'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  var hasDock=isDealUser||isLangUser;
+  if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
   grid.innerHTML=visible.map(function(t){
@@ -1624,17 +1628,29 @@ function renderEmpHome(){
       '<div style="font-size:10px;color:rgba(255,255,255,0.4);">car'+(t.count===1?'':'s')+'</div>' +
     '</div>';
   }).join('');
-  // Widget dock — fixed at bottom of screen for deal users
+  // Widget dock — fixed at bottom, shown for deal users and/or lang users
   var dock=document.getElementById('emp-widget-dock');
   var wb=document.getElementById('emp-widget-bar');
-  if(isDealUser){
+  if(hasDock){
     if(dock) dock.style.display='block';
     if(wb){
       wb.style.display='flex';
-      wb.innerHTML='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
-        '<div style="font-size:22px;line-height:1;">💵</div>' +
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
-      '</div>';
+      var whtml='';
+      if(isDealUser){
+        whtml+='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
+          '<div style="font-size:22px;line-height:1;">💵</div>' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
+        '</div>';
+      }
+      if(isLangUser){
+        var langIcon=window._lang==='es'?'🇺🇸':'🇲🇽';
+        var langLabel=window._lang==='es'?'English':'Español';
+        whtml+='<div id="lang-toggle-btn" onclick="toggleLang()" style="background:linear-gradient(145deg,#0a001a,#200050,#3a0080);box-shadow:0 4px 18px rgba(139,92,246,0.25),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
+          '<div style="font-size:22px;line-height:1;">'+langIcon+'</div>' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">'+langLabel+'</div>' +
+        '</div>';
+      }
+      wb.innerHTML=whtml;
     }
   } else {
     if(dock) dock.style.display='none';
@@ -4826,6 +4842,188 @@ function dcUpdate(){
   }
   el.innerHTML=html;
   el.style.display='block';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LANGUAGE / TRANSLATION SYSTEM — Spanish ↔ English
+// ═══════════════════════════════════════════════════════════════════
+window._lang = localStorage.getItem('cf-lang') || 'en';
+window._txCache = {};
+window._txObserver = null;
+
+// Comprehensive EN→ES static dictionary
+var ES_DICT = {
+  // Navigation & tabs
+  'Inventory':'Inventario','Tasks':'Tareas','Detail':'Detalle','Photos':'Fotos',
+  'Parts':'Partes','Repair':'Reparación','Repairs':'Reparaciones','Paint':'Pintura',
+  'Progress':'Progreso','Team':'Equipo','Calendar':'Calendario','Home':'Inicio',
+  'Me':'Yo','All':'Todo','Recent':'Reciente',
+  // Tile labels
+  'cars':'autos','car':'auto','Cars':'Autos','Car':'Auto',
+  // Actions / buttons
+  'Assign':'Asignar','Mark Done':'Marcar Listo','Mark Car Complete':'Marcar Auto Completo',
+  'Confirm':'Confirmar','Redo':'Rehacer','Submit':'Enviar','Cancel':'Cancelar',
+  'Save':'Guardar','Close':'Cerrar','Add':'Agregar','Edit':'Editar','Delete':'Eliminar',
+  'Send Task':'Enviar Tarea','Add Task':'Agregar Tarea','Save Event':'Guardar Evento',
+  'All Employees':'Todos los Empleados','Unassigned':'Sin Asignar',
+  'Sign In':'Iniciar Sesión','Sync':'Sincronizar',
+  'Add Vehicle Manually':'Agregar Vehículo Manualmente',
+  'Assign to Workers →':'Asignar a Trabajadores →',
+  'Keep me signed in':'Mantenerme conectado',
+  'Add photos':'Agregar fotos',
+  // Status / badges
+  'In Review':'En Revisión','Confirmed':'Confirmado','Complete':'Completo',
+  'Pending':'Pendiente','Done':'Listo','Approved':'Aprobado','Rejected':'Rechazado',
+  'pending review':'pendiente de revisión',
+  // Deal Calc
+  'Deal Calc':'Calc. Trato','DEAL CALCULATOR':'CALCULADORA DE TRATO',
+  'Sale Price':'Precio de Venta','Down Payment':'Pago Inicial',
+  'Finance Deal':'Trato Financiado','Cash Deal':'Trato al Contado',
+  'Finance Fee':'Cargo por Financiamiento','Dealer Fee':'Cargo del Distribuidor',
+  'Doc Fee':'Cargo de Documentación','Taxable Subtotal':'Subtotal Gravable',
+  'Sales Tax (6.5%)':'Impuesto (6.5%)','Title Fee':'Cargo de Título',
+  'Registration Fee':'Cargo de Registro','Total Amount Due':'Total a Pagar',
+  'Down Payment':'Pago Inicial','Amount Financed':'Monto Financiado',
+  'Biweekly (13 payments)':'Quincenal (13 pagos)','Total Cash Due':'Total al Contado',
+  // Labels & misc
+  'Tools':'Herramientas','Notes':'Notas','Note':'Nota','Task':'Tarea',
+  'Employee Portal':'Portal del Empleado','Username':'Usuario','PIN':'PIN',
+  'No cars in Paint queue':'Sin autos en cola de Pintura',
+  'No tasks pending review':'Sin tareas pendientes de revisión',
+  'No tasks yet':'Aún no hay tareas',
+  'Loading…':'Cargando…','Loading':'Cargando',
+  'Sync failed — retrying...':'Error de sincronización — reintentando...',
+  'Signing in...':'Iniciando sesión...',
+  'Invalid username or PIN':'Usuario o PIN incorrecto',
+  'No cars here yet':'Aún no hay autos',
+  'Assign workers first':'Asigna trabajadores primero',
+  'Event title *':'Título del evento *','Notes (optional)':'Notas (opcional)',
+  'Send push notification':'Enviar notificación push',
+  'Español':'Español','English':'English',
+  // Category screen terms
+  'Paint queue':'Cola de pintura','Detail queue':'Cola de detalle',
+  'Photos queue':'Cola de fotos','Parts queue':'Cola de partes',
+  'Repair queue':'Cola de reparaciones',
+};
+
+// Call Google Translate free endpoint for text not in dictionary
+async function _txApi(text) {
+  if (!text || !text.trim() || !/[a-zA-Z]{2}/.test(text)) return text;
+  var key = text.trim();
+  if (window._txCache[key]) return window._txCache[key];
+  try {
+    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(key);
+    var r = await fetch(url);
+    var j = await r.json();
+    var out = (j[0]||[]).map(function(x){return (x&&x[0])||'';}).join('');
+    if (out && out !== key) window._txCache[key] = out;
+    return out || key;
+  } catch(e) { return key; }
+}
+
+// Translate a single text string using dict first, then API fallback
+async function _txStr(raw) {
+  var trimmed = raw.trim();
+  if (!trimmed) return raw;
+  // Exact match
+  if (ES_DICT[trimmed]) return raw.replace(trimmed, ES_DICT[trimmed]);
+  // Partial replacements
+  var result = raw;
+  var changed = false;
+  Object.keys(ES_DICT).forEach(function(en){
+    if (result.indexOf(en) !== -1) { result = result.split(en).join(ES_DICT[en]); changed = true; }
+  });
+  if (changed) return result;
+  // API for longer content (notes, task descriptions, etc.)
+  if (trimmed.length > 6 && /[a-zA-Z]{3}/.test(trimmed)) {
+    var api = await _txApi(trimmed);
+    if (api && api !== trimmed) return raw.replace(trimmed, api);
+  }
+  return raw;
+}
+
+// Walk DOM and translate all text nodes and placeholders
+async function applySpanish(root) {
+  if (window._lang !== 'es') return;
+  root = root || document.body;
+  // Text nodes
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: function(n) {
+      var tag = n.parentElement && n.parentElement.tagName;
+      if (!tag || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  }, false);
+  var nodes = [];
+  var n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    var orig = node.textContent;
+    if (!orig || !orig.trim() || !/[a-zA-Z]/.test(orig)) continue;
+    var translated = await _txStr(orig);
+    if (translated !== orig) node.textContent = translated;
+  }
+  // Input/textarea placeholders
+  var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
+  for (var j = 0; j < inputs.length; j++) {
+    var ph = inputs[j].getAttribute('placeholder');
+    if (ph && /[a-zA-Z]/.test(ph)) {
+      var tph = await _txStr(ph);
+      if (tph !== ph) inputs[j].setAttribute('placeholder', tph);
+    }
+  }
+}
+
+// Set up MutationObserver so new rendered content auto-translates
+function _txStartObserver() {
+  if (window._txObserver) return;
+  window._txObserver = new MutationObserver(function(mutations) {
+    if (window._lang !== 'es') return;
+    mutations.forEach(function(m) {
+      m.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1) applySpanish(node);
+      });
+    });
+  });
+  window._txObserver.observe(document.body, { childList: true, subtree: true });
+}
+function _txStopObserver() {
+  if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
+}
+
+// Toggle between EN and ES
+function toggleLang() {
+  if (window._lang === 'en') {
+    window._lang = 'es';
+    localStorage.setItem('cf-lang', 'es');
+    _txStartObserver();
+    applySpanish(document.body);
+  } else {
+    window._lang = 'en';
+    localStorage.setItem('cf-lang', 'en');
+    _txStopObserver();
+    // Reload to restore all original English text
+    window.location.reload();
+  }
+  _txUpdateBtn();
+}
+
+// Refresh toggle button label
+function _txUpdateBtn() {
+  var btn = document.getElementById('lang-toggle-btn');
+  if (!btn) return;
+  btn.innerHTML = window._lang === 'es'
+    ? '<div style="font-size:18px;line-height:1;">🇺🇸</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">English</div>'
+    : '<div style="font-size:18px;line-height:1;">🇲🇽</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">Español</div>';
+}
+
+// Init: if user was in ES mode before, start observer and translate on login
+function _txInit() {
+  if (window._lang === 'es') {
+    _txStartObserver();
+    setTimeout(function(){ applySpanish(document.body); }, 400);
+  }
 }
 
 
