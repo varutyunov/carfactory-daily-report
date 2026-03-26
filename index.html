@@ -4875,6 +4875,23 @@ function _dcBig(label,value,col){
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:'+(col||'#30d158')+';">'+value+'</span>' +
   '</div>';
 }
+// Tiered sales tax: 6.5% on first $5000, 6% on everything above
+function _dcCalcTax(taxSub){
+  if(taxSub<=5000) return {tax:taxSub*0.065, label:'Sales Tax (6.5%)'};
+  var taxLow=5000*0.065;
+  var taxHigh=(taxSub-5000)*0.06;
+  return {tax:taxLow+taxHigh, label:'Sales Tax (6.5% / 6%)'};
+}
+function _dcTaxRows(taxSub){
+  if(taxSub<=5000){
+    return _dcRow('Sales Tax (6.5%)',_dcFmt(taxSub*0.065));
+  }
+  var taxLow=5000*0.065;
+  var taxHigh=(taxSub-5000)*0.06;
+  return _dcRow('Tax on first $5k (6.5%)',_dcFmt(taxLow))+
+    _dcRow('Tax on remainder (6%)',_dcFmt(taxHigh))+
+    _dcRow('Total Sales Tax',_dcFmt(taxLow+taxHigh),'#888');
+}
 var _dcAmtFin=0; // stored so adjustment inputs can reference it
 function dcUpdate(){
   var sp=parseFloat((document.getElementById('dc-sale-price').value||'').trim());
@@ -4889,7 +4906,8 @@ function dcUpdate(){
     // FINANCE DEAL
     var financeFee=500,dealerFee=399,docFee=150;
     var taxSub=sp+financeFee+dealerFee+docFee;
-    var tax=taxSub*0.065;
+    var taxInfo=_dcCalcTax(taxSub);
+    var tax=taxInfo.tax;
     var titleFee=78,regFee=20;
     var totalDue=taxSub+tax+titleFee+regFee;
     _dcAmtFin=totalDue-dp;
@@ -4901,7 +4919,7 @@ function dcUpdate(){
       _dcRow('Doc Fee',_dcFmt(docFee))+
       _dcDiv()+
       _dcRow('Taxable Subtotal',_dcFmt(taxSub),'#888')+
-      _dcRow('Sales Tax (6.5%)',_dcFmt(tax))+
+      _dcTaxRows(taxSub)+
       _dcRow('Title Fee',_dcFmt(titleFee))+
       _dcRow('Registration Fee',_dcFmt(regFee))+
       _dcDiv()+
@@ -4920,7 +4938,8 @@ function dcUpdate(){
     _dcAmtFin=0;
     var dealerFee=399,docFee=150;
     var taxSub=sp+dealerFee+docFee;
-    var tax=taxSub*0.065;
+    var taxInfo=_dcCalcTax(taxSub);
+    var tax=taxInfo.tax;
     var titleFee=78,regFee=20;
     var totalDue=taxSub+tax+titleFee+regFee;
     html=_dcHeader('Cash Deal','#30d158')+
@@ -4929,7 +4948,7 @@ function dcUpdate(){
       _dcRow('Doc Fee',_dcFmt(docFee))+
       _dcDiv()+
       _dcRow('Taxable Subtotal',_dcFmt(taxSub),'#888')+
-      _dcRow('Sales Tax (6.5%)',_dcFmt(tax))+
+      _dcTaxRows(taxSub)+
       _dcRow('Title Fee',_dcFmt(titleFee))+
       _dcRow('Registration Fee',_dcFmt(regFee))+
       _dcDiv()+
