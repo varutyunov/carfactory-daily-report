@@ -1389,37 +1389,49 @@ function showLoading(msg){
 function hideLoading(){document.getElementById('load-overlay').style.display='none';}
 
 // ── SUPABASE DATA SYNC ─────────────────────────────────────────────────────────
+var _syncInProgress=false;
 async function syncFromSupabase(){
+  if(_syncInProgress) return;
+  _syncInProgress=true;
   showLoading('Syncing data...');
-  try{
-    // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
-    const [emps, inv, asgn, calEvRaw] = await Promise.all([
-      sbGet('employees', 'order=name&limit=500'),
-      sbGet('inventory', 'order=name&limit=500&select=*'),
-      sbGet('assignments', 'select=*&order=assigned_at.desc&limit=500'),
-      sbGet('calendar_events', 'order=event_date.asc&limit=500').catch(()=>[])
-    ]);
-    S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
-    if(!emps || !inv) throw new Error('Empty response from Supabase');
-    // Completely replace — never merge with stale localStorage
-    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-    const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
-    const pxSaved=localStorage.getItem('px_cache');
-    S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
-    S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
-    // Wipe localStorage completely and save fresh Supabase data
-    var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
-    if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
-    if(pxSaved) localStorage.setItem('px_cache',pxSaved);
-    sv();
-    console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
-  } catch(e){
-    console.error('Sync failed:', e);
-    showLoading('Sync failed — retrying...');
-    setTimeout(()=>syncFromSupabase(), 2000);
-    return;
+  for(var _attempt=0; _attempt<3; _attempt++){
+    try{
+      // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
+      const [emps, inv, asgn, calEvRaw] = await Promise.all([
+        sbGet('employees', 'order=name&limit=2000'),
+        sbGet('inventory', 'order=name&limit=2000&select=*'),
+        sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
+        sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[])
+      ]);
+      S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
+      if(!emps || !inv) throw new Error('Empty response from Supabase');
+      // Completely replace — never merge with stale localStorage
+      S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
+      const colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+      const pxSaved=localStorage.getItem('px_cache');
+      S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||colorMap[c.vin]||colorMap[c.stock]||'',miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
+      S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
+      // Wipe localStorage completely and save fresh Supabase data
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');
+      if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
+      if(pxSaved) localStorage.setItem('px_cache',pxSaved);
+      sv();
+      console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
+      _syncInProgress=false;
+      hideLoading();
+      return; // success — resolve promise only after data is loaded
+    } catch(e){
+      console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
+      if(_attempt < 2){
+        showLoading('Sync failed — retrying...');
+        await new Promise(function(r){ setTimeout(r, 2000); });
+      }
+    }
   }
+  // All retries exhausted
+  _syncInProgress=false;
   hideLoading();
+  console.error('Sync failed after 3 attempts');
 }
 
 // ── OFFLINE DETECTION ──────────────────────────────────────────────────────────
@@ -1469,22 +1481,28 @@ async function doLogin(){
   // Start translation system if previously in Spanish mode
   if(typeof _txInit==='function') _txInit();
 }
-function doSync(){
+async function doSync(){
   const btn=document.getElementById('sync-btn');
   btn.style.color='#30d158';
   btn.style.pointerEvents='none';
   btn.style.animation='spin 1s linear infinite';
   // Save session so user stays logged in after reload
   if(me) localStorage.setItem('cf_session', JSON.stringify(me));
-  // Tell SW to fetch fresh app version
+  // Tell SW to skip waiting so new app code activates on next load
   if('serviceWorker' in navigator && navigator.serviceWorker.controller){
     navigator.serviceWorker.controller.postMessage('SYNC');
-    // Fallback: if SW doesn't respond in 5s, reload anyway
-    setTimeout(()=>{ if(btn.style.pointerEvents==='none') window.location.reload(); }, 5000);
-  } else {
-    // No SW — just reload
-    window.location.reload();
   }
+  // Fetch fresh data from Supabase and re-render (no reload needed)
+  try{
+    await syncFromSupabase();
+    // Re-render current view with fresh data
+    if(me && me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
+    else{goEmpHome();}
+    fetchNotifications();
+  }catch(e){console.error('doSync error:',e);}
+  btn.style.color='#555';
+  btn.style.pointerEvents='';
+  btn.style.animation='';
 }
 function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display='none';closeAIChat();document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
 // Enter key handled by <form> submit
