@@ -1612,10 +1612,13 @@ function renderEmpHome(){
     '</div>';
   }).join('');
   if(isDealUser){
-    tileHTML+='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 6px 28px rgba(34,197,94,0.28),0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;min-height:120px;">' +
-      '<div style="font-size:30px;line-height:1;">💵</div>' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">Deal Calc</div>' +
-      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">cash &amp; finance</div>' +
+    tileHTML+='<div onclick="openDealCalc()" style="grid-column:1/-1;background:linear-gradient(135deg,#001a0e,#003318);box-shadow:0 4px 20px rgba(34,197,94,0.15);border-radius:14px;padding:12px 18px;display:flex;flex-direction:row;align-items:center;gap:12px;cursor:pointer;border:1px solid rgba(34,197,94,0.18);-webkit-tap-highlight-color:transparent;margin-top:4px;">' +
+      '<div style="font-size:20px;line-height:1;flex-shrink:0;">💵</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;">Deal Calculator</div>' +
+        '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px;">Cash &amp; finance breakdown</div>' +
+      '</div>' +
+      '<div style="font-size:13px;color:rgba(34,197,94,0.6);">›</div>' +
     '</div>';
   }
   grid.innerHTML=tileHTML;
