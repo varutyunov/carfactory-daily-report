@@ -1293,18 +1293,16 @@ function initOneSignalUser(name){
 
 // Send a push notification to all subscribed employees
 async function sendNotification(empId, message, subtitle, carName){
+  // Send push to all managers (owner-targeted)
   try{
-    var payload={
-      app_id:OS_APP_ID,
-      headings:{en:carName||'Car Factory'},
-      contents:{en:message},
-      included_segments:['All']
-    };
-    await fetch('https://onesignal.com/api/v1/notifications',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
-      body:JSON.stringify(payload)
-    });
+    var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
+    if(managers.length>0){
+      await sendPushNotification(managers.map(function(m){return m.name;}), carName||'Car Factory', message);
+    }
+    // Also create in-app notifications for each manager
+    for(var i=0;i<managers.length;i++){
+      try{await createNotification(managers[i].id, message, null, carName||'');}catch(e2){}
+    }
   }catch(e){console.warn('Notification error',e);}
 }
 
@@ -1600,6 +1598,8 @@ function updateTabBadges(){
   const tabDetail=document.getElementById('tab-detail');
   const tabPhotos=document.getElementById('tab-photos');
   const tabRepair=document.getElementById('tab-repair');
+  const tabParts=document.getElementById('tab-parts');
+  const tabPaint=document.getElementById('tab-paint');
   function setBadge(el,label,count){
     if(!el) return;
     if(count>0){
@@ -1608,19 +1608,25 @@ function updateTabBadges(){
       el.textContent=label;
     }
   }
+  function catReviewCount(cat){
+    return S.inventory.filter(function(car){
+      var ws=getWorkState(car.id);
+      return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;
+    }).length;
+  }
+  function catQueueCount(cat){
+    return S.inventory.filter(function(car){
+      var ws=getWorkState(car.id);
+      return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;
+    }).length;
+  }
   const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved&&!isQueueAssignment(a)).length;
   setBadge(tabTasks,'Tasks',taskReviewCount);
-  const detailCount=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.detail&&ws.categories.detail.done&&!ws.categories.detail.reviewed;
-  }).length;
-  setBadge(tabDetail,'Detail',detailCount);
-  const photosCount=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.photos&&ws.categories.photos.done&&!ws.categories.photos.reviewed;
-  }).length;
-  setBadge(tabPhotos,'Photos',photosCount);
-  setBadge(tabRepair,'Repair',taskReviewCount);
+  setBadge(tabDetail,'Detail',catReviewCount('detail'));
+  setBadge(tabPhotos,'Photos',catReviewCount('photos'));
+  setBadge(tabRepair,'Repair',catQueueCount('repair'));
+  setBadge(tabParts,'Parts',catQueueCount('parts'));
+  setBadge(tabPaint,'Paint',catQueueCount('paint'));
 }
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
@@ -2086,6 +2092,14 @@ async function submitReview(){
     await sbPatch('assignments',a.id,{submitted:true,photos:uploadedPhotos,submitted_at:now,tasks:a.tasks});
     a.submitted=true;a.photos=uploadedPhotos;a.submittedAt=now;sv();
     updateSubBtn(a);
+    // Notify all managers
+    var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
+    var carName=car?car.name:'vehicle';
+    var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
+    await sendPushNotification(managers.map(function(m){return m.name;}),'📋 Review Needed',me.name+' submitted work on '+carName);
+    for(var mi=0;mi<managers.length;mi++){
+      try{await createNotification(managers[mi].id,me.name+' submitted work on '+carName+' — needs review',a.id,carName);}catch(e2){}
+    }
   } catch(e){alert('Error: '+e.message);}
   hideLoading();
   setTimeout(()=>backToGrid(),400);
@@ -2586,24 +2600,40 @@ function renderMgrDetail(){
 async function approveDetail(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.detail&&ws.categories.detail.doneBy;
   if(ws.categories.detail&&ws.categories.detail.done) ws.categories.detail.reviewed=true;
   if(ws.categories.detail) ws.categories.detail.sectionPool=false;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
+  // Notify employee who did the work
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'✅ Detail Approved',me.name+' approved detail on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' approved detail on '+carName,null,carName);}catch(e){}
+  }
   renderMgrDetail();
-  updateTabBadges();
+  updateTabBadges();updateHomeBadges();
 }
 async function rejectDetail(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.detail&&ws.categories.detail.doneBy;
   if(ws.categories.detail) ws.categories.detail.done=false;
   if(ws.categories.photos) ws.categories.photos.done=false;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
+  // Notify employee to redo
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'↩ Detail Sent Back',me.name+' sent back detail on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' sent back detail on '+carName+' — needs redo',null,carName);}catch(e){}
+  }
   renderMgrDetail();
-  updateTabBadges();
+  updateTabBadges();updateHomeBadges();
 }
 async function removeFromDetailQueue(carId){
   const ws=getWorkState(carId);
@@ -2716,20 +2746,34 @@ function renderMgrPhotos(){
 async function approvePhotos(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.photos&&ws.categories.photos.doneBy;
   if(ws.categories.photos){ws.categories.photos.reviewed=true;ws.categories.photos.sectionPool=false;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrPhotos();updateTabBadges();
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'✅ Photos Approved',me.name+' approved photos on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' approved photos on '+carName,null,carName);}catch(e){}
+  }
+  renderMgrPhotos();updateTabBadges();updateHomeBadges();
 }
 async function rejectPhotos(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.photos&&ws.categories.photos.doneBy;
   if(ws.categories.photos) ws.categories.photos.done=false;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrPhotos();updateTabBadges();
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'↩ Photos Sent Back',me.name+' sent back photos on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' sent back photos on '+carName+' — needs redo',null,carName);}catch(e){}
+  }
+  renderMgrPhotos();updateTabBadges();updateHomeBadges();
 }
 async function removeFromPhotosQueue(carId){
   const ws=getWorkState(carId);
@@ -2962,20 +3006,34 @@ function renderMgrParts(){
 async function approveParts(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.parts&&ws.categories.parts.doneBy;
   if(ws.categories.parts){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrParts();updateTabBadges();
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'✅ Parts Approved',me.name+' approved parts on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' approved parts on '+carName,null,carName);}catch(e){}
+  }
+  renderMgrParts();updateTabBadges();updateHomeBadges();
 }
 async function rejectParts(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
+  const doneBy=ws.categories.parts&&ws.categories.parts.doneBy;
   if(ws.categories.parts) ws.categories.parts.done=false;
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrParts();updateTabBadges();
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'↩ Parts Sent Back',me.name+' sent back parts on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' sent back parts on '+carName+' — needs redo',null,carName);}catch(e){}
+  }
+  renderMgrParts();updateTabBadges();updateHomeBadges();
 }
 async function removeFromPartsQueue(carId){
   const ws=getWorkState(carId);
@@ -3042,9 +3100,20 @@ function renderReview(){
 }
 async function approve(aid){
   showLoading('Approving...');
-  try{await sbPatch('assignments',aid,{approved:true});const a=S.assignments.find(x=>String(x.id)===String(aid));a.approved=true;sv();}
-  catch(e){alert('Error: '+e.message);}
-  hideLoading();renderReview();
+  try{
+    await sbPatch('assignments',aid,{approved:true});
+    const a=S.assignments.find(x=>String(x.id)===String(aid));
+    a.approved=true;sv();
+    // Notify employee
+    var emp=(S.employees||[]).find(function(e){return e.id===a.employeeId;});
+    var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
+    if(emp){
+      var carName=car?car.name:'vehicle';
+      await sendPushNotification([emp.name],'✅ Work Approved',me.name+' approved your work on '+carName);
+      try{await createNotification(emp.id,me.name+' approved your work on '+carName,aid,carName);}catch(e2){}
+    }
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();renderReview();updateTabBadges();updateHomeBadges();
 }
 async function sendBack(aid){
   showLoading('Sending back...');
@@ -3053,8 +3122,16 @@ async function sendBack(aid){
     a.tasks.forEach(t=>{t.done=false;t.by=null;});
     await sbPatch('assignments',aid,{submitted:false,tasks:a.tasks});
     a.submitted=false;sv();
+    // Notify employee
+    var emp=(S.employees||[]).find(function(e){return e.id===a.employeeId;});
+    var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
+    if(emp){
+      var carName=car?car.name:'vehicle';
+      await sendPushNotification([emp.name],'↩ Sent Back',me.name+' sent back your work on '+carName);
+      try{await createNotification(emp.id,me.name+' sent back your work on '+carName+' — needs redo',aid,carName);}catch(e2){}
+    }
   }catch(e){alert('Error: '+e.message);}
-  hideLoading();renderReview();
+  hideLoading();renderReview();updateTabBadges();updateHomeBadges();
 }
 
 // ── TEAM ───────────────────────────────────────────────────────────────────────
@@ -3800,6 +3877,7 @@ async function mgrConfirmCatDone(carId,section){
 async function mgrSendCatBack(carId,section){
   var ws=getWorkState(carId);
   if(!ws.categories||!ws.categories[section]) return;
+  var doneBy=ws.categories[section].doneBy;
   ws.categories[section].done=false;
   ws.categories[section].pendingReview=false;
   ws.categories[section].confirmed=false;
@@ -3808,8 +3886,13 @@ async function mgrSendCatBack(carId,section){
   await saveWorkState(carId);
   var sectionLabel={paint:'Paint',detail:'Detail',repair:'Repair',photos:'Photos',parts:'Parts'}[section]||section;
   var carName=car?car.name:'Car';
-  try{await sendNotification(null,'↩ '+sectionLabel+' sent back for redo on '+carName,null,carName);}catch(e){}
-  renderProgress();
+  // Notify the employee who did the work
+  if(doneBy){
+    try{await sendPushNotification([doneBy],'↩ '+sectionLabel+' Sent Back',me.name+' sent back '+sectionLabel.toLowerCase()+' on '+carName);}catch(e){}
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' sent back '+sectionLabel.toLowerCase()+' on '+carName+' — needs redo',null,carName);}catch(e){}
+  }
+  renderProgress();updateTabBadges();updateHomeBadges();
 }
 async function mgrMarkCatDone(carId,section){
   var ws=getWorkState(carId);
