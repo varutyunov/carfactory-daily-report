@@ -4847,22 +4847,21 @@ function dcUpdate(){
 // ═══════════════════════════════════════════════════════════════════
 // LANGUAGE / TRANSLATION SYSTEM — Spanish ↔ English
 // ═══════════════════════════════════════════════════════════════════
+// Design: main DOM walk is 100% synchronous (dict only, zero async).
+// API translation runs separately, only for user-entered note elements.
+// Observer only fires the sync walk — no async in mutation callbacks.
 window._lang = localStorage.getItem('cf-lang') || 'en';
 window._txCache = {};
 window._txObserver = null;
-window._txVer = 0;       // incremented on every toggle — aborts stale async runs
-window._txTimer = null;  // debounce timer for observer-triggered translations
+window._txTimer = null;
 
 // Comprehensive EN→ES static dictionary
 var ES_DICT = {
-  // Navigation & tabs
   'Inventory':'Inventario','Tasks':'Tareas','Detail':'Detalle','Photos':'Fotos',
   'Parts':'Partes','Repair':'Reparación','Repairs':'Reparaciones','Paint':'Pintura',
   'Progress':'Progreso','Team':'Equipo','Calendar':'Calendario','Home':'Inicio',
   'Me':'Yo','All':'Todo','Recent':'Reciente',
-  // Tile labels
   'cars':'autos','car':'auto','Cars':'Autos','Car':'Auto',
-  // Actions / buttons
   'Assign':'Asignar','Mark Done':'Marcar Listo','Mark Car Complete':'Marcar Auto Completo',
   'Confirm':'Confirmar','Redo':'Rehacer','Submit':'Enviar','Cancel':'Cancelar',
   'Save':'Guardar','Close':'Cerrar','Add':'Agregar','Edit':'Editar','Delete':'Eliminar',
@@ -4873,11 +4872,9 @@ var ES_DICT = {
   'Assign to Workers →':'Asignar a Trabajadores →',
   'Keep me signed in':'Mantenerme conectado',
   'Add photos':'Agregar fotos',
-  // Status / badges
   'In Review':'En Revisión','Confirmed':'Confirmado','Complete':'Completo',
   'Pending':'Pendiente','Done':'Listo','Approved':'Aprobado','Rejected':'Rechazado',
   'pending review':'pendiente de revisión',
-  // Deal Calc
   'Deal Calc':'Calc. Trato','DEAL CALCULATOR':'CALCULADORA DE TRATO',
   'Sale Price':'Precio de Venta','Down Payment':'Pago Inicial',
   'Finance Deal':'Trato Financiado','Cash Deal':'Trato al Contado',
@@ -4887,14 +4884,12 @@ var ES_DICT = {
   'Registration Fee':'Cargo de Registro','Total Amount Due':'Total a Pagar',
   'Amount Financed':'Monto Financiado',
   'Biweekly (13 payments)':'Quincenal (13 pagos)','Total Cash Due':'Total al Contado',
-  // Labels & misc
   'Tools':'Herramientas','Notes':'Notas','Note':'Nota','Task':'Tarea',
-  'Employee Portal':'Portal del Empleado','Username':'Usuario','PIN':'PIN',
+  'Employee Portal':'Portal del Empleado','Username':'Usuario',
   'No cars in Paint queue':'Sin autos en cola de Pintura',
   'No tasks pending review':'Sin tareas pendientes de revisión',
   'No tasks yet':'Aún no hay tareas',
   'Loading…':'Cargando…','Loading':'Cargando',
-  'Sync failed — retrying...':'Error de sincronización — reintentando...',
   'Signing in...':'Iniciando sesión...',
   'Invalid username or PIN':'Usuario o PIN incorrecto',
   'No cars here yet':'Aún no hay autos',
@@ -4906,107 +4901,96 @@ var ES_DICT = {
   'Repair queue':'Cola de reparaciones',
 };
 
-// Google Translate free endpoint — only called for dynamic content not in dict
-async function _txApi(text) {
-  if (!text || !text.trim() || !/[a-zA-Z]{2}/.test(text)) return text;
-  var key = text.trim();
-  if (window._txCache[key]) return window._txCache[key];
-  try {
-    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(key);
-    var r = await fetch(url);
-    var j = await r.json();
-    var out = (j[0]||[]).map(function(x){return (x&&x[0])||'';}).join('');
-    if (out && out !== key) window._txCache[key] = out;
-    return out || key;
-  } catch(e) { return key; }
-}
-
-// Translate one string: dict first, then API for longer dynamic content
-async function _txStr(raw) {
+// Apply dict to a single string — pure synchronous, no network
+function _txApplyDict(raw) {
   var trimmed = raw.trim();
-  if (!trimmed) return raw;
+  if (!trimmed || !/[a-zA-Z]/.test(trimmed)) return raw;
   if (ES_DICT[trimmed]) return raw.replace(trimmed, ES_DICT[trimmed]);
-  var result = raw, changed = false;
-  Object.keys(ES_DICT).forEach(function(en){
-    if (result.indexOf(en) !== -1) { result = result.split(en).join(ES_DICT[en]); changed = true; }
-  });
-  if (changed) return result;
-  if (trimmed.length > 6 && /[a-zA-Z]{3}/.test(trimmed)) {
-    var api = await _txApi(trimmed);
-    if (api && api !== trimmed) return raw.replace(trimmed, api);
+  var result = raw;
+  var keys = Object.keys(ES_DICT);
+  for (var k = 0; k < keys.length; k++) {
+    if (result.indexOf(keys[k]) !== -1) result = result.split(keys[k]).join(ES_DICT[keys[k]]);
   }
-  return raw;
+  return result;
 }
 
-// Walk a DOM subtree and translate text nodes + placeholders.
-// Disconnects the observer first to prevent mutation feedback loops,
-// then reconnects when done. Aborts early if _txVer changed (rapid toggle).
-async function applySpanish(root) {
+// Walk DOM and apply dict translation synchronously — NEVER awaits anything
+function applySpanish(root) {
   if (window._lang !== 'es') return;
-  var myVer = window._txVer;
   root = root || document.body;
 
-  // Pause observer BEFORE touching the DOM — prevents infinite mutation loops
-  if (window._txObserver) window._txObserver.disconnect();
+  // Disconnect observer before touching DOM, null it out so _txStartObserver works correctly
+  if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
 
-  try {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: function(n) {
-        var tag = n.parentElement && n.parentElement.tagName;
-        if (!tag || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    }, false);
-    var nodes = [];
-    var n;
-    while ((n = walker.nextNode())) nodes.push(n);
-
-    for (var i = 0; i < nodes.length; i++) {
-      if (window._txVer !== myVer) return; // language toggled — abort
-      var node = nodes[i];
-      if (!node.parentNode) continue;      // node removed from DOM
-      var orig = node.textContent;
-      if (!orig || !orig.trim() || !/[a-zA-Z]/.test(orig)) continue;
-      var translated = await _txStr(orig);
-      if (window._txVer !== myVer) return; // check again after await
-      if (translated !== orig && node.parentNode) node.textContent = translated;
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: function(n) {
+      var tag = n.parentElement && n.parentElement.tagName;
+      if (!tag || tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
     }
-
-    // Placeholders
-    var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
-    for (var j = 0; j < inputs.length; j++) {
-      if (window._txVer !== myVer) return;
-      var ph = inputs[j].getAttribute('placeholder');
-      if (ph && /[a-zA-Z]/.test(ph)) {
-        var tph = await _txStr(ph);
-        if (window._txVer !== myVer) return;
-        if (tph !== ph) inputs[j].setAttribute('placeholder', tph);
-      }
-    }
-  } finally {
-    // Always reconnect observer (if still in ES mode and version unchanged)
-    if (window._lang === 'es' && window._txVer === myVer) _txStartObserver();
+  }, false);
+  var nodes = [], n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    if (!node.parentNode) continue;
+    var orig = node.textContent;
+    var tx = _txApplyDict(orig);
+    if (tx !== orig) node.textContent = tx;
   }
+  // Placeholders
+  var inputs = root.querySelectorAll ? root.querySelectorAll('input[placeholder],textarea[placeholder]') : [];
+  for (var j = 0; j < inputs.length; j++) {
+    var ph = inputs[j].getAttribute('placeholder');
+    if (ph) { var tph = _txApplyDict(ph); if (tph !== ph) inputs[j].setAttribute('placeholder', tph); }
+  }
+
+  // Restart observer now that DOM changes are done
+  if (window._lang === 'es') _txStartObserver();
+
+  // Fire async API translation for note/description elements only (runs in background, non-blocking)
+  _txTranslateNotes();
 }
 
-// Debounced wrapper — collapses rapid observer firings into one translation pass
-function _txSchedule(root) {
-  clearTimeout(window._txTimer);
-  window._txTimer = setTimeout(function(){ applySpanish(root); }, 120);
+// Translate only user-entered content (notes, task text) via API — runs async in background
+function _txTranslateNotes() {
+  if (window._lang !== 'es') return;
+  var sel = '.eq-note, .ti-note, .rc-tn-note';
+  var els = document.querySelectorAll(sel);
+  if (!els.length) return;
+  var noteTexts = [];
+  for (var i = 0; i < els.length; i++) {
+    var t = els[i].textContent.trim().replace(/^"|"$/g,'');
+    if (t && /[a-zA-Z]{3}/.test(t) && !window._txCache[t]) noteTexts.push({el:els[i], text:t});
+  }
+  if (!noteTexts.length) return;
+  // Batch all API calls concurrently (not sequential) — much faster and non-blocking
+  Promise.all(noteTexts.map(function(item){
+    return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(item.text))
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var out = (j[0]||[]).map(function(x){return (x&&x[0])||'';}).join('');
+        if (out && out !== item.text) {
+          window._txCache[item.text] = out;
+          if (window._lang === 'es' && item.el.parentNode) item.el.textContent = '"' + out + '"';
+        }
+      })
+      .catch(function(){});
+  }));
 }
 
-// MutationObserver: only reacts to added ELEMENT nodes, ignores text node changes
+// MutationObserver: fires synchronous dict translation on new element nodes
 function _txStartObserver() {
-  if (window._txObserver) return; // already running
+  if (window._txObserver) return;
   window._txObserver = new MutationObserver(function(mutations) {
     if (window._lang !== 'es') return;
     var hasNew = false;
     mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1) hasNew = true; // element node added
-      });
+      m.addedNodes.forEach(function(nd){ if (nd.nodeType === 1) hasNew = true; });
     });
-    if (hasNew) _txSchedule(document.body);
+    if (!hasNew) return;
+    clearTimeout(window._txTimer);
+    window._txTimer = setTimeout(function(){ applySpanish(document.body); }, 80);
   });
   window._txObserver.observe(document.body, { childList: true, subtree: true });
 }
@@ -5015,18 +4999,17 @@ function _txStopObserver() {
   if (window._txObserver) { window._txObserver.disconnect(); window._txObserver = null; }
 }
 
-// Toggle between EN and ES
+// Toggle between EN and ES — safe to tap repeatedly
 function toggleLang() {
-  window._txVer++;           // invalidate any in-flight async translation
-  _txStopObserver();         // stop observer immediately
   if (window._lang === 'en') {
     window._lang = 'es';
     localStorage.setItem('cf-lang', 'es');
-    applySpanish(document.body); // observer restarted inside applySpanish when done
+    applySpanish(document.body);
   } else {
+    _txStopObserver();
     window._lang = 'en';
     localStorage.setItem('cf-lang', 'en');
-    window.location.reload(); // fastest way to restore all original English
+    window.location.reload();
   }
   _txUpdateBtn();
 }
@@ -5040,10 +5023,10 @@ function _txUpdateBtn() {
     : '<div style="font-size:18px;line-height:1;">🇲🇽</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-top:3px;">Español</div>';
 }
 
-// Init: if user was in ES mode before, start observer and translate on login
+// Init: restore Spanish on page load if previously set
 function _txInit() {
   if (window._lang === 'es') {
-    setTimeout(function(){ applySpanish(document.body); }, 400); // observer started inside applySpanish
+    setTimeout(function(){ applySpanish(document.body); }, 400);
   }
 }
 
