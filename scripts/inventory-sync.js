@@ -57,8 +57,7 @@ async function main() {
       stock: r['stockno'],
       vin: r['vin'] || '',
       location,
-      color,
-      miles
+      color
     });
     csvStocks.add(r['stockno']);
   }
@@ -99,7 +98,6 @@ async function main() {
     const ex = existingByStock.get(c.stock);
     const patch = {};
     if (c.color) patch.color = c.color;
-    if (c.miles != null) patch.miles = c.miles;
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
