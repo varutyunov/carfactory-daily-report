@@ -1344,7 +1344,10 @@ async function sendPushNotification(targetNames, title, body){
         include_external_user_ids: externalIds,
         channel_for_external_user_ids: 'push',
         headings:{ en: title },
-        contents:{ en: body }
+        contents:{ en: body },
+        ios_badgeType: 'Increase',
+        ios_badgeCount: 1,
+        web_push_topic: title
       })
     });
   }catch(e){ console.log('Push failed:',e); }
