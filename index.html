@@ -2028,32 +2028,34 @@ function empTabGo(tab,btn){
   else if(tab==='personal') renderPersonalTab();
 }
 function renderDetailQueue(){
-  // Show only cars assigned to Detail section pool
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;});
+  var grid=document.getElementById('detail-grid');
+  var empty=document.getElementById('detail-empty');
+  if(!cars.length){if(grid)grid.style.display='none';if(empty)empty.style.display='flex';return;}
+  if(grid){grid.style.display='block';grid.style.padding='0';}
+  if(empty)empty.style.display='none';
+  var o='<div style="display:flex;flex-direction:column;gap:8px;padding:10px 0;">';
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories.detail.done;
+    var assignedTo=ws.categories.detail.assignedTo||[];
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'detail\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='</div>';
+    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
   });
-  const grid=document.getElementById('detail-grid');
-  const empty=document.getElementById('detail-empty');
-  if(!cars.length){grid.style.display='none';empty.style.display='flex';return;}
-  grid.style.display='grid';empty.style.display='none';
-  grid.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const isDetail=ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;
-    const isPhotos=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
-    const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
-    return`<a href="javascript:void(0)" onclick="openDetailDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${detailDone?'rgba(48,209,88,.4)':'#1e3a1e'};">
-      <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
-      <div style="color:#30d158;font-size:10px;font-weight:600;margin-top:4px;">✨ Detail</div>
-      ${detailDone?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Done</div>':''}
-      </div>
-    </a>`;
-  }).join('');
-  applyPexels(cars);
+  o+='</div>';
+  grid.innerHTML=o;
 }
 function renderPersonalTab(){
   // Show cars where photos/detail is assigned to THIS employee specifically
@@ -2713,44 +2715,33 @@ async function mgrRemoveTask(idx){
 
 // ── REVIEW ─────────────────────────────────────────────────────────────────────
 function renderMgrDetail(){
-  const el=document.getElementById('mgr-detail-list');
-  // Only cars assigned to Detail section pool
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&(
-      (ws.categories.detail&&ws.categories.detail.sectionPool)
-    );
-  });
+  var el=document.getElementById('mgr-detail-list');
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No vehicles in Detail queue</div></div>';return;}
-  el.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const detailDone=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
-    const photosDone=ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool&&ws.categories.photos.done;
-    const detailReviewed=ws.categories&&ws.categories.detail&&ws.categories.detail.reviewed;
-    const photosReviewed=ws.categories&&ws.categories.photos&&ws.categories.photos.reviewed;
-    const needsReview=(detailDone&&!detailReviewed)||(photosDone&&!photosReviewed);
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
-      <div class="rc-head">${photoHTML}<div class="rc-info">
-        <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
-      </div></div>
-      <div class="rc-tasks-list">
-        <div class="rc-task"><div class="rc-dot ${detailDone?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">✨ Detail${detailDone?' — done by '+(ws.categories.detail.doneBy||'employee'):''}</div></div></div>
-      </div>
-      <div style="padding:4px 0;">
-        <button onclick="openPhotoGallery(${car.id},'detail','✨ Detail Verification — ${car.name.replace(/'/g,"\\\\'")}')" style="width:100%;padding:10px;background:#1a1a1a;border:1px solid rgba(167,139,250,.3);border-radius:8px;color:#a78bfa;font-size:13px;font-weight:600;cursor:pointer;text-align:center;">📷 View Detail Photos</button>
-      </div>
-      <div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="removeFromDetailQueue(${car.id})">↩ Remove</button>
-        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectDetail(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
-        <button class="rc-btn rc-approve" onclick="approveDetail(${car.id})">✓ Approve</button>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  applyPexels(cars);
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories.detail.done;
+    var needsReview=done&&!ws.categories.detail.reviewed;
+    var assignedTo=(ws.categories.detail.assignedTo||[]);
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'detail\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='</div>';
+    if(needsReview) o+='<span style="font-size:11px;color:#ff453a;font-weight:700;flex-shrink:0;">⚠ Review</span>';
+    else if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
 }
 async function approveDetail(carId){
   const ws=getWorkState(carId);
@@ -2803,28 +2794,34 @@ async function removeFromDetailQueue(carId){
 
 // ── PHOTOS QUEUE (mirrors Detail exactly) ───────────────────────────────────
 function renderPhotosQueue(){
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
-  });
-  const grid=document.getElementById('photos-grid');
-  const empty=document.getElementById('photos-empty');
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
+  var grid=document.getElementById('photos-grid');
+  var empty=document.getElementById('photos-empty');
   if(!cars.length){if(grid)grid.style.display='none';if(empty)empty.style.display='flex';return;}
-  if(grid)grid.style.display='grid';if(empty)empty.style.display='none';
-  grid.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
-    return`<a href="javascript:void(0)" onclick="openPhotosDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e3a1e'};">
-      <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
-      ${done?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Photos done</div>':'<div style="color:#64d2ff;font-size:10px;font-weight:600;margin-top:4px;">📷 Photos</div>'}
-      </div>
-    </a>`;
-  }).join('');
-  applyPexels(cars);
+  if(grid){grid.style.display='block';grid.style.padding='0';}
+  if(empty)empty.style.display='none';
+  var o='<div style="display:flex;flex-direction:column;gap:8px;padding:10px 0;">';
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories.photos.done;
+    var assignedTo=ws.categories.photos.assignedTo||[];
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'photos\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='</div>';
+    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  grid.innerHTML=o;
 }
 function openPhotosDoneModal(carId){
   const car=S.inventory.find(c=>c.id===carId);
@@ -2864,39 +2861,33 @@ async function markPhotosDone(carId){
   updateTabBadges();
 }
 function renderMgrPhotos(){
-  const el=document.getElementById('mgr-photos-list');
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;
-  });
+  var el=document.getElementById('mgr-photos-list');
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
-  el.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
-    const reviewed=ws.categories&&ws.categories.photos&&ws.categories.photos.reviewed;
-    const needsReview=done&&!reviewed;
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card" style="border-color:${needsReview?'rgba(255,69,58,.4)':'#1a1a1a'};">
-      <div class="rc-head">${photoHTML}<div class="rc-info">
-        <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${needsReview?'<div style="color:#ff453a;font-size:12px;font-weight:600;margin-top:4px;">⚠ Needs Review</div>':''}
-      </div></div>
-      <div class="rc-tasks-list">
-        <div class="rc-task"><div class="rc-dot ${done?'dot-on':'dot-off'}"></div><div class="rc-tn"><div class="rc-tn-name">📷 Photos${done?' — done by '+(ws.categories.photos.doneBy||'employee'):''}</div></div></div>
-      </div>
-      <div style="padding:4px 0;">
-        <button onclick="openPhotoGallery(${car.id},'photos','📷 Photos — ${car.name.replace(/'/g,"\\\\'")}')" style="width:100%;padding:10px;background:#1a1a1a;border:1px solid rgba(192,86,243,.3);border-radius:8px;color:#c056f3;font-size:13px;font-weight:600;cursor:pointer;text-align:center;">📷 View / Upload Photos</button>
-      </div>
-      <div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="removeFromPhotosQueue(${car.id})">↩ Remove</button>
-        ${needsReview?`<button class="rc-btn rc-back" onclick="rejectPhotos(${car.id})" style="background:#1a1a1a;">↩ Send Back</button>
-        <button class="rc-btn rc-approve" onclick="approvePhotos(${car.id})">✓ Approve</button>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  applyPexels(cars);
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var done=ws.categories.photos.done;
+    var needsReview=done&&!ws.categories.photos.reviewed;
+    var assignedTo=(ws.categories.photos.assignedTo||[]);
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'photos\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='</div>';
+    if(needsReview) o+='<span style="font-size:11px;color:#ff453a;font-weight:700;flex-shrink:0;">⚠ Review</span>';
+    else if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
 }
 async function approvePhotos(carId){
   const ws=getWorkState(carId);
@@ -2942,30 +2933,41 @@ async function removeFromPhotosQueue(carId){
 
 // ── PARTS QUEUE (mirrors Detail/Photos exactly) ──────────────────────────────
 function renderPartsQueue(){
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;
-  });
-  const grid=document.getElementById('parts-grid');
-  const empty=document.getElementById('parts-empty');
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;});
+  var grid=document.getElementById('parts-grid');
+  var empty=document.getElementById('parts-empty');
   if(!cars.length){if(grid)grid.style.display='none';if(empty)empty.style.display='flex';return;}
-  if(grid)grid.style.display='grid';if(empty)empty.style.display='none';
-  grid.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const done=ws.categories&&ws.categories.parts&&ws.categories.parts.done;
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
-    const repairs=ws.categories.parts.repairs||[];
-    return`<a href="javascript:void(0)" onclick="openPartsDoneModal(${car.id})" class="car-tile" style="display:block;text-decoration:none;color:inherit;border-color:${done?'rgba(48,209,88,.4)':'#1e2a3a'};">
-      <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div>
-      <div style="color:#ff9f0a;font-size:10px;font-weight:600;margin-top:4px;">📦 Parts${repairs.length?' ('+repairs.length+' item'+(repairs.length>1?'s':'')+')':''}</div>
-      ${done?'<div style="color:#30d158;font-size:11px;margin-top:2px;">✓ Done</div>':''}
-      </div>
-    </a>`;
-  }).join('');
-  applyPexels(cars);
+  if(grid){grid.style.display='block';grid.style.padding='0';}
+  if(empty)empty.style.display='none';
+  // Build flat list of parts items across all cars
+  var allItems=[];
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var repairs=(ws.categories.parts.repairs||[]);
+    var done=ws.categories.parts.done;
+    if(!repairs.length){allItems.push({car:car,text:'(no items listed)',itemDone:false,carDone:done,idx:-1});}
+    else{repairs.forEach(function(r,i){allItems.push({car:car,text:typeof r==='string'?r:(r.text||''),itemDone:typeof r==='object'?!!r.done:false,bought:typeof r==='object'?!!r.bought:false,carDone:done,idx:i});});}
+  });
+  var o='<div style="display:flex;flex-direction:column;gap:8px;padding:10px 0;">';
+  allItems.forEach(function(item){
+    var c=item.car;
+    var pxUrl=!c.photo&&pxCache[String(c.id)];
+    var thumbSrc=c.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(c.name)+'</div>';
+    var borderCol=item.carDone?'rgba(48,209,88,0.3)':item.bought?'rgba(251,191,36,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+c.id+');toggleProgCat(\'parts\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:14px;color:'+(item.itemDone?'#666':'#fff')+';font-weight:600;'+(item.itemDone?'text-decoration:line-through;':'')+'">'+item.text+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+'</div>';
+    o+='</div>';
+    if(item.carDone) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    else if(item.bought) o+='<span style="font-size:11px;color:#fbbf24;font-weight:700;flex-shrink:0;">Bought</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  grid.innerHTML=o;
 }
 function openPartsDoneModal(carId){
   const car=S.inventory.find(c=>c.id===carId);
@@ -3012,43 +3014,37 @@ async function markPartsDone(carId){
 function renderMgrRepair(){
   var el=document.getElementById('mgr-repair-list');
   if(!el) return;
-  var cars=S.inventory.filter(function(car){
-    var ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;
-  });
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div></div>';return;}
-  el.innerHTML=cars.map(function(car){
+  // Build flat list of repair items across all cars
+  var allItems=[];
+  cars.forEach(function(car){
     var ws=getWorkState(car.id);
     var rd=ws.categories.repair||{};
-    var notes=rd.notes||'';
     var items=rd.items||[];
-    var assignedTo=rd.assignedTo||[];
-    var empNames=assignedTo.map(function(id){var e=S.employees.find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    var itemRows=items.map(function(item,i){
-      var txt=typeof item==='string'?item:(item.text||'');
-      var done=typeof item==='object'?!!item.done:false;
-      return`<div class="rc-task" style="align-items:center;"><div class="rc-dot ${done?'dot-on':'dot-off'}" style="cursor:pointer;flex-shrink:0;" onclick="toggleRepairItem(${car.id},${i})"></div><div class="rc-tn" style="flex:1;"><div class="rc-tn-name" style="${done?'text-decoration:line-through;color:#555;':''}">🔧 ${txt}</div></div><button onclick="removeRepairItem(${car.id},${i})" style="background:none;border:none;color:#555;font-size:15px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button></div>`;
-    }).join('');
-    return`<div class="rev-card">
-      <div class="rc-head">${photoHTML}<div class="rc-info">
-        <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${empNames.length?`<div style="font-size:11px;color:#666;margin-top:3px;">→ ${empNames.join(', ')}</div>`:''}
-      </div></div>
-      ${notes?`<div style="padding:5px 0 2px;font-size:13px;color:#888;font-style:italic;">"${notes}"</div>`:''}
-      ${itemRows?`<div style="padding:4px 0;">${itemRows}</div>`:''}
-      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-        <input id="ri-${car.id}" placeholder="Add repair item..." style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;padding:9px 12px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addRepairItem(${car.id})"/>
-        <button onclick="addRepairItem(${car.id})" style="background:#fb923c;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;flex-shrink:0;">+</button>
-      </div>
-      <div class="rc-actions" style="margin-top:8px;">
-        <button class="rc-btn rc-back" onclick="removeFromRepairQueue(${car.id})">↩ Remove</button>
-      </div>
-    </div>`;
-  }).join('');
-  applyPexels(cars);
+    var done=rd.done;
+    if(!items.length){allItems.push({car:car,text:'(no items listed)',itemDone:false,carDone:done,idx:-1});}
+    else{items.forEach(function(item,i){allItems.push({car:car,text:typeof item==='string'?item:(item.text||''),itemDone:typeof item==='object'?!!item.done:false,carDone:done,idx:i});});}
+  });
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  allItems.forEach(function(item){
+    var c=item.car;
+    var pxUrl=!c.photo&&pxCache[String(c.id)];
+    var thumbSrc=c.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(c.name)+'</div>';
+    var borderCol=item.carDone?'rgba(48,209,88,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+c.id+');toggleProgCat(\'repair\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:14px;color:'+(item.itemDone?'#666':'#fff')+';font-weight:600;'+(item.itemDone?'text-decoration:line-through;':'')+'">'+item.text+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+'</div>';
+    o+='</div>';
+    if(item.carDone) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
 }
 async function removeFromRepairQueue(carId){
   showLoading('Removing...');
@@ -3116,47 +3112,37 @@ async function removeRepairItem(carId,idx){
 }
 
 function renderMgrParts(){
-  const el=document.getElementById('mgr-parts-list');
-  const cars=S.inventory.filter(car=>{
-    const ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;
-  });
+  var el=document.getElementById('mgr-parts-list');
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📦</div><div class="et">No vehicles in Parts queue</div></div>';return;}
-  el.innerHTML=cars.map(car=>{
-    const ws=getWorkState(car.id);
-    const repairs=(ws.categories.parts.repairs)||[];
-    const allBought=repairs.length>0&&repairs.every(r=>typeof r==='object'?r.bought:false);
-    const pxUrl=!car.photo&&pxCache[String(car.id)];
-    const photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const repairRows=repairs.map((r,i)=>{
-      const txt=typeof r==='string'?r:(r.text||'');
-      const bought=typeof r==='object'?!!r.bought:false;
-      return`<div class="rc-task" style="align-items:center;">
-        <div class="rc-dot ${bought?'dot-on':'dot-off'}" style="cursor:pointer;flex-shrink:0;" onclick="togglePartItem(${car.id},${i})"></div>
-        <div class="rc-tn" style="flex:1;"><div class="rc-tn-name" style="${bought?'text-decoration:line-through;color:#555;':''}">📦 ${txt}</div></div>
-        <button onclick="removePartItem(${car.id},${i})" style="background:none;border:none;color:#555;font-size:15px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>
-      </div>`;
-    }).join('');
-    return`<div class="rev-card">
-      <div class="rc-head">${photoHTML}<div class="rc-info">
-        <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${allBought?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:4px;">✓ All parts bought</div>':''}
-      </div></div>
-      ${repairRows?`<div style="padding:8px 0;">${repairRows}</div>`:'<div style="padding:6px 0;color:#555;font-size:13px;">No parts listed yet</div>'}
-      <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
-        <input id="pi-${car.id}" placeholder="Add part..." style="flex:1;background:#1a1a1a;border:1px solid rgba(251,191,36,0.25);border-radius:8px;color:#fff;font-size:13px;padding:9px 12px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addPartItem(${car.id})"/>
-        <button onclick="addPartItem(${car.id})" style="background:#fbbf24;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;flex-shrink:0;">+</button>
-      </div>
-      <div style="padding:4px 0;">
-        <button onclick="openPhotoGallery(${car.id},'parts','📦 Parts Verification — ${car.name.replace(/'/g,"\\\\'")}')" style="width:100%;padding:10px;background:#1a1a1a;border:1px solid rgba(251,191,36,.3);border-radius:8px;color:#fbbf24;font-size:13px;font-weight:600;cursor:pointer;text-align:center;">📷 View Parts Photos</button>
-      </div>
-      <div class="rc-actions" style="margin-top:8px;">
-        <button class="rc-btn rc-back" onclick="removeFromPartsQueue(${car.id})">↩ Clear &amp; Remove</button>
-      </div>
-    </div>`;
-  }).join('');
-  applyPexels(cars);
+  var allItems=[];
+  cars.forEach(function(car){
+    var ws=getWorkState(car.id);
+    var repairs=(ws.categories.parts.repairs||[]);
+    var done=ws.categories.parts.done;
+    if(!repairs.length){allItems.push({car:car,text:'(no items listed)',itemDone:false,bought:false,carDone:done,idx:-1});}
+    else{repairs.forEach(function(r,i){allItems.push({car:car,text:typeof r==='string'?r:(r.text||''),itemDone:typeof r==='object'?!!r.done:false,bought:typeof r==='object'?!!r.bought:false,carDone:done,idx:i});});}
+  });
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  allItems.forEach(function(item){
+    var c=item.car;
+    var pxUrl=!c.photo&&pxCache[String(c.id)];
+    var thumbSrc=c.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(c.name)+'</div>';
+    var borderCol=item.carDone?'rgba(48,209,88,0.3)':item.bought?'rgba(251,191,36,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+c.id+');toggleProgCat(\'parts\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:14px;color:'+(item.bought?'#666':'#fff')+';font-weight:600;'+(item.bought?'text-decoration:line-through;':'')+'">'+item.text+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+'</div>';
+    o+='</div>';
+    if(item.carDone) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    else if(item.bought) o+='<span style="font-size:11px;color:#fbbf24;font-weight:700;flex-shrink:0;">Bought</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
 }
 async function approveParts(carId){
   const ws=getWorkState(carId);
@@ -4090,10 +4076,13 @@ async function mgrMarkCarComplete(carId){
 }
 
 /* ── PROGRESS VIEW ── */
+var _progOpenCat={};
 function renderProgress(){
   var el=document.getElementById('mgr-progress-content');
   if(!el) return;
-  var tabTypes=['paint','detail','repair','photos','parts'];
+  // If a car is open full-screen, render that instead
+  if(_progFullCar){renderProgFull();return;}
+  var tabTypes=['paint','detail','repair','photos','parts','tasks'];
   var carIdSet=new Set();
   (S.inventory||[]).forEach(function(car){
     var ws=getWorkState(car.id);
@@ -4114,13 +4103,7 @@ function renderProgress(){
     '</div>';
     return;
   }
-  var catMeta={
-    paint:{label:'Paint',icon:'🎨',color:'#ec4899'},
-    detail:{label:'Detail',icon:'✨',color:'#a78bfa'},
-    repair:{label:'Repair',icon:'🔧',color:'#fb923c'},
-    photos:{label:'Photos',icon:'📷',color:'#c084fc'},
-    parts:{label:'Parts',icon:'📦',color:'#fbbf24'}
-  };
+  var catMeta={paint:{label:'Paint',icon:'🎨',color:'#ec4899'},detail:{label:'Detail',icon:'✨',color:'#a78bfa'},repair:{label:'Repair',icon:'🔧',color:'#fb923c'},photos:{label:'Photos',icon:'📷',color:'#c084fc'},parts:{label:'Parts',icon:'📦',color:'#fbbf24'},tasks:{label:'Tasks',icon:'📋',color:'#60a5fa'}};
   var out='<div style="display:flex;flex-direction:column;gap:14px;padding:14px 14px 80px;">';
   activeCars.forEach(function(car){
     var ws=getWorkState(car.id);
@@ -4131,22 +4114,18 @@ function renderProgress(){
     var pendingReview=activeTabs.filter(function(t){return cats[t]&&cats[t].pendingReview&&!cats[t].confirmed;}).length;
     var pct=totalCats?Math.round(confirmedCats/totalCats*100):0;
     var pctColor=pct===100?'#30d158':pendingReview?'#ffd60a':'#a78bfa';
-    var isExpanded=_progressExpanded.has(car.id);
     var allConfirmed=totalCats>0&&confirmedCats===totalCats;
-    // Car photo thumbnail
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var thumbSrc=car.photo||pxUrl||'';
     var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:12px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    // Status summary chips
     var summaryChips=activeTabs.map(function(t){
-      var c=cats[t];
-      var col=c.confirmed?'#30d158':c.done?'#ffd60a':catMeta[t].color;
-      var icon=c.confirmed?'✓':c.done?'⏳':catMeta[t].icon;
+      var c=cats[t];var col=c.confirmed?'#30d158':c.done?'#ffd60a':catMeta[t].color;var icon=c.confirmed?'✓':c.done?'⏳':catMeta[t].icon;
       return '<span style="font-size:10px;background:'+col+'18;color:'+col+';border:1px solid '+col+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+icon+' '+catMeta[t].label+'</span>';
     }).join('');
-    out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;">';
-    // Header row with photo
-    out+='<div onclick="toggleProgressExpand('+car.id+')" style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;cursor:pointer;">';
+    var carAssigns=(S.assignments||[]).filter(function(a){return a.inventoryId===car.id&&!a.approved;});
+    if(carAssigns.length){var tc=catMeta.tasks.color;summaryChips+='<span style="font-size:10px;background:'+tc+'18;color:'+tc+';border:1px solid '+tc+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+catMeta.tasks.icon+' Tasks</span>';}
+    out+='<div onclick="openProgCar('+car.id+')" style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    out+='<div style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;">';
     out+=thumbHTML;
     out+='<div style="flex:1;min-width:0;">';
     out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
@@ -4155,112 +4134,213 @@ function renderProgress(){
     out+='</div>';
     out+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">';
     out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:'+pctColor+';">'+pct+'%</div>';
-    out+='<div style="font-size:16px;color:#333;">'+(isExpanded?'▲':'▼')+'</div>';
+    out+='<div style="font-size:18px;color:#444;">›</div>';
     out+='</div>';
     out+='</div>';
-    // Progress bar
     out+='<div style="margin:0 16px 10px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;">';
     out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:2px;transition:width 0.4s;"></div>';
     out+='</div>';
-    // Expanded detail — full workflow editing
-    if(isExpanded){
-      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:10px;">';
-      activeTabs.forEach(function(t){
-        var c=cats[t];
-        var meta=catMeta[t];
-        var isConf=c.confirmed||false;
-        var isPend=(c.done&&!c.reviewed)||false;
-        var isDone=c.done||false;
-        var rowBg=isConf?'rgba(48,209,88,0.06)':isPend?'rgba(255,214,10,0.06)':'rgba(255,255,255,0.02)';
-        out+='<div style="background:'+rowBg+';border-radius:12px;padding:12px;border:1px solid '+(isConf?'rgba(48,209,88,0.15)':isPend?'rgba(255,214,10,0.15)':'#1a1a1a')+'">';
-        // Category header row
-        out+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
-        out+='<div style="font-size:16px;">'+meta.icon+'</div>';
-        out+='<div style="flex:1;min-width:0;">';
-        out+='<div style="font-size:13px;font-weight:700;color:#fff;">'+meta.label+'</div>';
-        if(c.doneBy) out+='<div style="font-size:11px;color:#555;margin-top:1px;">by '+c.doneBy+(c.doneAt?' · '+new Date(c.doneAt).toLocaleDateString():'')+'</div>';
-        out+='</div>';
-        // Status + action buttons
-        out+='<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;">';
-        if(isConf){
-          out+='<span style="font-size:11px;font-weight:700;color:#30d158;">✓ Done</span>';
-        } else if(isPend){
-          out+='<button onclick="event.stopPropagation();mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
-          out+='<button onclick="event.stopPropagation();mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
-        } else {
-          out+='<button onclick="event.stopPropagation();mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
-        }
-        out+='</div>';
-        out+='</div>';
-        // Notes
-        if(c.notes) out+='<div style="font-size:12px;color:#666;font-style:italic;padding:0 2px;margin-bottom:4px;">"'+c.notes+'"</div>';
-        // Inline editing for all categories
-        var items=(c.items||c.repairs||[]);
-        if(items.length){
-          out+='<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;">';
-          items.forEach(function(item,i){
-            var txt=typeof item==='string'?item:(item.text||'');
-            var done=typeof item==='object'?!!item.done:false;
-            out+='<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.02);border-radius:6px;">';
-            out+='<div onclick="event.stopPropagation();progToggleItem('+car.id+',\''+t+'\','+i+')" style="width:16px;height:16px;border-radius:4px;border:2px solid '+(done?'#30d158':'#333')+';background:'+(done?'#30d158':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(done?'<span style="color:#000;font-size:10px;font-weight:900;">✓</span>':'')+'</div>';
-            out+='<span style="flex:1;font-size:12px;color:'+(done?'#555':'#ccc')+';'+(done?'text-decoration:line-through;':'')+'">'+txt+'</span>';
-            out+='<button onclick="event.stopPropagation();progRemoveItem('+car.id+',\''+t+'\','+i+')" style="background:none;border:none;color:#444;font-size:13px;cursor:pointer;padding:0 2px;">✕</button>';
-            out+='</div>';
-          });
-          out+='</div>';
-        }
-        // Add item input
-        out+='<div style="display:flex;gap:6px;">';
-        out+='<input id="prog-item-'+car.id+'-'+t+'" placeholder="Add '+meta.label.toLowerCase()+' item..." style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:inherit;" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.stopPropagation();progAddItem('+car.id+',\''+t+'\');}"/>';
-        out+='<button onclick="event.stopPropagation();progAddItem('+car.id+',\''+t+'\')" style="background:'+meta.color+';border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;flex-shrink:0;">+</button>';
-        out+='</div>';
-        // Photo button for all categories
-        out+='<div style="display:flex;gap:6px;margin-top:6px;">';
-        var safeTitle=meta.icon+' '+meta.label+' — '+car.name.replace(/'/g,"\\'");
-        out+='<button onclick="event.stopPropagation();openPhotoGallery('+car.id+',\''+t+'\',\''+safeTitle+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:'+meta.color+';font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">📷 Photos</button>';
-        // Assign employee button
-        out+='<button onclick="event.stopPropagation();progAssignCat('+car.id+',\''+t+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#888;font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">'+(c.assignedTo&&c.assignedTo.length?'👤 Reassign':'👤 Assign')+'</button>';
-        out+='</div>';
-        // Show assigned employees
-        if(c.assignedTo&&c.assignedTo.length){
-          var empNames=c.assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
-          if(empNames.length) out+='<div style="font-size:10px;color:#555;margin-top:4px;">→ '+empNames.join(', ')+'</div>';
-        }
-        out+='</div>';
-      });
-      out+='</div>';
-      // Notes section — always shown with add input
-      var carNotes=(ws.notes||[]);
-      out+='<div style="padding:0 16px 8px;"><div style="font-size:10px;font-weight:700;color:#444;letter-spacing:1px;margin-bottom:4px;">NOTES</div>';
-      if(carNotes.length){
-        carNotes.slice(-5).forEach(function(n){
-          var dt=n.at?new Date(n.at):'';
-          var timeStr=dt?dt.toLocaleDateString():'';
-          out+='<div style="font-size:11px;color:#888;padding:3px 0;"><span style="color:#64d2ff;font-weight:600;">'+(n.by||'')+'</span> '+n.text+(timeStr?' <span style="color:#333;font-size:9px;">'+timeStr+'</span>':'')+'</div>';
-        });
-      } else {
-        out+='<div style="font-size:11px;color:#333;padding:3px 0;">No notes yet</div>';
-      }
-      out+='<div style="display:flex;gap:6px;margin-top:6px;">';
-      out+='<input id="prog-note-'+car.id+'" placeholder="Add note..." style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:inherit;" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.stopPropagation();progAddNote('+car.id+');}"/>';
-      out+='<button onclick="event.stopPropagation();progAddNote('+car.id+')" style="background:#64d2ff;border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;flex-shrink:0;">+</button>';
-      out+='</div>';
-      out+='</div>';
-      // Bottom actions
-      out+='<div style="padding:0 16px 14px;display:flex;gap:8px;">';
-      if(allConfirmed){
-        out+='<button onclick="mgrMarkCarComplete('+car.id+')" style="flex:1;background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.4);color:#30d158;font-size:13px;font-weight:700;border-radius:10px;padding:10px 16px;cursor:pointer;letter-spacing:0.5px;">🏁 Mark Car Complete</button>';
-      } else {
-        out+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;cursor:pointer;">+ Assign Task</button>';
-        out+='<button onclick="removeCarFromProgress('+car.id+')" style="background:rgba(255,255,255,0.04);border:1px solid #222;color:#666;font-size:13px;font-weight:600;border-radius:10px;padding:10px 14px;cursor:pointer;white-space:nowrap;">↩ Remove</button>';
-      }
-      out+='</div>';
-    }
     out+='</div>';
   });
   out+='</div>';
   el.innerHTML=out;
   applyPexels(activeCars);
+}
+// ── Full-screen vehicle workflow view ──
+var _progFullCar=null;
+function openProgCar(carId){
+  _progFullCar=carId;
+  _progOpenCat={};
+  renderProgress();
+}
+function closeProgCar(){
+  _progFullCar=null;
+  _progOpenCat={};
+  renderProgress();
+}
+function toggleProgCat(cat){
+  if(_progOpenCat[cat]) delete _progOpenCat[cat];
+  else _progOpenCat[cat]=true;
+  renderProgress();
+}
+function renderProgFull(){
+  var el=document.getElementById('mgr-progress-content');
+  if(!el) return;
+  var car=S.inventory.find(function(c){return c.id===_progFullCar;});
+  if(!car){_progFullCar=null;renderProgress();return;}
+  var ws=getWorkState(car.id);
+  var cats=ws.categories||{};
+  var tabTypes=['repair','parts','detail','photos','paint','tasks'];
+  var activeTabs=tabTypes.filter(function(t){return cats[t]&&cats[t].sectionPool;});
+  var totalCats=activeTabs.length;
+  var confirmedCats=activeTabs.filter(function(t){return cats[t]&&(cats[t].confirmed||false);}).length;
+  var pct=totalCats?Math.round(confirmedCats/totalCats*100):0;
+  var pctColor=pct===100?'#30d158':'#a78bfa';
+  var allConfirmed=totalCats>0&&confirmedCats===totalCats;
+  var catMeta={paint:{label:'Paint',icon:'🎨',color:'#ec4899'},detail:{label:'Detail',icon:'✨',color:'#a78bfa'},repair:{label:'Repair',icon:'🔧',color:'#fb923c'},photos:{label:'Photos',icon:'📷',color:'#c084fc'},parts:{label:'Parts',icon:'📦',color:'#fbbf24'},tasks:{label:'Tasks',icon:'📋',color:'#60a5fa'}};
+  var pxUrl=!car.photo&&pxCache[String(car.id)];
+  var thumbSrc=car.photo||pxUrl||'';
+  var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:64px;height:64px;border-radius:14px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:64px;height:64px;border-radius:14px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+  var o='';
+  // Header
+  o+='<div style="padding:16px 16px 0;display:flex;align-items:center;gap:14px;">';
+  o+='<button onclick="closeProgCar()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:22px;cursor:pointer;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">←</button>';
+  o+=thumbHTML;
+  o+='<div style="flex:1;min-width:0;">';
+  o+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+  o+='<div style="font-size:12px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
+  o+='</div>';
+  o+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:'+pctColor+';flex-shrink:0;">'+pct+'%</div>';
+  o+='</div>';
+  // Progress bar
+  o+='<div style="margin:12px 16px 16px;height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden;">';
+  o+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width 0.4s;"></div>';
+  o+='</div>';
+  // Category accordion sections
+  o+='<div style="display:flex;flex-direction:column;gap:10px;padding:0 14px 14px;">';
+  activeTabs.forEach(function(t){
+    var c=cats[t];var meta=catMeta[t];
+    var isConf=c.confirmed||false;var isPend=(c.done&&!c.reviewed)||false;
+    var isOpen=!!_progOpenCat[t];
+    var items=(c.items||c.repairs||[]);
+    var itemCount=items.length;
+    var doneCount=items.filter(function(x){return typeof x==='object'&&x.done;}).length;
+    var statusColor=isConf?'#30d158':isPend?'#ffd60a':meta.color;
+    var statusText=isConf?'✓ Done':isPend?'⏳ Review':'';
+    var borderCol=isConf?'rgba(48,209,88,0.3)':isPend?'rgba(255,214,10,0.3)':'#1e1e1e';
+    // Section header — always visible, tap to expand
+    o+='<div style="background:#0d0d0d;border:1px solid '+borderCol+';border-radius:14px;overflow:hidden;">';
+    o+='<div onclick="toggleProgCat(\''+t+'\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div style="width:40px;height:40px;border-radius:12px;background:'+meta.color+'15;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+meta.icon+'</div>';
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;letter-spacing:1px;">'+meta.label.toUpperCase()+'</div>';
+    if(c.doneBy) o+='<div style="font-size:11px;color:#555;margin-top:2px;">by '+c.doneBy+(c.doneAt?' · '+new Date(c.doneAt).toLocaleDateString():'')+'</div>';
+    else if(itemCount>0) o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+doneCount+'/'+itemCount+' items</div>';
+    o+='</div>';
+    if(statusText) o+='<span style="font-size:11px;font-weight:700;color:'+statusColor+';flex-shrink:0;">'+statusText+'</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;margin-left:4px;">'+(isOpen?'▲':'▼')+'</div>';
+    o+='</div>';
+    // Expanded content
+    if(isOpen){
+      o+='<div style="border-top:1px solid #151515;padding:14px 16px 16px;">';
+      // Action buttons row
+      o+='<div style="display:flex;gap:8px;margin-bottom:14px;">';
+      if(isConf){
+        o+='<span style="flex:1;text-align:center;font-size:13px;font-weight:700;color:#30d158;padding:10px;">✓ Confirmed Complete</span>';
+      } else if(isPend){
+        o+='<button onclick="mgrConfirmCatDone('+car.id+',\''+t+'\')" style="flex:1;background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:13px;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;">✓ Confirm</button>';
+        o+='<button onclick="mgrSendCatBack('+car.id+',\''+t+'\')" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:13px;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;">↩ Send Back</button>';
+      } else {
+        o+='<button onclick="mgrMarkCatDone('+car.id+',\''+t+'\')" style="flex:1;background:'+meta.color+'18;border:1px solid '+meta.color+'44;color:'+meta.color+';font-size:13px;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;">Mark Done</button>';
+      }
+      o+='</div>';
+      // Category notes (not shown for parts — those become items)
+      if(c.notes&&t!=='parts') o+='<div style="font-size:13px;color:#777;font-style:italic;padding:8px 12px;background:#0a0a0a;border-radius:8px;margin-bottom:12px;border-left:3px solid '+meta.color+';">"'+c.notes+'"</div>';
+      // Items — each as its own card
+      if(items.length){
+        o+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">';
+        items.forEach(function(item,i){
+          var txt=typeof item==='string'?item:(item.text||'');
+          var done=typeof item==='object'?!!item.done:false;
+          o+='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:'+(done?'rgba(48,209,88,0.04)':'#111')+';border:1px solid '+(done?'rgba(48,209,88,0.15)':'#1e1e1e')+';border-radius:10px;">';
+          o+='<div onclick="progToggleItem('+car.id+',\''+t+'\','+i+')" style="width:22px;height:22px;border-radius:6px;border:2px solid '+(done?'#30d158':'#444')+';background:'+(done?'#30d158':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(done?'<span style="color:#000;font-size:12px;font-weight:900;">✓</span>':'')+'</div>';
+          o+='<span style="flex:1;font-size:14px;color:'+(done?'#666':'#eee')+';'+(done?'text-decoration:line-through;':'')+'">'+txt+'</span>';
+          o+='<button onclick="progRemoveItem('+car.id+',\''+t+'\','+i+')" style="background:none;border:none;color:#333;font-size:16px;cursor:pointer;padding:4px 6px;">✕</button>';
+          o+='</div>';
+        });
+        o+='</div>';
+      }
+      // Add item input — large and easy to use
+      o+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
+      o+='<input id="prog-item-'+car.id+'-'+t+'" placeholder="Add '+meta.label.toLowerCase()+' item..." style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;font-family:inherit;" onkeydown="if(event.key===\'Enter\')progAddItem('+car.id+',\''+t+'\');"/>';
+      o+='<button onclick="progAddItem('+car.id+',\''+t+'\')" style="background:'+meta.color+';border:none;border-radius:10px;color:#000;font-size:16px;font-weight:800;padding:12px 18px;cursor:pointer;flex-shrink:0;">+</button>';
+      o+='</div>';
+      // Assign row (Photos only on employee side)
+      o+='<div style="display:flex;gap:8px;">';
+      o+='<button onclick="progAssignCat('+car.id+',\''+t+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:10px;color:#888;font-size:13px;font-weight:600;padding:10px 12px;cursor:pointer;text-align:center;">'+(c.assignedTo&&c.assignedTo.length?'👤 Reassign':'👤 Assign')+'</button>';
+      o+='</div>';
+      if(c.assignedTo&&c.assignedTo.length){
+        var empNames=c.assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+        if(empNames.length) o+='<div style="font-size:11px;color:#555;margin-top:6px;padding:0 2px;">Assigned: '+empNames.join(', ')+'</div>';
+      }
+      o+='</div>';
+    }
+    o+='</div>';
+  });
+  o+='</div>';
+  // Tasks section — from assignments
+  var carAssigns=(S.assignments||[]).filter(function(a){return a.inventoryId===car.id&&!a.approved;});
+  if(carAssigns.length){
+    var taskMeta=catMeta.tasks||{label:'Tasks',icon:'📋',color:'#60a5fa'};
+    var isTaskOpen=!!_progOpenCat['tasks'];
+    // Collect all tasks with employee names
+    var allTasks=[];
+    carAssigns.forEach(function(a){
+      var emp=(S.employees||[]).find(function(e){return e.id===a.employeeId;});
+      var empName=emp?emp.name:'Employee #'+a.employeeId;
+      (a.tasks||[]).forEach(function(t){
+        allTasks.push({text:typeof t==='string'?t:(t.text||''),done:typeof t==='object'?!!t.done:false,emp:empName,assignId:a.id,submitted:a.submitted});
+      });
+    });
+    var tasksDone=allTasks.filter(function(t){return t.done;}).length;
+    o+='<div style="display:flex;flex-direction:column;gap:10px;padding:0 14px 14px;">';
+    o+='<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+    o+='<div onclick="toggleProgCat(\'tasks\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div style="width:40px;height:40px;border-radius:12px;background:'+taskMeta.color+'15;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+taskMeta.icon+'</div>';
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;letter-spacing:1px;">TASKS</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+tasksDone+'/'+allTasks.length+' done · '+carAssigns.length+' assigned</div>';
+    o+='</div>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;margin-left:4px;">'+(isTaskOpen?'▲':'▼')+'</div>';
+    o+='</div>';
+    if(isTaskOpen){
+      o+='<div style="border-top:1px solid #151515;padding:14px 16px 16px;">';
+      o+='<div style="display:flex;flex-direction:column;gap:8px;">';
+      allTasks.forEach(function(t){
+        o+='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:'+(t.done?'rgba(48,209,88,0.04)':'#111')+';border:1px solid '+(t.done?'rgba(48,209,88,0.15)':'#1e1e1e')+';border-radius:10px;">';
+        o+='<div style="width:22px;height:22px;border-radius:6px;border:2px solid '+(t.done?'#30d158':'#444')+';background:'+(t.done?'#30d158':'transparent')+';flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(t.done?'<span style="color:#000;font-size:12px;font-weight:900;">✓</span>':'')+'</div>';
+        o+='<div style="flex:1;min-width:0;">';
+        o+='<span style="font-size:14px;color:'+(t.done?'#666':'#eee')+';'+(t.done?'text-decoration:line-through;':'')+'">'+t.text+'</span>';
+        o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+t.emp+(t.submitted?' · <span style="color:#ffd60a;">Submitted</span>':'')+'</div>';
+        o+='</div>';
+        o+='</div>';
+      });
+      o+='</div>';
+      o+='</div>';
+    }
+    o+='</div>';
+    o+='</div>';
+  }
+  // Notes section
+  var carNotes=(ws.notes||[]);
+  o+='<div style="padding:0 16px 12px;"><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Notes</div>';
+  if(carNotes.length){
+    carNotes.slice(-5).forEach(function(n){
+      var dt=n.at?new Date(n.at):'';
+      var timeStr=dt?dt.toLocaleDateString():'';
+      o+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:8px 12px;margin-bottom:6px;">';
+      o+='<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:12px;font-weight:700;color:#64d2ff;">'+(n.by||'')+'</span><span style="font-size:10px;color:#333;">'+timeStr+'</span></div>';
+      o+='<div style="font-size:13px;color:#ccc;">'+n.text+'</div></div>';
+    });
+  } else {
+    o+='<div style="font-size:13px;color:#333;padding:4px 0;">No notes yet</div>';
+  }
+  o+='<div style="display:flex;gap:8px;margin-top:8px;">';
+  o+='<input id="prog-note-'+car.id+'" placeholder="Add note..." style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;font-family:inherit;" onkeydown="if(event.key===\'Enter\')progAddNote('+car.id+');"/>';
+  o+='<button onclick="progAddNote('+car.id+')" style="background:#64d2ff;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;padding:12px 18px;cursor:pointer;flex-shrink:0;">+</button>';
+  o+='</div>';
+  o+='</div>';
+  // Bottom actions
+  o+='<div style="padding:8px 16px 80px;display:flex;gap:8px;">';
+  if(allConfirmed){
+    o+='<button onclick="mgrMarkCarComplete('+car.id+')" style="flex:1;background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.4);color:#30d158;font-size:14px;font-weight:700;border-radius:12px;padding:14px 16px;cursor:pointer;letter-spacing:0.5px;">🏁 Mark Car Complete</button>';
+  } else {
+    o+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;font-size:14px;font-weight:600;border-radius:12px;padding:14px 16px;cursor:pointer;">+ Assign Task</button>';
+    o+='<button onclick="removeCarFromProgress('+car.id+');closeProgCar();" style="background:rgba(255,255,255,0.04);border:1px solid #222;color:#666;font-size:14px;font-weight:600;border-radius:12px;padding:14px;cursor:pointer;white-space:nowrap;">↩ Remove</button>';
+  }
+  o+='</div>';
+  el.innerHTML=o;
+  applyPexels([car]);
 }
 // ── Progress inline editing helpers ──
 async function progAddItem(carId,cat){
@@ -4940,9 +5020,15 @@ async function submitCarAssign(){
       if(!wsq.categories) wsq.categories = {};
       if(!wsq.categories[qType]) wsq.categories[qType] = {};
       wsq.categories[qType].sectionPool = true;
-      wsq.categories[qType].notes = note;
       wsq.categories[qType].assignedTo = isUnassigned ? [] : selectedIds.slice();
       wsq.categories[qType].addedAt = new Date().toISOString();
+      // For parts, add note text as an item instead of storing as notes
+      if(qType === 'parts' && note){
+        if(!wsq.categories.parts.repairs) wsq.categories.parts.repairs = [];
+        wsq.categories.parts.repairs.push({text: note, bought: false});
+      } else {
+        wsq.categories[qType].notes = note;
+      }
       // Only queue Parts if something was actually typed in the parts box
       if(qType === 'repair'){
         var partsDescVal = ((document.getElementById('ca-parts-desc')||{}).value||'').trim();
@@ -4984,32 +5070,31 @@ async function submitCarAssign(){
 function renderMgrPaint(){
   var el=document.getElementById('mgr-paint-list');
   if(!el) return;
-  var cars=S.inventory.filter(function(car){
-    var ws=getWorkState(car.id);
-    return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;
-  });
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No vehicles in Paint queue</div></div>';return;}
-  el.innerHTML=cars.map(function(car){
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  cars.forEach(function(car){
     var ws=getWorkState(car.id);
     var pd=ws.categories.paint||{};
-    var notes=pd.notes||'';
+    var done=pd.done;
     var assignedTo=pd.assignedTo||[];
-    var empNames=assignedTo.map(function(id){var e=S.employees.find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
     var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var photoHTML=car.photo?`<img class="rc-img" src="${car.photo}"/>`:pxUrl?`<img class="rc-img" src="${pxUrl}"/>`:`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return`<div class="rev-card">
-      <div class="rc-head">${photoHTML}<div class="rc-info">
-        <div class="rc-name">${car.name}</div>
-        <div class="rc-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' · '+car.color:''}</div>
-        ${empNames.length?`<div style="font-size:11px;color:#666;margin-top:3px;">→ ${empNames.join(', ')}</div>`:''}
-      </div></div>
-      ${notes?`<div style="padding:5px 0 2px;font-size:13px;color:#888;font-style:italic;">"${notes}"</div>`:''}
-      <div class="rc-actions">
-        <button class="rc-btn rc-back" onclick="removeFromPaintQueue(${car.id})">↩ Remove</button>
-      </div>
-    </div>`;
-  }).join('');
-  applyPexels(cars);
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'paint\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='</div>';
+    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
 }
 
 // ── AI BRAIN ─────────────────────────────────────────────────────────────────
