@@ -37,7 +37,8 @@ async function cpFetch(url, opts, depth) {
 
   const res = await fetch(url, Object.assign({}, opts, {
     headers: Object.assign({ 'Cookie': cookieHeader(), 'User-Agent': 'Mozilla/5.0' }, opts && opts.headers),
-    redirect: 'manual'
+    redirect: 'manual',
+    timeout: 30000
   }));
   updateJar(res);
 
