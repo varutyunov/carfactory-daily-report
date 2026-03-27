@@ -303,6 +303,9 @@ canvas{display:none;}
 .cp-empty{text-align:center;color:#444;padding:40px 0;font-size:14px;}
 .cp-search{width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;color:#fff;font-size:14px;padding:10px 14px;outline:none;margin-bottom:12px;font-family:inherit;}
 .cp-search::placeholder{color:#444;}
+.cp-loc-toggle{display:flex;gap:4px;justify-content:center;padding:4px 0 8px;}
+.cp-loc-btn{padding:6px 18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#888;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;transition:all .2s;}
+.cp-loc-btn.active{background:rgba(79,70,229,.2);border-color:rgba(79,70,229,.5);color:#a78bfa;}
 .cp-late{color:#ff453a!important;}
 .cp-current{color:#30d158!important;}
 .orbit-wrap{padding:14px 10px 4px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;overflow:visible;}
@@ -823,6 +826,10 @@ canvas{display:none;}
       <div class="swipe-page swipe-page-1" id="swipe-page-1">
         <div class="cp-panel">
           <div class="cp-header">CarPay</div>
+          <div class="cp-loc-toggle">
+            <button class="cp-loc-btn active" onclick="cpSetLoc('debary',this)">DeBary</button>
+            <button class="cp-loc-btn" onclick="cpSetLoc('deland',this)">DeLand</button>
+          </div>
           <div class="cp-tabs" id="cp-tabs">
             <div class="cp-tab active" onclick="cpTabGo('today',this)">Today</div>
             <div class="cp-tab" onclick="cpTabGo('customers',this)">Customers</div>
@@ -1631,13 +1638,19 @@ async function syncFromSupabase(){
   for(var _attempt=0; _attempt<3; _attempt++){
     try{
       // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
-      const [emps, inv, asgn, calEvRaw] = await Promise.all([
+      const [emps, inv, asgn, calEvRaw, cpCusts, cpPays] = await Promise.all([
         sbGet('employees', 'order=name&limit=2000'),
         sbGet('inventory', 'order=name&limit=2000&select=*'),
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
-        sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[])
+        sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
+        sbGet('carpay_customers', 'order=name&limit=5000').catch(()=>[]),
+        sbGet('carpay_payments', 'order=created_at.desc&limit=5000').catch(()=>[])
       ]);
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
+      // CarPay data
+      _cpData.customers=(Array.isArray(cpCusts)?cpCusts:[]).map(function(c){return{name:c.name,account:c.account,daysLate:String(c.days_late||0),nextPayment:c.next_payment||'',autoPay:!!c.auto_pay,location:c.location||'debary'};});
+      _cpData.payments=(Array.isArray(cpPays)?cpPays:[]).map(function(p){return{name:p.name,account:p.account,amountSent:p.amount_sent||'$0.00',date:p.date||'',time:p.time||'',method:p.method||'',reference:p.reference||'',location:p.location||'debary'};});
+      _cpData.synced=true;
       if(!emps || !inv) throw new Error('Empty response from Supabase');
       // Completely replace — never merge with stale localStorage
       S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
@@ -1650,9 +1663,10 @@ async function syncFromSupabase(){
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
-      console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees');
+      console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees,', _cpData.customers.length, 'CarPay customers');
       _syncInProgress=false;
       hideLoading();
+      try{cpRenderAll();}catch(e){}
       return; // success — resolve promise only after data is loaded
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
@@ -5327,6 +5341,13 @@ document.addEventListener('click',function(e){
 
 /* ── CARPAY TAB LOGIC ─────────────────────────────────────────────────────── */
 var _cpData={customers:[],payments:[],synced:false};
+var _cpLoc='debary';
+function cpSetLoc(loc,btn){
+  _cpLoc=loc;
+  document.querySelectorAll('.cp-loc-btn').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  cpRenderAll();
+}
 function cpTabGo(tab,btn){
   document.querySelectorAll('#cp-tabs .cp-tab').forEach(function(t){t.classList.remove('active');});
   if(btn) btn.classList.add('active');
@@ -5337,7 +5358,7 @@ function cpTabGo(tab,btn){
 }
 function cpRenderToday(){
   var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  var todayPayments=_cpData.payments.filter(function(p){return p.date===today;});
+  var todayPayments=_cpData.payments.filter(function(p){return p.date===today&&p.location===_cpLoc;});
   var count=todayPayments.length;
   var total=todayPayments.reduce(function(s,p){return s+(parseFloat(p.amountSent.replace(/[$,]/g,''))||0);},0);
   var ce=document.getElementById('cp-today-count');if(ce)ce.textContent=count;
@@ -5350,9 +5371,10 @@ function cpRenderToday(){
 }
 function cpRenderCustomers(){
   var list=document.getElementById('cp-cust-list');
-  if(!_cpData.customers.length){list.innerHTML='<div class="cp-empty">No customer data yet</div>';return;}
+  var locCusts=_cpData.customers.filter(function(c){return c.location===_cpLoc;});
+  if(!locCusts.length){list.innerHTML='<div class="cp-empty">No customer data yet</div>';return;}
   var q=(document.getElementById('cp-cust-search')||{}).value||'';
-  var filtered=_cpData.customers;
+  var filtered=locCusts;
   if(q)filtered=filtered.filter(function(c){return c.name.toLowerCase().indexOf(q.toLowerCase())!==-1||c.account.indexOf(q)!==-1;});
   list.innerHTML=filtered.map(function(c){
     var daysNum=parseInt(c.daysLate)||0;
@@ -5362,7 +5384,7 @@ function cpRenderCustomers(){
 }
 function cpFilterCustomers(){cpRenderCustomers();}
 function cpRenderLate(){
-  var late=_cpData.customers.filter(function(c){return parseInt(c.daysLate)>0;});
+  var late=_cpData.customers.filter(function(c){return c.location===_cpLoc&&parseInt(c.daysLate)>0;});
   late.sort(function(a,b){return parseInt(b.daysLate)-parseInt(a.daysLate);});
   var ce=document.getElementById('cp-late-count');if(ce)ce.textContent=late.length;
   var avg=late.length?Math.round(late.reduce(function(s,c){return s+parseInt(c.daysLate);},0)/late.length):0;
@@ -5375,9 +5397,10 @@ function cpRenderLate(){
 }
 function cpRenderHistory(){
   var list=document.getElementById('cp-hist-list');
-  if(!_cpData.payments.length){list.innerHTML='<div class="cp-empty">No payment history yet</div>';return;}
+  var locPays=_cpData.payments.filter(function(p){return p.location===_cpLoc;});
+  if(!locPays.length){list.innerHTML='<div class="cp-empty">No payment history yet</div>';return;}
   var q=(document.getElementById('cp-hist-search')||{}).value||'';
-  var filtered=_cpData.payments;
+  var filtered=locPays;
   if(q)filtered=filtered.filter(function(p){return p.name.toLowerCase().indexOf(q.toLowerCase())!==-1||p.account.indexOf(q)!==-1;});
   list.innerHTML=filtered.slice(0,100).map(function(p){
     return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.date+' '+p.time+' · #'+p.reference+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
