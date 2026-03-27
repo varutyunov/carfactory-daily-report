@@ -1429,6 +1429,33 @@ function updateNotifBadge(){
   if(!badge) return;
   if(count>0){badge.style.display='block';badge.textContent=count>9?'9+':count;}
   else{badge.style.display='none';}
+  updateAppBadge();
+}
+function updateAppBadge(){
+  // Set the PWA app icon badge on the home screen (like iMessage unread count)
+  if(!navigator.setAppBadge) return;
+  try{
+    var total=0;
+    // Count unread in-app notifications
+    total+=(S.notifications||[]).filter(function(n){return !n.read;}).length;
+    // Count items needing review across all categories
+    if(me&&me.role==='manager'){
+      (S.inventory||[]).forEach(function(car){
+        var ws=getWorkState(car.id);
+        if(!ws.categories) return;
+        ['detail','photos','parts','repair','paint'].forEach(function(cat){
+          if(ws.categories[cat]&&ws.categories[cat].sectionPool) total++;
+        });
+      });
+      // Count submitted task assignments needing review
+      total+=(S.assignments||[]).filter(function(a){return a.submitted&&!a.approved;}).length;
+    } else {
+      // For employees: count their active assignments
+      total+=(S.assignments||[]).filter(function(a){return a.employeeId===(me&&me.id)&&!a.approved;}).length;
+    }
+    if(total>0) navigator.setAppBadge(total);
+    else navigator.clearAppBadge();
+  }catch(e){}
 }
 async function openNotifPanel(){
   const el=document.getElementById('notif-list');
@@ -3856,6 +3883,7 @@ function updateHomeBadges(){
   var pac=spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
   var paintc=spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
+  updateAppBadge();
 }
 
 /* ── PROGRESS REVIEW ACTIONS ── */
