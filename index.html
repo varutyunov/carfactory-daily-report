@@ -270,11 +270,11 @@ canvas{display:none;}
 .cs-add-btn{width:100%;padding:12px;background:none;border:1px dashed #222;border-radius:10px;color:#555;font-size:14px;cursor:pointer;margin-top:4px;}
 
 /* ── MGR HOME — ORBITAL COMMAND CENTER ── */
-#mgr-home{overflow:hidden;background:#000;display:flex;flex-direction:column;}
+#mgr-home{overflow:hidden;background:#000;display:flex;flex-direction:column;touch-action:pan-y;}
 /* ── Swipe Pages Container ── */
-.swipe-container{display:flex;flex:1;min-height:0;transition:transform 0.35s cubic-bezier(.4,.0,.2,1);width:200%;will-change:transform;}
+.swipe-container{display:flex;flex:1;min-height:0;transition:transform 0.35s cubic-bezier(.4,.0,.2,1);width:200%;will-change:transform;touch-action:pan-y;}
 .swipe-container.at-page-1{transform:translateX(-50%);}
-.swipe-page{width:50%;flex-shrink:0;overflow-y:auto;overflow-x:hidden;}
+.swipe-page{width:50%;flex-shrink:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;}
 .swipe-page-0{background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;}
 .swipe-page-1{background:#050510;}
 .swipe-dots{display:flex;justify-content:center;gap:8px;padding:8px 0 4px;flex-shrink:0;}
@@ -4949,37 +4949,39 @@ var _swStartX=0,_swStartY=0,_swDx=0,_swDir=null; // dir: null=undecided, 'h'=hor
 function initSwipe(){
   if(_swipeInited) return;
   _swipeInited=true;
-  // Attach to mgr-home so it captures touches from all children
   var home=document.getElementById('mgr-home');
   if(!home) return;
   var el=document.getElementById('swipe-container');
   if(!el) return;
-  home.addEventListener('touchstart',function(e){
+  // Use capturing phase on document so we intercept touches BEFORE any child scrollable steals them
+  document.addEventListener('touchstart',function(e){
+    // Only handle touches inside mgr-home
+    if(!home.contains(e.target)) return;
     _swStartX=e.touches[0].clientX;
     _swStartY=e.touches[0].clientY;
     _swDx=0;
     _swDir=null;
-  },{passive:true});
-  home.addEventListener('touchmove',function(e){
-    if(!el) return;
+  },true);
+  document.addEventListener('touchmove',function(e){
+    if(!home.contains(e.target)) return;
     var dx=e.touches[0].clientX-_swStartX;
     var dy=e.touches[0].clientY-_swStartY;
-    // Decide direction on first significant move
     if(_swDir===null){
-      if(Math.abs(dx)<8&&Math.abs(dy)<8) return; // too small, wait
+      if(Math.abs(dx)<8&&Math.abs(dy)<8) return;
       _swDir=Math.abs(dx)>=Math.abs(dy)?'h':'v';
       if(_swDir==='h') el.style.transition='none';
     }
-    if(_swDir!=='h') return; // vertical scroll, ignore
-    // Prevent iOS from scrolling when we are swiping horizontally
+    if(_swDir!=='h') return;
     e.preventDefault();
+    e.stopPropagation();
     _swDx=dx;
     var base=_swipePage===0?0:-50;
     var pct=base+(dx/home.offsetWidth)*50;
     pct=Math.max(-50,Math.min(0,pct));
     el.style.transform='translateX('+pct+'%)';
-  },{passive:false});
-  home.addEventListener('touchend',function(){
+  },{capture:true,passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!home.contains(e.target)&&_swDir!=='h') return;
     if(_swDir!=='h'){_swDir=null;return;}
     el.style.transition='';
     el.style.transform='';
@@ -4987,9 +4989,8 @@ function initSwipe(){
       if(_swDx<0&&_swipePage===0) setSwipePage(1);
       else if(_swDx>0&&_swipePage===1) setSwipePage(0);
     }
-    // If threshold not met, it snaps back via CSS class
     _swDir=null;
-  },{passive:true});
+  },true);
 }
 function setSwipePage(p){
   _swipePage=p;
