@@ -1,0 +1,22 @@
+name: CarPay Sync
+
+on:
+  schedule:
+    # Every 2 hours during business hours (Mon-Sat, 8am-8pm ET = 12-24 UTC)
+    - cron: '0 12,14,16,18,20,22,0 * * 1-6'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install node-fetch@2
+      - run: node scripts/carpay-sync.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          CARPAY_EMAIL: ${{ secrets.CARPAY_EMAIL }}
+          CARPAY_PASSWORD: ${{ secrets.CARPAY_PASSWORD }}
+          CARPAY_DEBARY_ID: ${{ secrets.CARPAY_DEBARY_ID }}
+          CARPAY_DELAND_ID: ${{ secrets.CARPAY_DELAND_ID }}
