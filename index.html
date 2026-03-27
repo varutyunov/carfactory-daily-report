@@ -296,6 +296,14 @@ canvas{display:none;}
 .cp-card-amount{font-size:18px;font-weight:800;color:#30d158;}
 .cp-card-date{font-size:12px;color:#555;}
 .cp-card-method{font-size:11px;color:#4f46e5;background:rgba(79,70,229,.12);padding:3px 8px;border-radius:6px;}
+.cp-day-group{margin-bottom:4px;}
+.cp-day-hdr{display:flex;align-items:center;padding:11px 14px;background:rgba(255,255,255,.05);border-radius:10px;cursor:pointer;user-select:none;}
+.cp-day-hdr:active{opacity:.7;}
+.cp-day-label{font-weight:700;font-size:15px;flex:1;}
+.cp-day-meta{font-size:12px;color:#888;margin-right:8px;}
+.cp-day-chev{font-size:13px;color:#666;transition:transform .15s;}
+.cp-day-chev.open{transform:rotate(90deg);}
+.cp-day-body{padding:4px 0;}
 .cp-stat-row{display:flex;gap:10px;margin-bottom:12px;}
 .cp-stat{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;text-align:center;}
 .cp-stat-val{font-size:24px;font-weight:800;color:#fff;}
@@ -5357,17 +5365,44 @@ function cpTabGo(tab,btn){
   });
 }
 function cpRenderToday(){
-  var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  var todayPayments=_cpData.payments.filter(function(p){return p.date===today&&p.location===_cpLoc;});
-  var count=todayPayments.length;
-  var total=todayPayments.reduce(function(s,p){return s+(parseFloat(p.amountSent.replace(/[$,]/g,''))||0);},0);
-  var ce=document.getElementById('cp-today-count');if(ce)ce.textContent=count;
-  var te=document.getElementById('cp-today-total');if(te)te.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:2});
-  var list=document.getElementById('cp-today-list');
-  if(!todayPayments.length){list.innerHTML='<div class="cp-empty">No payments today yet</div>';return;}
-  list.innerHTML=todayPayments.map(function(p){
-    return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.time+' · Acct #'+p.account+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
-  }).join('');
+  var container=document.getElementById('cp-today-list');
+  var locPays=_cpData.payments.filter(function(p){return p.location===_cpLoc;});
+  if(!locPays.length){container.innerHTML='<div class="cp-empty">No payment data yet</div>';return;}
+  var byDate={};
+  locPays.forEach(function(p){if(p.date){if(!byDate[p.date])byDate[p.date]=[];byDate[p.date].push(p);}});
+  var now=new Date();now.setHours(0,0,0,0);
+  var html='';
+  for(var i=0;i<10;i++){
+    var d=new Date(now);d.setDate(d.getDate()-i);
+    var key=d.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    var pays=byDate[key]||[];
+    var total=pays.reduce(function(s,p){return s+(parseFloat((p.amountSent||'').replace(/[$,]/g,''))||0);},0);
+    var isToday=i===0;
+    var dayId='cpd'+i;
+    var label=isToday?'Today':d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    html+='<div class="cp-day-group">';
+    html+='<div class="cp-day-hdr" onclick="cpToggleDay(\''+dayId+'\',this)">';
+    html+='<span class="cp-day-label">'+label+'</span>';
+    if(pays.length){html+='<span class="cp-day-meta">'+pays.length+' · $'+total.toLocaleString('en-US',{minimumFractionDigits:2})+'</span>';}
+    else{html+='<span class="cp-day-meta" style="color:#444;">—</span>';}
+    html+='<span class="cp-day-chev'+(isToday?' open':'')+'">▶</span>';
+    html+='</div>';
+    html+='<div id="'+dayId+'" class="cp-day-body" style="display:'+(isToday&&pays.length?'block':'none')+'">';
+    if(pays.length){
+      html+=pays.map(function(p){
+        return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.time+' · Acct #'+p.account+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
+      }).join('');
+    }
+    html+='</div></div>';
+  }
+  container.innerHTML=html;
+}
+function cpToggleDay(id,hdr){
+  var body=document.getElementById(id);
+  var chev=hdr.querySelector('.cp-day-chev');
+  var open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(chev){if(open)chev.classList.remove('open');else chev.classList.add('open');}
 }
 function cpRenderCustomers(){
   var list=document.getElementById('cp-cust-list');
