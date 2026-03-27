@@ -4983,6 +4983,8 @@ function setSwipePage(p){
   _swipePage=p;
   var el=document.getElementById('swipe-container');
   if(!el) return;
+  el.style.transition='';
+  el.style.transform='';
   if(p===0){el.classList.remove('at-page-1');}
   else{el.classList.add('at-page-1');}
   var dots=document.querySelectorAll('#swipe-dots .swipe-dot');
