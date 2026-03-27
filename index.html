@@ -1438,21 +1438,20 @@ function updateAppBadge(){
   // Set the PWA app icon badge on the home screen (like iMessage unread count)
   try{
     var total=0;
-    // Count unread in-app notifications
-    total+=(S.notifications||[]).filter(function(n){return !n.read;}).length;
-    // Count items needing review across all categories
     if(me&&me.role==='manager'){
+      // Owner: only count items employees marked done that need review
       (S.inventory||[]).forEach(function(car){
         var ws=getWorkState(car.id);
         if(!ws.categories) return;
         ['detail','photos','parts','repair','paint'].forEach(function(cat){
-          if(ws.categories[cat]&&ws.categories[cat].sectionPool) total++;
+          if(ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed) total++;
         });
       });
       // Count submitted task assignments needing review
       total+=(S.assignments||[]).filter(function(a){return a.submitted&&!a.approved;}).length;
     } else {
-      // For employees: count their active assignments
+      // For employees: count their active assignments + unread notifications
+      total+=(S.notifications||[]).filter(function(n){return !n.read;}).length;
       total+=(S.assignments||[]).filter(function(a){return a.employeeId===(me&&me.id)&&!a.approved;}).length;
     }
     // Try direct API first
@@ -3884,13 +3883,18 @@ function updateHomeBadges(){
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
   var allCount=Object.keys(allSeen).length;
 
+  // For owner: only count items employees marked done that need review
+  // For employees: count items in their section pool
+  function reviewCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;}).length;}
   function spCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
-  var tc=carsWithTag('task'); var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=tc;hbt.style.display=tc>0?'block':'none';}
-  var rc=spCount('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
-  var dc=spCount('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
-  var pc=spCount('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
-  var pac=spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
-  var paintc=spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
+  var isOwner=me&&me.role==='manager';
+  var taskBadge=isOwner?asgns.filter(function(a){return a.submitted&&!a.approved;}).length:carsWithTag('task');
+  var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=taskBadge;hbt.style.display=taskBadge>0?'block':'none';}
+  var rc=isOwner?reviewCount('repair'):spCount('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
+  var dc=isOwner?reviewCount('detail'):spCount('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
+  var pc=isOwner?reviewCount('photos'):spCount('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
+  var pac=isOwner?reviewCount('parts'):spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
+  var paintc=isOwner?reviewCount('paint'):spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
   updateAppBadge();
 }
