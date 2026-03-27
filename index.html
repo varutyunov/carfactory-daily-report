@@ -46,7 +46,10 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 /* MGR TABS */
 .mtabs{display:flex;flex-wrap:wrap;gap:6px;background:#000;padding:8px 10px;border-bottom:1px solid #111;flex-shrink:0;}
 .emp-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;}
-.mt{flex:0 0 auto;padding:8px 16px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:13px;font-weight:600;cursor:pointer;}
+.mt{flex:0 0 auto;padding:8px 16px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:13px;font-weight:600;cursor:pointer;position:relative;}
+.mt .badge-left,.mt .badge-right{position:absolute;top:-7px;font-size:10px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;border-radius:9px;line-height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.mt .badge-left{left:-4px;background:#30d158;color:#fff;}
+.mt .badge-right{right:-4px;background:#ff453a;color:#fff;}
 .mt.on{background:#fff;border-color:#fff;color:#000;}
 
 /* CONTENT */
@@ -360,6 +363,9 @@ canvas{display:none;}
 .orbit-badge{position:absolute;top:-8px;right:-8px;z-index:10;background:#ef4444;color:#fff;border-radius:12px;
   font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;display:none;
   box-shadow:0 2px 10px rgba(239,68,68,0.7),0 0 0 2px #000;animation:badge-pulse 2s ease-in-out infinite;}
+.orbit-badge-green{position:absolute;top:-8px;left:-8px;z-index:10;background:#30d158;color:#fff;border-radius:12px;
+  font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;display:none;
+  box-shadow:0 2px 10px rgba(48,209,88,0.7),0 0 0 2px #000;animation:badge-pulse 2s ease-in-out infinite;}
 @keyframes badge-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.15);}}
 
 /* Stagger entrance */
@@ -710,6 +716,7 @@ canvas{display:none;}
                 <path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/>
               </svg>
               <div class="orbit-tile-label">Tasks</div>
+              <span class="orbit-badge-green" id="hbadge-tasks-green"></span>
               <span class="orbit-badge" id="hbadge-tasks"></span>
             </div>
           </div>
@@ -721,6 +728,7 @@ canvas{display:none;}
                 <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
               </svg>
               <div class="orbit-tile-label">Repairs</div>
+              <span class="orbit-badge-green" id="hbadge-repair-green"></span>
               <span class="orbit-badge" id="hbadge-repair"></span>
             </div>
           </div>
@@ -732,6 +740,7 @@ canvas{display:none;}
                 <path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/>
               </svg>
               <div class="orbit-tile-label">Detail</div>
+              <span class="orbit-badge-green" id="hbadge-detail-green"></span>
               <span class="orbit-badge" id="hbadge-detail"></span>
             </div>
           </div>
@@ -754,6 +763,7 @@ canvas{display:none;}
                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
               </svg>
               <div class="orbit-tile-label">Photos</div>
+              <span class="orbit-badge-green" id="hbadge-photos-green"></span>
               <span class="orbit-badge" id="hbadge-photos"></span>
             </div>
           </div>
@@ -765,6 +775,7 @@ canvas{display:none;}
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/>
               </svg>
               <div class="orbit-tile-label">Parts</div>
+              <span class="orbit-badge-green" id="hbadge-parts-green"></span>
               <span class="orbit-badge" id="hbadge-parts"></span>
             </div>
           </div>
@@ -786,6 +797,7 @@ canvas{display:none;}
                 <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
               </svg>
               <div class="orbit-tile-label">Paint</div>
+              <span class="orbit-badge-green" id="hbadge-paint-green"></span>
               <span class="orbit-badge" id="hbadge-paint"></span>
             </div>
           </div>
@@ -1736,39 +1748,34 @@ function showView(id){
 function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();if(id==='paint')renderMgrPaint();updateTabBadges();}
 
 function updateTabBadges(){
-  const tabTasks=document.getElementById('tab-tasks');
-  const tabDetail=document.getElementById('tab-detail');
-  const tabPhotos=document.getElementById('tab-photos');
-  const tabRepair=document.getElementById('tab-repair');
-  const tabParts=document.getElementById('tab-parts');
-  const tabPaint=document.getElementById('tab-paint');
-  function setBadge(el,label,count){
+  var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
+  function setDualBadge(el,label,greenCount,redCount){
     if(!el) return;
-    if(count>0){
-      el.innerHTML=label+' <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:2px;">'+count+'</span>';
-    }else{
-      el.textContent=label;
-    }
+    var html=label;
+    if(greenCount>0) html='<span class="badge-left">'+greenCount+'</span>'+html;
+    if(redCount>0) html=html+'<span class="badge-right">'+redCount+'</span>';
+    el.innerHTML=html;
   }
   function catReviewCount(cat){
-    return S.inventory.filter(function(car){
+    return (S.inventory||[]).filter(function(car){
       var ws=getWorkState(car.id);
       return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;
     }).length;
   }
   function catQueueCount(cat){
-    return S.inventory.filter(function(car){
+    return (S.inventory||[]).filter(function(car){
       var ws=getWorkState(car.id);
       return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;
     }).length;
   }
-  const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved&&!isQueueAssignment(a)).length;
-  setBadge(tabTasks,'Tasks',taskReviewCount);
-  setBadge(tabDetail,'Detail',catReviewCount('detail'));
-  setBadge(tabPhotos,'Photos',catReviewCount('photos'));
-  setBadge(tabRepair,'Repair',catQueueCount('repair'));
-  setBadge(tabParts,'Parts',catQueueCount('parts'));
-  setBadge(tabPaint,'Paint',catQueueCount('paint'));
+  var taskReviewCount=(S.assignments||[]).filter(function(a){return a.submitted&&!a.approved&&!isQueueAssignment(a);}).length;
+  // Green (left) = employee submissions needing review; Red (right) = owner queue counts
+  setDualBadge(tabs.tasks,'Tasks',taskReviewCount,0);
+  setDualBadge(tabs.detail,'Detail',catReviewCount('detail'),catQueueCount('detail'));
+  setDualBadge(tabs.photos,'Photos',catReviewCount('photos'),catQueueCount('photos'));
+  setDualBadge(tabs.repair,'Repair',catReviewCount('repair'),catQueueCount('repair'));
+  setDualBadge(tabs.parts,'Parts',catReviewCount('parts'),catQueueCount('parts'));
+  setDualBadge(tabs.paint,'Paint',catReviewCount('paint'),catQueueCount('paint'));
 }
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
@@ -3988,31 +3995,25 @@ function goMgrHome(){
 
 function updateHomeBadges(){
   var asgns=(S.assignments||[]).filter(function(a){return !a.approved;});
-  function hasTag(tag){return function(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('['+tag+']')!==-1;};}
-  function carsWithTag(){
-    var tags=[].slice.call(arguments);
-    var seen={};
-    asgns.forEach(function(a){
-      if(!seen[a.inventoryId]&&(a.tasks||[]).some(function(t){return tags.some(function(tag){return hasTag(tag)(t);});}))seen[a.inventoryId]=1;
-    });
-    return Object.keys(seen).length;
-  }
-  // All cars with any active assignment (for progress)
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
   var allCount=Object.keys(allSeen).length;
-
-  // For owner: only count items employees marked done that need review
-  // For employees: count items in their section pool
+  // Green = employee submissions needing owner review
   function reviewCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;}).length;}
-  function spCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
-  var isOwner=me&&me.role==='manager';
-  var taskBadge=isOwner?asgns.filter(function(a){return a.submitted&&!a.approved;}).length:carsWithTag('task');
-  var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=taskBadge;hbt.style.display=taskBadge>0?'block':'none';}
-  var rc=isOwner?reviewCount('repair'):spCount('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
-  var dc=isOwner?reviewCount('detail'):spCount('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
-  var pc=isOwner?reviewCount('photos'):spCount('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
-  var pac=isOwner?reviewCount('parts'):spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
-  var paintc=isOwner?reviewCount('paint'):spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
+  // Red = cars in queue (set by owner)
+  function queueCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
+  function setOrbitDual(baseName,green,red){
+    var gEl=document.getElementById(baseName+'-green');
+    var rEl=document.getElementById(baseName);
+    if(gEl){gEl.textContent=green;gEl.style.display=green>0?'block':'none';}
+    if(rEl){rEl.textContent=red;rEl.style.display=red>0?'block':'none';}
+  }
+  var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved;}).length;
+  setOrbitDual('hbadge-tasks',taskGreen,0);
+  setOrbitDual('hbadge-detail',reviewCount('detail'),queueCount('detail'));
+  setOrbitDual('hbadge-photos',reviewCount('photos'),queueCount('photos'));
+  setOrbitDual('hbadge-repair',reviewCount('repair'),queueCount('repair'));
+  setOrbitDual('hbadge-parts',reviewCount('parts'),queueCount('parts'));
+  setOrbitDual('hbadge-paint',reviewCount('paint'),queueCount('paint'));
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
   updateAppBadge();
 }
