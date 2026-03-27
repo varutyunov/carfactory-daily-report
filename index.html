@@ -602,6 +602,11 @@ canvas{display:none;}
         <div class="car-grid" id="personal-grid"></div>
         <div class="empty" id="personal-empty" style="display:none;"><div class="ei">👤</div><div class="et">No personal assignments yet.</div></div>
       </div>
+      <!-- Employee Inventory View -->
+      <div id="emp-inv-view" style="padding:0 14px 80px;display:none;">
+        <input class="inv-search" id="emp-inv-search" placeholder="Search vehicles..." oninput="empInvFilter(this.value)" style="margin-bottom:10px;"/>
+        <div id="emp-inv-list"></div>
+      </div>
       </div>
     </div>
 
@@ -843,7 +848,7 @@ canvas{display:none;}
 
 <!-- CAR ACTION SHEET -->
 <div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
-  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;">
+  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;">
       <div style="flex:1;min-width:0;">
         <div id="ca-car-name" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;"></div>
@@ -852,6 +857,11 @@ canvas{display:none;}
       <button onclick="closeCarActions()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;">&#x2715;</button>
     </div>
     <button onclick="openCarPhotoGallery()" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#64d2ff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:14px;text-align:center;">📷 Car Photos</button>
+    <!-- Notes from employees -->
+    <div id="ca-notes-section" style="display:none;margin-bottom:14px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Notes</div>
+      <div id="ca-notes-list"></div>
+    </div>
     <div class="ca-grid">
       <div class="ca-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 6px 28px rgba(251,146,60,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('repair')">
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,146,60,0.9)" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -877,6 +887,28 @@ canvas{display:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(167,139,250,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/></svg>
         <span class="ca-tile-label">Detail</span>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMPLOYEE CAR ACTION SHEET (photo + notes) -->
+<div id="m-emp-car" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
+  <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+      <div style="flex:1;min-width:0;">
+        <div id="ecar-name" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;"></div>
+        <div id="ecar-info" style="margin-top:6px;font-size:12px;color:#666;"></div>
+      </div>
+      <button onclick="closeEmpCar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;">&#x2715;</button>
+    </div>
+    <!-- Photo button -->
+    <button onclick="empCarPhotos()" style="width:100%;padding:12px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#64d2ff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;text-align:center;">📷 Photos</button>
+    <!-- Notes section -->
+    <div style="margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Notes</div>
+    <div id="ecar-notes" style="margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;">
+      <textarea id="ecar-note-inp" rows="2" placeholder="Add a note..." style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:14px;padding:10px 12px;outline:none;font-family:inherit;resize:none;"></textarea>
+      <button onclick="empAddNote()" style="background:#64d2ff;border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;cursor:pointer;padding:0 16px;flex-shrink:0;">Send</button>
     </div>
   </div>
 </div>
@@ -1783,6 +1815,7 @@ function goEmpHome(){
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='';
   var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='none';
   var catList=document.getElementById('emp-cat-car-list');if(catList)catList.style.display='none';
+  var invView=document.getElementById('emp-inv-view');if(invView)invView.style.display='none';
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
   var bar=document.getElementById('mgr-back-bar');if(bar)bar.style.display='none';
   var backBtn=document.getElementById('mgr-back-bar-btn');if(backBtn)backBtn.setAttribute('onclick','goMgrHome()');
@@ -1836,15 +1869,21 @@ function renderEmpHome(){
   var hasDock=isDealUser||isLangUser;
   // Widget-only users (e.g. Jesse) — skip vehicle tiles entirely
   if(isWidgetOnly) visible=[];
+  // Always add Inventory tile for all employees
+  var invCount=(S.inventory||[]).length;
+  tiles.push({id:'_inventory',label:'Inventory',count:invCount,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#64d2ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20"/><path d="M10 8v13"/></svg>',bg:'linear-gradient(145deg,#001520,#003050,#004a7a)',glow:'rgba(100,210,255,0.25)',always:true});
+  var visible=tiles.filter(function(t){return t.always||t.count>0;});
+  if(isWidgetOnly) visible=visible.filter(function(t){return t.always;});
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
   grid.innerHTML=visible.map(function(t){
-    return '<div onclick="empOrbitGo(\''+t.id+'\')" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;">' +
+    var onclick=t.id==='_inventory'?'empOpenInventory()':'empOrbitGo(\''+t.id+'\')';
+    return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;">' +
       '<div style="width:36px;height:36px;">'+t.icon+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;line-height:1;">'+t.count+'</div>' +
-      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">car'+(t.count===1?'':'s')+'</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+(t.id==='_inventory'?'vehicle'+(t.count===1?'':'s'):'car'+(t.count===1?'':'s'))+'</div>' +
     '</div>';
   }).join('');
   // Widget dock — fixed at bottom, shown for deal users and/or lang users
@@ -4569,6 +4608,25 @@ function openCarActions(carId){
   if(milesVal) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(milesVal).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
   document.getElementById('ca-car-info').innerHTML = rows.join('');
+  // Render notes section for owner
+  var ws=getWorkState(carId);
+  var notes=(ws.notes||[]).slice().reverse();
+  var nSec=document.getElementById('ca-notes-section');
+  var nList=document.getElementById('ca-notes-list');
+  if(notes.length&&nSec&&nList){
+    nSec.style.display='block';
+    nList.innerHTML=notes.map(function(n){
+      var dt=n.at?new Date(n.at):'';
+      var timeStr=dt?dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+      return '<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:6px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+        +'<span style="font-size:12px;font-weight:700;color:#64d2ff;">'+(n.by||'')+'</span>'
+        +'<span style="font-size:10px;color:#444;">'+timeStr+'</span>'
+        +'</div>'
+        +'<div style="font-size:13px;color:#ccc;line-height:1.4;">'+n.text+'</div>'
+        +'</div>';
+    }).join('');
+  } else if(nSec){ nSec.style.display='none'; }
   document.getElementById('m-car-actions').style.display = 'flex';
 }
 
@@ -5354,6 +5412,122 @@ async function sendAIVoice(text){
     var msgs=document.getElementById('ai-messages');
     if(msgs) msgs.scrollTop=msgs.scrollHeight;
   },150);
+}
+
+/* ── EMPLOYEE INVENTORY ─────────────────────────────────────────────────── */
+var _empInvFilter='';
+var _empCarId=null;
+function empOpenInventory(){
+  var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
+  var dock=document.getElementById('emp-widget-dock');if(dock)dock.style.display='none';
+  var sec=document.getElementById('emp-section-content');if(sec)sec.style.display='block';
+  ['detail','photos','parts','tasks','personal'].forEach(function(t){var el=document.getElementById('emp-tab-'+t);if(el)el.style.display='none';});
+  var catList=document.getElementById('emp-cat-car-list');if(catList)catList.style.display='none';
+  var invView=document.getElementById('emp-inv-view');if(invView){invView.style.display='block';invView.style.paddingTop='66px';}
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
+  var bar=document.getElementById('mgr-back-bar');if(bar){bar.style.display='flex';document.getElementById('mgr-back-bar-title').textContent='Inventory';document.getElementById('mgr-back-bar-btn').setAttribute('onclick','goEmpHome()');}
+  _empInvFilter='';
+  var si=document.getElementById('emp-inv-search');if(si)si.value='';
+  empRenderInv();
+}
+function empInvFilter(val){
+  _empInvFilter=(val||'').toLowerCase();
+  empRenderInv();
+}
+function empRenderInv(){
+  var list=document.getElementById('emp-inv-list');if(!list)return;
+  var filter=_empInvFilter;
+  var items=(S.inventory||[]).filter(function(c){
+    if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')).toLowerCase().includes(filter)) return false;
+    return true;
+  }).sort(function(a,b){return b.id-a.id;});
+  list.innerHTML=items.map(function(car){
+    var ws=getWorkState(car.id);
+    var noteCount=(ws.notes&&ws.notes.length)||0;
+    var noteBadge=noteCount?'<span style="font-size:10px;background:rgba(100,210,255,.15);color:#64d2ff;border:1px solid rgba(100,210,255,.3);border-radius:4px;padding:1px 5px;font-weight:700;">'+noteCount+' note'+(noteCount===1?'':'s')+'</span>':'';
+    var thumb=car.photo?'<img style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:48px;height:48px;border-radius:10px;background:#111;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    return '<div onclick="empOpenCar('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">'
+      +thumb
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>'
+      +'<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>'
+      +(noteBadge?'<div style="margin-top:4px;">'+noteBadge+'</div>':'')
+      +'</div>'
+      +'<div style="font-size:18px;color:#333;">›</div>'
+      +'</div>';
+  }).join('');
+  if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
+}
+function empOpenCar(carId){
+  _empCarId=carId;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(!car)return;
+  document.getElementById('ecar-name').textContent=car.name;
+  var info=[];
+  if(car.stock) info.push('Stock # '+car.stock);
+  if(car.color) info.push(car.color);
+  if(car.vin) info.push('VIN '+car.vin.slice(-8));
+  document.getElementById('ecar-info').textContent=info.join(' · ');
+  empRenderNotes();
+  document.getElementById('ecar-note-inp').value='';
+  document.getElementById('m-emp-car').style.display='flex';
+}
+function closeEmpCar(){
+  document.getElementById('m-emp-car').style.display='none';
+  _empCarId=null;
+}
+function empCarPhotos(){
+  if(!_empCarId)return;
+  var car=S.inventory.find(function(c){return c.id===_empCarId;});
+  var name=car?car.name:'Vehicle';
+  openPhotoGallery(_empCarId,'inventory','📷 '+name+' Photos');
+}
+function empRenderNotes(){
+  var el=document.getElementById('ecar-notes');if(!el)return;
+  if(!_empCarId){el.innerHTML='';return;}
+  var ws=getWorkState(_empCarId);
+  var notes=(ws.notes||[]).slice().reverse();
+  if(!notes.length){el.innerHTML='<div style="color:#333;font-size:13px;padding:8px 0;">No notes yet</div>';return;}
+  el.innerHTML=notes.map(function(n){
+    var dt=n.at?new Date(n.at):'';
+    var timeStr=dt?dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+    return '<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:6px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+      +'<span style="font-size:12px;font-weight:700;color:#64d2ff;">'+((n.by)||'')+'</span>'
+      +'<span style="font-size:10px;color:#444;">'+timeStr+'</span>'
+      +'</div>'
+      +'<div style="font-size:13px;color:#ccc;line-height:1.4;">'+n.text+'</div>'
+      +'</div>';
+  }).join('');
+}
+async function empAddNote(){
+  if(!_empCarId)return;
+  var inp=document.getElementById('ecar-note-inp');
+  var text=(inp.value||'').trim();
+  if(!text)return;
+  inp.value='';
+  var car=S.inventory.find(function(c){return c.id===_empCarId;});
+  if(!car)return;
+  var ws=getWorkState(_empCarId);
+  if(!ws.notes) ws.notes=[];
+  ws.notes.push({text:text,by:me?me.name:'',at:new Date().toISOString()});
+  car.work=ws;
+  empRenderNotes();
+  // Save to Supabase
+  try{await saveWorkState(_empCarId);}catch(e){console.warn('Note save error:',e);}
+  // Re-render inventory list to update note count
+  empRenderInv();
+  // Notify managers
+  try{
+    var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
+    if(managers.length>0){
+      var msg=(me?me.name:'Employee')+' added a note on '+car.name+': '+text.substring(0,80);
+      await sendPushNotification(managers.map(function(m){return m.name;}), car.name, msg);
+      for(var i=0;i<managers.length;i++){
+        try{await createNotification(managers[i].id, msg, null, car.name);}catch(e2){}
+      }
+    }
+  }catch(e){console.warn('Note notification error:',e);}
 }
 
 /* ── DEAL CALCULATOR ── */
