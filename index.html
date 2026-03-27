@@ -4867,16 +4867,33 @@ function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.
 var _voiceRecog=null;
 var _voiceListening=false;
 
+var _voiceTranscript='';
 function toggleVoiceAI(){
-  if(_voiceListening){ stopVoiceAI(); return; }
+  if(_voiceListening){
+    // Second tap — stop listening and send what was captured
+    _voiceListening=false;
+    if(_voiceRecog){ try{_voiceRecog.stop();}catch(e){} }
+    // Send accumulated transcript
+    var text=_voiceTranscript.trim();
+    _voiceTranscript='';
+    _voiceRecog=null;
+    var btn=document.getElementById('orbit-brain-btn');
+    if(btn) btn.classList.remove('listening');
+    var lbl=document.getElementById('orbit-brain-label');
+    if(lbl) lbl.innerHTML='Factory<br>AI';
+    var wave=document.getElementById('voice-wave');
+    if(wave) wave.style.display='none';
+    if(text) sendAIVoice(text);
+    return;
+  }
   var SpeechRecog=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SpeechRecog){ openAIChat(); return; }  // fallback: focus text input
+  if(!SpeechRecog){ openAIChat(); return; }
   try{
-    var _gotResult=false;
+    _voiceTranscript='';
     _voiceRecog=new SpeechRecog();
     _voiceRecog.lang='en-US';
-    _voiceRecog.continuous=false;
-    _voiceRecog.interimResults=false;
+    _voiceRecog.continuous=true;
+    _voiceRecog.interimResults=true;
     _voiceRecog.maxAlternatives=1;
     _voiceRecog.onstart=function(){
       _voiceListening=true;
@@ -4888,34 +4905,28 @@ function toggleVoiceAI(){
       if(wave) wave.style.display='flex';
     };
     _voiceRecog.onresult=function(event){
-      _gotResult=true;
-      // Reset UI directly — avoid calling .stop() during callback (iOS bug)
-      _voiceListening=false;
-      _voiceRecog=null;
-      var btn=document.getElementById('orbit-brain-btn');
-      if(btn) btn.classList.remove('listening');
-      var lbl=document.getElementById('orbit-brain-label');
-      if(lbl) lbl.innerHTML='Factory<br>AI';
-      var wave=document.getElementById('voice-wave');
-      if(wave) wave.style.display='none';
-      var transcript=(event.results[0][0].transcript||'').trim();
-      if(transcript) sendAIVoice(transcript);
+      // Build transcript from all results
+      var full='';
+      for(var i=0;i<event.results.length;i++){
+        full+=event.results[i][0].transcript;
+      }
+      _voiceTranscript=full;
+      // Show live preview in the input field
+      var inp=document.getElementById('ai-input');
+      if(inp) inp.value=full;
     };
     _voiceRecog.onerror=function(event){
-      stopVoiceAI();
       if(event.error==='not-allowed'||event.error==='permission-denied'){
+        stopVoiceAI();
         var lbl=document.getElementById('orbit-brain-label');
         if(lbl){ lbl.innerHTML='Mic<br>Blocked'; setTimeout(function(){lbl.innerHTML='Factory<br>AI';},3000); }
       }
+      // Ignore 'no-speech' and 'aborted' — keep listening
     };
     _voiceRecog.onend=function(){
+      // If still supposed to be listening (iOS/browser auto-stops), restart
       if(_voiceListening){
-        stopVoiceAI();
-        if(!_gotResult){
-          // iOS silently ended without capturing speech — show hint
-          var lbl=document.getElementById('orbit-brain-label');
-          if(lbl){ lbl.innerHTML='Try<br>Again'; setTimeout(function(){lbl.innerHTML='Factory<br>AI';},2000); }
-        }
+        try{ _voiceRecog.start(); }catch(e){ stopVoiceAI(); }
       }
     };
     _voiceRecog.start();
@@ -4924,6 +4935,7 @@ function toggleVoiceAI(){
 
 function stopVoiceAI(){
   _voiceListening=false;
+  _voiceTranscript='';
   if(_voiceRecog){ try{_voiceRecog.stop();}catch(e){} _voiceRecog=null; }
   var btn=document.getElementById('orbit-brain-btn');
   if(btn) btn.classList.remove('listening');
