@@ -551,7 +551,7 @@ canvas{display:none;}
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
     <button class="mt on" onclick="mgrGo('inventory',this)">Inv</button>
-    <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
+    <button class="mt" onclick="mgrGo('tasks',this)" id="tab-tasks">Tasks</button>
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
     <button class="mt" onclick="mgrGo('photos',this)" id="tab-photos">Photos</button>
     <button class="mt" onclick="mgrGo('parts',this)" id="tab-parts">Parts</button>
@@ -2761,7 +2761,7 @@ function renderMgrDetail(){
     var thumbSrc=car.photo||pxUrl||'';
     var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'detail\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div onclick="mgrCatSheet('+car.id+',\'detail\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
@@ -2907,7 +2907,7 @@ function renderMgrPhotos(){
     var thumbSrc=car.photo||pxUrl||'';
     var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'photos\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div onclick="mgrCatSheet('+car.id+',\'photos\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
@@ -3091,14 +3091,76 @@ function renderMgrTasks(){
   el.innerHTML=o;
 }
 function mgrTaskSheet(aid,idx,taskText,carName){
+  var a=S.assignments.find(function(x){return String(x.id)===String(aid);});
+  var isSubmitted=a&&a.submitted;
   var body=document.getElementById('detail-done-body');
   body.innerHTML=
     '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">'+taskText+'</div>'+
     '<div style="font-size:12px;color:#555;margin-bottom:20px;">'+carName+'</div>'+
-    '<button onclick="mgrMarkTaskDone(\''+aid+'\','+idx+')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Done</button>'+
-    '<button onclick="openMgrAssign(\''+aid+'\');closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid #333;border-radius:12px;color:#888;font-size:14px;cursor:pointer;margin-bottom:10px;">Open Assignment</button>'+
+    (isSubmitted
+      ? '<button onclick="mgrApproveSubmitted(\''+aid+'\')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Approve</button>'
+      : '<button onclick="mgrMarkTaskDone(\''+aid+'\','+idx+')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Done</button>'
+    )+
     '<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #222;border-radius:12px;color:#555;font-size:14px;cursor:pointer;">Cancel</button>';
   openM('m-detail-done');
+}
+async function mgrApproveSubmitted(aid){
+  closeM('m-detail-done');
+  await approve(aid);
+}
+function mgrCatSheet(carId,cat){
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(!car) return;
+  var ws=getWorkState(carId);
+  var cd=(ws.categories&&ws.categories[cat])||{};
+  var assignedTo=cd.assignedTo||[];
+  var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+  var pxUrl=!car.photo&&pxCache[String(car.id)];
+  var thumbSrc=car.photo||pxUrl||'';
+  var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+  var subText=(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'');
+  var extraHTML='';
+  if(cat==='parts'){
+    var repairs=cd.repairs||[];
+    var itemTexts=repairs.map(function(r){return typeof r==='string'?r:(r.text||'');}).filter(Boolean);
+    if(itemTexts.length) extraHTML='<div style="font-size:12px;color:#666;margin-bottom:16px;line-height:1.6;">'+itemTexts.map(function(t){return'· '+t;}).join('<br>')+'</div>';
+  }
+  var body=document.getElementById('detail-done-body');
+  body.innerHTML=
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'+
+      thumbHTML+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-size:17px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>'+
+        '<div style="font-size:12px;color:#555;margin-top:2px;">'+subText+'</div>'+
+      '</div>'+
+    '</div>'+
+    extraHTML+
+    '<button onclick="mgrCatApprove('+carId+',\''+cat+'\')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Done</button>'+
+    '<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #222;border-radius:12px;color:#555;font-size:14px;cursor:pointer;">Cancel</button>';
+  openM('m-detail-done');
+}
+async function mgrCatApprove(carId,cat){
+  closeM('m-detail-done');
+  if(cat==='detail') await approveDetail(carId);
+  else if(cat==='photos') await approvePhotos(carId);
+  else if(cat==='parts') await approveParts(carId);
+  else if(cat==='paint') await approvePaint(carId);
+}
+async function approvePaint(carId){
+  const ws=getWorkState(carId);
+  if(!ws.categories) return;
+  const doneBy=ws.categories.paint&&ws.categories.paint.doneBy;
+  if(ws.categories.paint){ws.categories.paint.reviewed=true;ws.categories.paint.sectionPool=false;}
+  const car=S.inventory.find(c=>c.id===carId);
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  if(doneBy){
+    var carName=car?car.name:'vehicle';
+    await sendPushNotification([doneBy],'✅ Paint Approved',me.name+' approved paint on '+carName);
+    var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
+    if(emp) try{await createNotification(emp.id,me.name+' approved paint on '+carName,null,carName);}catch(e){}
+  }
+  renderMgrPaint();updateTabBadges();updateHomeBadges();
 }
 async function mgrMarkTaskDone(aid,idx){
   var a=S.assignments.find(function(x){return String(x.id)===String(aid);});
@@ -3216,29 +3278,27 @@ function renderMgrParts(){
   var el=document.getElementById('mgr-parts-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📦</div><div class="et">No vehicles in Parts queue</div></div>';return;}
-  var allItems=[];
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
   cars.forEach(function(car){
     var ws=getWorkState(car.id);
-    var repairs=(ws.categories.parts.repairs||[]);
-    var done=ws.categories.parts.done;
-    if(!repairs.length){allItems.push({car:car,text:'(no items listed)',itemDone:false,bought:false,carDone:done,idx:-1});}
-    else{repairs.forEach(function(r,i){allItems.push({car:car,text:typeof r==='string'?r:(r.text||''),itemDone:typeof r==='object'?!!r.done:false,bought:typeof r==='object'?!!r.bought:false,carDone:done,idx:i});});}
-  });
-  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
-  allItems.forEach(function(item){
-    var c=item.car;
-    var pxUrl=!c.photo&&pxCache[String(c.id)];
-    var thumbSrc=c.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(c.name)+'</div>';
-    var borderCol=item.carDone?'rgba(48,209,88,0.3)':item.bought?'rgba(251,191,36,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+c.id+');toggleProgCat(\'parts\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    var pd=ws.categories.parts||{};
+    var done=pd.done;
+    var repairs=pd.repairs||[];
+    var assignedTo=pd.assignedTo||[];
+    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+    var itemTexts=repairs.map(function(r){return typeof r==='string'?r:(r.text||'');}).filter(Boolean);
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
+    o+='<div onclick="mgrCatSheet('+car.id+',\'parts\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="font-size:14px;color:'+(item.bought?'#666':'#fff')+';font-weight:600;'+(item.bought?'text-decoration:line-through;':'')+'">'+item.text+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+'</div>';
+    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    if(itemTexts.length) o+='<div style="font-size:11px;color:#444;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+itemTexts.join(' · ')+'</div>';
     o+='</div>';
-    if(item.carDone) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
-    else if(item.bought) o+='<span style="font-size:11px;color:#fbbf24;font-weight:700;flex-shrink:0;">Bought</span>';
+    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
     o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
     o+='</div>';
   });
@@ -5187,7 +5247,7 @@ function renderMgrPaint(){
     var thumbSrc=car.photo||pxUrl||'';
     var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'paint\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div onclick="mgrCatSheet('+car.id+',\'paint\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
