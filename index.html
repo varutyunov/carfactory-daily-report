@@ -572,8 +572,8 @@ canvas{display:none;}
       </div>
 
       <!-- EMPLOYEE TILE HOME -->
-      <div id="emp-orbit-home" style="padding:24px 16px 180px;">
-        <div id="emp-tile-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:400px;margin:0 auto;"></div>
+      <div id="emp-orbit-home" style="padding:10px 14px 130px;">
+        <div id="emp-tile-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:400px;margin:0 auto;"></div>
         <div id="emp-tile-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:16px;">
           <div style="font-size:40px;">&#x2615;</div>
           <div style="font-size:18px;font-weight:700;color:#fff;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">NO TASKS YET</div>
@@ -1916,11 +1916,10 @@ function renderEmpHome(){
   grid.innerHTML=visible.map(function(t){
     var dimmed=t.count===0;
     var onclick='empOrbitGo(\''+t.id+'\')';
-    return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;opacity:'+(dimmed?'0.45':'1')+'">' +
-      '<div style="width:36px;height:36px;">'+t.icon+'</div>' +
+    return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 4px 16px '+t.glow+',0 6px 20px rgba(0,0,0,0.6);border-radius:18px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:80px;opacity:'+(dimmed?'0.45':'1')+'">' +
+      '<div style="width:24px;height:24px;">'+t.icon+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;line-height:1;">'+(t.count||'—')+'</div>' +
-      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+(t.count===1?'car':'cars')+'</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#fff;line-height:1;">'+(t.count||'—')+'</div>' +
     '</div>';
   }).join('');
   // Widget dock — fixed at bottom, shown for deal users and/or lang users
