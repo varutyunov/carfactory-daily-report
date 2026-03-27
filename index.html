@@ -3062,7 +3062,9 @@ function renderMgrTasks(){
     var tasks=(a.tasks||[]).filter(function(t){return !isCatTask(t);});
     if(!tasks.length) return;
     tasks.forEach(function(t){
-      allItems.push({a:a,car:car,emp:emp,text:typeof t==='object'?(t.name||t.text||'Task'):t,taskDone:typeof t==='object'?!!t.done:false,urgent:typeof t==='object'?!!t.urgent:false,submitted:a.submitted});
+      var raw=typeof t==='object'?(t.name||t.text||'Task'):t;
+      var clean=raw.replace(/^\[task\]\s*/i,'').trim()||raw;
+      allItems.push({a:a,car:car,emp:emp,text:clean,taskDone:typeof t==='object'?!!t.done:false,urgent:typeof t==='object'?!!t.urgent:false,submitted:a.submitted});
     });
   });
   if(!allItems.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
