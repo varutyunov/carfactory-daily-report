@@ -173,19 +173,23 @@ function parsePayments(html) {
   if (!tbodyMatch) return payments;
 
   const rows = tbodyMatch[1].match(/<tr[\s\S]*?<\/tr>/g) || [];
+  let debugDone = false;
   rows.forEach(row => {
     const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
       td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
     );
-    // cols: Name, Account#, Reference#, Date, Time, Platform, Collector, ApprovedInDMS,
-    //       PaymentMethod, ConvFee, TotalWithFee, AmountSent, Memo
+    if (!debugDone && tds.length > 0) {
+      console.log('  DEBUG payments columns (' + tds.length + '):');
+      tds.forEach((v, i) => console.log('    [' + i + '] = ' + JSON.stringify(v)));
+      debugDone = true;
+    }
     if (tds.length < 11) return;
     const name = tds[0];
     const account = tds[1];
     const reference = tds[2];
-    const date = tds[3];   // e.g. "March 27, 2026"
-    const time = tds[4];   // e.g. "9:02 AM"
-    const method = tds[5]; // Platform: "Customer Mobile App", "Automatic Payment", etc.
+    const date = tds[3];
+    const time = tds[4];
+    const method = tds[5];
     const amountSent = tds[11] || tds[10] || '';
 
     if (!name || !account) return;
