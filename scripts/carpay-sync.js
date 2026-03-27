@@ -29,25 +29,38 @@ function cookieHeader() {
   return Object.entries(jar).map(([k, v]) => k + '=' + v).join('; ');
 }
 
-// ── HTTP helper (manual redirect + cookie tracking) ──────────────────────────
+// ── HTTP helper (manual redirect + cookie tracking + retry) ──────────────────
 async function cpFetch(url, opts, depth) {
   depth = depth || 0;
   if (depth > 10) throw new Error('Too many redirects');
   if (!url.startsWith('http')) url = BASE + url;
 
-  const res = await fetch(url, Object.assign({}, opts, {
-    headers: Object.assign({ 'Cookie': cookieHeader(), 'User-Agent': 'Mozilla/5.0' }, opts && opts.headers),
-    redirect: 'manual',
-    timeout: 120000
-  }));
-  updateJar(res);
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      console.log('  Retrying (' + attempt + '/2): ' + url);
+      await new Promise(r => setTimeout(r, 5000 * attempt));
+    }
+    try {
+      const res = await fetch(url, Object.assign({}, opts, {
+        headers: Object.assign({ 'Cookie': cookieHeader(), 'User-Agent': 'Mozilla/5.0' }, opts && opts.headers),
+        redirect: 'manual',
+        timeout: 60000
+      }));
+      updateJar(res);
 
-  if (res.status >= 300 && res.status < 400) {
-    let loc = res.headers.get('location') || '';
-    if (!loc.startsWith('http')) loc = BASE + loc;
-    return cpFetch(loc, { method: 'GET' }, depth + 1);
+      if (res.status >= 300 && res.status < 400) {
+        let loc = res.headers.get('location') || '';
+        if (!loc.startsWith('http')) loc = BASE + loc;
+        return cpFetch(loc, { method: 'GET' }, depth + 1);
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (e.type !== 'request-timeout') throw e;
+    }
   }
-  return res;
+  throw lastErr;
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
