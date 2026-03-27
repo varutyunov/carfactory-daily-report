@@ -1902,7 +1902,7 @@ function renderEmpHome(){
   var isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   // Show lang toggle in top bar for lang users
   var langBtn=document.getElementById('lang-toggle-btn');
-  if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇲🇽';}
+  if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
   // Widget-only users (e.g. Jesse) — skip vehicle tiles entirely
   if(isWidgetOnly) visible=[];
@@ -6199,7 +6199,7 @@ function toggleLang() {
   }
   // Update top-bar lang button icon
   var lb = document.getElementById('lang-toggle-btn');
-  if (lb) lb.textContent = window._lang === 'es' ? '🇺🇸' : '🇲🇽';
+  if (lb) lb.textContent = window._lang === 'es' ? '🇺🇸' : '🇵🇷';
 }
 
 function _txInit() {
