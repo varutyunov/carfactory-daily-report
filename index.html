@@ -1278,9 +1278,9 @@ OneSignalDeferred.push(async function(OneSignal){
 // Call after login to link user + show enable bar if needed
 function initOneSignalUser(name){
   window._osExternalId = name.toLowerCase().replace(/\s+/g,'_');
-  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'granted';
-  // Only prompt once — skip if already granted, already denied, or user dismissed before
-  if(perm === 'default' && !localStorage.getItem('cf_notif_dismissed')){ showNotifEnableBar(); }
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+  // Show enable bar if notifications not yet granted
+  if(perm !== 'granted'){ showNotifEnableBar(); }
   // Link user to OneSignal whenever SDK is ready
   function linkUser(OS){
     try{ OS.login(window._osExternalId); }catch(e){}
@@ -1312,7 +1312,7 @@ function showNotifEnableBar(){
   const bar = document.createElement('div');
   bar.id = 'notif-bar';
   bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-bottom:1px solid #4f46e5;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="localStorage.setItem(\'cf_notif_dismissed\',\'1\');document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
+  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
   document.body.appendChild(bar);
 }
 
@@ -3435,7 +3435,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed','1');
+var _keepAiKey=getAiKey();Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
