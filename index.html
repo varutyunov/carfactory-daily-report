@@ -44,9 +44,11 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .so{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:16px;cursor:pointer;padding:6px 10px;border-radius:8px;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 
 /* MGR TABS */
-.mtabs{display:flex;flex-wrap:wrap;gap:6px;background:#000;padding:8px 10px;border-bottom:1px solid #111;flex-shrink:0;}
-.emp-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;}
-.mt{flex:0 0 auto;padding:8px 16px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:13px;font-weight:600;cursor:pointer;position:relative;}
+.mtabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;background:#000;padding:6px 10px;border-bottom:1px solid #111;flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.mtabs::-webkit-scrollbar{display:none;}
+.emp-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:6px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.emp-tabs::-webkit-scrollbar{display:none;}
+.mt{flex:0 0 auto;padding:5px 11px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:11px;font-weight:600;cursor:pointer;position:relative;white-space:nowrap;}
 .mt .badge-left,.mt .badge-right{position:absolute;top:-7px;font-size:10px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;border-radius:9px;line-height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
 .mt .badge-left{left:-4px;background:#30d158;color:#fff;}
 .mt .badge-right{right:-4px;background:#ff453a;color:#fff;}
@@ -934,8 +936,13 @@ canvas{display:none;}
       </div>
       <button onclick="closeEmpCar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:18px;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;">&#x2715;</button>
     </div>
-    <!-- Photo button -->
-    <button onclick="empCarPhotos()" style="width:100%;padding:12px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#64d2ff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;text-align:center;">📷 Photos</button>
+    <!-- Photo buttons -->
+    <button onclick="empCarPhotos()" style="width:100%;padding:12px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#64d2ff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:center;">📷 Photos</button>
+    <label id="emp-car-icon-lbl" for="emp-car-icon-inp" style="display:block;width:100%;padding:12px;background:#0a0a0a;border:1px dashed #2a2a2a;border-radius:10px;color:#a78bfa;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;text-align:center;box-sizing:border-box;">
+      <span id="emp-car-icon-txt">🖼 Change Car Icon</span>
+      <img id="emp-car-icon-preview" style="display:none;width:100%;height:110px;object-fit:cover;border-radius:8px;margin-top:8px;filter:contrast(1.1) saturate(1.15);"/>
+    </label>
+    <input type="file" id="emp-car-icon-inp" accept="image/*" onchange="empSetCarIcon(event)" style="display:none;"/>
     <!-- Notes section -->
     <div style="margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Notes</div>
     <div id="ecar-notes" style="margin-bottom:10px;"></div>
@@ -5839,6 +5846,10 @@ function empOpenCar(carId){
   document.getElementById('ecar-info').textContent=info.join(' · ');
   empRenderNotes();
   document.getElementById('ecar-note-inp').value='';
+  // Reset icon upload state
+  var _icPrev=document.getElementById('emp-car-icon-preview');if(_icPrev){_icPrev.style.display='none';_icPrev.src='';}
+  var _icTxt=document.getElementById('emp-car-icon-txt');if(_icTxt)_icTxt.textContent=car.photo?'🖼 Change Car Icon':'📷 Set Car Icon';
+  var _icInp=document.getElementById('emp-car-icon-inp');if(_icInp)_icInp.value='';
   document.getElementById('m-emp-car').style.display='flex';
 }
 function closeEmpCar(){
@@ -5850,6 +5861,23 @@ function empCarPhotos(){
   var car=S.inventory.find(function(c){return c.id===_empCarId;});
   var name=car?car.name:'Vehicle';
   openPhotoGallery(_empCarId,'inventory','📷 '+name+' Photos');
+}
+function empSetCarIcon(e){
+  var f=e.target.files[0];if(!f||!_empCarId)return;
+  enhancePhoto(f,async function(url){
+    var prev=document.getElementById('emp-car-icon-preview');
+    if(prev){prev.src=url;prev.style.display='block';}
+    var txt=document.getElementById('emp-car-icon-txt');if(txt)txt.textContent='Tap to retake';
+    showLoading('Saving...');
+    try{
+      await sbPatch('inventory',_empCarId,{photo:url});
+      var car=S.inventory.find(function(c){return c.id===_empCarId;});
+      if(car) car.photo=url;
+      sv();
+      empRenderInv();
+      hideLoading();
+    }catch(ex){hideLoading();console.error(ex);}
+  });
 }
 function empRenderNotes(){
   var el=document.getElementById('ecar-notes');if(!el)return;
