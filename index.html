@@ -5022,14 +5022,21 @@ async function removeCarFromProgress(carId){
   showLoading('Removing...');
   try{
     var toRemove=(S.assignments||[]).filter(function(a){return a.inventoryId===carId&&!a.approved;});
-    for(var i=0;i<toRemove.length;i++){
-      await sbDelete('assignments',toRemove[i].id);
-    }
+    for(var i=0;i<toRemove.length;i++){await sbDelete('assignments',toRemove[i].id);}
     S.assignments=S.assignments.filter(function(a){return!(a.inventoryId===carId&&!a.approved);});
+    // Clear all category flags so car disappears from Progress card list
+    var ws=getWorkState(carId);
+    if(ws.categories){
+      ['paint','detail','repair','photos','parts'].forEach(function(t){
+        if(ws.categories[t]){ws.categories[t].sectionPool=false;ws.categories[t].confirmed=false;ws.categories[t].done=false;ws.categories[t].pendingReview=false;}
+      });
+      var car=S.inventory.find(function(c){return c.id===carId;});
+      if(car) car.work=ws;
+      await saveWorkState(carId);
+    }
     removeFromProgress(carId);
-    renderProgress();
-    updateTabBadges();
-    updateHomeBadges();
+    renderProgress();updateTabBadges();updateHomeBadges();
+    renderMgrRepair();renderMgrDetail();renderMgrPhotos();renderMgrParts();renderMgrPaint();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
 }
