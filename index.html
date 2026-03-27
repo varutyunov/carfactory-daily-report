@@ -1652,7 +1652,7 @@ async function syncFromSupabase(){
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
         sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
         sbGet('carpay_customers', 'order=name&limit=5000').catch(()=>[]),
-        sbGet('carpay_payments', 'order=created_at.desc&limit=5000').catch(()=>[])
+        sbGet('carpay_payments', 'order=synced_at.desc&limit=5000').catch(()=>[])
       ]);
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
       // CarPay data
