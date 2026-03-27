@@ -545,6 +545,7 @@ canvas{display:none;}
       <div class="ub" id="ub">Employee</div>
 
       <button id="sync-btn" onclick="doSync()" title="Sync latest data" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;">&#x21BB;</button>
+      <button id="lang-toggle-btn" onclick="toggleLang()" style="display:none;background:none;border:none;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;" title="Toggle language"></button>
       <button class="so" onclick="doLogout()">&#x2715;</button>
     </div>
   </div>
@@ -1899,7 +1900,10 @@ function renderEmpHome(){
   var isDealUser=me&&['manny','scott','jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isLangUser=me&&['manny','ricky'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
-  var hasDock=isDealUser||isLangUser;
+  // Show lang toggle in top bar for lang users
+  var langBtn=document.getElementById('lang-toggle-btn');
+  if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇲🇽';}
+  var hasDock=isDealUser;
   // Widget-only users (e.g. Jesse) — skip vehicle tiles entirely
   if(isWidgetOnly) visible=[];
   // Always add Inventory tile for all employees
@@ -1931,14 +1935,6 @@ function renderEmpHome(){
         whtml+='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
           '<div style="font-size:22px;line-height:1;">💵</div>' +
           '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
-        '</div>';
-      }
-      if(isLangUser){
-        var langIcon=window._lang==='es'?'🇺🇸':'🇲🇽';
-        var langLabel=window._lang==='es'?'English':'Español';
-        whtml+='<div id="lang-toggle-btn" onclick="toggleLang()" style="background:linear-gradient(145deg,#0a001a,#200050,#3a0080);box-shadow:0 4px 18px rgba(139,92,246,0.25),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
-          '<div style="font-size:22px;line-height:1;">'+langIcon+'</div>' +
-          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">'+langLabel+'</div>' +
         '</div>';
       }
       wb.innerHTML=whtml;
@@ -6201,6 +6197,9 @@ function toggleLang() {
     var ts = document.querySelector('#emp-widget-dock span');
     if (ts) ts.textContent = 'Tools';
   }
+  // Update top-bar lang button icon
+  var lb = document.getElementById('lang-toggle-btn');
+  if (lb) lb.textContent = window._lang === 'es' ? '🇺🇸' : '🇲🇽';
 }
 
 function _txInit() {
