@@ -4093,7 +4093,6 @@ async function mgrMarkCarComplete(carId){
 function renderProgress(){
   var el=document.getElementById('mgr-progress-content');
   if(!el) return;
-  // Collect all cars with any active sectionPool category
   var tabTypes=['paint','detail','repair','photos','parts'];
   var carIdSet=new Set();
   (S.inventory||[]).forEach(function(car){
@@ -4104,7 +4103,6 @@ function renderProgress(){
       });
     }
   });
-  // Also include assignment-based and pinned cars
   (S.assignments||[]).forEach(function(a){if(!a.approved) carIdSet.add(a.inventoryId);});
   getProgressCars().forEach(function(id){carIdSet.add(id);});
   var activeCars=Array.from(carIdSet).map(function(id){return S.inventory.find(function(c){return c.id===id;});}).filter(Boolean);
@@ -4135,16 +4133,21 @@ function renderProgress(){
     var pctColor=pct===100?'#30d158':pendingReview?'#ffd60a':'#a78bfa';
     var isExpanded=_progressExpanded.has(car.id);
     var allConfirmed=totalCats>0&&confirmedCats===totalCats;
+    // Car photo thumbnail
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:12px;background:#111;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">'+carImage(car.name)+'</div>';
     // Status summary chips
     var summaryChips=activeTabs.map(function(t){
       var c=cats[t];
-      var col=c.confirmed?'#30d158':c.pendingReview?'#ffd60a':catMeta[t].color;
-      var icon=c.confirmed?'✓':c.pendingReview?'⏳':catMeta[t].icon;
+      var col=c.confirmed?'#30d158':c.done?'#ffd60a':catMeta[t].color;
+      var icon=c.confirmed?'✓':c.done?'⏳':catMeta[t].icon;
       return '<span style="font-size:10px;background:'+col+'18;color:'+col+';border:1px solid '+col+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+icon+' '+catMeta[t].label+'</span>';
     }).join('');
     out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;">';
-    // Header row (tap to expand)
+    // Header row with photo
     out+='<div onclick="toggleProgressExpand('+car.id+')" style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;cursor:pointer;">';
+    out+=thumbHTML;
     out+='<div style="flex:1;min-width:0;">';
     out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
     out+='<div style="font-size:11px;color:#444;margin-top:1px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
@@ -4159,37 +4162,84 @@ function renderProgress(){
     out+='<div style="margin:0 16px 10px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;">';
     out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:2px;transition:width 0.4s;"></div>';
     out+='</div>';
-    // Expanded detail
+    // Expanded detail — full workflow editing
     if(isExpanded){
-      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:8px;">';
+      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:10px;">';
       activeTabs.forEach(function(t){
         var c=cats[t];
         var meta=catMeta[t];
         var isConf=c.confirmed||false;
-        var isPend=c.pendingReview&&!isConf;
+        var isPend=(c.done&&!c.reviewed)||false;
         var isDone=c.done||false;
         var rowBg=isConf?'rgba(48,209,88,0.06)':isPend?'rgba(255,214,10,0.06)':'rgba(255,255,255,0.02)';
-        out+='<div style="background:'+rowBg+';border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">';
+        out+='<div style="background:'+rowBg+';border-radius:12px;padding:12px;border:1px solid '+(isConf?'rgba(48,209,88,0.15)':isPend?'rgba(255,214,10,0.15)':'#1a1a1a')+'">';
+        // Category header row
+        out+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
         out+='<div style="font-size:16px;">'+meta.icon+'</div>';
         out+='<div style="flex:1;min-width:0;">';
         out+='<div style="font-size:13px;font-weight:700;color:#fff;">'+meta.label+'</div>';
         if(c.doneBy) out+='<div style="font-size:11px;color:#555;margin-top:1px;">by '+c.doneBy+(c.doneAt?' · '+new Date(c.doneAt).toLocaleDateString():'')+'</div>';
-        if(c.notes) out+='<div style="font-size:11px;color:#666;font-style:italic;margin-top:2px;">"'+c.notes+'"</div>';
         out+='</div>';
-        // Action buttons
+        // Status + action buttons
         out+='<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;">';
         if(isConf){
           out+='<span style="font-size:11px;font-weight:700;color:#30d158;">✓ Done</span>';
         } else if(isPend){
-          out+='<button onclick="mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
-          out+='<button onclick="mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
+          out+='<button onclick="event.stopPropagation();mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
+          out+='<button onclick="event.stopPropagation();mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
         } else {
-          out+='<button onclick="mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
+          out+='<button onclick="event.stopPropagation();mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
         }
         out+='</div>';
         out+='</div>';
+        // Notes
+        if(c.notes) out+='<div style="font-size:12px;color:#666;font-style:italic;padding:0 2px;margin-bottom:4px;">"'+c.notes+'"</div>';
+        // Category-specific inline editing
+        if(t==='repair'||t==='parts'){
+          var items=(c.items||c.repairs||[]);
+          if(items.length){
+            out+='<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;">';
+            items.forEach(function(item,i){
+              var txt=typeof item==='string'?item:(item.text||'');
+              var done=typeof item==='object'?!!item.done:false;
+              out+='<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.02);border-radius:6px;">';
+              out+='<div onclick="event.stopPropagation();progToggleItem('+car.id+',\''+t+'\','+i+')" style="width:16px;height:16px;border-radius:4px;border:2px solid '+(done?'#30d158':'#333')+';background:'+(done?'#30d158':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(done?'<span style="color:#000;font-size:10px;font-weight:900;">✓</span>':'')+'</div>';
+              out+='<span style="flex:1;font-size:12px;color:'+(done?'#555':'#ccc')+';'+(done?'text-decoration:line-through;':'')+'">'+txt+'</span>';
+              out+='<button onclick="event.stopPropagation();progRemoveItem('+car.id+',\''+t+'\','+i+')" style="background:none;border:none;color:#444;font-size:13px;cursor:pointer;padding:0 2px;">✕</button>';
+              out+='</div>';
+            });
+            out+='</div>';
+          }
+          // Add item input
+          out+='<div style="display:flex;gap:6px;">';
+          out+='<input id="prog-item-'+car.id+'-'+t+'" placeholder="Add '+meta.label.toLowerCase()+' item..." style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:inherit;" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.stopPropagation();progAddItem('+car.id+',\''+t+'\');}"/>';
+          out+='<button onclick="event.stopPropagation();progAddItem('+car.id+',\''+t+'\')" style="background:'+meta.color+';border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;flex-shrink:0;">+</button>';
+          out+='</div>';
+        }
+        // Photo button for all categories
+        out+='<div style="display:flex;gap:6px;margin-top:6px;">';
+        var safeTitle=meta.icon+' '+meta.label+' — '+car.name.replace(/'/g,"\\'");
+        out+='<button onclick="event.stopPropagation();openPhotoGallery('+car.id+',\''+t+'\',\''+safeTitle+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:'+meta.color+';font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">📷 Photos</button>';
+        // Assign employee button
+        out+='<button onclick="event.stopPropagation();progAssignCat('+car.id+',\''+t+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#888;font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">'+(c.assignedTo&&c.assignedTo.length?'👤 Reassign':'👤 Assign')+'</button>';
+        out+='</div>';
+        // Show assigned employees
+        if(c.assignedTo&&c.assignedTo.length){
+          var empNames=c.assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+          if(empNames.length) out+='<div style="font-size:10px;color:#555;margin-top:4px;">→ '+empNames.join(', ')+'</div>';
+        }
+        out+='</div>';
       });
       out+='</div>';
+      // Notes section
+      var carNotes=(ws.notes||[]);
+      if(carNotes.length){
+        out+='<div style="padding:0 16px 8px;"><div style="font-size:10px;font-weight:700;color:#444;letter-spacing:1px;margin-bottom:4px;">NOTES</div>';
+        carNotes.slice(-3).forEach(function(n){
+          out+='<div style="font-size:11px;color:#888;padding:3px 0;"><span style="color:#64d2ff;font-weight:600;">'+((n.by)||'')+'</span> '+n.text+'</div>';
+        });
+        out+='</div>';
+      }
       // Bottom actions
       out+='<div style="padding:0 16px 14px;display:flex;gap:8px;">';
       if(allConfirmed){
@@ -4204,6 +4254,76 @@ function renderProgress(){
   });
   out+='</div>';
   el.innerHTML=out;
+  applyPexels(activeCars);
+}
+// ── Progress inline editing helpers ──
+async function progAddItem(carId,cat){
+  var inp=document.getElementById('prog-item-'+carId+'-'+cat);
+  if(!inp) return;
+  var txt=inp.value.trim();if(!txt) return;
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[cat]) ws.categories[cat]={sectionPool:true};
+  var key=(cat==='parts')?'repairs':'items';
+  if(!ws.categories[cat][key]) ws.categories[cat][key]=[];
+  ws.categories[cat][key].push({text:txt,done:false});
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  inp.value='';
+  await saveWorkState(carId);
+  renderProgress();
+}
+async function progToggleItem(carId,cat,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var key=(cat==='parts')?'repairs':'items';
+  var items=ws.categories[cat][key]||[];
+  if(idx<0||idx>=items.length) return;
+  var it=items[idx];
+  var txt=typeof it==='string'?it:(it.text||'');
+  var done=typeof it==='object'?!!it.done:false;
+  items[idx]={text:txt,done:!done};
+  ws.categories[cat][key]=items;
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  renderProgress();
+}
+async function progRemoveItem(carId,cat,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var key=(cat==='parts')?'repairs':'items';
+  var items=ws.categories[cat][key]||[];
+  items.splice(idx,1);
+  ws.categories[cat][key]=items;
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  renderProgress();
+}
+function progAssignCat(carId,cat){
+  var emps=(S.employees||[]).filter(function(e){return e.role!=='manager';});
+  if(!emps.length){alert('No employees to assign');return;}
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var current=(ws.categories[cat].assignedTo||[]);
+  var html='<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Assign '+cat.charAt(0).toUpperCase()+cat.slice(1)+'</div>';
+  emps.forEach(function(e){
+    var sel=current.indexOf(e.id)!==-1;
+    html+='<button onclick="progToggleAssign('+carId+',\''+cat+'\','+e.id+',this)" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:4px;background:'+(sel?'rgba(100,210,255,0.1)':'#111')+';border:1px solid '+(sel?'rgba(100,210,255,0.3)':'#222')+';border-radius:10px;color:'+(sel?'#64d2ff':'#ccc')+';font-size:14px;cursor:pointer;font-weight:'+(sel?'700':'400')+';">'+(sel?'✓ ':'')+e.name+'</button>';
+  });
+  html+='<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:10px;">Done</button>';
+  document.getElementById('detail-done-body').innerHTML=html;
+  openM('m-detail-done');
+}
+async function progToggleAssign(carId,cat,empId,btn){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  if(!ws.categories[cat].assignedTo) ws.categories[cat].assignedTo=[];
+  var idx=ws.categories[cat].assignedTo.indexOf(empId);
+  if(idx===-1) ws.categories[cat].assignedTo.push(empId);
+  else ws.categories[cat].assignedTo.splice(idx,1);
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  progAssignCat(carId,cat);
+  renderProgress();
 }
 
 /* ── CALENDAR VIEW ── */
