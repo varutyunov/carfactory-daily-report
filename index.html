@@ -1799,7 +1799,7 @@ function updateTabBadges(){
       return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;
     }).length;
   }
-  function hasPureTaskTab(a){return (a.tasks||[]).some(function(t){var txt=(typeof t==='object'?(t.name||t.text):t)||'';return !/\[(paint|detail|repair|photos|parts)\]/i.test(txt);});}
+  function hasPureTaskTab(a){return (a.tasks||[]).some(function(t){if(typeof t==='object'&&t.done) return false;var txt=(typeof t==='object'?(t.name||t.text):t)||'';return !/\[(paint|detail|repair|photos|parts)\]/i.test(txt);});}
   var taskReviewCount=(S.assignments||[]).filter(function(a){return a.submitted&&!a.approved&&hasPureTaskTab(a);}).length;
   // Green (left) = employee submissions needing review; Red (right) = owner queue counts
   setDualBadge(tabs.tasks,'Tasks',taskReviewCount,0);
@@ -4094,7 +4094,7 @@ function updateHomeBadges(){
     if(gEl){gEl.textContent=green;gEl.style.display=green>0?'block':'none';}
     if(rEl){rEl.textContent=red;rEl.style.display=red>0?'block':'none';}
   }
-  function hasPureTask(a){return (a.tasks||[]).some(function(t){var txt=(typeof t==='object'?(t.name||t.text):t)||'';return !/\[(paint|detail|repair|photos|parts)\]/i.test(txt);});}
+  function hasPureTask(a){return (a.tasks||[]).some(function(t){if(typeof t==='object'&&t.done) return false;var txt=(typeof t==='object'?(t.name||t.text):t)||'';return !/\[(paint|detail|repair|photos|parts)\]/i.test(txt);});}
   var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved&&hasPureTask(a);}).length;
   var taskRed=asgns.filter(function(a){return !a.submitted&&!a.approved&&hasPureTask(a);}).length;
   setOrbitDual('hbadge-tasks',taskGreen,taskRed);
