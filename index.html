@@ -723,7 +723,7 @@ canvas{display:none;}
 
           <!-- TASKS (40°) -->
           <div class="orbit-tw" style="transform:rotate(40deg) translateY(-169px) rotate(-40deg);">
-            <div class="orbit-tile" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 4px 20px rgba(34,197,94,0.25);" onclick="mgrGoSection('assigned','Tasks')">
+            <div class="orbit-tile" style="background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);box-shadow:0 4px 20px rgba(34,197,94,0.25);" onclick="mgrGoSection('tasks','Tasks')">
               <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/>
               </svg>
@@ -1165,7 +1165,11 @@ canvas{display:none;}
       <button class="mcl" onclick="closeM('m-mgr-assign')">✕</button>
     </div>
     <div id="mgr-task-list" style="margin-top:8px;"></div>
-    <button onclick="mgrAddTask()" style="width:100%;padding:12px;background:none;border:1px dashed #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;">+ Add Task</button>
+    <div id="mgr-assign-review-actions" style="display:none;gap:10px;margin-top:12px;">
+      <button onclick="mgrSendBack()" style="flex:1;padding:13px;background:none;border:1px solid #555;border-radius:10px;color:#ccc;font-size:14px;font-weight:700;cursor:pointer;">↩ Send Back</button>
+      <button onclick="mgrApprove()" style="flex:1;padding:13px;background:rgba(48,209,88,.15);border:1px solid rgba(48,209,88,.4);border-radius:10px;color:#30d158;font-size:14px;font-weight:700;cursor:pointer;">✓ Approve</button>
+    </div>
+    <button onclick="mgrAddTask()" style="width:100%;padding:12px;background:none;border:1px dashed #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:8px;" id="mgr-add-task-btn">+ Add Task</button>
     <button onclick="mgrUnassign()" style="width:100%;padding:12px;background:none;border:1px solid #ff453a;border-radius:10px;color:#ff453a;font-size:14px;cursor:pointer;margin-top:12px;">Unassign Employee</button>
   </div>
 </div>
@@ -1766,7 +1770,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();if(id==='paint')renderMgrPaint();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint')renderMgrPaint();updateTabBadges();}
 
 function updateTabBadges(){
   var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
@@ -2645,10 +2649,16 @@ function openMgrAssign(assignId){
   const car=S.inventory.find(c=>c.id===a.inventoryId);
   const emp=S.employees.find(e=>e.id===a.employeeId);
   document.getElementById('mgr-assign-title').textContent=car?car.name:'Vehicle';
-  document.getElementById('mgr-assign-sub').textContent=(emp?emp.name:'?')+' · '+(car?car.stock:'');
+  document.getElementById('mgr-assign-sub').textContent=(emp?emp.name:'?')+' · '+(car?car.stock||'':'');
+  var revEl=document.getElementById('mgr-assign-review-actions');
+  var addBtn=document.getElementById('mgr-add-task-btn');
+  if(revEl){revEl.style.display=a&&a.submitted?'flex':'none';}
+  if(addBtn){addBtn.style.display=a&&a.submitted?'none':'block';}
   renderMgrTaskList();
   openM('m-mgr-assign');
 }
+function mgrApprove(){approve(curMgrAssignId);closeM('m-mgr-assign');}
+function mgrSendBack(){sendBack(curMgrAssignId);closeM('m-mgr-assign');}
 function renderMgrTaskList(){
   const a=S.assignments.find(x=>String(x.id)===String(curMgrAssignId));
   if(!a) return;
@@ -2721,7 +2731,7 @@ async function mgrUnassign(){
     S.assignments=S.assignments.filter(x=>x.id!==a.id);
     sv();
     closeM('m-mgr-assign');
-    renderAssigned();
+    renderMgrTasks();renderAssigned();
     renderInv();
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
@@ -3033,6 +3043,40 @@ async function markPartsDone(carId){
   updateTabBadges();
 }
 // ── REPAIR QUEUE ────────────────────────────────────────────────────────────
+function renderMgrTasks(){
+  var el=document.getElementById('rev-list');
+  if(!el) return;
+  var asgns=(S.assignments||[]).filter(function(a){return !a.approved&&!isQueueAssignment(a);});
+  if(!asgns.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
+  var allItems=[];
+  asgns.forEach(function(a){
+    var car=S.inventory.find(function(c){return c.id===a.inventoryId;});
+    var emp=S.employees.find(function(e){return e.id===a.employeeId;});
+    if(!car) return;
+    var tasks=a.tasks||[];
+    if(!tasks.length){allItems.push({a:a,car:car,emp:emp,text:'(no tasks)',taskDone:false,urgent:false,submitted:a.submitted});}
+    else{tasks.forEach(function(t){allItems.push({a:a,car:car,emp:emp,text:typeof t==='object'?(t.name||t.text||'Task'):t,taskDone:typeof t==='object'?!!t.done:false,urgent:typeof t==='object'?!!t.urgent:false,submitted:a.submitted});});}
+  });
+  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
+  allItems.forEach(function(item){
+    var c=item.car;
+    var pxUrl=!c.photo&&pxCache[String(c.id)];
+    var thumbSrc=c.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(c.name)+'</div>';
+    var borderCol=item.submitted?'rgba(48,209,88,0.25)':'#1e1e1e';
+    o+='<div onclick="openMgrAssign(\''+item.a.id+'\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+=thumbHTML;
+    o+='<div style="flex:1;min-width:0;">';
+    o+='<div style="font-size:14px;color:'+(item.taskDone?'#666':'#fff')+';font-weight:600;'+(item.taskDone?'text-decoration:line-through;':'')+'">'+item.text+(item.urgent?' ⚠':'')+'</div>';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+(item.emp?' · '+item.emp.name:'')+'</div>';
+    o+='</div>';
+    if(item.submitted) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">Review</span>';
+    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
+}
 function renderMgrRepair(){
   var el=document.getElementById('mgr-repair-list');
   if(!el) return;
@@ -3276,7 +3320,7 @@ async function approve(aid){
       try{await createNotification(emp.id,me.name+' approved your work on '+carName,aid,carName);}catch(e2){}
     }
   }catch(e){alert('Error: '+e.message);}
-  hideLoading();renderReview();updateTabBadges();updateHomeBadges();
+  hideLoading();renderMgrTasks();updateTabBadges();updateHomeBadges();
 }
 async function sendBack(aid){
   showLoading('Sending back...');
@@ -3294,7 +3338,7 @@ async function sendBack(aid){
       try{await createNotification(emp.id,me.name+' sent back your work on '+carName+' — needs redo',aid,carName);}catch(e2){}
     }
   }catch(e){alert('Error: '+e.message);}
-  hideLoading();renderReview();updateTabBadges();updateHomeBadges();
+  hideLoading();renderMgrTasks();updateTabBadges();updateHomeBadges();
 }
 
 // ── TEAM ───────────────────────────────────────────────────────────────────────
@@ -3962,6 +4006,7 @@ function mgrGoSection(id, label){
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
   if(id==='inventory'){invTab='all';['all','paint','detail','photos'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
+  else if(id==='tasks')renderMgrTasks();
   else if(id==='repair')renderMgrRepair();
   else if(id==='detail')renderMgrDetail();
   else if(id==='photos')renderMgrPhotos();
@@ -4014,8 +4059,9 @@ function updateHomeBadges(){
     if(gEl){gEl.textContent=green;gEl.style.display=green>0?'block':'none';}
     if(rEl){rEl.textContent=red;rEl.style.display=red>0?'block':'none';}
   }
-  var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved;}).length;
-  setOrbitDual('hbadge-tasks',taskGreen,0);
+  var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved&&!isQueueAssignment(a);}).length;
+  var taskRed=asgns.filter(function(a){return !a.submitted&&!a.approved&&!isQueueAssignment(a);}).length;
+  setOrbitDual('hbadge-tasks',taskGreen,taskRed);
   setOrbitDual('hbadge-detail',reviewCount('detail'),queueCount('detail'));
   setOrbitDual('hbadge-photos',reviewCount('photos'),queueCount('photos'));
   setOrbitDual('hbadge-repair',reviewCount('repair'),queueCount('repair'));
