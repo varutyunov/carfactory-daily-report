@@ -46,7 +46,10 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 /* MGR TABS */
 .mtabs{display:flex;flex-wrap:wrap;gap:6px;background:#000;padding:8px 10px;border-bottom:1px solid #111;flex-shrink:0;}
 .emp-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;}
-.mt{flex:0 0 auto;padding:8px 16px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:13px;font-weight:600;cursor:pointer;}
+.mt{flex:0 0 auto;padding:8px 16px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:13px;font-weight:600;cursor:pointer;position:relative;}
+.mt .badge-left,.mt .badge-right{position:absolute;top:-7px;font-size:10px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;border-radius:9px;line-height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.mt .badge-left{left:-4px;background:#30d158;color:#fff;}
+.mt .badge-right{right:-4px;background:#ff453a;color:#fff;}
 .mt.on{background:#fff;border-color:#fff;color:#000;}
 
 /* CONTENT */
@@ -360,6 +363,9 @@ canvas{display:none;}
 .orbit-badge{position:absolute;top:-8px;right:-8px;z-index:10;background:#ef4444;color:#fff;border-radius:12px;
   font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;display:none;
   box-shadow:0 2px 10px rgba(239,68,68,0.7),0 0 0 2px #000;animation:badge-pulse 2s ease-in-out infinite;}
+.orbit-badge-green{position:absolute;top:-8px;left:-8px;z-index:10;background:#30d158;color:#fff;border-radius:12px;
+  font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;display:none;
+  box-shadow:0 2px 10px rgba(48,209,88,0.7),0 0 0 2px #000;animation:badge-pulse 2s ease-in-out infinite;}
 @keyframes badge-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.15);}}
 
 /* Stagger entrance */
@@ -537,7 +543,8 @@ canvas{display:none;}
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
     <button class="mt" onclick="mgrGo('photos',this)" id="tab-photos">Photos</button>
     <button class="mt" onclick="mgrGo('parts',this)" id="tab-parts">Parts</button>
-    <button class="mt" onclick="mgrGo('tasks',this)" id="tab-repair">Repair</button>
+    <button class="mt" onclick="mgrGo('repair',this)" id="tab-repair">Repair</button>
+    <button class="mt" onclick="mgrGo('paint',this)" id="tab-paint">Paint</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
   </div>
   <div class="content">
@@ -710,6 +717,7 @@ canvas{display:none;}
                 <path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/>
               </svg>
               <div class="orbit-tile-label">Tasks</div>
+              <span class="orbit-badge-green" id="hbadge-tasks-green"></span>
               <span class="orbit-badge" id="hbadge-tasks"></span>
             </div>
           </div>
@@ -721,6 +729,7 @@ canvas{display:none;}
                 <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
               </svg>
               <div class="orbit-tile-label">Repairs</div>
+              <span class="orbit-badge-green" id="hbadge-repair-green"></span>
               <span class="orbit-badge" id="hbadge-repair"></span>
             </div>
           </div>
@@ -732,6 +741,7 @@ canvas{display:none;}
                 <path d="M12 2l2.2 6.6H21l-5.6 4.1 2.1 6.5L12 15.2l-5.5 3.9 2.1-6.5L3 8.6h6.8z"/>
               </svg>
               <div class="orbit-tile-label">Detail</div>
+              <span class="orbit-badge-green" id="hbadge-detail-green"></span>
               <span class="orbit-badge" id="hbadge-detail"></span>
             </div>
           </div>
@@ -754,6 +764,7 @@ canvas{display:none;}
                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
               </svg>
               <div class="orbit-tile-label">Photos</div>
+              <span class="orbit-badge-green" id="hbadge-photos-green"></span>
               <span class="orbit-badge" id="hbadge-photos"></span>
             </div>
           </div>
@@ -765,6 +776,7 @@ canvas{display:none;}
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/>
               </svg>
               <div class="orbit-tile-label">Parts</div>
+              <span class="orbit-badge-green" id="hbadge-parts-green"></span>
               <span class="orbit-badge" id="hbadge-parts"></span>
             </div>
           </div>
@@ -786,6 +798,7 @@ canvas{display:none;}
                 <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
               </svg>
               <div class="orbit-tile-label">Paint</div>
+              <span class="orbit-badge-green" id="hbadge-paint-green"></span>
               <span class="orbit-badge" id="hbadge-paint"></span>
             </div>
           </div>
@@ -1305,15 +1318,9 @@ const CAR_SVG={
 '_sport':_S('M12 38h6a6 6 0 0112 0h52a6 6 0 0112 0h6c3 0 4-2 4-4v-3l-8-5-14-13c-3-2-6-3-9-3H40c-4 0-7 1-9 3L18 24l-10 5v5c0 2 1 4 4 4zM24 38a4 4 0 108 0 4 4 0 00-8 0zM88 38a4 4 0 108 0 4 4 0 00-8 0z')
 };
 function carImage(n){
-  const v=(n||'').toLowerCase();
-  // Try specific model match
-  for(const k in CAR_SVG){if(k[0]!=='_'&&v.includes(k))return'<img src="'+CAR_SVG[k]+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';}
-  // Fall back to category
-  if(/truck|f-150|f150|silverado|ram\s?\d|tundra|tacoma|colorado|canyon|ranger|frontier|ridgeline/.test(v))return'<img src="'+CAR_SVG._truck+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
-  if(/van|odyssey|sienna|pacifica|caravan/.test(v))return'<img src="'+CAR_SVG._van+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
-  if(/mustang|camaro|challenger|corvette|charger|supra/.test(v))return'<img src="'+CAR_SVG._sport+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
-  if(/cr-v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|sportage|tucson|cx-5|bronco|wrangler/.test(v))return'<img src="'+CAR_SVG._suv+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
-  return'<img src="'+CAR_SVG._sedan+'" style="width:100%;height:100%;object-fit:contain;opacity:0.35;padding:12%"/>';
+  var cat=carCategory(n);
+  var src=CAT_PHOTO[cat]||'stock-sedan.png';
+  return'<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;"/>';
 }
 
 // ── CURATED CATEGORY PHOTOS (B&W, hand-picked from Pexels) ────────────────────
@@ -1333,7 +1340,7 @@ function carCategory(name){
   if(/cr-?v|rav4|equinox|rogue|escape|explorer|pilot|highlander|4runner|tahoe|suburban|yukon|escalade|expedition|navigator|sportage|tucson|cx-?5|cx-?9|bronco|wrangler|cherokee|durango|traverse|enclave|acadia|mdx|rdx|qx|q5|q7|x3|x5|rx|gx|lx|gls|gle|murano|pathfinder|armada|sequoia|atlas|tiguan|sorento|santa.fe|outback|forester|crosstrek|defender|discovery/.test(v))return'suv';
   return'sedan';
 }
-const CAT_PHOTO={sedan:'stock-sedan.png',coupe:'stock-coupe.png',truck:'stock-truck.png',van:'stock-van.png',suv:'stock-sedan.png'};
+const CAT_PHOTO={sedan:'stock-sedan.png',coupe:'stock-coupe.png',truck:'stock-truck.png',van:'stock-van.png',suv:'stock-truck.png'};
 function fetchPexels(car){
   const cat=carCategory(car.name);
   return Promise.resolve(CAT_PHOTO[cat]||'stock-sedan.png');
@@ -1736,39 +1743,34 @@ function showView(id){
 function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair')renderMgrRepair();if(id==='detail')renderMgrDetail();if(id==='photos')renderMgrPhotos();if(id==='parts')renderMgrParts();if(id==='tasks')renderReview();if(id==='employees')renderTeam();if(id==='paint')renderMgrPaint();updateTabBadges();}
 
 function updateTabBadges(){
-  const tabTasks=document.getElementById('tab-tasks');
-  const tabDetail=document.getElementById('tab-detail');
-  const tabPhotos=document.getElementById('tab-photos');
-  const tabRepair=document.getElementById('tab-repair');
-  const tabParts=document.getElementById('tab-parts');
-  const tabPaint=document.getElementById('tab-paint');
-  function setBadge(el,label,count){
+  var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
+  function setDualBadge(el,label,greenCount,redCount){
     if(!el) return;
-    if(count>0){
-      el.innerHTML=label+' <span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:2px;">'+count+'</span>';
-    }else{
-      el.textContent=label;
-    }
+    var html=label;
+    if(greenCount>0) html='<span class="badge-left">'+greenCount+'</span>'+html;
+    if(redCount>0) html=html+'<span class="badge-right">'+redCount+'</span>';
+    el.innerHTML=html;
   }
   function catReviewCount(cat){
-    return S.inventory.filter(function(car){
+    return (S.inventory||[]).filter(function(car){
       var ws=getWorkState(car.id);
       return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;
     }).length;
   }
   function catQueueCount(cat){
-    return S.inventory.filter(function(car){
+    return (S.inventory||[]).filter(function(car){
       var ws=getWorkState(car.id);
       return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;
     }).length;
   }
-  const taskReviewCount=S.assignments.filter(a=>a.submitted&&!a.approved&&!isQueueAssignment(a)).length;
-  setBadge(tabTasks,'Tasks',taskReviewCount);
-  setBadge(tabDetail,'Detail',catReviewCount('detail'));
-  setBadge(tabPhotos,'Photos',catReviewCount('photos'));
-  setBadge(tabRepair,'Repair',catQueueCount('repair'));
-  setBadge(tabParts,'Parts',catQueueCount('parts'));
-  setBadge(tabPaint,'Paint',catQueueCount('paint'));
+  var taskReviewCount=(S.assignments||[]).filter(function(a){return a.submitted&&!a.approved&&!isQueueAssignment(a);}).length;
+  // Green (left) = employee submissions needing review; Red (right) = owner queue counts
+  setDualBadge(tabs.tasks,'Tasks',taskReviewCount,0);
+  setDualBadge(tabs.detail,'Detail',catReviewCount('detail'),catQueueCount('detail'));
+  setDualBadge(tabs.photos,'Photos',catReviewCount('photos'),catQueueCount('photos'));
+  setDualBadge(tabs.repair,'Repair',catReviewCount('repair'),catQueueCount('repair'));
+  setDualBadge(tabs.parts,'Parts',catReviewCount('parts'),catQueueCount('parts'));
+  setDualBadge(tabs.paint,'Paint',catReviewCount('paint'),catQueueCount('paint'));
 }
 
 // ── EMPLOYEE GRID ──────────────────────────────────────────────────────────────
@@ -3988,31 +3990,25 @@ function goMgrHome(){
 
 function updateHomeBadges(){
   var asgns=(S.assignments||[]).filter(function(a){return !a.approved;});
-  function hasTag(tag){return function(t){var txt=(typeof t==='object'?t.text:t)||'';return txt.toLowerCase().indexOf('['+tag+']')!==-1;};}
-  function carsWithTag(){
-    var tags=[].slice.call(arguments);
-    var seen={};
-    asgns.forEach(function(a){
-      if(!seen[a.inventoryId]&&(a.tasks||[]).some(function(t){return tags.some(function(tag){return hasTag(tag)(t);});}))seen[a.inventoryId]=1;
-    });
-    return Object.keys(seen).length;
-  }
-  // All cars with any active assignment (for progress)
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
   var allCount=Object.keys(allSeen).length;
-
-  // For owner: only count items employees marked done that need review
-  // For employees: count items in their section pool
+  // Green = employee submissions needing owner review
   function reviewCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].done&&!ws.categories[cat].reviewed;}).length;}
-  function spCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
-  var isOwner=me&&me.role==='manager';
-  var taskBadge=isOwner?asgns.filter(function(a){return a.submitted&&!a.approved;}).length:carsWithTag('task');
-  var hbt=document.getElementById('hbadge-tasks'); if(hbt){hbt.textContent=taskBadge;hbt.style.display=taskBadge>0?'block':'none';}
-  var rc=isOwner?reviewCount('repair'):spCount('repair'); var hbr=document.getElementById('hbadge-repair'); if(hbr){hbr.textContent=rc;hbr.style.display=rc>0?'block':'none';}
-  var dc=isOwner?reviewCount('detail'):spCount('detail'); var hbd=document.getElementById('hbadge-detail'); if(hbd){hbd.textContent=dc;hbd.style.display=dc>0?'block':'none';}
-  var pc=isOwner?reviewCount('photos'):spCount('photos'); var hbp=document.getElementById('hbadge-photos'); if(hbp){hbp.textContent=pc;hbp.style.display=pc>0?'block':'none';}
-  var pac=isOwner?reviewCount('parts'):spCount('parts'); var hbpa=document.getElementById('hbadge-parts'); if(hbpa){hbpa.textContent=pac;hbpa.style.display=pac>0?'block':'none';}
-  var paintc=isOwner?reviewCount('paint'):spCount('paint'); var hbpaint=document.getElementById('hbadge-paint'); if(hbpaint){hbpaint.textContent=paintc;hbpaint.style.display=paintc>0?'block':'none';}
+  // Red = cars in queue (set by owner)
+  function queueCount(cat){return (S.inventory||[]).filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;}).length;}
+  function setOrbitDual(baseName,green,red){
+    var gEl=document.getElementById(baseName+'-green');
+    var rEl=document.getElementById(baseName);
+    if(gEl){gEl.textContent=green;gEl.style.display=green>0?'block':'none';}
+    if(rEl){rEl.textContent=red;rEl.style.display=red>0?'block':'none';}
+  }
+  var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved;}).length;
+  setOrbitDual('hbadge-tasks',taskGreen,0);
+  setOrbitDual('hbadge-detail',reviewCount('detail'),queueCount('detail'));
+  setOrbitDual('hbadge-photos',reviewCount('photos'),queueCount('photos'));
+  setOrbitDual('hbadge-repair',reviewCount('repair'),queueCount('repair'));
+  setOrbitDual('hbadge-parts',reviewCount('parts'),queueCount('parts'));
+  setOrbitDual('hbadge-paint',reviewCount('paint'),queueCount('paint'));
   var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
   updateAppBadge();
 }
@@ -4028,6 +4024,7 @@ async function mgrConfirmCatDone(carId,section){
   var ws=getWorkState(carId);
   if(!ws.categories||!ws.categories[section]) return;
   ws.categories[section].confirmed=true;
+  ws.categories[section].reviewed=true;
   ws.categories[section].pendingReview=false;
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(car) car.work=ws;
@@ -4092,7 +4089,6 @@ async function mgrMarkCarComplete(carId){
 function renderProgress(){
   var el=document.getElementById('mgr-progress-content');
   if(!el) return;
-  // Collect all cars with any active sectionPool category
   var tabTypes=['paint','detail','repair','photos','parts'];
   var carIdSet=new Set();
   (S.inventory||[]).forEach(function(car){
@@ -4103,7 +4099,6 @@ function renderProgress(){
       });
     }
   });
-  // Also include assignment-based and pinned cars
   (S.assignments||[]).forEach(function(a){if(!a.approved) carIdSet.add(a.inventoryId);});
   getProgressCars().forEach(function(id){carIdSet.add(id);});
   var activeCars=Array.from(carIdSet).map(function(id){return S.inventory.find(function(c){return c.id===id;});}).filter(Boolean);
@@ -4134,16 +4129,21 @@ function renderProgress(){
     var pctColor=pct===100?'#30d158':pendingReview?'#ffd60a':'#a78bfa';
     var isExpanded=_progressExpanded.has(car.id);
     var allConfirmed=totalCats>0&&confirmedCats===totalCats;
+    // Car photo thumbnail
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var thumbSrc=car.photo||pxUrl||'';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:12px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     // Status summary chips
     var summaryChips=activeTabs.map(function(t){
       var c=cats[t];
-      var col=c.confirmed?'#30d158':c.pendingReview?'#ffd60a':catMeta[t].color;
-      var icon=c.confirmed?'✓':c.pendingReview?'⏳':catMeta[t].icon;
+      var col=c.confirmed?'#30d158':c.done?'#ffd60a':catMeta[t].color;
+      var icon=c.confirmed?'✓':c.done?'⏳':catMeta[t].icon;
       return '<span style="font-size:10px;background:'+col+'18;color:'+col+';border:1px solid '+col+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+icon+' '+catMeta[t].label+'</span>';
     }).join('');
     out+='<div style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;">';
-    // Header row (tap to expand)
+    // Header row with photo
     out+='<div onclick="toggleProgressExpand('+car.id+')" style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;cursor:pointer;">';
+    out+=thumbHTML;
     out+='<div style="flex:1;min-width:0;">';
     out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
     out+='<div style="font-size:11px;color:#444;margin-top:1px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
@@ -4158,37 +4158,82 @@ function renderProgress(){
     out+='<div style="margin:0 16px 10px;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;">';
     out+='<div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:2px;transition:width 0.4s;"></div>';
     out+='</div>';
-    // Expanded detail
+    // Expanded detail — full workflow editing
     if(isExpanded){
-      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:8px;">';
+      out+='<div style="border-top:1px solid #151515;padding:10px 16px 14px;display:flex;flex-direction:column;gap:10px;">';
       activeTabs.forEach(function(t){
         var c=cats[t];
         var meta=catMeta[t];
         var isConf=c.confirmed||false;
-        var isPend=c.pendingReview&&!isConf;
+        var isPend=(c.done&&!c.reviewed)||false;
         var isDone=c.done||false;
         var rowBg=isConf?'rgba(48,209,88,0.06)':isPend?'rgba(255,214,10,0.06)':'rgba(255,255,255,0.02)';
-        out+='<div style="background:'+rowBg+';border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">';
+        out+='<div style="background:'+rowBg+';border-radius:12px;padding:12px;border:1px solid '+(isConf?'rgba(48,209,88,0.15)':isPend?'rgba(255,214,10,0.15)':'#1a1a1a')+'">';
+        // Category header row
+        out+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
         out+='<div style="font-size:16px;">'+meta.icon+'</div>';
         out+='<div style="flex:1;min-width:0;">';
         out+='<div style="font-size:13px;font-weight:700;color:#fff;">'+meta.label+'</div>';
         if(c.doneBy) out+='<div style="font-size:11px;color:#555;margin-top:1px;">by '+c.doneBy+(c.doneAt?' · '+new Date(c.doneAt).toLocaleDateString():'')+'</div>';
-        if(c.notes) out+='<div style="font-size:11px;color:#666;font-style:italic;margin-top:2px;">"'+c.notes+'"</div>';
         out+='</div>';
-        // Action buttons
+        // Status + action buttons
         out+='<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;">';
         if(isConf){
           out+='<span style="font-size:11px;font-weight:700;color:#30d158;">✓ Done</span>';
         } else if(isPend){
-          out+='<button onclick="mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
-          out+='<button onclick="mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
+          out+='<button onclick="event.stopPropagation();mgrConfirmCatDone('+car.id+',\''+t+'\')" style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">✓ Confirm</button>';
+          out+='<button onclick="event.stopPropagation();mgrSendCatBack('+car.id+',\''+t+'\')" style="background:rgba(255,255,255,0.04);border:1px solid #252525;color:#888;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">↩ Redo</button>';
         } else {
-          out+='<button onclick="mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
+          out+='<button onclick="event.stopPropagation();mgrMarkCatDone('+car.id+',\''+t+'\')" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;font-size:11px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;white-space:nowrap;">Mark Done</button>';
         }
         out+='</div>';
         out+='</div>';
+        // Notes
+        if(c.notes) out+='<div style="font-size:12px;color:#666;font-style:italic;padding:0 2px;margin-bottom:4px;">"'+c.notes+'"</div>';
+        // Inline editing for all categories
+        var items=(c.items||c.repairs||[]);
+        if(items.length){
+          out+='<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;">';
+          items.forEach(function(item,i){
+            var txt=typeof item==='string'?item:(item.text||'');
+            var done=typeof item==='object'?!!item.done:false;
+            out+='<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.02);border-radius:6px;">';
+            out+='<div onclick="event.stopPropagation();progToggleItem('+car.id+',\''+t+'\','+i+')" style="width:16px;height:16px;border-radius:4px;border:2px solid '+(done?'#30d158':'#333')+';background:'+(done?'#30d158':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(done?'<span style="color:#000;font-size:10px;font-weight:900;">✓</span>':'')+'</div>';
+            out+='<span style="flex:1;font-size:12px;color:'+(done?'#555':'#ccc')+';'+(done?'text-decoration:line-through;':'')+'">'+txt+'</span>';
+            out+='<button onclick="event.stopPropagation();progRemoveItem('+car.id+',\''+t+'\','+i+')" style="background:none;border:none;color:#444;font-size:13px;cursor:pointer;padding:0 2px;">✕</button>';
+            out+='</div>';
+          });
+          out+='</div>';
+        }
+        // Add item input
+        out+='<div style="display:flex;gap:6px;">';
+        out+='<input id="prog-item-'+car.id+'-'+t+'" placeholder="Add '+meta.label.toLowerCase()+' item..." style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:inherit;" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.stopPropagation();progAddItem('+car.id+',\''+t+'\');}"/>';
+        out+='<button onclick="event.stopPropagation();progAddItem('+car.id+',\''+t+'\')" style="background:'+meta.color+';border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;flex-shrink:0;">+</button>';
+        out+='</div>';
+        // Photo button for all categories
+        out+='<div style="display:flex;gap:6px;margin-top:6px;">';
+        var safeTitle=meta.icon+' '+meta.label+' — '+car.name.replace(/'/g,"\\'");
+        out+='<button onclick="event.stopPropagation();openPhotoGallery('+car.id+',\''+t+'\',\''+safeTitle+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:'+meta.color+';font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">📷 Photos</button>';
+        // Assign employee button
+        out+='<button onclick="event.stopPropagation();progAssignCat('+car.id+',\''+t+'\')" style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#888;font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;text-align:center;">'+(c.assignedTo&&c.assignedTo.length?'👤 Reassign':'👤 Assign')+'</button>';
+        out+='</div>';
+        // Show assigned employees
+        if(c.assignedTo&&c.assignedTo.length){
+          var empNames=c.assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
+          if(empNames.length) out+='<div style="font-size:10px;color:#555;margin-top:4px;">→ '+empNames.join(', ')+'</div>';
+        }
+        out+='</div>';
       });
       out+='</div>';
+      // Notes section
+      var carNotes=(ws.notes||[]);
+      if(carNotes.length){
+        out+='<div style="padding:0 16px 8px;"><div style="font-size:10px;font-weight:700;color:#444;letter-spacing:1px;margin-bottom:4px;">NOTES</div>';
+        carNotes.slice(-3).forEach(function(n){
+          out+='<div style="font-size:11px;color:#888;padding:3px 0;"><span style="color:#64d2ff;font-weight:600;">'+((n.by)||'')+'</span> '+n.text+'</div>';
+        });
+        out+='</div>';
+      }
       // Bottom actions
       out+='<div style="padding:0 16px 14px;display:flex;gap:8px;">';
       if(allConfirmed){
@@ -4203,6 +4248,76 @@ function renderProgress(){
   });
   out+='</div>';
   el.innerHTML=out;
+  applyPexels(activeCars);
+}
+// ── Progress inline editing helpers ──
+async function progAddItem(carId,cat){
+  var inp=document.getElementById('prog-item-'+carId+'-'+cat);
+  if(!inp) return;
+  var txt=inp.value.trim();if(!txt) return;
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories[cat]) ws.categories[cat]={sectionPool:true};
+  var key=(cat==='parts')?'repairs':'items';
+  if(!ws.categories[cat][key]) ws.categories[cat][key]=[];
+  ws.categories[cat][key].push({text:txt,done:false});
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  inp.value='';
+  await saveWorkState(carId);
+  renderProgress();
+}
+async function progToggleItem(carId,cat,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var key=(cat==='parts')?'repairs':'items';
+  var items=ws.categories[cat][key]||[];
+  if(idx<0||idx>=items.length) return;
+  var it=items[idx];
+  var txt=typeof it==='string'?it:(it.text||'');
+  var done=typeof it==='object'?!!it.done:false;
+  items[idx]={text:txt,done:!done};
+  ws.categories[cat][key]=items;
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  renderProgress();
+}
+async function progRemoveItem(carId,cat,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var key=(cat==='parts')?'repairs':'items';
+  var items=ws.categories[cat][key]||[];
+  items.splice(idx,1);
+  ws.categories[cat][key]=items;
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  renderProgress();
+}
+function progAssignCat(carId,cat){
+  var emps=(S.employees||[]).filter(function(e){return e.role!=='manager';});
+  if(!emps.length){alert('No employees to assign');return;}
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  var current=(ws.categories[cat].assignedTo||[]);
+  var html='<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Assign '+cat.charAt(0).toUpperCase()+cat.slice(1)+'</div>';
+  emps.forEach(function(e){
+    var sel=current.indexOf(e.id)!==-1;
+    html+='<button onclick="progToggleAssign('+carId+',\''+cat+'\','+e.id+',this)" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:4px;background:'+(sel?'rgba(100,210,255,0.1)':'#111')+';border:1px solid '+(sel?'rgba(100,210,255,0.3)':'#222')+';border-radius:10px;color:'+(sel?'#64d2ff':'#ccc')+';font-size:14px;cursor:pointer;font-weight:'+(sel?'700':'400')+';">'+(sel?'✓ ':'')+e.name+'</button>';
+  });
+  html+='<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;cursor:pointer;margin-top:10px;">Done</button>';
+  document.getElementById('detail-done-body').innerHTML=html;
+  openM('m-detail-done');
+}
+async function progToggleAssign(carId,cat,empId,btn){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories[cat]) return;
+  if(!ws.categories[cat].assignedTo) ws.categories[cat].assignedTo=[];
+  var idx=ws.categories[cat].assignedTo.indexOf(empId);
+  if(idx===-1) ws.categories[cat].assignedTo.push(empId);
+  else ws.categories[cat].assignedTo.splice(idx,1);
+  var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
+  await saveWorkState(carId);
+  progAssignCat(carId,cat);
+  renderProgress();
 }
 
 /* ── CALENDAR VIEW ── */
@@ -5445,7 +5560,7 @@ function empRenderInv(){
     var ws=getWorkState(car.id);
     var noteCount=(ws.notes&&ws.notes.length)||0;
     var noteBadge=noteCount?'<span style="font-size:10px;background:rgba(100,210,255,.15);color:#64d2ff;border:1px solid rgba(100,210,255,.3);border-radius:4px;padding:1px 5px;font-weight:700;">'+noteCount+' note'+(noteCount===1?'':'s')+'</span>':'';
-    var thumb=car.photo?'<img style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:48px;height:48px;border-radius:10px;background:#111;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var thumb=car.photo?'<img style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     return '<div onclick="empOpenCar('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">'
       +thumb
       +'<div style="flex:1;min-width:0;">'
