@@ -3478,8 +3478,8 @@ function parseCSV(csv){
     var stock=row['stockno']||row['stock']||row['stock #']||'';
     var make=row['make']||'';
     var status=row['status']||'';
-    // Match GitHub Action filter: must be INSTOCK with a make and stock number
-    if(status&&status!=='INSTOCK') continue;
+    // Include INSTOCK and REPO vehicles; skip SOLD or other statuses
+    if(status&&status!=='INSTOCK'&&status!=='REPO') continue;
     if(!stock) continue;
     var year=row['year']||'';var model=row['model']||'';var vin=row['vin']||'';
     var color=row['colorexterior']||row['color']||row['extcolor']||row['ext color']||row['exterior color']||'';

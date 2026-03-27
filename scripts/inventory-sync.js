@@ -41,7 +41,7 @@ async function main() {
     const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
     const r = {};
     hdrs.forEach((h, j) => r[h] = vals[j] || '');
-    if (r['status'] !== 'INSTOCK' || !r['make'] || !r['stockno']) continue;
+    if ((r['status'] !== 'INSTOCK' && r['status'] !== 'REPO') || !r['make'] || !r['stockno']) continue;
 
     // Fix: correct column name is 'colorexterior', not 'color'
     const color = r['colorexterior'] || r['color'] || r['extcolor'] || '';
