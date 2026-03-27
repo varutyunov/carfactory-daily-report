@@ -101,7 +101,8 @@ async function cpLogin(email, password) {
 
 // ── Switch Location ──────────────────────────────────────────────────────────
 async function cpSelectDealer(dealerId) {
-  await cpFetch('/dms/select-dealer?dealerId=' + dealerId);
+  const res = await cpFetch('/dms/select-dealer?dealerId=' + dealerId);
+  await res.text(); // consume body to free the socket
 }
 
 // ── Parse customers table from HTML ─────────────────────────────────────────
