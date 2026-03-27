@@ -54,12 +54,21 @@ async function cpLogin(email, password) {
   // GET login page to get CSRF token + session cookie
   const page = await cpFetch('/login');
   const html = await page.text();
-  const m = html.match(/name="_token"\s+value="([^"]+)"/);
-  if (!m) { console.error('CSRF token not found'); return false; }
+  // CarPay uses CakePHP: field is _csrfToken
+  const mCsrf = html.match(/name="_csrfToken"[^>]*value="([^"]+)"/);
+  if (!mCsrf) { console.error('CSRF token not found'); return false; }
+  // Also grab _Token[fields] for CakePHP security component
+  const mFields = html.match(/name="_Token\[fields\]"[^>]*value="([^"]+)"/);
+  const tokenFields = mFields ? mFields[1] : '';
 
-  const body = 'email=' + encodeURIComponent(email) +
-               '&password=' + encodeURIComponent(password) +
-               '&_token=' + encodeURIComponent(m[1]);
+  // CarPay field names: username, password__not_in_db
+  const body = 'username=' + encodeURIComponent(email) +
+               '&password__not_in_db=' + encodeURIComponent(password) +
+               '&_csrfToken=' + encodeURIComponent(mCsrf[1]) +
+               '&_Token%5Bfields%5D=' + encodeURIComponent(tokenFields) +
+               '&_Token%5Bunlocked%5D=' +
+               '&redirect=' +
+               '&remember_me_not_in_db=0';
 
   const res = await cpFetch('/login', {
     method: 'POST',
