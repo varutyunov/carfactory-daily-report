@@ -44,11 +44,9 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .so{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:16px;cursor:pointer;padding:6px 10px;border-radius:8px;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 
 /* MGR TABS */
-.mtabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;background:#000;padding:6px 10px;border-bottom:1px solid #111;flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.mtabs::-webkit-scrollbar{display:none;}
-.emp-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:6px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.emp-tabs::-webkit-scrollbar{display:none;}
-.mt{flex:0 0 auto;padding:5px 11px;background:#1a1a1a;border:1px solid #333;border-radius:20px;color:#888;font-size:11px;font-weight:600;cursor:pointer;position:relative;white-space:nowrap;}
+.mtabs{display:flex;flex-wrap:nowrap;gap:3px;background:#000;padding:5px 8px;border-bottom:1px solid #111;flex-shrink:0;}
+.emp-tabs{display:flex;flex-wrap:nowrap;gap:3px;padding:5px 8px;}
+.mt{flex:1;min-width:0;padding:5px 2px;background:#1a1a1a;border:1px solid #333;border-radius:16px;color:#888;font-size:10px;font-weight:700;cursor:pointer;position:relative;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;text-transform:uppercase;}
 .mt .badge-left,.mt .badge-right{position:absolute;top:-7px;font-size:10px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;border-radius:9px;line-height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
 .mt .badge-left{left:-4px;background:#30d158;color:#fff;}
 .mt .badge-right{right:-4px;background:#ff453a;color:#fff;}
@@ -552,7 +550,7 @@ canvas{display:none;}
     </div>
   </div>
   <div class="mtabs" id="mtabs" style="display:none;">
-    <button class="mt on" onclick="mgrGo('inventory',this)">Inventory</button>
+    <button class="mt on" onclick="mgrGo('inventory',this)">Inv</button>
     <button class="mt" onclick="mgrGo('assigned',this)" id="tab-tasks">Tasks</button>
     <button class="mt" onclick="mgrGo('detail',this)" id="tab-detail">Detail</button>
     <button class="mt" onclick="mgrGo('photos',this)" id="tab-photos">Photos</button>
@@ -1903,7 +1901,6 @@ function renderEmpHome(){
     {id:'paint',label:'Paint',count:carSets.paint.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 3H5a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M12 11v6"/><path d="M8 17h8a2 2 0 012 2H6a2 2 0 012-2z"/></svg>',bg:'linear-gradient(145deg,#1a0010,#4a0030,#7c0055)',glow:'rgba(236,72,153,0.25)'},
     {id:'tasks',label:'Tasks',count:carSets.tasks.size,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 5-5"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4"/></svg>',bg:'linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a)',glow:'rgba(34,197,94,0.25)'}
   ];
-  var visible=tiles.filter(function(t){return t.count>0;});
   var isDealUser=me&&['manny','scott','jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isLangUser=me&&['manny','ricky'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
@@ -1911,23 +1908,19 @@ function renderEmpHome(){
   var langBtn=document.getElementById('lang-toggle-btn');
   if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
-  // Widget-only users (e.g. Jesse) — skip vehicle tiles entirely
-  if(isWidgetOnly) visible=[];
-  // Always add Inventory tile for all employees
-  var invCount=(S.inventory||[]).length;
-  tiles.push({id:'_inventory',label:'Inventory',count:invCount,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#64d2ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20"/><path d="M10 8v13"/></svg>',bg:'linear-gradient(145deg,#001520,#003050,#004a7a)',glow:'rgba(100,210,255,0.25)',always:true});
-  var visible=tiles.filter(function(t){return t.always||t.count>0;});
-  if(isWidgetOnly) visible=visible.filter(function(t){return t.always;});
+  // All 6 category tiles always shown; widget-only users see none
+  var visible=isWidgetOnly?[]:tiles;
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
   grid.innerHTML=visible.map(function(t){
-    var onclick=t.id==='_inventory'?'empOpenInventory()':'empOrbitGo(\''+t.id+'\')';
-    return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;">' +
+    var dimmed=t.count===0;
+    var onclick='empOrbitGo(\''+t.id+'\')';
+    return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 6px 28px '+t.glow+',0 10px 40px rgba(0,0,0,0.7);border-radius:22px;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:120px;opacity:'+(dimmed?'0.45':'1')+'">' +
       '<div style="width:36px;height:36px;">'+t.icon+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;line-height:1;">'+t.count+'</div>' +
-      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+(t.id==='_inventory'?'vehicle'+(t.count===1?'':'s'):'car'+(t.count===1?'':'s'))+'</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;line-height:1;">'+(t.count||'—')+'</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+(t.count===1?'car':'cars')+'</div>' +
     '</div>';
   }).join('');
   // Widget dock — fixed at bottom, shown for deal users and/or lang users
@@ -1984,9 +1977,10 @@ function renderEmpCatCars(section){
   }
   function makeThumb(car){
     var pxUrl=!car.photo&&pxCache[String(car.id)];
-    if(car.photo) return '<img class="eq-thumb" src="'+car.photo+'"/>';
-    if(pxUrl) return '<img class="eq-thumb" src="'+pxUrl+'"/>';
-    return '<div class="eq-thumb-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var oc='onclick="empOpenCar('+car.id+')" title="Change car icon"';
+    if(car.photo) return '<img class="eq-thumb" style="cursor:pointer;" '+oc+' src="'+car.photo+'"/>';
+    if(pxUrl) return '<img class="eq-thumb" style="cursor:pointer;" '+oc+' src="'+pxUrl+'"/>';
+    return '<div class="eq-thumb-ph" style="cursor:pointer;" '+oc+' data-px="'+car.id+'">'+carImage(car.name)+'</div>';
   }
   var assignedHTML=filtered.map(function(a){
     var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
@@ -2174,7 +2168,10 @@ function openTaskView(aid){
   curTaskId=aid;uploadedPhotos=[];
   const a=S.assignments.find(x=>x.id===aid);
   const car=S.inventory.find(c=>c.id===a.inventoryId);
+  _empCarId=car.id;
   const img=document.getElementById('th-img');const ph=document.getElementById('th-ph');
+  img.onclick=function(){empOpenCar(car.id);};ph.onclick=function(){empOpenCar(car.id);};
+  img.title='Tap to change car icon';ph.title='Tap to change car icon';
   if(car.photo){img.src=car.photo;img.style.display='block';ph.style.display='none';}
   else{
     const cached=pxCache[String(car.id)];
