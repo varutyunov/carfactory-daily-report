@@ -326,9 +326,10 @@ canvas{display:none;}
 .orbit-tile svg{width:34px;height:34px;margin-bottom:4px;position:relative;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));}
 .orbit-tile-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;
   text-transform:uppercase;text-align:center;position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.7);}
-.orbit-badge{position:absolute;top:-6px;right:-6px;z-index:10;background:#ef4444;color:#fff;border-radius:10px;
-  font-size:10px;font-weight:700;padding:2px 6px;min-width:18px;text-align:center;line-height:14px;display:none;
-  box-shadow:0 2px 8px rgba(239,68,68,0.6),0 0 0 2px #000;}
+.orbit-badge{position:absolute;top:-8px;right:-8px;z-index:10;background:#ef4444;color:#fff;border-radius:12px;
+  font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;display:none;
+  box-shadow:0 2px 10px rgba(239,68,68,0.7),0 0 0 2px #000;animation:badge-pulse 2s ease-in-out infinite;}
+@keyframes badge-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.15);}}
 
 /* Stagger entrance */
 @keyframes orbitIn{from{opacity:0;transform:scale(0.5);}to{opacity:1;transform:scale(1);}}
