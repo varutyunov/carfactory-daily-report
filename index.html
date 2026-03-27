@@ -1436,7 +1436,6 @@ function updateNotifBadge(){
 }
 function updateAppBadge(){
   // Set the PWA app icon badge on the home screen (like iMessage unread count)
-  if(!navigator.setAppBadge) return;
   try{
     var total=0;
     // Count unread in-app notifications
@@ -1456,8 +1455,15 @@ function updateAppBadge(){
       // For employees: count their active assignments
       total+=(S.assignments||[]).filter(function(a){return a.employeeId===(me&&me.id)&&!a.approved;}).length;
     }
-    if(total>0) navigator.setAppBadge(total);
-    else navigator.clearAppBadge();
+    // Try direct API first
+    if(navigator.setAppBadge){
+      if(total>0) navigator.setAppBadge(total).catch(function(){});
+      else navigator.clearAppBadge().catch(function(){});
+    }
+    // Also tell service worker to set badge (more reliable on iOS)
+    if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({type:'SET_BADGE', count:total});
+    }
   }catch(e){}
 }
 async function openNotifPanel(){

@@ -1,4 +1,4 @@
-const CACHE = 'cf-cache-v70';
+const CACHE = 'cf-cache-v71';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
@@ -43,5 +43,46 @@ self.addEventListener('fetch', e => {
 
 // Message handler — always skip waiting so new SW takes over immediately
 self.addEventListener('message', e => {
+  if(e.data && e.data.type === 'SET_BADGE' && typeof e.data.count === 'number'){
+    if(navigator.setAppBadge){
+      if(e.data.count > 0) navigator.setAppBadge(e.data.count).catch(()=>{});
+      else navigator.clearAppBadge().catch(()=>{});
+    }
+    return;
+  }
   self.skipWaiting();
+});
+
+// Push notification received — show native notification + set badge
+self.addEventListener('push', e => {
+  const data = e.data ? e.data.json() : {};
+  const title = (data.headings && data.headings.en) || data.title || 'Car Factory';
+  const body = (data.contents && data.contents.en) || data.body || '';
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.tag || 'cf-notif',
+      renotify: true,
+      data: data
+    }).then(() => {
+      // Increment badge on push
+      if(navigator.setAppBadge) navigator.setAppBadge().catch(()=>{});
+    })
+  );
+});
+
+// Notification clicked — open or focus the app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({type:'window',includeUncontrolled:true}).then(clients => {
+      if(clients.length > 0){
+        clients[0].focus();
+        return;
+      }
+      return self.clients.openWindow('/');
+    })
+  );
 });
