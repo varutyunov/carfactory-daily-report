@@ -4944,39 +4944,49 @@ function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.
 
 /* ── SWIPE PAGES (Home ↔ CarPay) ──────────────────────────────────────────── */
 var _swipePage=0;
-var _swipeStartX=0,_swipeStartY=0,_swipeDx=0,_swipeLocked=false;
+var _swipeInited=false;
+var _swStartX=0,_swStartY=0,_swDx=0,_swDir=null; // dir: null=undecided, 'h'=horizontal, 'v'=vertical
 function initSwipe(){
+  if(_swipeInited) return;
+  _swipeInited=true;
+  // Attach to mgr-home so it captures touches from all children
+  var home=document.getElementById('mgr-home');
+  if(!home) return;
   var el=document.getElementById('swipe-container');
   if(!el) return;
-  el.addEventListener('touchstart',function(e){
-    _swipeStartX=e.touches[0].clientX;
-    _swipeStartY=e.touches[0].clientY;
-    _swipeDx=0;_swipeLocked=false;
-    el.style.transition='none';
+  home.addEventListener('touchstart',function(e){
+    _swStartX=e.touches[0].clientX;
+    _swStartY=e.touches[0].clientY;
+    _swDx=0;
+    _swDir=null;
   },{passive:true});
-  el.addEventListener('touchmove',function(e){
-    var dx=e.touches[0].clientX-_swipeStartX;
-    var dy=e.touches[0].clientY-_swipeStartY;
-    if(!_swipeLocked){
-      if(Math.abs(dy)>Math.abs(dx)){_swipeLocked=true;return;}// vertical scroll
-      _swipeLocked=true;
+  home.addEventListener('touchmove',function(e){
+    if(!el) return;
+    var dx=e.touches[0].clientX-_swStartX;
+    var dy=e.touches[0].clientY-_swStartY;
+    // Decide direction on first significant move
+    if(_swDir===null){
+      if(Math.abs(dx)<8&&Math.abs(dy)<8) return; // too small, wait
+      _swDir=Math.abs(dx)>=Math.abs(dy)?'h':'v';
+      if(_swDir==='h') el.style.transition='none';
     }
-    if(_swipeLocked && Math.abs(dy)>Math.abs(dx)) return;
-    _swipeDx=dx;
+    if(_swDir!=='h') return; // vertical scroll, ignore
+    _swDx=dx;
     var base=_swipePage===0?0:-50;
-    var pct=base+(dx/el.parentElement.offsetWidth)*50;
+    var pct=base+(dx/home.offsetWidth)*50;
     pct=Math.max(-50,Math.min(0,pct));
     el.style.transform='translateX('+pct+'%)';
   },{passive:true});
-  el.addEventListener('touchend',function(){
+  home.addEventListener('touchend',function(){
+    if(_swDir!=='h'){_swDir=null;return;}
     el.style.transition='';
-    if(Math.abs(_swipeDx)>50){
-      if(_swipeDx<0&&_swipePage===0) setSwipePage(1);
-      else if(_swipeDx>0&&_swipePage===1) setSwipePage(0);
-      else setSwipePage(_swipePage);
-    } else {
-      setSwipePage(_swipePage);
+    el.style.transform='';
+    if(Math.abs(_swDx)>40){
+      if(_swDx<0&&_swipePage===0) setSwipePage(1);
+      else if(_swDx>0&&_swipePage===1) setSwipePage(0);
     }
+    // If threshold not met, it snaps back via CSS class
+    _swDir=null;
   },{passive:true});
 }
 function setSwipePage(p){
@@ -4990,6 +5000,12 @@ function setSwipePage(p){
   var dots=document.querySelectorAll('#swipe-dots .swipe-dot');
   dots.forEach(function(d,i){d.classList.toggle('active',i===p);});
 }
+// Also allow tapping the dots to switch
+document.addEventListener('click',function(e){
+  if(!e.target.classList.contains('swipe-dot')) return;
+  var dots=document.querySelectorAll('#swipe-dots .swipe-dot');
+  dots.forEach(function(d,i){if(d===e.target) setSwipePage(i);});
+});
 
 /* ── CARPAY TAB LOGIC ─────────────────────────────────────────────────────── */
 var _cpData={customers:[],payments:[],synced:false};
