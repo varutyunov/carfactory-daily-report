@@ -173,24 +173,18 @@ function parsePayments(html) {
   if (!tbodyMatch) return payments;
 
   const rows = tbodyMatch[1].match(/<tr[\s\S]*?<\/tr>/g) || [];
-  let debugDone = false;
   rows.forEach(row => {
     const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
       td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
     );
-    if (!debugDone && tds.length > 0) {
-      console.log('  DEBUG payments columns (' + tds.length + '):');
-      tds.forEach((v, i) => console.log('    [' + i + '] = ' + JSON.stringify(v)));
-      debugDone = true;
-    }
-    if (tds.length < 11) return;
+    if (tds.length < 17) return;
     const name = tds[0];
     const account = tds[1];
     const reference = tds[2];
-    const date = tds[3];
-    const time = tds[4];
-    const method = tds[5];
-    const amountSent = tds[11] || tds[10] || '';
+    const date = tds[5];        // "March 27, 2026"
+    const time = tds[6];        // "1:11 PM"
+    const method = tds[8];      // "Customer Mobile App"
+    const amountSent = tds[16]; // "$275.00" (net to dealer)
 
     if (!name || !account) return;
     payments.push({
