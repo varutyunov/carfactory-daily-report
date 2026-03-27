@@ -2780,7 +2780,7 @@ async function approveDetail(carId){
   if(!ws.categories) return;
   const doneBy=ws.categories.detail&&ws.categories.detail.doneBy;
   if(ws.categories.detail&&ws.categories.detail.done) ws.categories.detail.reviewed=true;
-  if(ws.categories.detail) ws.categories.detail.sectionPool=false;
+  if(ws.categories.detail){ws.categories.detail.sectionPool=false;ws.categories.detail.confirmed=true;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -2792,7 +2792,7 @@ async function approveDetail(carId){
     if(emp) try{await createNotification(emp.id,me.name+' approved detail on '+carName,null,carName);}catch(e){}
   }
   renderMgrDetail();
-  updateTabBadges();updateHomeBadges();
+  updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function rejectDetail(carId){
   const ws=getWorkState(carId);
@@ -2925,7 +2925,7 @@ async function approvePhotos(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
   const doneBy=ws.categories.photos&&ws.categories.photos.doneBy;
-  if(ws.categories.photos){ws.categories.photos.reviewed=true;ws.categories.photos.sectionPool=false;}
+  if(ws.categories.photos){ws.categories.photos.reviewed=true;ws.categories.photos.sectionPool=false;ws.categories.photos.confirmed=true;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -2935,7 +2935,7 @@ async function approvePhotos(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved photos on '+carName,null,carName);}catch(e){}
   }
-  renderMgrPhotos();updateTabBadges();updateHomeBadges();
+  renderMgrPhotos();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function rejectPhotos(carId){
   const ws=getWorkState(carId);
@@ -3150,7 +3150,7 @@ async function approvePaint(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
   const doneBy=ws.categories.paint&&ws.categories.paint.doneBy;
-  if(ws.categories.paint){ws.categories.paint.reviewed=true;ws.categories.paint.sectionPool=false;}
+  if(ws.categories.paint){ws.categories.paint.reviewed=true;ws.categories.paint.sectionPool=false;ws.categories.paint.confirmed=true;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -3160,7 +3160,7 @@ async function approvePaint(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved paint on '+carName,null,carName);}catch(e){}
   }
-  renderMgrPaint();updateTabBadges();updateHomeBadges();
+  renderMgrPaint();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function mgrMarkTaskDone(aid,idx){
   var a=S.assignments.find(function(x){return String(x.id)===String(aid);});
@@ -3333,17 +3333,17 @@ async function mgrMarkPartDone(carId,idx){
   }
   // auto-approve if all parts are now bought
   var allBought=repairs.length>0&&repairs.every(function(r){return typeof r==='object'?r.bought:false;});
-  if(allBought){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;}
+  if(allBought){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;ws.categories.parts.confirmed=true;}
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(car) car.work=ws;
   await saveWorkState(carId);
-  renderMgrParts();updateTabBadges();updateHomeBadges();
+  renderMgrParts();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function approveParts(carId){
   const ws=getWorkState(carId);
   if(!ws.categories) return;
   const doneBy=ws.categories.parts&&ws.categories.parts.doneBy;
-  if(ws.categories.parts){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;}
+  if(ws.categories.parts){ws.categories.parts.reviewed=true;ws.categories.parts.sectionPool=false;ws.categories.parts.confirmed=true;}
   const car=S.inventory.find(c=>c.id===carId);
   if(car) car.work=ws;
   await saveWorkState(carId);
@@ -3353,7 +3353,7 @@ async function approveParts(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved parts on '+carName,null,carName);}catch(e){}
   }
-  renderMgrParts();updateTabBadges();updateHomeBadges();
+  renderMgrParts();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function rejectParts(carId){
   const ws=getWorkState(carId);
@@ -4286,7 +4286,7 @@ function renderProgress(){
     var ws=getWorkState(car.id);
     if(ws.categories){
       tabTypes.forEach(function(t){
-        if(ws.categories[t]&&ws.categories[t].sectionPool) carIdSet.add(car.id);
+        if(ws.categories[t]&&(ws.categories[t].sectionPool||ws.categories[t].confirmed)) carIdSet.add(car.id);
       });
     }
   });
@@ -4306,10 +4306,10 @@ function renderProgress(){
   activeCars.forEach(function(car){
     var ws=getWorkState(car.id);
     var cats=ws.categories||{};
-    var activeTabs=tabTypes.filter(function(t){return cats[t]&&cats[t].sectionPool;});
+    var activeTabs=tabTypes.filter(function(t){return cats[t]&&(cats[t].sectionPool||cats[t].confirmed);});
     var totalCats=activeTabs.length;
-    var confirmedCats=activeTabs.filter(function(t){return cats[t]&&(cats[t].confirmed||false);}).length;
-    var pendingReview=activeTabs.filter(function(t){return cats[t]&&cats[t].pendingReview&&!cats[t].confirmed;}).length;
+    var confirmedCats=activeTabs.filter(function(t){return cats[t]&&cats[t].confirmed;}).length;
+    var pendingReview=activeTabs.filter(function(t){return cats[t]&&cats[t].sectionPool&&cats[t].done&&!cats[t].confirmed;}).length;
     var pct=totalCats?Math.round(confirmedCats/totalCats*100):0;
     var pctColor=pct===100?'#30d158':pendingReview?'#ffd60a':'#a78bfa';
     var allConfirmed=totalCats>0&&confirmedCats===totalCats;
@@ -4369,9 +4369,9 @@ function renderProgFull(){
   var ws=getWorkState(car.id);
   var cats=ws.categories||{};
   var tabTypes=['repair','parts','detail','photos','paint','tasks'];
-  var activeTabs=tabTypes.filter(function(t){return cats[t]&&cats[t].sectionPool;});
+  var activeTabs=tabTypes.filter(function(t){return cats[t]&&(cats[t].sectionPool||cats[t].confirmed);});
   var totalCats=activeTabs.length;
-  var confirmedCats=activeTabs.filter(function(t){return cats[t]&&(cats[t].confirmed||false);}).length;
+  var confirmedCats=activeTabs.filter(function(t){return cats[t]&&cats[t].confirmed;}).length;
   var pct=totalCats?Math.round(confirmedCats/totalCats*100):0;
   var pctColor=pct===100?'#30d158':'#a78bfa';
   var allConfirmed=totalCats>0&&confirmedCats===totalCats;
