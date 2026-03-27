@@ -277,7 +277,7 @@ canvas{display:none;}
 /* ── Swipe Pages Container ── */
 .swipe-container{display:flex;flex:1;min-height:0;transition:transform 0.35s cubic-bezier(.4,.0,.2,1);width:200%;will-change:transform;touch-action:pan-y;}
 .swipe-container.at-page-1{transform:translateX(-50%);}
-.swipe-page{width:50%;flex-shrink:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;}
+.swipe-page{width:50%;flex-shrink:0;overflow-y:auto;touch-action:pan-y;}
 .swipe-page-0{background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;}
 .swipe-page-1{background:#050510;}
 .swipe-dots{display:flex;justify-content:center;gap:8px;padding:8px 0 4px;flex-shrink:0;}
@@ -305,7 +305,7 @@ canvas{display:none;}
 .cp-search::placeholder{color:#444;}
 .cp-late{color:#ff453a!important;}
 .cp-current{color:#30d158!important;}
-.orbit-wrap{padding:10px 0 4px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+.orbit-wrap{padding:14px 10px 4px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;overflow:visible;}
 .orbit-container{position:relative;width:442px;height:442px;}
 /* Scale orbit down on smaller screens — origin:top so layout collapses with negative margin */
 @media(max-width:380px){.orbit-wrap{transform:scale(0.80);transform-origin:top center;margin-bottom:-91px;}}
@@ -871,9 +871,13 @@ canvas{display:none;}
     </div>
     <button onclick="openCarPhotoGallery()" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;color:#64d2ff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:14px;text-align:center;">📷 Car Photos</button>
     <!-- Notes from employees -->
-    <div id="ca-notes-section" style="display:none;margin-bottom:14px;">
+    <div id="ca-notes-section" style="margin-bottom:14px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Notes</div>
       <div id="ca-notes-list"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <textarea id="ca-note-inp" rows="2" placeholder="Add a note..." style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:14px;padding:10px 12px;outline:none;font-family:inherit;resize:none;"></textarea>
+        <button onclick="caAddNote()" style="background:#64d2ff;border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;cursor:pointer;padding:0 16px;flex-shrink:0;">Send</button>
+      </div>
     </div>
     <div class="ca-grid">
       <div class="ca-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 6px 28px rgba(251,146,60,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('repair')">
@@ -4225,15 +4229,23 @@ function renderProgress(){
         out+='</div>';
       });
       out+='</div>';
-      // Notes section
+      // Notes section — always shown with add input
       var carNotes=(ws.notes||[]);
+      out+='<div style="padding:0 16px 8px;"><div style="font-size:10px;font-weight:700;color:#444;letter-spacing:1px;margin-bottom:4px;">NOTES</div>';
       if(carNotes.length){
-        out+='<div style="padding:0 16px 8px;"><div style="font-size:10px;font-weight:700;color:#444;letter-spacing:1px;margin-bottom:4px;">NOTES</div>';
-        carNotes.slice(-3).forEach(function(n){
-          out+='<div style="font-size:11px;color:#888;padding:3px 0;"><span style="color:#64d2ff;font-weight:600;">'+((n.by)||'')+'</span> '+n.text+'</div>';
+        carNotes.slice(-5).forEach(function(n){
+          var dt=n.at?new Date(n.at):'';
+          var timeStr=dt?dt.toLocaleDateString():'';
+          out+='<div style="font-size:11px;color:#888;padding:3px 0;"><span style="color:#64d2ff;font-weight:600;">'+(n.by||'')+'</span> '+n.text+(timeStr?' <span style="color:#333;font-size:9px;">'+timeStr+'</span>':'')+'</div>';
         });
-        out+='</div>';
+      } else {
+        out+='<div style="font-size:11px;color:#333;padding:3px 0;">No notes yet</div>';
       }
+      out+='<div style="display:flex;gap:6px;margin-top:6px;">';
+      out+='<input id="prog-note-'+car.id+'" placeholder="Add note..." style="flex:1;background:#111;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:inherit;" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.stopPropagation();progAddNote('+car.id+');}"/>';
+      out+='<button onclick="event.stopPropagation();progAddNote('+car.id+')" style="background:#64d2ff;border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;flex-shrink:0;">+</button>';
+      out+='</div>';
+      out+='</div>';
       // Bottom actions
       out+='<div style="padding:0 16px 14px;display:flex;gap:8px;">';
       if(allConfirmed){
@@ -4265,6 +4277,9 @@ async function progAddItem(carId,cat){
   inp.value='';
   await saveWorkState(carId);
   renderProgress();
+  // Refocus input so user can quickly add multiple items
+  var newInp=document.getElementById('prog-item-'+carId+'-'+cat);
+  if(newInp){newInp.focus();newInp.scrollIntoView({block:'nearest'});}
 }
 async function progToggleItem(carId,cat,idx){
   var ws=getWorkState(carId);
@@ -4280,6 +4295,23 @@ async function progToggleItem(carId,cat,idx){
   var c=S.inventory.find(function(x){return x.id===carId;});if(c)c.work=ws;
   await saveWorkState(carId);
   renderProgress();
+}
+async function progAddNote(carId){
+  var inp=document.getElementById('prog-note-'+carId);
+  if(!inp) return;
+  var text=inp.value.trim();if(!text) return;
+  inp.value='';
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(!car) return;
+  var ws=getWorkState(carId);
+  if(!ws.notes) ws.notes=[];
+  ws.notes.push({text:text,by:me?me.name:'Owner',at:new Date().toISOString()});
+  car.work=ws;
+  await saveWorkState(carId);
+  renderProgress();
+  // Refocus the input
+  var newInp=document.getElementById('prog-note-'+carId);
+  if(newInp) newInp.focus();
 }
 async function progRemoveItem(carId,cat,idx){
   var ws=getWorkState(carId);
@@ -4723,31 +4755,56 @@ function openCarActions(carId){
   if(milesVal) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(milesVal).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
   document.getElementById('ca-car-info').innerHTML = rows.join('');
-  // Render notes section for owner
+  // Render notes section for owner — always visible so owner can add notes
   var ws=getWorkState(carId);
   var notes=(ws.notes||[]).slice().reverse();
   var nSec=document.getElementById('ca-notes-section');
   var nList=document.getElementById('ca-notes-list');
-  if(notes.length&&nSec&&nList){
-    nSec.style.display='block';
-    nList.innerHTML=notes.map(function(n){
-      var dt=n.at?new Date(n.at):'';
-      var timeStr=dt?dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-      return '<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:6px;">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
-        +'<span style="font-size:12px;font-weight:700;color:#64d2ff;">'+(n.by||'')+'</span>'
-        +'<span style="font-size:10px;color:#444;">'+timeStr+'</span>'
-        +'</div>'
-        +'<div style="font-size:13px;color:#ccc;line-height:1.4;">'+n.text+'</div>'
-        +'</div>';
-    }).join('');
-  } else if(nSec){ nSec.style.display='none'; }
+  var nInp=document.getElementById('ca-note-inp');
+  if(nInp) nInp.value='';
+  if(nSec) nSec.style.display='block';
+  if(nList){
+    if(notes.length){
+      nList.innerHTML=notes.map(function(n){
+        var dt=n.at?new Date(n.at):'';
+        var timeStr=dt?dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+        return '<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;margin-bottom:6px;">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+          +'<span style="font-size:12px;font-weight:700;color:#64d2ff;">'+(n.by||'')+'</span>'
+          +'<span style="font-size:10px;color:#444;">'+timeStr+'</span>'
+          +'</div>'
+          +'<div style="font-size:13px;color:#ccc;line-height:1.4;">'+n.text+'</div>'
+          +'</div>';
+      }).join('');
+    } else {
+      nList.innerHTML='<div style="color:#333;font-size:13px;padding:4px 0;">No notes yet</div>';
+    }
+  }
   document.getElementById('m-car-actions').style.display = 'flex';
 }
 
 function closeCarActions(){
   document.getElementById('m-car-actions').style.display = 'none';
   caCarId = null;
+}
+
+async function caAddNote(){
+  if(!caCarId) return;
+  var inp=document.getElementById('ca-note-inp');
+  var text=(inp.value||'').trim();
+  if(!text) return;
+  inp.value='';
+  var car=S.inventory.find(function(c){return c.id===caCarId;});
+  if(!car) return;
+  var ws=getWorkState(caCarId);
+  if(!ws.notes) ws.notes=[];
+  ws.notes.push({text:text,by:me?me.name:'Owner',at:new Date().toISOString()});
+  car.work=ws;
+  try{await saveWorkState(caCarId);}catch(e){console.warn('Note save error:',e);}
+  // Re-render notes in this modal
+  openCarActions(caCarId);
+  // Refresh progress view if visible
+  renderProgress();
 }
 
 function openCarPhotoGallery(){
