@@ -2616,10 +2616,38 @@ function isQueueAssignment(a){
   var tasks=a.tasks||[];
   if(!tasks.length) return false;
   return tasks.every(function(t){
-    var txt=(typeof t==='object'?t.text:t)||'';
+    var txt=(typeof t==='object'?(t.name||t.text):t)||'';
     var lo=txt.toLowerCase();
-    return lo.indexOf('[paint]')!==-1||lo.indexOf('[detail]')!==-1||lo.indexOf('[repair]')!==-1;
+    return /\[(paint|detail|repair|photos|parts)\]/.test(lo);
   });
+}
+async function cleanupCatAssignments(carId,cat){
+  // Auto-approve any queue assignments for this car+category since the category is done
+  var toApprove=(S.assignments||[]).filter(function(a){
+    if(a.inventoryId!==carId||a.approved) return false;
+    return (a.tasks||[]).every(function(t){
+      var txt=(typeof t==='object'?(t.name||t.text):t)||'';
+      return txt.toLowerCase().indexOf('['+cat+']')!==-1;
+    });
+  });
+  for(var i=0;i<toApprove.length;i++){
+    var a=toApprove[i];
+    try{await sbPatch('assignments',a.id,{approved:true});a.approved=true;}catch(e){}
+  }
+  // For mixed assignments (multiple category tags), remove just this category's tasks
+  var mixed=(S.assignments||[]).filter(function(a){
+    if(a.inventoryId!==carId||a.approved) return false;
+    var tasks=a.tasks||[];
+    var hasThisCat=tasks.some(function(t){var txt=(typeof t==='object'?(t.name||t.text):t)||'';return txt.toLowerCase().indexOf('['+cat+']')!==-1;});
+    var hasOtherCat=tasks.some(function(t){var txt=(typeof t==='object'?(t.name||t.text):t)||'';var lo=txt.toLowerCase();return /\[(paint|detail|repair|photos|parts)\]/.test(lo)&&lo.indexOf('['+cat+']')===-1;});
+    return hasThisCat&&hasOtherCat;
+  });
+  for(var j=0;j<mixed.length;j++){
+    var ma=mixed[j];
+    var remaining=ma.tasks.filter(function(t){var txt=(typeof t==='object'?(t.name||t.text):t)||'';return txt.toLowerCase().indexOf('['+cat+']')===-1;});
+    try{await sbPatch('assignments',ma.id,{tasks:remaining});ma.tasks=remaining;}catch(e){}
+  }
+  sv();
 }
 
 function renderAssigned(){
@@ -2791,6 +2819,7 @@ async function approveDetail(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved detail on '+carName,null,carName);}catch(e){}
   }
+  await cleanupCatAssignments(carId,'detail');
   renderMgrDetail();
   updateTabBadges();updateHomeBadges();renderProgress();
 }
@@ -2935,6 +2964,7 @@ async function approvePhotos(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved photos on '+carName,null,carName);}catch(e){}
   }
+  await cleanupCatAssignments(carId,'photos');
   renderMgrPhotos();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function rejectPhotos(carId){
@@ -3160,6 +3190,7 @@ async function approvePaint(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved paint on '+carName,null,carName);}catch(e){}
   }
+  await cleanupCatAssignments(carId,'paint');
   renderMgrPaint();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function mgrMarkTaskDone(aid,idx){
@@ -3353,6 +3384,7 @@ async function approveParts(carId){
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved parts on '+carName,null,carName);}catch(e){}
   }
+  await cleanupCatAssignments(carId,'parts');
   renderMgrParts();updateTabBadges();updateHomeBadges();renderProgress();
 }
 async function rejectParts(carId){
@@ -4320,7 +4352,7 @@ function renderProgress(){
       var c=cats[t];var col=c.confirmed?'#30d158':c.done?'#ffd60a':catMeta[t].color;var icon=c.confirmed?'✓':c.done?'⏳':catMeta[t].icon;
       return '<span style="font-size:10px;background:'+col+'18;color:'+col+';border:1px solid '+col+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+icon+' '+catMeta[t].label+'</span>';
     }).join('');
-    var carAssigns=(S.assignments||[]).filter(function(a){return a.inventoryId===car.id&&!a.approved;});
+    var carAssigns=(S.assignments||[]).filter(function(a){return a.inventoryId===car.id&&!a.approved&&!isQueueAssignment(a);});
     if(carAssigns.length){var tc=catMeta.tasks.color;summaryChips+='<span style="font-size:10px;background:'+tc+'18;color:'+tc+';border:1px solid '+tc+'33;border-radius:5px;padding:2px 6px;font-weight:700;">'+catMeta.tasks.icon+' Tasks</span>';}
     out+='<div onclick="openProgCar('+car.id+')" style="background:#0d0d0d;border-radius:16px;border:1px solid '+(pendingReview?'rgba(255,214,10,0.25)':allConfirmed?'rgba(48,209,88,0.25)':'#1e1e1e')+';overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     out+='<div style="padding:14px 16px 10px;display:flex;align-items:center;gap:12px;">';
