@@ -3443,9 +3443,12 @@ function mgrRepairSheet(carId){
     '</div>'+
     '<div style="font-size:10px;font-weight:700;color:#444;letter-spacing:0.1em;margin-bottom:2px;">REPAIRS</div>'+
     '<div id="rsi-'+carId+'">'+itemsHTML+'</div>'+
-    '<div style="display:flex;gap:6px;margin-top:10px;margin-bottom:20px;">'+
-      '<input id="rsi-inp-'+carId+'" placeholder="Add repair item..." onkeydown="if(event.key===\'Enter\')repairSheetAdd('+carId+')" style="flex:1;background:#111;border:1px solid #252525;border-radius:9px;color:#fff;font-size:13px;padding:9px 12px;outline:none;-webkit-appearance:none;" />'+
-      '<button onclick="repairSheetAdd('+carId+')" style="background:#ff9f0a;border:none;border-radius:9px;color:#000;font-size:20px;font-weight:700;width:42px;height:42px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">+</button>'+
+    '<div style="margin-top:10px;margin-bottom:20px;">'+
+      '<div style="display:flex;gap:6px;margin-bottom:6px;">'+
+        '<input id="rsi-inp-'+carId+'" placeholder="Add repair item..." onkeydown="if(event.key===\'Enter\')repairSheetAdd('+carId+')" style="flex:1;background:#111;border:1px solid #252525;border-radius:9px;color:#fff;font-size:13px;padding:9px 12px;outline:none;-webkit-appearance:none;" />'+
+        '<button onclick="repairSheetAdd('+carId+')" style="background:#ff9f0a;border:none;border-radius:9px;color:#000;font-size:20px;font-weight:700;width:42px;height:42px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">+</button>'+
+      '</div>'+
+      '<input id="rsi-part-'+carId+'" placeholder="🔩 Part to order? (optional)" onkeydown="if(event.key===\'Enter\')repairSheetAdd('+carId+')" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:9px;color:#aaa;font-size:12px;padding:8px 12px;outline:none;-webkit-appearance:none;" />'+
     '</div>'+
     actionBtn;
   openM('m-detail-done');
@@ -3473,18 +3476,40 @@ async function repairSheetRemove(carId,idx){
 }
 async function repairSheetAdd(carId){
   var inp=document.getElementById('rsi-inp-'+carId);
+  var partInp=document.getElementById('rsi-part-'+carId);
   if(!inp||!inp.value.trim()) return;
   var txt=inp.value.trim();
+  var partTxt=partInp?partInp.value.trim():'';
   var ws=getWorkState(carId);
   if(!ws.categories) ws.categories={};
   if(!ws.categories.repair) ws.categories.repair={sectionPool:true,items:[]};
   if(!ws.categories.repair.items) ws.categories.repair.items=[];
   ws.categories.repair.items.push({text:txt,done:false});
   inp.value='';
+  if(partInp) partInp.value='';
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(car) car.work=ws;
   await saveWorkState(carId);
+  if(partTxt) await addPartFromRepair(carId,txt,partTxt);
   mgrRepairSheet(carId);renderMgrRepair();
+}
+async function addPartFromRepair(carId,repairText,partName){
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories.parts) ws.categories.parts={selected:false,description:'',repairs:[],sectionPool:false};
+  if(!ws.categories.parts.repairs) ws.categories.parts.repairs=[];
+  var exists=ws.categories.parts.repairs.some(function(p){
+    var pt=typeof p==='object'?p.text:p;var pr=typeof p==='object'?(p.fromRepair||''):'';
+    return pt===partName&&pr===repairText;
+  });
+  if(!exists){
+    ws.categories.parts.repairs.push({text:partName,part:'',fromRepair:repairText,fromCategory:'repair'});
+    ws.categories.parts.sectionPool=true;
+  }
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();updateTabBadges();updateHomeBadges();
 }
 
 function renderMgrParts(){
