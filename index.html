@@ -6875,9 +6875,12 @@ function _txInit() {
 
           <!-- Header: logo + address -->
           <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #000;">
-            <img src="icon-512.png" style="width:48px;height:48px;border-radius:6px;flex-shrink:0;" alt="Car Factory"/>
+            <div style="flex-shrink:0;text-align:center;">
+              <img src="icon-512.png" style="width:48px;height:48px;border-radius:6px;" alt="Car Factory"/>
+              <div id="pf-logo-label" style="display:none;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:2px;color:#000;"></div>
+            </div>
             <div style="flex:1;"></div>
-            <div style="text-align:right;font-size:10px;line-height:1.3;color:#333;">
+            <div id="pf-address" style="text-align:right;font-size:10px;line-height:1.3;color:#333;">
               100 S Charles Richard Beall Blvd<br>DeBary, FL 32713<br>CarFactoryDebary.com
             </div>
           </div>
@@ -6891,7 +6894,7 @@ function _txInit() {
           <div style="text-align:right;margin-bottom:10px;font-size:11px;">Date: <span id="pf-date" style="border-bottom:1px solid #000;padding:0 20px;font-weight:600;"></span></div>
 
           <!-- Body paragraphs -->
-          <p style="margin:0 0 8px;text-align:justify;">I, <span id="pf-name" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, hereinafter referred to as "Buyer," agree to pay the amount of <span id="pf-amount" style="font-weight:700;">$______</span> as a NON-REFUNDABLE PARTIAL PAYMENT toward the purchase of a vehicle including, but not limited to, a motorcycle, scooter, or ATV, acknowledging the representation to be accurate, to the Buyer by Premier Auto Group LLC dba Car Factory, hereinafter known as "Seller," owner of said vehicle.</p>
+          <p style="margin:0 0 8px;text-align:justify;">I, <span id="pf-name" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, hereinafter referred to as "Buyer," agree to pay the amount of <span id="pf-amount" style="font-weight:700;">$______</span> as a NON-REFUNDABLE PARTIAL PAYMENT toward the purchase of a vehicle including, but not limited to, a motorcycle, scooter, or ATV, acknowledging the representation to be accurate, to the Buyer by <span id="pf-dba1">Premier Auto Group LLC dba Car Factory</span>, hereinafter known as "Seller," owner of said vehicle.</p>
 
           <!-- Vehicle info box -->
           <div style="border:1px solid #999;padding:6px 12px;margin:0 0 8px;border-radius:4px;">
@@ -6903,7 +6906,7 @@ function _txInit() {
 
           <p style="margin:0 0 8px;text-align:justify;">Buyer understands, acknowledges, and agrees that if he/she fails to pay the Seller the remaining amount due, when it is due, for the purchase of said vehicle, the non-refundable partial payment shall be forfeited.</p>
 
-          <p style="margin:0 0 8px;text-align:justify;">Buyer understands and agrees never to dispute representation of said vehicle, parts, or accessories, sold AS IS, without any kind of warranty. Seller may, at his sole discretion, issue a credit not exceeding the partial payment amount, to be applied when making a future vehicle purchase from <strong>Premier Auto Group LLC dba Car Factory</strong>.</p>
+          <p style="margin:0 0 8px;text-align:justify;">Buyer understands and agrees never to dispute representation of said vehicle, parts, or accessories, sold AS IS, without any kind of warranty. Seller may, at his sole discretion, issue a credit not exceeding the partial payment amount, to be applied when making a future vehicle purchase from <strong id="pf-dba2">Premier Auto Group LLC dba Car Factory</strong>.</p>
 
           <!-- Signature blocks -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:22px;">
@@ -7485,6 +7488,18 @@ function depositGoPreview() {
   // Set title based on deal type
   var titleEl = document.getElementById('pf-title');
   if(titleEl) titleEl.textContent = isFinance ? 'Non-Refundable Down Payment Agreement' : 'Non-Refundable Partial Payment Agreement';
+
+  // Location-aware form fields
+  var isDeLand = me && me.location === 'DeLand';
+  var addrEl = document.getElementById('pf-address');
+  if(addrEl) addrEl.innerHTML = isDeLand
+    ? '1117 N Woodland Blvd<br>DeLand, FL 32720'
+    : '100 S Charles Richard Beall Blvd<br>DeBary, FL 32713<br>CarFactoryDebary.com';
+  var logoLabel = document.getElementById('pf-logo-label');
+  if(logoLabel) { logoLabel.style.display = isDeLand ? 'block' : 'none'; logoLabel.textContent = isDeLand ? 'DeLand' : ''; }
+  var dbaName = isDeLand ? 'Premier Auto Group LLC dba Car Factory DeLand' : 'Premier Auto Group LLC dba Car Factory';
+  var dba1 = document.getElementById('pf-dba1'); if(dba1) dba1.textContent = dbaName;
+  var dba2 = document.getElementById('pf-dba2'); if(dba2) dba2.textContent = dbaName;
 
   // Build the balance paragraph based on deal type
   var balPara = document.getElementById('pf-balance-para');
