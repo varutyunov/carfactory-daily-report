@@ -7167,10 +7167,48 @@ function openFormDetail(id) {
   if(dep.location) html += 'Location: ' + dep.location;
   html += '</div>';
 
+  // Delete button
+  html += '<button id="dep-delete-btn" onclick="depDeleteConfirm1(' + dep.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+
   html += '</div>';
 
   var body = document.getElementById('forms-body');
   body.innerHTML = html;
+}
+
+function depDeleteConfirm1(id) {
+  var btn = document.getElementById('dep-delete-btn');
+  btn.textContent = 'Are you sure? Tap again to confirm';
+  btn.style.background = '#1a0505';
+  btn.style.borderColor = '#ef4444';
+  btn.onclick = function(){ depDeleteConfirm2(id); };
+}
+
+function depDeleteConfirm2(id) {
+  var btn = document.getElementById('dep-delete-btn');
+  btn.textContent = 'FINAL WARNING — This cannot be undone';
+  btn.style.background = '#ef4444';
+  btn.style.color = '#fff';
+  btn.style.borderColor = '#ef4444';
+  btn.onclick = function(){ depDeleteFinal(id); };
+}
+
+async function depDeleteFinal(id) {
+  var btn = document.getElementById('dep-delete-btn');
+  btn.textContent = 'Deleting...';
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  try {
+    await sbDelete('deposits', id);
+    _formsData = _formsData.filter(function(d){ return d.id !== id; });
+    _formsFiltered = _formsFiltered.filter(function(d){ return d.id !== id; });
+    formsBack();
+  } catch(e) {
+    btn.textContent = 'Error: ' + (e.message||e);
+    btn.style.background = '#1a0505';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
