@@ -1836,6 +1836,7 @@ function renderGrid(){
 let curEmpTab='detail';
 let empActiveCat=null;
 function empOrbitGo(section){
+  if(section==='inventory'){empOpenInventory();return;}
   empActiveCat=section;
   var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
@@ -1908,8 +1909,11 @@ function renderEmpHome(){
   var langBtn=document.getElementById('lang-toggle-btn');
   if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
-  // All 6 category tiles always shown; widget-only users see none
-  var visible=isWidgetOnly?[]:tiles;
+  // Inventory tile for DeLand employees (Jesse)
+  var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return c.location==='DeLand';}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
+  var isDeLandEmp=isWidgetOnly&&me&&me.location==='DeLand';
+  // All 6 category tiles always shown; widget-only users see none (unless DeLand inventory tile)
+  var visible=isDeLandEmp?[invTile]:isWidgetOnly?[]:tiles;
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
@@ -3781,6 +3785,7 @@ async function importFromReport(){
 
 async function syncNow(){
   var MASTER_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+  var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeLand.csv';
   var url=S.syncUrl||MASTER_URL;
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
   stEl.textContent='Syncing with CSV + Supabase...';
@@ -3788,7 +3793,14 @@ async function syncNow(){
     var r=await fetch(url+'?t='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
     var csv=await r.text();
-    var imp=parseCSV(csv);
+    var imp=parseCSV(csv,'DeBary');
+    // Also fetch DeLand CSV if not using a custom sync URL
+    if(!S.syncUrl){
+      try{
+        var rDL=await fetch(DELAND_URL+'?t='+Date.now());
+        if(rDL.ok){var csvDL=await rDL.text();var impDL=parseCSV(csvDL,'DeLand');imp=imp.concat(impDL);}
+      }catch(e){console.log('DeLand CSV fetch skipped:',e);}
+    }
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
@@ -3888,7 +3900,7 @@ async function clearAllQueues(){
   }
   hideLoading();
 }
-function parseCSV(csv){
+function parseCSV(csv,forceLocation){
   var lines=csv.trim().split('\n');if(lines.length<2)return[];
   var hdr=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').toLowerCase();});
   var cars=[];
@@ -3904,7 +3916,7 @@ function parseCSV(csv){
     var year=row['year']||'';var model=row['model']||'';var vin=row['vin']||'';
     var color=row['colorexterior']||row['color']||row['extcolor']||row['ext color']||row['exterior color']||'';
     var lot=row['lotno']||'';
-    var location=lot==='2'?'DeLand':'DeBary';
+    var location=forceLocation||(lot==='2'?'DeLand':'DeBary');
     var milesRaw=row['currentmiles']||row['miles']||row['mileage']||row['odometer']||'';
     var miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;
     cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,photo:null});
@@ -6123,7 +6135,10 @@ function empInvFilter(val){
 function empRenderInv(){
   var list=document.getElementById('emp-inv-list');if(!list)return;
   var filter=_empInvFilter;
+  var myLoc=me&&me.location?me.location:'DeBary';
   var items=(S.inventory||[]).filter(function(c){
+    if(c.location&&c.location.toLowerCase()!==myLoc.toLowerCase()) return false;
+    if(!c.location&&myLoc.toLowerCase()!=='debary') return false;
     if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')).toLowerCase().includes(filter)) return false;
     return true;
   }).sort(function(a,b){return b.id-a.id;});

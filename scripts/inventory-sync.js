@@ -26,42 +26,64 @@ async function sbGetAll(table, select) {
   return all;
 }
 
-async function main() {
-  // Read CSV directly from repo
-  const csv = fs.readFileSync('InventoryMaster.csv', 'utf8');
-  if (!csv || csv.length < 100) throw new Error('CSV empty or not found');
+function parseCsv(csvPath, forceLocation) {
+  const csv = fs.readFileSync(csvPath, 'utf8');
+  if (!csv || csv.length < 100) throw new Error(`CSV empty or not found: ${csvPath}`);
   const lines = csv.trim().split('\n');
   const hdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-  console.log('Columns found:', hdrs.join(', '));
+  console.log(`[${csvPath}] Columns:`, hdrs.join(', '));
 
-  // Parse CSV rows
-  const csvCars = [];
-  const csvStocks = new Set();
+  const cars = [];
+  const stocks = new Set();
   for (let i = 1; i < lines.length; i++) {
     const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
     const r = {};
     hdrs.forEach((h, j) => r[h] = vals[j] || '');
     if ((r['status'] !== 'INSTOCK' && r['status'] !== 'REPO') || !r['make'] || !r['stockno']) continue;
 
-    // Fix: correct column name is 'colorexterior', not 'color'
     const color = r['colorexterior'] || r['color'] || r['extcolor'] || '';
 
-    // Fix: lot 1 = DeBary, lot 2 = DeLand, lot 3 = DeBary (overflow lot)
-    const lot = r['lotno'];
-    const location = lot === '2' ? 'DeLand' : 'DeBary';
+    // forceLocation overrides lotno-based logic
+    let location;
+    if (forceLocation) {
+      location = forceLocation;
+    } else {
+      const lot = r['lotno'];
+      location = lot === '2' ? 'DeLand' : 'DeBary';
+    }
 
-    const milesRaw = r['currentmiles'] || '';
-    const miles = milesRaw ? parseInt(milesRaw.replace(/[^0-9]/g, '')) || null : null;
-    csvCars.push({
+    cars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
       stock: r['stockno'],
       vin: r['vin'] || '',
       location,
       color
     });
-    csvStocks.add(r['stockno']);
+    stocks.add(r['stockno']);
   }
-  console.log('INSTOCK in CSV:', csvCars.length);
+  console.log(`[${csvPath}] INSTOCK:`, cars.length);
+  return { cars, stocks };
+}
+
+async function main() {
+  // Parse both CSV files
+  const debary = parseCsv('InventoryMaster.csv', 'DeBary');
+  const deland = fs.existsSync('InventoryMasterDeLand.csv')
+    ? parseCsv('InventoryMasterDeLand.csv', 'DeLand')
+    : { cars: [], stocks: new Set() };
+
+  const allCsvCars = [...debary.cars, ...deland.cars];
+  const allCsvStocks = new Set([...debary.stocks, ...deland.stocks]);
+
+  // Deduplicate by VIN across both files
+  const seen = new Set();
+  const csvCars = allCsvCars.filter(c => {
+    if (c.vin && seen.has(c.vin)) return false;
+    if (c.vin) seen.add(c.vin);
+    return true;
+  });
+
+  console.log('Total INSTOCK (both lots):', csvCars.length);
 
   // Get ALL existing vehicles from Supabase (paginated)
   const existing = await sbGetAll('inventory', 'id,stock,vin,name');
@@ -71,9 +93,7 @@ async function main() {
 
   // --- ADD NEW CARS ---
   const toInsert = csvCars.filter(c => {
-    // Skip if stock number already exists
     if (existingByStock.has(c.stock)) return false;
-    // Skip if VIN already exists (prevent duplicates from stock number changes)
     if (c.vin && existingByVin.has(c.vin)) return false;
     return true;
   });
@@ -91,13 +111,14 @@ async function main() {
     }
   }
 
-  // --- UPDATE EXISTING CARS (miles + color) ---
+  // --- UPDATE EXISTING CARS (location + color) ---
   const toUpdate = csvCars.filter(c => existingByStock.has(c.stock));
   let updated = 0;
   for (const c of toUpdate) {
     const ex = existingByStock.get(c.stock);
     const patch = {};
     if (c.color) patch.color = c.color;
+    if (c.location) patch.location = c.location;
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
@@ -108,8 +129,6 @@ async function main() {
   console.log('Updated:', updated);
 
   // --- REMOVE SOLD CARS ---
-  // Cars in Supabase whose stock number is NOT in the CSV INSTOCK list
-  // Only remove cars that have no active assignments
   const assignments = await sbGetAll('assignments', 'inventory_id,approved');
   const activeAssignments = new Set(
     assignments.filter(a => !a.approved).map(a => a.inventory_id)
@@ -117,8 +136,8 @@ async function main() {
 
   const toRemove = existing.filter(c => {
     if (!c.stock) return false;
-    if (csvStocks.has(c.stock)) return false; // still in stock
-    if (activeAssignments.has(c.id)) return false; // has active work, keep it
+    if (allCsvStocks.has(c.stock)) return false;
+    if (activeAssignments.has(c.id)) return false;
     return true;
   });
 
