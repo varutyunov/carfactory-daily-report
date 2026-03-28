@@ -626,7 +626,7 @@ canvas{display:none;}
         <input class="inv-search" id="emp-inv-search" placeholder="Search vehicles..." oninput="empInvFilter(this.value)" style="margin-bottom:10px;"/>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div id="emp-sync-st" style="font-size:13px;color:#555;"></div>
-          <button onclick="empSyncDeLand()" style="background:none;border:1px solid #1e1e1e;color:#888;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer;">⟳ Sync DeLand</button>
+          <button onclick="empSyncInv()" id="emp-sync-btn" style="background:none;border:1px solid #1e1e1e;color:#888;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer;">⟳ Sync</button>
         </div>
         <div id="emp-inv-list"></div>
       </div>
@@ -1913,11 +1913,11 @@ function renderEmpHome(){
   var langBtn=document.getElementById('lang-toggle-btn');
   if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
-  // Inventory tile for DeLand employees (Jesse)
-  var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return c.location==='DeLand';}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
-  var isDeLandEmp=isWidgetOnly&&me&&me.location==='DeLand';
-  // All 6 category tiles always shown; widget-only users see none (unless DeLand inventory tile)
-  var visible=isDeLandEmp?[invTile]:isWidgetOnly?[]:tiles;
+  // Inventory tile — count matches employee's location
+  var myEmpLoc=me&&me.location?me.location:'DeBary';
+  var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
+  // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory
+  var visible=isWidgetOnly?[invTile]:[...tiles,invTile];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
@@ -6183,6 +6183,8 @@ function empOpenInventory(){
   var bar=document.getElementById('mgr-back-bar');if(bar){bar.style.display='flex';document.getElementById('mgr-back-bar-title').textContent='Inventory';document.getElementById('mgr-back-bar-btn').setAttribute('onclick','goEmpHome()');}
   _empInvFilter='';
   var si=document.getElementById('emp-inv-search');if(si)si.value='';
+  var myLoc2=me&&me.location?me.location:'DeBary';
+  var syncBtn=document.getElementById('emp-sync-btn');if(syncBtn)syncBtn.textContent='⟳ Sync '+myLoc2;
   empRenderInv();
 }
 function empInvFilter(val){
@@ -6214,11 +6216,12 @@ function empRenderInv(){
   }).join('');
   if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
 }
-async function empSyncDeLand(){
+async function empSyncInv(){
+  var myLoc=me&&me.location?me.location:'DeBary';
   var stEl=document.getElementById('emp-sync-st');
-  if(stEl){stEl.textContent='Syncing DeLand...';stEl.dataset.syncing='1';}
+  if(stEl){stEl.textContent='Syncing '+myLoc+'...';stEl.dataset.syncing='1';}
   try{
-    await syncLocation('DeLand');
+    await syncLocation(myLoc);
     empRenderInv();
     if(stEl){stEl.textContent='Synced!';stEl.dataset.syncing='';setTimeout(function(){empRenderInv();},2000);}
   }catch(e){
