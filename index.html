@@ -6803,11 +6803,13 @@ function _txInit() {
         </div>
       </div>
       <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Remaining Balance</div>
-        <div style="display:flex;gap:10px;align-items:stretch;">
-          <input id="dep-balance" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="e.g. 15000 or Finance"/>
-          <button onclick="depSetFinance()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Finance</button>
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deal Type</div>
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <button id="dep-type-cash" onclick="depSetDealType('cash')" style="flex:1;padding:12px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Cash Buy</button>
+          <button id="dep-type-finance" onclick="depSetDealType('finance')" style="flex:1;padding:12px;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Finance</button>
         </div>
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;" id="dep-balance-label">Remaining Balance</div>
+        <input id="dep-balance" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Remaining amount due"/>
       </div>
       <div style="margin-bottom:20px;">
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Withdraw Vehicle Until</div>
@@ -6837,7 +6839,7 @@ function _txInit() {
 
           <!-- Title -->
           <div style="text-align:center;margin:18px 0 20px;">
-            <div style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Non-Refundable Partial Payment Agreement</div>
+            <div id="pf-title" style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Non-Refundable Partial Payment Agreement</div>
           </div>
 
           <!-- Date line -->
@@ -6852,7 +6854,7 @@ function _txInit() {
             <div id="pf-vin-desc" style="font-weight:700;font-size:14px;"></div>
           </div>
 
-          <p style="margin:0 0 14px;text-align:justify;">Seller hereby agrees, in consideration of payment of said non-refundable partial payment, to withdraw said vehicle from the market until <span id="pf-withdraw" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, upon receipt of the remaining amount due of <span id="pf-balance" style="font-weight:700;">$______</span> for the purchase by the Buyer.</p>
+          <p id="pf-balance-para" style="margin:0 0 14px;text-align:justify;"></p>
 
           <p style="margin:0 0 14px;text-align:justify;">Buyer understands, acknowledges, and agrees that if he/she fails to pay the Seller the remaining amount due, when it is due, for the purchase of said vehicle, the non-refundable partial payment shall be forfeited.</p>
 
@@ -6936,11 +6938,13 @@ function _txInit() {
 var _depData = {};  // stores customer + car + photo data
 
 function openDepositForm() {
-  _depData = {};
+  _depData = { dealType: 'cash' };
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
   depShowStep(1);
+  // Reset deal type buttons to cash
+  depSetDealType('cash');
   // Reset step 1 UI
   var choose = document.getElementById('dep-choose');
   var previewWrap = document.getElementById('dep-id-preview-wrap');
@@ -7049,6 +7053,7 @@ async function depositSave() {
       withdraw_until: d.withdrawDisp || '',
       id_photo_url: idPhotoUrl,
       signed_form_url: signedFormUrl,
+      deal_type: d.dealType || 'cash',
       created_by: (typeof me !== 'undefined' && me && me.name) ? me.name : '',
       location: (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary',
       created_at: new Date().toISOString()
@@ -7147,9 +7152,20 @@ function depSelectCar(carId) {
 
 // ── STEP 3: FINANCE BUTTON ───────────────────────────────────
 
-function depSetFinance() {
-  var el = document.getElementById('dep-balance');
-  if(el) el.value = 'Finance';
+function depSetDealType(type) {
+  _depData.dealType = type;
+  var cashBtn = document.getElementById('dep-type-cash');
+  var finBtn = document.getElementById('dep-type-finance');
+  var label = document.getElementById('dep-balance-label');
+  if(type === 'finance') {
+    finBtn.style.background = '#1d4ed8'; finBtn.style.color = '#fff'; finBtn.style.border = 'none';
+    cashBtn.style.background = '#0d0d0d'; cashBtn.style.color = '#888'; cashBtn.style.border = '1px solid #1e1e1e';
+    if(label) label.textContent = 'Remaining Down Payment Due';
+  } else {
+    cashBtn.style.background = '#1d4ed8'; cashBtn.style.color = '#fff'; cashBtn.style.border = 'none';
+    finBtn.style.background = '#0d0d0d'; finBtn.style.color = '#888'; finBtn.style.border = '1px solid #1e1e1e';
+    if(label) label.textContent = 'Remaining Balance';
+  }
 }
 
 // ── STEP 3 → STEP 4: PREVIEW ─────────────────────────────────
@@ -7181,7 +7197,8 @@ function depositGoPreview() {
   var vehicleStr = [year, make, model, color].filter(Boolean).join(' ');
   var vinLine = vehicleStr + (vin ? '\nVIN: ' + vin : '') + (stock ? '  |  Stock #' + stock : '');
   var amountFmt = amount ? '$'+parseFloat(amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
-  var balanceFmt = balance ? (balance.toLowerCase()==='finance' ? 'Finance' : '$'+parseFloat(balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : '';
+  var balanceFmt = balance ? '$'+parseFloat(balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  var isFinance = (_depData.dealType === 'finance');
 
   setText('pf-name',        fullName);
   setText('pf-amount',      amountFmt);
@@ -7189,12 +7206,25 @@ function depositGoPreview() {
   var vinEl = document.getElementById('pf-vin-desc');
   if(vinEl) vinEl.innerHTML = vehicleStr + (vin ? '<br><span style="font-size:12px;font-weight:400;color:#555;">VIN: ' + vin + '</span>' : '') + (stock ? '<span style="font-size:12px;font-weight:400;color:#555;margin-left:12px;">Stock #' + stock + '</span>' : '');
   setText('pf-withdraw',    withdrawDisp);
-  setText('pf-balance',     balanceFmt);
   setText('pf-buyer-print', fullName);
   setText('pf-date',        dateDisp);
   setText('pf-buyer-date',  dateDisp);
 
-  _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp};
+  // Set title based on deal type
+  var titleEl = document.getElementById('pf-title');
+  if(titleEl) titleEl.textContent = isFinance ? 'Non-Refundable Down Payment Agreement' : 'Non-Refundable Partial Payment Agreement';
+
+  // Build the balance paragraph based on deal type
+  var balPara = document.getElementById('pf-balance-para');
+  if(balPara) {
+    if(isFinance) {
+      balPara.innerHTML = 'Seller hereby agrees, in consideration of payment of said non-refundable partial payment, to withdraw said vehicle from the market until <span style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;">' + (withdrawDisp||'______') + '</span>, upon receipt of the remaining amount due of <span style="font-weight:700;">' + (balanceFmt||'$______') + '</span> which completes the down payment amount for financing the above vehicle.';
+    } else {
+      balPara.innerHTML = 'Seller hereby agrees, in consideration of payment of said non-refundable partial payment, to withdraw said vehicle from the market until <span style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;">' + (withdrawDisp||'______') + '</span>, upon receipt of the remaining amount due of <span style="font-weight:700;">' + (balanceFmt||'$______') + '</span> for the purchase by the Buyer.';
+    }
+  }
+
+  _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp,dealType:isFinance?'finance':'cash'};
 
   depShowStep(4);
 }
