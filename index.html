@@ -7073,16 +7073,17 @@ function _txInit() {
 
 <style>
 @media print {
+  body, html { background: white !important; }
   body > *:not(#deposit-overlay) { display: none !important; }
-  #deposit-overlay { display: block !important; position: static !important; background: white !important; }
+  #deposit-overlay { display: block !important; position: static !important; background: white !important; color: #000 !important; }
   #deposit-back-bar { display: none !important; }
-  #deposit-body { padding-top: 0 !important; overflow: visible !important; }
-  #dep-step4 { display: block !important; padding: 0 !important; }
+  #deposit-body { padding-top: 0 !important; overflow: visible !important; background: white !important; }
+  #dep-step4 { display: block !important; padding: 0 !important; background: white !important; }
   #dep-step4 > div:first-child { display: none !important; } /* hide step title */
+  #dep-step4 > div:last-child { display: none !important; } /* hide action buttons */
   #dep-step1, #dep-step2, #dep-step3 { display: none !important; }
   .dep-print-actions { display: none !important; }
-  #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; }
-  * { -webkit-print-color-adjust: exact; color-adjust: exact; print-color-adjust: exact; }
+  #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; }
   @page { margin: 0.3in; size: letter; }
 }
 </style>
@@ -7656,6 +7657,15 @@ function depositEmail() {
     var logoWasHidden = false;
     if(logoImg) { logoImg.style.display = 'none'; logoWasHidden = true; }
 
+    // Temporarily set white backgrounds on parent elements to prevent dark bleed-through
+    var step4 = document.getElementById('dep-step4');
+    var depBody = document.getElementById('deposit-body');
+    var depOverlay = document.getElementById('deposit-overlay');
+    var origBgs = [];
+    [step4, depBody, depOverlay].forEach(function(el) {
+      if(el) { origBgs.push(el.style.background); el.style.background = '#fff'; }
+    });
+
     html2canvas(formEl, {
       scale: 2,
       backgroundColor: '#ffffff',
@@ -7663,8 +7673,11 @@ function depositEmail() {
       useCORS: false,
       allowTaint: false
     }).then(function(canvas) {
-      // Restore logo
+      // Restore logo and backgrounds
       if(logoWasHidden && logoImg) logoImg.style.display = '';
+      [step4, depBody, depOverlay].forEach(function(el, i) {
+        if(el) el.style.background = origBgs[i] || '';
+      });
 
       try {
         var jsPDF = window.jspdf.jsPDF;
@@ -7694,11 +7707,13 @@ function depositEmail() {
         }
       } catch(e2) {
         if(logoWasHidden && logoImg) logoImg.style.display = '';
+        [step4, depBody, depOverlay].forEach(function(el, i) { if(el) el.style.background = origBgs[i] || ''; });
         alert('PDF build error: ' + (e2.message||e2));
         resetBtn();
       }
     }).catch(function(err) {
       if(logoWasHidden && logoImg) logoImg.style.display = '';
+      [step4, depBody, depOverlay].forEach(function(el, i) { if(el) el.style.background = origBgs[i] || ''; });
       alert('Canvas error: ' + (err.message||err));
       resetBtn();
     });
