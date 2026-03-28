@@ -1073,7 +1073,10 @@ canvas{display:none;}
           <div style="margin-bottom:12px;">
             <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
             <div class="sync-btns">
-              <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
+              <button class="sync-btn" onclick="syncLocation('DeBary')">⟳ Sync DeBary</button>
+              <button class="sync-btn" onclick="syncLocation('DeLand')">⟳ Sync DeLand</button>
+            </div>
+            <div class="sync-btns" style="margin-top:8px;">
               <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
@@ -3783,44 +3786,27 @@ async function importFromReport(){
   }
 }
 
-async function syncNow(){
-  var MASTER_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+async function syncLocation(loc){
+  var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
   var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
-  var url=S.syncUrl||MASTER_URL;
+  var csvUrl=loc==='DeLand'?DELAND_URL:(S.syncUrl||DEBARY_URL);
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
-  stEl.textContent='Syncing with CSV + Supabase...';
+  stEl.textContent='Syncing '+loc+'...';
   try{
-    var r=await fetch(url+'?t='+Date.now());
+    var r=await fetch(csvUrl+'?t='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
     var csv=await r.text();
-    var imp=parseCSV(csv,'DeBary'); // InventoryMaster is DeBary only — DeLand has its own file
-    // Also fetch DeLand CSV if not using a custom sync URL; DeLand entries take priority on duplicate VINs
-    if(!S.syncUrl){
-      try{
-        var rDL=await fetch(DELAND_URL+'?t='+Date.now());
-        if(rDL.ok){
-          var csvDL=await rDL.text();var impDL=parseCSV(csvDL,'DeLand');
-          // Merge: DeLand wins on duplicate VINs or stock numbers
-          var seenVins=new Set(impDL.filter(function(c){return c.vin;}).map(function(c){return c.vin;}));
-          var seenStocks=new Set(impDL.map(function(c){return c.stock;}));
-          var debaryOnly=imp.filter(function(c){return (!c.vin||!seenVins.has(c.vin))&&!seenStocks.has(c.stock);});
-          imp=impDL.concat(debaryOnly);
-        }
-      }catch(e){console.log('DeLand CSV fetch skipped:',e);}
-    }
+    var imp=parseCSV(csv,loc);
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
-    // Build lookup of existing inventory by stock AND vin
     var existByStock={};var existByVin={};
     S.inventory.forEach(function(c){
       if(c.stock) existByStock[c.stock]=c;
       if(c.vin) existByVin[c.vin]=c;
     });
     var added=0,updated=0,removed=0;
-    var sbPatches=[];
-    var toInsertSB=[]; // new cars to POST to Supabase
-    // Add new + update existing
+    var sbPatches=[];var toInsertSB=[];
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
       var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
@@ -3832,14 +3818,12 @@ async function syncNow(){
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        // New car — queue for Supabase insert (no miles column in DB)
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:c.location||'DeBary',photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:loc,photo:null});
         added++;
       }
     });
-    // POST new cars to Supabase so they persist across page loads
     if(toInsertSB.length){
-      stEl.textContent='Adding '+toInsertSB.length+' new cars to database...';
+      stEl.textContent='Adding '+toInsertSB.length+' new cars...';
       for(var i=0;i<toInsertSB.length;i+=50){
         var batch=toInsertSB.slice(i,i+50);
         try{
@@ -3852,32 +3836,35 @@ async function syncNow(){
         }catch(e){console.error('Insert batch error:',e);}
       }
     }
-    // Write miles + color updates to Supabase
     if(sbPatches.length){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     }
-    // Remove sold cars from local state AND Supabase
+    // Only remove cars of THIS location that are no longer in its CSV
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock) return true;
+      if((c.location||'DeBary')!==loc) return true; // don't touch other location
       if(csvStocks.has(c.stock)) return true;
       if(activeIds.has(c.id)) return true;
       toRemoveDB.push(c.id);
       removed++;
       return false;
     });
-    // DELETE sold cars from Supabase
     for(var d=0;d<toRemoveDB.length;d++){
       try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){console.error('Delete error:',e);}
     }
     localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
     S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
     S.lastSync=Date.now();sv();
-    stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
+    stEl.textContent=loc+' synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
     renderInv();
   }catch(e){stEl.textContent='Sync failed: '+e.message;}
+}
+async function syncNow(){
+  await syncLocation('DeBary');
+  await syncLocation('DeLand');
 }
 async function clearAllQueues(){
   if(!confirm('Clear ALL cars from ALL tabs?\n\nThis removes all active assignments and resets Detail / Photos / Parts queues.\n\nThis cannot be undone.')) return;
