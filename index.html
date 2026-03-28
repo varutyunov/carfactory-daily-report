@@ -1934,7 +1934,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}if(id==='deals')renderMgrDeals();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}if(id==='deals')openDealsView();updateTabBadges();}
 
 function updateTabBadges(){
   var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
