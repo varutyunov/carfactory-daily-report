@@ -2065,10 +2065,8 @@ function renderEmpHome(){
   var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
   // Deposit tile — always visible
   var depositTile={id:'deposit',label:'Deposit',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
-  // Deal Upload tile
-  var dealUploadTile={id:'dealupload',label:'Deal Upload',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>',bg:'linear-gradient(145deg,#1a1000,#4a3000,#7a5000)',glow:'rgba(245,158,11,0.25)',noCount:true};
-  // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory + deposit
-  var visible=isWidgetOnly?[invTile,depositTile,dealUploadTile]:[...tiles,invTile,depositTile,dealUploadTile];
+  // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory
+  var visible=isWidgetOnly?[invTile]:[...tiles,invTile];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
@@ -2082,20 +2080,28 @@ function renderEmpHome(){
       (countDisplay?'<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#fff;line-height:1;">'+countDisplay+'</div>':'') +
     '</div>';
   }).join('');
-  // Widget dock — fixed at bottom, shown for deal users and/or lang users
+  // Widget dock — fixed at bottom, shown for deal users and widget-only users
   var dock=document.getElementById('emp-widget-dock');
   var wb=document.getElementById('emp-widget-bar');
-  if(hasDock){
+  var showDock=isDealUser||isWidgetOnly;
+  if(showDock){
     if(dock) dock.style.display='block';
     if(wb){
       wb.style.display='flex';
+      var wStyle='background:linear-gradient(145deg,#0a0a1a,#151530,#1a1a40);box-shadow:0 4px 18px rgba(96,165,250,0.18),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;flex:1;min-height:70px;';
       var whtml='';
-      if(isDealUser){
-        whtml+='<div onclick="openDealCalc()" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);-webkit-tap-highlight-color:transparent;width:90px;min-height:80px;">' +
-          '<div style="font-size:22px;line-height:1;">💵</div>' +
-          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:1.2px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
-        '</div>';
-      }
+      whtml+='<div onclick="openDealCalc()" style="'+wStyle+'background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 18px rgba(34,197,94,0.22),0 6px 24px rgba(0,0,0,0.6);">' +
+        '<div style="font-size:20px;line-height:1;">💵</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
+      '</div>';
+      whtml+='<div onclick="openDepositForm()" style="'+wStyle+'background:linear-gradient(145deg,#001233,#003080,#1d4ed8);box-shadow:0 4px 18px rgba(96,165,250,0.22),0 6px 24px rgba(0,0,0,0.6);">' +
+        '<div style="font-size:20px;line-height:1;">📋</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Deposit</div>' +
+      '</div>';
+      whtml+='<div onclick="openDealForm()" style="'+wStyle+'background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);box-shadow:0 4px 18px rgba(245,158,11,0.22),0 6px 24px rgba(0,0,0,0.6);">' +
+        '<div style="font-size:20px;line-height:1;">📤</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Deal Upload</div>' +
+      '</div>';
       wb.innerHTML=whtml;
     }
   } else {
