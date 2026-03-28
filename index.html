@@ -7570,6 +7570,7 @@ function depositGoPreview() {
   var date     = get('dep-date');
   var withdraw = get('dep-withdraw');
 
+  if(!fname && !lname) { alert('Please enter the customer name.'); return; }
   if(!amount) { alert('Please enter the deposit amount.'); return; }
 
   function fmtDate(d){if(!d)return'';var p=d.split('-');return p.length===3?p[1]+'/'+p[2]+'/'+p[0]:d;}
