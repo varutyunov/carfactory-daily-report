@@ -7335,11 +7335,21 @@ function openDepositForm() {
   var previewWrap = document.getElementById('dep-id-preview-wrap');
   if(choose) choose.style.display = 'flex';
   if(previewWrap) previewWrap.style.display = 'none';
+  // Clear all form inputs
+  ['dep-fname','dep-lname','dep-year','dep-make','dep-model','dep-stock','dep-vin','dep-color','dep-amount','dep-balance','dep-date','dep-withdraw'].forEach(function(id) {
+    var el = document.getElementById(id); if(el) { el.value = ''; el.defaultValue = ''; }
+  });
+  // Reset vehicle search
+  var carSearch = document.getElementById('dep-car-search');
+  if(carSearch) carSearch.value = '';
   // Reset step 4 upload UI
   var signedWrap = document.getElementById('dep-signed-preview-wrap');
   if(signedWrap) signedWrap.style.display = 'none';
   var signedLabel = document.getElementById('dep-signed-label');
   if(signedLabel) signedLabel.style.display = 'block';
+  // Reset save button
+  var saveBtn = document.getElementById('dep-save-btn');
+  if(saveBtn) { saveBtn.textContent = 'Save Deposit Record'; saveBtn.disabled = false; saveBtn.style.background = '#16a34a'; }
   var saveStatus = document.getElementById('dep-save-status');
   if(saveStatus) saveStatus.textContent = '';
 }
@@ -7570,8 +7580,11 @@ function depositGoPreview() {
   var date     = get('dep-date');
   var withdraw = get('dep-withdraw');
 
-  if(!fname && !lname) { alert('Please enter the customer name.'); return; }
+  if(!fname || !lname) { alert('Please enter the customer\'s first and last name.'); return; }
   if(!amount) { alert('Please enter the deposit amount.'); return; }
+  if(!date) { alert('Please enter the date.'); return; }
+  if(!balance) { alert('Please enter the remaining balance.'); return; }
+  if(!withdraw) { alert('Please enter the vehicle held until date.'); return; }
 
   function fmtDate(d){if(!d)return'';var p=d.split('-');return p.length===3?p[1]+'/'+p[2]+'/'+p[0]:d;}
   var dateDisp = fmtDate(date);
@@ -7740,6 +7753,13 @@ function openDealForm() {
   document.getElementById('deal-overlay').style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
   dealShowStep(1);
+  // Clear all inputs
+  ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.getElementById('deal-car-summary').textContent = '';
+  document.getElementById('deal-photo-grid').innerHTML = '';
+  dealSetType('cash');
   dealRenderInv();
   dealAddPayment(); // start with one payment row
 }
