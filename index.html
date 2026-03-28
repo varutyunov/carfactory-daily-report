@@ -6762,8 +6762,8 @@ function _txInit() {
     <div id="dep-step3" style="display:none;padding:20px 16px 100px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 4 — Review & Complete</div>
 
-      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER INFO</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">First Name</div>
           <input id="dep-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="First"/>
@@ -6773,36 +6773,8 @@ function _txInit() {
           <input id="dep-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Last"/>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date of Birth</div>
-          <input id="dep-dob" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">DL Number</div>
-          <input id="dep-dl" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="DL #"/>
-        </div>
-      </div>
-      <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Street Address</div>
-        <input id="dep-addr" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="123 Main St"/>
-      </div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:20px;">
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">City</div>
-          <input id="dep-city" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="City"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">State</div>
-          <input id="dep-state" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="FL" maxlength="2"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Zip</div>
-          <input id="dep-zip" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="32713" maxlength="5"/>
-        </div>
-      </div>
 
-      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE INFO</div>
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Year</div>
@@ -6862,44 +6834,69 @@ function _txInit() {
     <div id="dep-step4" style="display:none;padding:20px 16px 100px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 4 of 4 — Preview & Send</div>
 
-      <!-- Printable form card — matches actual Non-Refundable Partial Payment Form -->
-      <div id="dep-print-form" style="background:#fff;color:#000;border-radius:14px;padding:32px 28px;max-width:540px;margin:0 auto 20px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.7;">
-        <!-- Header -->
-        <div style="text-align:center;margin-bottom:28px;">
-          <div style="font-family:'UnifrakturMaguntia','Old English Text MT',serif;font-size:34px;letter-spacing:4px;font-weight:400;">Car Factory</div>
-          <div style="font-size:13px;margin-top:6px;line-height:1.4;">100 S Charles Richard Beall Blvd<br>Debary FL 32713<br>CarFactoryDebary.com</div>
-        </div>
+      <!-- Printable form — professional layout -->
+      <div id="dep-print-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:13px;line-height:1.5;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
+        <!-- Page container with print margins -->
+        <div style="padding:0.6in 0.7in 0.5in;">
 
-        <!-- Body -->
-        <p style="margin:0 0 18px;">I, <span id="pf-name" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, hereinafter referred to as "Buyer," agree to pay the amount of <span id="pf-amount" style="font-weight:700;">$______</span> as a <span style="font-variant:small-caps;">non-refundable partial payment</span> toward the purchase of a vehicle including, but not limited to, a motorcycle, scooter, or ATV, acknowledging the representation to be accurate, to the Buyer by Premier Auto Group LLC dba Car Factory, hereinafter known as "Seller," owner of said vehicle.</p>
-
-        <p style="margin:0 0 18px;">VIN/Description: <span id="pf-vin-desc" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span></p>
-
-        <p style="margin:0 0 18px;">Seller, hereby agrees in consideration of payment of said <span style="font-variant:small-caps;">non-refundable partial payment</span> to withdraw said vehicle, from the market until <span id="pf-withdraw" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, upon receipt of the remaining amount due of <span id="pf-balance" style="font-weight:700;">$______</span> for the purchase by the Buyer. Buyer understands, acknowledges, and agrees that if he fails to pay the Seller the remaining amount due, when it is due, for the purchase of said vehicle, the <span style="font-variant:small-caps;">non-refundable partial payment</span> shall be forfeited. Buyer understands and agrees never to dispute representation of said vehicle, parts, or accessories, sold AS IS, without any kind of warranty. Seller may, at his sole discretion, issue a credit not exceeding the partial payment amount, to be applied when making a future vehicle purchase from</p>
-
-        <p style="margin:0 0 30px;font-weight:700;font-style:italic;">Premier Auto Group LLC dba Car Factory</p>
-
-        <!-- Signature block -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:20px;">
-          <div>
-            <div style="font-style:italic;font-weight:600;margin-bottom:24px;">Seller, authorized principal</div>
-            <div style="border-bottom:1px solid #000;height:28px;"></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Print</div>
-            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Signature</div>
-            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Date</div>
+          <!-- Header: logo + dealership info -->
+          <div style="display:flex;align-items:center;gap:18px;margin-bottom:6px;padding-bottom:10px;border-bottom:2px solid #000;">
+            <img src="icon-512.png" style="width:64px;height:64px;border-radius:8px;flex-shrink:0;" alt="Car Factory"/>
+            <div style="flex:1;">
+              <div style="font-family:'Barlow Condensed',Impact,sans-serif;font-size:28px;font-weight:900;letter-spacing:3px;text-transform:uppercase;line-height:1;">CAR FACTORY</div>
+              <div style="font-size:11px;color:#444;margin-top:2px;">Premier Auto Group LLC</div>
+            </div>
+            <div style="text-align:right;font-size:11px;line-height:1.4;color:#333;">
+              100 S Charles Richard Beall Blvd<br>DeBary, FL 32713<br>CarFactoryDebary.com
+            </div>
           </div>
-          <div>
-            <div style="font-weight:600;margin-bottom:24px;">Buyer</div>
-            <div style="border-bottom:1px solid #000;height:28px;"><span id="pf-buyer-print" style="font-size:14px;"></span></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Print</div>
-            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Signature</div>
-            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"><span id="pf-date" style="font-size:14px;"></span></div>
-            <div style="font-size:12px;text-align:center;margin-top:3px;">Date</div>
+
+          <!-- Title -->
+          <div style="text-align:center;margin:18px 0 20px;">
+            <div style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Non-Refundable Partial Payment Agreement</div>
           </div>
-        </div>
+
+          <!-- Date line -->
+          <div style="text-align:right;margin-bottom:16px;font-size:12px;">Date: <span id="pf-date" style="border-bottom:1px solid #000;padding:0 20px;font-weight:600;"></span></div>
+
+          <!-- Body paragraphs -->
+          <p style="margin:0 0 14px;text-align:justify;">I, <span id="pf-name" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, hereinafter referred to as "Buyer," agree to pay the amount of <span id="pf-amount" style="font-weight:700;">$______</span> as a NON-REFUNDABLE PARTIAL PAYMENT toward the purchase of a vehicle including, but not limited to, a motorcycle, scooter, or ATV, acknowledging the representation to be accurate, to the Buyer by Premier Auto Group LLC dba Car Factory, hereinafter known as "Seller," owner of said vehicle.</p>
+
+          <!-- Vehicle info box -->
+          <div style="border:1px solid #999;padding:10px 14px;margin:0 0 14px;border-radius:4px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:4px;">Vehicle</div>
+            <div id="pf-vin-desc" style="font-weight:700;font-size:14px;"></div>
+          </div>
+
+          <p style="margin:0 0 14px;text-align:justify;">Seller hereby agrees, in consideration of payment of said non-refundable partial payment, to withdraw said vehicle from the market until <span id="pf-withdraw" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, upon receipt of the remaining amount due of <span id="pf-balance" style="font-weight:700;">$______</span> for the purchase by the Buyer.</p>
+
+          <p style="margin:0 0 14px;text-align:justify;">Buyer understands, acknowledges, and agrees that if he/she fails to pay the Seller the remaining amount due, when it is due, for the purchase of said vehicle, the non-refundable partial payment shall be forfeited.</p>
+
+          <p style="margin:0 0 14px;text-align:justify;">Buyer understands and agrees never to dispute representation of said vehicle, parts, or accessories, sold AS IS, without any kind of warranty. Seller may, at his sole discretion, issue a credit not exceeding the partial payment amount, to be applied when making a future vehicle purchase from <strong>Premier Auto Group LLC dba Car Factory</strong>.</p>
+
+          <!-- Signature blocks -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:36px;">
+            <div>
+              <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px;">Seller (Authorized Principal)</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-bottom:2px;"></div>
+              <div style="font-size:10px;color:#666;">Print Name</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-top:20px;margin-bottom:2px;"></div>
+              <div style="font-size:10px;color:#666;">Signature</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-top:20px;margin-bottom:2px;"></div>
+              <div style="font-size:10px;color:#666;">Date</div>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px;">Buyer</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-bottom:2px;"><span id="pf-buyer-print" style="font-size:13px;"></span></div>
+              <div style="font-size:10px;color:#666;">Print Name</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-top:20px;margin-bottom:2px;"></div>
+              <div style="font-size:10px;color:#666;">Signature</div>
+              <div style="border-bottom:1px solid #000;height:24px;margin-top:20px;margin-bottom:2px;"><span id="pf-buyer-date" style="font-size:13px;"></span></div>
+              <div style="font-size:10px;color:#666;">Date</div>
+            </div>
+          </div>
+
+        </div><!-- /page padding -->
       </div>
 
       <!-- Action buttons -->
@@ -6920,10 +6917,12 @@ function _txInit() {
   #deposit-back-bar { display: none !important; }
   #deposit-body { padding-top: 0 !important; overflow: visible !important; }
   #dep-step4 { display: block !important; padding: 0 !important; }
+  #dep-step4 > div:first-child { display: none !important; } /* hide step title */
   #dep-step1, #dep-step2, #dep-step3 { display: none !important; }
   .dep-print-actions { display: none !important; }
   #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; }
-  * { -webkit-print-color-adjust: exact; color-adjust: exact; }
+  * { -webkit-print-color-adjust: exact; color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 0.4in; size: letter; }
 }
 </style>
 
@@ -7155,7 +7154,7 @@ function depReadLicenseWithAI(apiKey, dataUrl, status) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: 'Read this driver license. Return ONLY a JSON object with these exact fields: firstName, lastName, dob (YYYY-MM-DD format), dlNumber, address, city, state, zip. No markdown, no explanation, no backticks — just the raw JSON object.' }
+          { type: 'text', text: 'Read the first name and last name from this driver license. Return ONLY a JSON object like {"firstName":"John","lastName":"Smith"}. No markdown, no backticks, just the JSON.' }
         ]
       }]
     })
@@ -7322,12 +7321,6 @@ function depFillCustomerFields(d) {
   var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
   set('dep-fname', d.firstName);
   set('dep-lname', d.lastName);
-  set('dep-dob',   d.dob);
-  set('dep-dl',    d.dlNumber);
-  set('dep-addr',  d.address);
-  set('dep-city',  d.city);
-  set('dep-state', d.state);
-  set('dep-zip',   d.zip);
 }
 
 function depositManualEntry() {
@@ -7422,12 +7415,6 @@ function depositGoPreview() {
   var get = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   var fname = get('dep-fname');
   var lname = get('dep-lname');
-  var dob   = get('dep-dob');
-  var dl    = get('dep-dl');
-  var addr  = get('dep-addr');
-  var city  = get('dep-city');
-  var state = get('dep-state');
-  var zip   = get('dep-zip');
   var year  = get('dep-year');
   var make  = get('dep-make');
   var model = get('dep-model');
@@ -7449,17 +7436,20 @@ function depositGoPreview() {
 
   var fullName = [fname, lname].filter(Boolean).join(' ');
   var vehicleStr = [year, make, model, color].filter(Boolean).join(' ');
-  var vinDesc = vin ? vin + (vehicleStr ? ' / ' + vehicleStr : '') : vehicleStr;
+  var vinLine = vehicleStr + (vin ? '\nVIN: ' + vin : '') + (stock ? '  |  Stock #' + stock : '');
   var amountFmt = amount ? '$'+parseFloat(amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
   var balanceFmt = balance ? (balance.toLowerCase()==='finance' ? 'Finance' : '$'+parseFloat(balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : '';
 
   setText('pf-name',        fullName);
   setText('pf-amount',      amountFmt);
-  setText('pf-vin-desc',    vinDesc);
+  // Fill the vehicle info box with line breaks
+  var vinEl = document.getElementById('pf-vin-desc');
+  if(vinEl) vinEl.innerHTML = vehicleStr + (vin ? '<br><span style="font-size:12px;font-weight:400;color:#555;">VIN: ' + vin + '</span>' : '') + (stock ? '<span style="font-size:12px;font-weight:400;color:#555;margin-left:12px;">Stock #' + stock + '</span>' : '');
   setText('pf-withdraw',    withdrawDisp);
   setText('pf-balance',     balanceFmt);
   setText('pf-buyer-print', fullName);
   setText('pf-date',        dateDisp);
+  setText('pf-buyer-date',  dateDisp);
 
   _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp};
 
