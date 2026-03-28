@@ -563,6 +563,7 @@ canvas{display:none;}
     <button class="mt" onclick="mgrGo('repair',this)" id="tab-repair">Repair</button>
     <button class="mt" onclick="mgrGo('paint',this)" id="tab-paint">Paint</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
+    <button class="mt" onclick="mgrGo('deals',this)" id="tab-deals">Deals</button>
   </div>
   <div class="content">
 
@@ -924,6 +925,99 @@ canvas{display:none;}
   </div>
 </div>
 
+<!-- DEAL UPLOAD OVERLAY -->
+<div id="deal-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="dealBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="deal-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEAL UPLOAD</span>
+  </div>
+  <div id="deal-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+
+    <!-- STEP 1: SELECT VEHICLE -->
+    <div id="deal-step1" style="padding:16px 12px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:12px;text-transform:uppercase;">Step 1 — Select Vehicle</div>
+      <input id="deal-inv-search" placeholder="Search stock #, year, make..." oninput="dealInvFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
+      <div id="deal-inv-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- STEP 2: DEAL INFO -->
+    <div id="deal-step2" style="display:none;padding:16px 12px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;">Step 2 — Deal Info</div>
+      <div id="deal-car-summary" style="background:#111;border-radius:14px;padding:14px;margin-bottom:14px;font-size:14px;color:#fff;font-weight:600;"></div>
+
+      <!-- Cash / Finance toggle -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button id="deal-type-cash" onclick="dealSetType('cash')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;">Cash</button>
+        <button id="deal-type-finance" onclick="dealSetType('finance')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Finance</button>
+      </div>
+
+      <!-- GPS Serial (finance only) -->
+      <div id="deal-gps-wrap" style="display:none;margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
+        <input id="deal-gps" placeholder="Enter GPS serial #" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+      </div>
+
+      <!-- Customer Name -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Customer Name</label>
+        <input id="deal-customer" placeholder="Full name" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+      </div>
+
+      <!-- Payments Section -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payments Collected</label>
+        <div id="deal-payments" style="margin-top:8px;display:flex;flex-direction:column;gap:8px;"></div>
+        <button onclick="dealAddPayment()" style="margin-top:8px;width:100%;padding:12px;background:#111;border:1px dashed #333;border-radius:12px;color:#4ade80;font-size:14px;font-weight:600;cursor:pointer;">+ Add Payment</button>
+      </div>
+
+      <!-- Total display -->
+      <div style="background:#111;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:14px;color:#888;font-weight:600;">Total Collected</span>
+        <span id="deal-total" style="font-size:20px;font-weight:700;color:#4ade80;">$0.00</span>
+      </div>
+
+      <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
+    </div>
+
+    <!-- STEP 3: PHOTOS -->
+    <div id="deal-step3" style="display:none;padding:16px 12px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;">Step 3 — Upload Photos</div>
+      <div style="font-size:13px;color:#666;margin-bottom:14px;">Upload deal documents, buyer's order, etc.</div>
+      <div id="deal-photo-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"></div>
+      <label style="display:block;width:100%;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
+        + Add Photos
+        <input type="file" accept="image/*" multiple capture="environment" onchange="dealPhotosAdded(this)" style="display:none;"/>
+      </label>
+      <button onclick="dealSubmit()" style="width:100%;margin-top:16px;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Submit Deal</button>
+    </div>
+
+    <!-- STEP 4: DONE -->
+    <div id="deal-step4" style="display:none;padding:60px 16px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:#4ade80;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Deal Submitted</div>
+      <div style="font-size:14px;color:#666;margin-bottom:24px;">The deal has been uploaded and is ready for review.</div>
+      <button onclick="closeDealForm()" style="padding:14px 40px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;">Done</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- OWNER DEALS VIEW OVERLAY -->
+<div id="deals-view-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="dealsViewBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="deals-view-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEALS</span>
+  </div>
+  <div id="deals-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;">
+      <input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
+      <div id="deals-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;color:#555;padding:40px 0;">Loading deals...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- CAR ACTION SHEET -->
 <div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
   <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
@@ -1175,9 +1269,15 @@ canvas{display:none;}
 
     <div class="view" id="mgr-employees">
       <div style="padding:14px;">
-        
+
         <div id="team-list"></div>
         <button class="add-btn" onclick="openM('m-add-emp')">+ Add Employee</button>
+      </div>
+    </div>
+
+    <div class="view" id="mgr-deals">
+      <div style="padding:14px;">
+        <div id="mgr-deals-list"></div>
       </div>
     </div>
 
@@ -1825,7 +1925,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}if(id==='deals')renderMgrDeals();updateTabBadges();}
 
 function updateTabBadges(){
   var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
@@ -1887,6 +1987,7 @@ let empActiveCat=null;
 function empOrbitGo(section){
   if(section==='inventory'){empOpenInventory();return;}
   if(section==='deposit'){openDepositForm();return;}
+  if(section==='dealupload'){openDealForm();return;}
   empActiveCat=section;
   var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
@@ -1964,8 +2065,10 @@ function renderEmpHome(){
   var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
   // Deposit tile — always visible
   var depositTile={id:'deposit',label:'Deposit',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
+  // Deal Upload tile
+  var dealUploadTile={id:'dealupload',label:'Deal Upload',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>',bg:'linear-gradient(145deg,#1a1000,#4a3000,#7a5000)',glow:'rgba(245,158,11,0.25)',noCount:true};
   // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory + deposit
-  var visible=isWidgetOnly?[invTile,depositTile]:[...tiles,invTile,depositTile];
+  var visible=isWidgetOnly?[invTile,depositTile,dealUploadTile]:[...tiles,invTile,depositTile,dealUploadTile];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
@@ -7597,6 +7700,446 @@ function depositEmail() {
     alert('Unexpected error: ' + (e.message||e));
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// DEAL UPLOAD LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _dealData = {};
+var _dealPayments = [];
+var _dealPhotos = [];
+var _dealStep = 1;
+
+function openDealForm() {
+  _dealData = { type: 'cash' };
+  _dealPayments = [];
+  _dealPhotos = [];
+  _dealStep = 1;
+  document.getElementById('deal-overlay').style.display = 'flex';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
+  dealShowStep(1);
+  dealRenderInv();
+  dealAddPayment(); // start with one payment row
+}
+
+function closeDealForm() {
+  document.getElementById('deal-overlay').style.display = 'none';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display = '';
+}
+
+function dealBack() {
+  if(_dealStep > 1) {
+    _dealStep--;
+    dealShowStep(_dealStep);
+  } else {
+    closeDealForm();
+  }
+}
+
+function dealShowStep(n) {
+  _dealStep = n;
+  [1,2,3,4].forEach(function(i) {
+    var el = document.getElementById('deal-step' + i);
+    if(el) el.style.display = (i === n) ? 'block' : 'none';
+  });
+  var titles = {1:'Select Vehicle',2:'Deal Info',3:'Upload Photos',4:'Done'};
+  document.getElementById('deal-bar-title').textContent = titles[n] || 'DEAL UPLOAD';
+}
+
+// ── STEP 1: Vehicle selection ──
+function dealInvFilter(val) {
+  _dealData.filter = (val || '').toLowerCase();
+  dealRenderInv();
+}
+
+function dealRenderInv() {
+  var el = document.getElementById('deal-inv-list');
+  var filter = (_dealData.filter || '').toLowerCase();
+  var myLoc = me && me.location ? me.location : 'DeBary';
+  var cars = (S.inventory || []).filter(function(c) {
+    if((c.location || 'DeBary').toLowerCase() !== myLoc.toLowerCase()) return false;
+    if(filter && !(c.name + ' ' + (c.stock||'') + ' ' + (c.vin||'')).toLowerCase().includes(filter)) return false;
+    return true;
+  }).sort(function(a,b){ return b.id - a.id; });
+  if(!cars.length) { el.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No vehicles found</div>'; return; }
+  el.innerHTML = cars.map(function(c) {
+    var label = c.name || 'Unknown';
+    var sub = [c.stock ? '#'+c.stock : '', c.color||''].filter(Boolean).join(' · ');
+    return '<div onclick="dealSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
+      '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
+      '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function dealSelectCar(carId) {
+  var car = (S.inventory || []).find(function(c){ return c.id == carId; });
+  if(!car) return;
+  _dealData.car = car;
+  document.getElementById('deal-car-summary').textContent = (car.name||'Unknown') + (car.stock ? ' · #'+car.stock : '');
+  document.getElementById('deal-inv-search').value = '';
+  _dealData.filter = '';
+  // Reset form
+  document.getElementById('deal-customer').value = '';
+  document.getElementById('deal-gps').value = '';
+  _dealPayments = [];
+  dealAddPayment();
+  dealSetType('cash');
+  dealShowStep(2);
+}
+
+// ── STEP 2: Deal info ──
+function dealSetType(type) {
+  _dealData.type = type;
+  var cashBtn = document.getElementById('deal-type-cash');
+  var finBtn = document.getElementById('deal-type-finance');
+  var gpsWrap = document.getElementById('deal-gps-wrap');
+  if(type === 'finance') {
+    finBtn.style.background = '#7c3aed'; finBtn.style.color = '#fff'; finBtn.style.borderColor = '#7c3aed';
+    cashBtn.style.background = 'transparent'; cashBtn.style.color = '#888'; cashBtn.style.borderColor = '#333';
+    gpsWrap.style.display = 'block';
+  } else {
+    cashBtn.style.background = '#1d4ed8'; cashBtn.style.color = '#fff'; cashBtn.style.borderColor = '#1d4ed8';
+    finBtn.style.background = 'transparent'; finBtn.style.color = '#888'; finBtn.style.borderColor = '#333';
+    gpsWrap.style.display = 'none';
+  }
+}
+
+function dealAddPayment() {
+  _dealPayments.push({ amount: '', method: 'cash' });
+  dealRenderPayments();
+}
+
+function dealRemovePayment(idx) {
+  _dealPayments.splice(idx, 1);
+  if(!_dealPayments.length) dealAddPayment();
+  else dealRenderPayments();
+}
+
+function dealUpdatePayment(idx, field, val) {
+  if(_dealPayments[idx]) _dealPayments[idx][field] = val;
+  dealUpdateTotal();
+}
+
+function dealRenderPayments() {
+  var el = document.getElementById('deal-payments');
+  el.innerHTML = _dealPayments.map(function(p, i) {
+    return '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<input type="number" inputmode="decimal" placeholder="$0.00" value="'+(p.amount||'')+'" oninput="dealUpdatePayment('+i+',\'amount\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>' +
+      '<select onchange="dealUpdatePayment('+i+',\'method\',this.value)" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 8px;font-size:14px;outline:none;appearance:auto;">' +
+        '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>' +
+        '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>' +
+        '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>' +
+        '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>' +
+        '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>' +
+      '</select>' +
+      (_dealPayments.length > 1 ? '<button onclick="dealRemovePayment('+i+')" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>' : '') +
+    '</div>';
+  }).join('');
+  dealUpdateTotal();
+}
+
+function dealUpdateTotal() {
+  var total = _dealPayments.reduce(function(sum, p) { return sum + (parseFloat(p.amount) || 0); }, 0);
+  document.getElementById('deal-total').textContent = '$' + total.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function dealGoStep3() {
+  var customer = document.getElementById('deal-customer').value.trim();
+  if(!customer) { alert('Please enter the customer name.'); return; }
+  var hasPayment = _dealPayments.some(function(p){ return parseFloat(p.amount) > 0; });
+  if(!hasPayment) { alert('Please enter at least one payment.'); return; }
+  if(_dealData.type === 'finance') {
+    _dealData.gpsSerial = document.getElementById('deal-gps').value.trim();
+  }
+  _dealData.customer = customer;
+  _dealPhotos = [];
+  document.getElementById('deal-photo-grid').innerHTML = '';
+  dealShowStep(3);
+}
+
+// ── STEP 3: Photos ──
+function dealPhotosAdded(input) {
+  if(!input.files) return;
+  for(var i = 0; i < input.files.length; i++) {
+    var file = input.files[i];
+    _dealPhotos.push(file);
+    var reader = new FileReader();
+    reader.onload = (function(f) {
+      return function(e) {
+        var grid = document.getElementById('deal-photo-grid');
+        var idx = _dealPhotos.indexOf(f);
+        var div = document.createElement('div');
+        div.style.cssText = 'position:relative;border-radius:12px;overflow:hidden;background:#111;';
+        div.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:120px;object-fit:cover;"/>' +
+          '<button onclick="dealRemovePhoto('+idx+')" style="position:absolute;top:4px;right:4px;background:#000c;border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;">×</button>';
+        grid.appendChild(div);
+      };
+    })(file);
+    reader.readAsDataURL(file);
+  }
+  input.value = '';
+}
+
+function dealRemovePhoto(idx) {
+  _dealPhotos[idx] = null;
+  // Re-render non-null photos
+  var grid = document.getElementById('deal-photo-grid');
+  grid.innerHTML = '';
+  _dealPhotos.forEach(function(f, i) {
+    if(!f) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var div = document.createElement('div');
+      div.style.cssText = 'position:relative;border-radius:12px;overflow:hidden;background:#111;';
+      div.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:120px;object-fit:cover;"/>' +
+        '<button onclick="dealRemovePhoto('+i+')" style="position:absolute;top:4px;right:4px;background:#000c;border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;">×</button>';
+      grid.appendChild(div);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+async function dealSubmit() {
+  var btn = event && event.target;
+  if(btn) { btn.textContent = 'Submitting...'; btn.disabled = true; }
+
+  try {
+    var car = _dealData.car;
+    var ts = Date.now();
+    var total = _dealPayments.reduce(function(sum, p) { return sum + (parseFloat(p.amount) || 0); }, 0);
+
+    // Upload photos
+    var photoUrls = [];
+    var validPhotos = _dealPhotos.filter(function(f){ return f !== null; });
+    for(var i = 0; i < validPhotos.length; i++) {
+      var ext = validPhotos[i].name.split('.').pop() || 'jpg';
+      var path = 'deals/' + ts + '_' + i + '.' + ext;
+      var url = await sbUpload(path, validPhotos[i]);
+      photoUrls.push(url);
+    }
+
+    // Build payments JSON
+    var payments = _dealPayments.filter(function(p){ return parseFloat(p.amount) > 0; }).map(function(p) {
+      return { amount: parseFloat(p.amount), method: p.method };
+    });
+
+    var record = {
+      customer_name: _dealData.customer,
+      vehicle_desc: car.name || '',
+      vin: car.vin || '',
+      stock: car.stock || '',
+      deal_type: _dealData.type,
+      total_collected: total,
+      payments: JSON.stringify(payments),
+      gps_serial: _dealData.gpsSerial || '',
+      photo_urls: JSON.stringify(photoUrls),
+      created_by: me ? me.name : '',
+      location: me ? me.location : 'DeBary',
+      created_at: new Date().toISOString()
+    };
+
+    await sbPost('deals', record);
+    dealShowStep(4);
+  } catch(err) {
+    console.error('Deal submit error:', err);
+    alert('Error submitting deal: ' + (err.message || err));
+    if(btn) { btn.textContent = 'Submit Deal'; btn.disabled = false; }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// OWNER DEALS VIEW
+// ══════════════════════════════════════════════════════════════
+
+var _dealsData = [];
+var _dealsFiltered = [];
+var _dealsViewingDetail = false;
+
+function renderMgrDeals() {
+  var list = document.getElementById('mgr-deals-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;"><button onclick="openDealsView()" style="width:100%;padding:16px;background:#111;border:1px solid #1e1e1e;border-radius:14px;color:#f59e0b;font-size:16px;font-weight:700;cursor:pointer;">Open Deals</button></div>';
+}
+
+function openDealsView() {
+  _dealsViewingDetail = false;
+  document.getElementById('deals-view-overlay').style.display = 'flex';
+  document.getElementById('deals-view-title').textContent = 'DEALS';
+  loadDeals();
+}
+
+function dealsViewBack() {
+  if(_dealsViewingDetail) {
+    _dealsViewingDetail = false;
+    document.getElementById('deals-view-title').textContent = 'DEALS';
+    var body = document.getElementById('deals-view-body');
+    body.innerHTML = '<div style="padding:12px;"><input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+    loadDeals();
+  } else {
+    document.getElementById('deals-view-overlay').style.display = 'none';
+  }
+}
+
+async function loadDeals() {
+  var list = document.getElementById('deals-list');
+  if(!list) return;
+  list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  try {
+    _dealsData = await sbGet('deals', 'order=created_at.desc');
+    _dealsFiltered = _dealsData;
+    renderDeals();
+  } catch(e) {
+    list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error: ' + (e.message||e) + '</div>';
+  }
+}
+
+function dealsFilter(q) {
+  q = (q||'').toLowerCase().trim();
+  if(!q) { _dealsFiltered = _dealsData; }
+  else {
+    _dealsFiltered = _dealsData.filter(function(d) {
+      return (d.customer_name||'').toLowerCase().includes(q) ||
+             (d.vehicle_desc||'').toLowerCase().includes(q) ||
+             (d.stock||'').toLowerCase().includes(q);
+    });
+  }
+  renderDeals();
+}
+
+function renderDeals() {
+  var list = document.getElementById('deals-list');
+  if(!_dealsFiltered.length) { list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No deals found</div>'; return; }
+  list.innerHTML = _dealsFiltered.map(function(d) {
+    var isFinance = d.deal_type === 'finance';
+    var badge = isFinance
+      ? '<span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Finance</span>'
+      : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Cash</span>';
+    var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : '';
+    var dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString() : '';
+    return '<div onclick="openDealDetail('+d.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
+        '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(d.customer_name||'Unknown')+'</div>' +
+        badge +
+      '</div>' +
+      '<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(d.vehicle_desc||'')+(d.stock?' &middot; #'+d.stock:'')+'</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
+        '<span style="font-size:16px;font-weight:700;color:#4ade80;">'+total+'</span>' +
+        '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#555;">' +
+          '<span>'+dateStr+'</span>' +
+          '<span>'+(d.created_by||'')+'</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openDealDetail(id) {
+  _dealsViewingDetail = true;
+  var d = _dealsData.find(function(x){ return x.id === id; });
+  if(!d) return;
+  document.getElementById('deals-view-title').textContent = d.customer_name || 'Deal';
+
+  var isFinance = d.deal_type === 'finance';
+  var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : 'N/A';
+  var payments = [];
+  try { payments = JSON.parse(d.payments || '[]'); } catch(e){}
+  var photos = [];
+  try { photos = JSON.parse(d.photo_urls || '[]'); } catch(e){}
+
+  var html = '<div style="padding:16px 12px 40px;">';
+
+  // Type badge + date
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
+  html += isFinance
+    ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">FINANCE</span>'
+    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">CASH</span>';
+  html += '<span style="font-size:13px;color:#666;">'+(d.created_at?new Date(d.created_at).toLocaleDateString():'')+'</span>';
+  html += '</div>';
+
+  // Vehicle
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
+  html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
+  if(d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
+  if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
+  html += '</div>';
+
+  // GPS Serial (finance only)
+  if(isFinance && d.gps_serial) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GPS Serial</div>';
+    html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+d.gps_serial+'</div>';
+    html += '</div>';
+  }
+
+  // Total
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Collected</div>';
+  html += '<div style="font-size:22px;font-weight:700;color:#4ade80;">'+total+'</div>';
+  html += '</div>';
+
+  // Payment breakdown
+  if(payments.length) {
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Payment Breakdown</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    payments.forEach(function(p) {
+      var methodLabel = {cash:'Cash',card:'Card',zelle:'Zelle',money_order:'Money Order',other:'Other'}[p.method] || p.method;
+      html += '<div style="background:#111;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<span style="font-size:14px;color:#888;">'+methodLabel+'</span>';
+      html += '<span style="font-size:16px;font-weight:700;color:#fff;">$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Photos
+  if(photos.length) {
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    photos.forEach(function(url) {
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\''+url+'\',\'_blank\')">';
+      html += '<img src="'+url+'" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Meta
+  html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
+  if(d.created_by) html += 'Uploaded by: '+d.created_by+'<br>';
+  if(d.location) html += 'Location: '+d.location;
+  html += '</div>';
+
+  // Delete
+  html += '<button id="deal-delete-btn" onclick="dealDeleteConfirm('+d.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Deal</button>';
+
+  html += '</div>';
+  document.getElementById('deals-view-body').innerHTML = html;
+}
+
+function dealDeleteConfirm(id) {
+  var btn = document.getElementById('deal-delete-btn');
+  btn.textContent = 'Tap again to permanently delete';
+  btn.style.background = '#ef4444';
+  btn.style.color = '#fff';
+  btn.style.borderColor = '#ef4444';
+  btn.onclick = function(){ dealDeleteFinal(id); };
+}
+
+async function dealDeleteFinal(id) {
+  var btn = document.getElementById('deal-delete-btn');
+  btn.textContent = 'Deleting...'; btn.disabled = true; btn.style.opacity = '0.5';
+  try {
+    await sbDelete('deals', id);
+    _dealsData = _dealsData.filter(function(d){ return d.id !== id; });
+    _dealsFiltered = _dealsFiltered.filter(function(d){ return d.id !== id; });
+    dealsViewBack();
+  } catch(e) {
+    btn.textContent = 'Error: '+(e.message||e);
+    btn.style.background = '#1a0505'; btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
 </script>
 
 </body>
