@@ -7932,7 +7932,9 @@ function dealGoStep3() {
   var hasPayment = _dealPayments.some(function(p){ return parseFloat(p.amount) > 0; });
   if(!hasPayment) { alert('Please enter at least one payment.'); return; }
   if(_dealData.type === 'finance') {
-    _dealData.gpsSerial = document.getElementById('deal-gps').value.trim();
+    var gps = document.getElementById('deal-gps').value.trim();
+    if(!gps) { alert('Please enter the GPS serial number.'); return; }
+    _dealData.gpsSerial = gps;
     _dealData.pickupPayment = document.getElementById('deal-pickup-payment').value.trim();
   }
   _dealData.customer = customer;
@@ -8021,7 +8023,10 @@ async function dealSubmit() {
       location: me ? me.location : 'DeBary',
       created_at: new Date().toISOString()
     };
-    if(_dealData.pickupPayment) record.pickup_payment = parseFloat(_dealData.pickupPayment);
+    // pickup_payment saved in payments note until DB column is added
+    if(_dealData.pickupPayment) {
+      record.gps_serial = (record.gps_serial || '') + ' | Pickup: $' + parseFloat(_dealData.pickupPayment).toFixed(2);
+    }
 
     await sbPost('deals', record);
     dealShowStep(4);
