@@ -66,21 +66,22 @@ function parseCsv(csvPath, forceLocation) {
 }
 
 async function main() {
-  // Parse both CSV files
-  const debary = parseCsv('InventoryMaster.csv', null); // uses lotno: 2=DeLand, else DeBary
+  // Parse both CSV files — InventoryMaster is DeBary only now; DeLand file is source of truth for DeLand
+  const debary = parseCsv('InventoryMaster.csv', 'DeBary');
   const deland = fs.existsSync('InventoryMasterDeland.csv')
     ? parseCsv('InventoryMasterDeland.csv', 'DeLand')
     : { cars: [], stocks: new Set() };
 
-  const allCsvCars = [...debary.cars, ...deland.cars];
   const allCsvStocks = new Set([...debary.stocks, ...deland.stocks]);
 
-  // Deduplicate by VIN across both files
+  // Deduplicate by VIN — DeLand file takes priority over DeBary for overlapping VINs
   const seen = new Set();
-  const csvCars = allCsvCars.filter(c => {
-    if (c.vin && seen.has(c.vin)) return false;
+  const csvCars = [];
+  // Process DeLand first so its entries win on duplicate VINs
+  [...deland.cars, ...debary.cars].forEach(c => {
+    if (c.vin && seen.has(c.vin)) return;
     if (c.vin) seen.add(c.vin);
-    return true;
+    csvCars.push(c);
   });
 
   console.log('Total INSTOCK (both lots):', csvCars.length);

@@ -3793,12 +3793,18 @@ async function syncNow(){
     var r=await fetch(url+'?t='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
     var csv=await r.text();
-    var imp=parseCSV(csv,null); // uses lotno: 2=DeLand, else DeBary
-    // Also fetch DeLand CSV if not using a custom sync URL
+    var imp=parseCSV(csv,'DeBary'); // InventoryMaster is DeBary only — DeLand has its own file
+    // Also fetch DeLand CSV if not using a custom sync URL; DeLand entries take priority on duplicate VINs
     if(!S.syncUrl){
       try{
         var rDL=await fetch(DELAND_URL+'?t='+Date.now());
-        if(rDL.ok){var csvDL=await rDL.text();var impDL=parseCSV(csvDL,'DeLand');imp=imp.concat(impDL);}
+        if(rDL.ok){
+          var csvDL=await rDL.text();var impDL=parseCSV(csvDL,'DeLand');
+          // Merge: DeLand wins on duplicate VINs — prepend DeLand so dedup keeps it
+          var seenVins=new Set(impDL.filter(function(c){return c.vin;}).map(function(c){return c.vin;}));
+          var debaryOnly=imp.filter(function(c){return !c.vin||!seenVins.has(c.vin);});
+          imp=impDL.concat(debaryOnly);
+        }
       }catch(e){console.log('DeLand CSV fetch skipped:',e);}
     }
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
