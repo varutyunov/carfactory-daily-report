@@ -20,7 +20,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
-<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- Tesseract removed — using Claude Vision API for DL reading -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
@@ -7098,53 +7098,61 @@ function depPhotoTaken(input) {
     // Store photo data URL so we can show it on manual entry screen as reference
     _depData.photoDataUrl = e.target.result;
 
-    if(typeof Tesseract === 'undefined') {
-      if(status) status.innerHTML = 'OCR library did not load.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Continue to Manual Entry</button>';
+    var apiKey = getAiKey();
+    if(!apiKey) {
+      if(status) status.innerHTML = 'No AI key saved — cannot read license photo.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
       return;
     }
 
-    if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading license — downloading OCR engine...</div>';
+    if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading license...</div>';
 
-    // Timeout: if Tesseract takes more than 30 seconds, offer manual entry
-    var timedOut = false;
-    var ocrTimeout = setTimeout(function() {
-      timedOut = true;
-      if(status) status.innerHTML = 'Taking too long to read.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Continue to Manual Entry</button>';
-    }, 30000);
+    // Get base64 from data URL
+    var base64 = e.target.result.split(',')[1];
+    var mediaType = (e.target.result.match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
 
-    Tesseract.recognize(preview, 'eng', {
-      logger: function(m) {
-        if(timedOut) return;
-        if(m.status === 'loading tesseract core') {
-          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Loading OCR engine...</div>';
-        } else if(m.status === 'initializing tesseract') {
-          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Initializing...</div>';
-        } else if(m.status === 'loading language traineddata') {
-          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Downloading language data... ' + Math.round((m.progress||0)*100) + '%</div>';
-        } else if(m.status === 'recognizing text') {
-          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading text... ' + Math.round((m.progress||0)*100) + '%</div>';
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: 'Read this driver license. Return ONLY a JSON object with these exact fields: firstName, lastName, dob (YYYY-MM-DD format), dlNumber, address, city, state, zip. No markdown, no explanation, no backticks — just the raw JSON object.' }
+          ]
+        }]
+      })
+    }).then(function(resp) {
+      if(!resp.ok) return resp.text().then(function(t){ throw new Error('API ' + resp.status + ': ' + t); });
+      return resp.json();
+    }).then(function(data) {
+      var text = (data.content && data.content[0] && data.content[0].text) || '';
+      console.log('Claude vision raw:', text);
+      var jsonStr = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+      try {
+        var parsed = JSON.parse(jsonStr);
+        if(parsed && (parsed.firstName || parsed.lastName)) {
+          _depData.customer = parsed;
+          depFillCustomerFields(parsed);
+          if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
+          setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1200);
+        } else {
+          if(status) status.innerHTML = 'Could not read name from photo.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
         }
-        console.log('Tesseract:', m.status, m.progress);
+      } catch(pe) {
+        console.error('JSON parse error:', pe, 'Raw:', text);
+        if(status) status.innerHTML = 'Could not parse response.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
       }
-    }).then(function(result) {
-      clearTimeout(ocrTimeout);
-      if(timedOut) return;
-      var text = result.data.text;
-      console.log('OCR raw text:', text);
-      var parsed = parseOCRText(text);
-      if(parsed && (parsed.firstName || parsed.lastName)) {
-        _depData.customer = parsed;
-        depFillCustomerFields(parsed);
-        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
-        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1200);
-      } else {
-        if(status) status.innerHTML = 'Could not read the name from this photo.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Info Manually</button><br><br><span style="font-size:11px;color:#444;">OCR saw: ' + (text||'(nothing)').substring(0,150).replace(/</g,'&lt;').replace(/\n/g,' ') + '</span>';
-      }
-    }).catch(function(e) {
-      clearTimeout(ocrTimeout);
-      if(timedOut) return;
-      console.error('Tesseract error:', e);
-      if(status) status.innerHTML = 'OCR error: ' + (e.message||e) + '<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Info Manually</button>';
+    }).catch(function(err) {
+      console.error('Vision API error:', err);
+      if(status) status.innerHTML = 'Error: ' + (err.message||err) + '<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
     });
   };
   reader.readAsDataURL(file);
