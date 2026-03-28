@@ -7178,15 +7178,7 @@ function openFormDetail(id) {
 
 function depDeleteConfirm1(id) {
   var btn = document.getElementById('dep-delete-btn');
-  btn.textContent = 'Are you sure? Tap again to confirm';
-  btn.style.background = '#1a0505';
-  btn.style.borderColor = '#ef4444';
-  btn.onclick = function(){ depDeleteConfirm2(id); };
-}
-
-function depDeleteConfirm2(id) {
-  var btn = document.getElementById('dep-delete-btn');
-  btn.textContent = 'FINAL WARNING — This cannot be undone';
+  btn.textContent = 'Tap again to permanently delete';
   btn.style.background = '#ef4444';
   btn.style.color = '#fff';
   btn.style.borderColor = '#ef4444';
