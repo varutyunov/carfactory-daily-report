@@ -908,7 +908,7 @@ canvas{display:none;}
       <!-- FORMS VIEW OVERLAY -->
       <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:#000;flex-direction:column;">
         <div style="position:fixed;top:0;left:0;right:0;z-index:410;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-          <button onclick="closeFormsView()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;">&#8592;</button>
+          <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;">&#8592;</button>
           <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
         </div>
         <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
@@ -7000,7 +7000,22 @@ function openFormsView() {
   loadForms();
 }
 
+var _formsViewingDetail = false;
+
+function formsBack() {
+  if(_formsViewingDetail) {
+    _formsViewingDetail = false;
+    // Restore the list view
+    var body = document.getElementById('forms-body');
+    body.innerHTML = '<div style="padding:16px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:15px;margin-bottom:16px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:12px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    loadForms();
+  } else {
+    closeFormsView();
+  }
+}
+
 function closeFormsView() {
+  _formsViewingDetail = false;
   document.getElementById('forms-overlay').style.display = 'none';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
 }
@@ -7078,6 +7093,7 @@ function renderForms() {
 }
 
 function openFormDetail(id) {
+  _formsViewingDetail = true;
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
 
@@ -7150,7 +7166,7 @@ function openFormDetail(id) {
   html += '</div>';
 
   var body = document.getElementById('forms-body');
-  body.innerHTML = '<div style="padding-top:0;">' + html + '<div style="padding:0 16px 20px;"><button onclick="loadForms()" style="width:100%;padding:14px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">← Back to All Forms</button></div></div>';
+  body.innerHTML = '<div style="padding-top:0;">' + html + '</div>';
 }
 
 // ══════════════════════════════════════════════════════════════
