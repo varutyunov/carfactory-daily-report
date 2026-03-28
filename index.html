@@ -3800,9 +3800,10 @@ async function syncNow(){
         var rDL=await fetch(DELAND_URL+'?t='+Date.now());
         if(rDL.ok){
           var csvDL=await rDL.text();var impDL=parseCSV(csvDL,'DeLand');
-          // Merge: DeLand wins on duplicate VINs — prepend DeLand so dedup keeps it
+          // Merge: DeLand wins on duplicate VINs or stock numbers
           var seenVins=new Set(impDL.filter(function(c){return c.vin;}).map(function(c){return c.vin;}));
-          var debaryOnly=imp.filter(function(c){return !c.vin||!seenVins.has(c.vin);});
+          var seenStocks=new Set(impDL.map(function(c){return c.stock;}));
+          var debaryOnly=imp.filter(function(c){return (!c.vin||!seenVins.has(c.vin))&&!seenStocks.has(c.stock);});
           imp=impDL.concat(debaryOnly);
         }
       }catch(e){console.log('DeLand CSV fetch skipped:',e);}
