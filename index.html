@@ -960,10 +960,12 @@ canvas{display:none;}
         <button id="deal-type-finance" onclick="dealSetType('finance')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Finance</button>
       </div>
 
-      <!-- GPS Serial (finance only) -->
+      <!-- GPS Serial + Pick Up Payment (finance only) -->
       <div id="deal-gps-wrap" style="display:none;margin-bottom:14px;">
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
         <input id="deal-gps" placeholder="Enter GPS serial #" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-top:12px;">Pick Up Payment Amount <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
+        <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
       </div>
 
       <!-- Customer Name -->
@@ -993,10 +995,16 @@ canvas{display:none;}
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;">Step 3 — Upload Photos</div>
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Upload deal documents, buyer's order, etc.</div>
       <div id="deal-photo-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"></div>
-      <label style="display:block;width:100%;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
-        + Add Photos
-        <input type="file" accept="image/*" multiple capture="environment" onchange="dealPhotosAdded(this)" style="display:none;"/>
-      </label>
+      <div style="display:flex;gap:10px;">
+        <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
+          📷 Take Photo
+          <input type="file" accept="image/*" capture="environment" onchange="dealPhotosAdded(this)" style="display:none;"/>
+        </label>
+        <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
+          📁 Upload
+          <input type="file" accept="image/*" multiple onchange="dealPhotosAdded(this)" style="display:none;"/>
+        </label>
+      </div>
       <button onclick="dealSubmit()" style="width:100%;margin-top:16px;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Submit Deal</button>
     </div>
 
@@ -7855,6 +7863,7 @@ function dealSelectCar(carId) {
   // Reset form
   document.getElementById('deal-customer').value = '';
   document.getElementById('deal-gps').value = '';
+  document.getElementById('deal-pickup-payment').value = '';
   _dealPayments = [];
   dealAddPayment();
   dealSetType('cash');
@@ -7924,6 +7933,7 @@ function dealGoStep3() {
   if(!hasPayment) { alert('Please enter at least one payment.'); return; }
   if(_dealData.type === 'finance') {
     _dealData.gpsSerial = document.getElementById('deal-gps').value.trim();
+    _dealData.pickupPayment = document.getElementById('deal-pickup-payment').value.trim();
   }
   _dealData.customer = customer;
   _dealPhotos = [];
@@ -8006,6 +8016,7 @@ async function dealSubmit() {
       total_collected: total,
       payments: JSON.stringify(payments),
       gps_serial: _dealData.gpsSerial || '',
+      pickup_payment: parseFloat(_dealData.pickupPayment) || null,
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: me ? me.location : 'DeBary',
@@ -8143,11 +8154,17 @@ function openDealDetail(id) {
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
   html += '</div>';
 
-  // GPS Serial (finance only)
+  // GPS Serial + Pick Up Payment (finance only)
   if(isFinance && d.gps_serial) {
     html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GPS Serial</div>';
     html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+d.gps_serial+'</div>';
+    html += '</div>';
+  }
+  if(isFinance && d.pickup_payment) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Pick Up Payment</div>';
+    html += '<div style="font-size:22px;font-weight:700;color:#f59e0b;">$'+parseFloat(d.pickup_payment).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
     html += '</div>';
   }
 
