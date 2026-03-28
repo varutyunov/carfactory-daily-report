@@ -6979,11 +6979,11 @@ function depStartBarcode() {
   document.getElementById('dep-choose').style.display = 'none';
   document.getElementById('dep-camera-wrap').style.display = 'block';
   document.getElementById('dep-photo-wrap').style.display = 'none';
-  document.getElementById('dep-scan-status').textContent = 'Point at barcode on back of license...';
+  document.getElementById('dep-scan-status').textContent = 'Starting camera...';
 
   if(typeof ZXing === 'undefined') {
-    depSetStatus('Barcode scanner not available');
-    setTimeout(depShowChoose, 2000);
+    depSetStatus('Barcode scanner library not loaded. Use Photo or Manual instead.');
+    setTimeout(depShowChoose, 3000);
     return;
   }
 
@@ -6992,21 +6992,52 @@ function depStartBarcode() {
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     _depCodeReader = new ZXing.BrowserMultiFormatReader(hints);
-    _depCodeReader.decodeFromVideoDevice(null, 'dep-video', function(result, err) {
-      if(result) {
-        var text = result.getText();
-        var parsed = parseAAMVA(text);
-        depStopCamera();
-        if(parsed && (parsed.dlNumber || parsed.firstName)) {
-          _depData.customer = parsed;
-          depFillCustomerFields(parsed);
-          depShowStep(2);
-          depLoadCarList();
-        } else {
-          depSetStatus('Barcode found but could not parse. Try photo or manual.');
-          setTimeout(depShowChoose, 2000);
-        }
+
+    // Use listVideoInputDevices first to pick back camera
+    _depCodeReader.listVideoInputDevices().then(function(devices) {
+      console.log('Camera devices found:', devices.length, devices.map(function(d){return d.label;}));
+      if(!devices.length) {
+        depSetStatus('No camera found on this device.');
+        setTimeout(depShowChoose, 2000);
+        return;
       }
+      // Prefer back/rear camera
+      var backCam = devices.find(function(d){ return /back|rear|environment/i.test(d.label); });
+      var deviceId = backCam ? backCam.deviceId : devices[devices.length - 1].deviceId;
+
+      depSetStatus('Point at barcode on back of license...');
+
+      _depCodeReader.decodeFromVideoDevice(deviceId, 'dep-video', function(result, err) {
+        if(result) {
+          var text = result.getText();
+          console.log('Barcode scanned, length:', text.length);
+          var parsed = parseAAMVA(text);
+          depStopCamera();
+          if(parsed && (parsed.dlNumber || parsed.firstName)) {
+            _depData.customer = parsed;
+            depFillCustomerFields(parsed);
+            depShowStep(2);
+            depLoadCarList();
+          } else {
+            depSetStatus('Barcode found but could not parse. Try photo or manual.');
+            setTimeout(depShowChoose, 2000);
+          }
+        }
+        if(err && !(err instanceof ZXing.NotFoundException)) {
+          console.error('ZXing error:', err);
+        }
+      });
+
+      // 30-second timeout — if nothing scanned, tell user
+      _depScanTimer = setTimeout(function() {
+        depSetStatus('No barcode detected after 30 seconds. Try photo or manual entry.');
+        setTimeout(function(){ depStopCamera(); depShowChoose(); }, 2500);
+      }, 30000);
+
+    }).catch(function(e) {
+      console.error('Camera list error:', e);
+      depSetStatus('Camera access denied or not available: ' + e.message);
+      setTimeout(depShowChoose, 3000);
     });
   } catch(e) {
     depSetStatus('Camera error: ' + e.message);
@@ -7236,9 +7267,15 @@ function depositManualEntry() {
 var _depAllCars = [];
 
 function depLoadCarList() {
-  var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
   var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
-  _depAllCars = inv.filter(function(c){ return (c.location||'DeBary') === myEmpLoc; });
+  var isOwner = (typeof me !== 'undefined' && me && me.role === 'owner');
+  if(isOwner) {
+    _depAllCars = inv.slice(); // owner sees ALL inventory
+  } else {
+    var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+    _depAllCars = inv.filter(function(c){ return (c.location||'DeBary') === myEmpLoc; });
+  }
+  console.log('depLoadCarList: inventory total=' + inv.length + ', showing=' + _depAllCars.length);
   depRenderCarList(_depAllCars);
 }
 
@@ -7246,7 +7283,7 @@ function depFilterCars(q) {
   if(!q) { depRenderCarList(_depAllCars); return; }
   var ql = q.toLowerCase();
   var filtered = _depAllCars.filter(function(c){
-    return [c.year,c.make,c.model,c.stock,c.vin,c.color].join(' ').toLowerCase().indexOf(ql) !== -1;
+    return [c.name,c.stock,c.vin,c.color,c.location].join(' ').toLowerCase().indexOf(ql) !== -1;
   });
   depRenderCarList(filtered);
 }
@@ -7259,8 +7296,8 @@ function depRenderCarList(cars) {
     return;
   }
   el.innerHTML = cars.map(function(c){
-    var label = [c.year, c.make, c.model].filter(Boolean).join(' ');
-    var sub   = [c.stock ? 'Stock: '+c.stock : '', c.color||''].filter(Boolean).join(' · ');
+    var label = c.name || [c.year, c.make, c.model].filter(Boolean).join(' ') || 'Unknown';
+    var sub   = [c.stock ? 'Stock: '+c.stock : '', c.color||'', c.location||''].filter(Boolean).join(' · ');
     return '<div onclick="depSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
       '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
       '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
@@ -7276,9 +7313,14 @@ function depSelectCar(carId) {
   _depData.car = car;
   // Fill vehicle fields
   var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
-  set('dep-year',  car.year);
-  set('dep-make',  car.make);
-  set('dep-model', car.model);
+  // Parse year/make/model from name field (e.g. "2024 Toyota Camry")
+  var nameParts = (car.name||'').split(' ');
+  var carYear = nameParts[0] || '';
+  var carMake = nameParts[1] || '';
+  var carModel = nameParts.slice(2).join(' ') || '';
+  set('dep-year',  carYear);
+  set('dep-make',  carMake);
+  set('dep-model', carModel);
   set('dep-stock', car.stock);
   set('dep-vin',   car.vin);
   set('dep-color', car.color);
