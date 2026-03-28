@@ -278,11 +278,13 @@ canvas{display:none;}
 /* ── MGR HOME — ORBITAL COMMAND CENTER ── */
 #mgr-home{overflow:hidden;background:#000;display:flex;flex-direction:column;touch-action:pan-y;}
 /* ── Swipe Pages Container ── */
-.swipe-container{display:flex;flex:1;min-height:0;transition:transform 0.35s cubic-bezier(.4,.0,.2,1);width:200%;will-change:transform;touch-action:pan-y;}
-.swipe-container.at-page-1{transform:translateX(-50%);}
-.swipe-page{width:50%;flex-shrink:0;overflow-y:auto;touch-action:pan-y;}
+.swipe-container{display:flex;flex:1;min-height:0;transition:transform 0.35s cubic-bezier(.4,.0,.2,1);width:300%;will-change:transform;touch-action:pan-y;}
+.swipe-container.at-page-1{transform:translateX(-33.333%);}
+.swipe-container.at-page-2{transform:translateX(-66.666%);}
+.swipe-page{width:33.333%;flex-shrink:0;overflow-y:auto;touch-action:pan-y;}
 .swipe-page-0{background:radial-gradient(ellipse at 50% 40%,#0a0a1e 0%,#050510 50%,#000 100%);display:flex;flex-direction:column;}
 .swipe-page-1{background:#050510;}
+.swipe-page-2{background:#050510;}
 .swipe-dots{display:flex;justify-content:center;gap:8px;padding:8px 0 4px;flex-shrink:0;}
 .swipe-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s;}
 .swipe-dot.active{background:#fff;transform:scale(1.3);}
@@ -667,7 +669,7 @@ canvas{display:none;}
 
     <!-- MGR HOME GRID -->
     <div class="view" id="mgr-home">
-      <div class="swipe-dots" id="swipe-dots"><span class="swipe-dot active"></span><span class="swipe-dot"></span></div>
+      <div class="swipe-dots" id="swipe-dots"><span class="swipe-dot active"></span><span class="swipe-dot"></span><span class="swipe-dot"></span></div>
       <div class="swipe-container" id="swipe-container">
       <div class="swipe-page swipe-page-0" id="swipe-page-0">
       <div class="orbit-wrap">
@@ -878,6 +880,50 @@ canvas{display:none;}
           </div>
         </div>
       </div><!-- /swipe-page-1 -->
+
+      <!-- SWIPE PAGE 3: TOOLS -->
+      <div class="swipe-page swipe-page-2" id="swipe-page-2">
+        <div style="padding:20px 16px 100px;">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:20px;">Tools</div>
+
+          <!-- Forms tile -->
+          <div onclick="openFormsView()" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:16px;padding:20px;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;gap:16px;">
+            <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">📄</div>
+            <div style="flex:1;">
+              <div style="font-size:17px;font-weight:700;color:#fff;">Forms</div>
+              <div style="font-size:12px;color:#666;margin-top:2px;">Deposit forms & agreements</div>
+            </div>
+            <div id="tools-forms-count" style="background:#1d4ed8;color:#fff;border-radius:10px;padding:4px 12px;font-size:14px;font-weight:700;min-width:28px;text-align:center;">0</div>
+            <div style="color:#333;font-size:20px;">›</div>
+          </div>
+
+          <!-- Deposit Form shortcut -->
+          <div onclick="openDepositForm()" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:16px;padding:20px;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;gap:16px;">
+            <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#16a34a,#4ade80);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">+</div>
+            <div style="flex:1;">
+              <div style="font-size:17px;font-weight:700;color:#fff;">New Deposit Form</div>
+              <div style="font-size:12px;color:#666;margin-top:2px;">Create a new deposit agreement</div>
+            </div>
+            <div style="color:#333;font-size:20px;">›</div>
+          </div>
+        </div>
+      </div><!-- /swipe-page-2 -->
+
+      <!-- FORMS VIEW OVERLAY -->
+      <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:#000;flex-direction:column;">
+        <div style="position:fixed;top:0;left:0;right:0;z-index:410;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+          <button onclick="closeFormsView()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;">&#8592;</button>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
+        </div>
+        <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+          <div style="padding:16px;">
+            <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:15px;margin-bottom:16px;outline:none;"/>
+            <div id="forms-list" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       </div><!-- /swipe-container -->
     </div>
@@ -5759,9 +5805,9 @@ function initSwipe(){
     e.preventDefault();
     e.stopPropagation();
     _swDx=dx;
-    var base=_swipePage===0?0:-50;
-    var pct=base+(dx/home.offsetWidth)*50;
-    pct=Math.max(-50,Math.min(0,pct));
+    var base=_swipePage*-33.333;
+    var pct=base+(dx/home.offsetWidth)*33.333;
+    pct=Math.max(-66.666,Math.min(0,pct));
     el.style.transform='translateX('+pct+'%)';
   },{capture:true,passive:false});
   document.addEventListener('touchend',function(e){
@@ -5770,8 +5816,8 @@ function initSwipe(){
     el.style.transition='';
     el.style.transform='';
     if(Math.abs(_swDx)>40){
-      if(_swDx<0&&_swipePage===0) setSwipePage(1);
-      else if(_swDx>0&&_swipePage===1) setSwipePage(0);
+      if(_swDx<0&&_swipePage<2) setSwipePage(_swipePage+1);
+      else if(_swDx>0&&_swipePage>0) setSwipePage(_swipePage-1);
     }
     _swDir=null;
   },true);
@@ -5782,10 +5828,13 @@ function setSwipePage(p){
   if(!el) return;
   el.style.transition='';
   el.style.transform='';
-  if(p===0){el.classList.remove('at-page-1');}
-  else{el.classList.add('at-page-1');}
+  el.classList.remove('at-page-1','at-page-2');
+  if(p===1) el.classList.add('at-page-1');
+  else if(p===2) el.classList.add('at-page-2');
   var dots=document.querySelectorAll('#swipe-dots .swipe-dot');
   dots.forEach(function(d,i){d.classList.toggle('active',i===p);});
+  // Load forms count when landing on tools page
+  if(p===2) loadFormsCount();
 }
 // Also allow tapping the dots to switch
 document.addEventListener('click',function(e){
@@ -6931,6 +6980,180 @@ function _txInit() {
 </style>
 
 <script>
+// ══════════════════════════════════════════════════════════════
+// FORMS VIEW LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _formsData = [];
+var _formsFiltered = [];
+
+async function loadFormsCount() {
+  try {
+    var rows = await sbGet('deposits', 'select=id&order=created_at.desc');
+    var countEl = document.getElementById('tools-forms-count');
+    if(countEl) countEl.textContent = rows.length;
+  } catch(e) { console.error('Forms count error:', e); }
+}
+
+function openFormsView() {
+  document.getElementById('forms-overlay').style.display = 'flex';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
+  loadForms();
+}
+
+function closeFormsView() {
+  document.getElementById('forms-overlay').style.display = 'none';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
+}
+
+async function loadForms() {
+  var list = document.getElementById('forms-list');
+  list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  try {
+    _formsData = await sbGet('deposits', 'order=created_at.desc');
+    _formsFiltered = _formsData;
+    renderForms();
+  } catch(e) {
+    list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error loading forms: ' + (e.message||e) + '</div>';
+  }
+}
+
+function formsFilter(q) {
+  q = q.toLowerCase().trim();
+  if(!q) { _formsFiltered = _formsData; }
+  else {
+    _formsFiltered = _formsData.filter(function(d) {
+      return (d.customer_name||'').toLowerCase().indexOf(q) !== -1 ||
+             (d.vehicle_desc||'').toLowerCase().indexOf(q) !== -1 ||
+             (d.stock||'').toLowerCase().indexOf(q) !== -1 ||
+             (d.vin||'').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  renderForms();
+}
+
+function renderForms() {
+  var list = document.getElementById('forms-list');
+  if(!_formsFiltered.length) {
+    list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No forms found</div>';
+    return;
+  }
+
+  // Group by deal: customer_name + vehicle_desc + stock
+  var deals = {};
+  _formsFiltered.forEach(function(d) {
+    var key = (d.customer_name||'Unknown') + '||' + (d.stock||d.vin||'no-vehicle');
+    if(!deals[key]) deals[key] = [];
+    deals[key].push(d);
+  });
+
+  var html = '';
+  Object.keys(deals).forEach(function(key) {
+    var group = deals[key];
+    var first = group[0];
+    var isFinance = first.deal_type === 'finance';
+    var typeBadge = isFinance
+      ? '<span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Finance</span>'
+      : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Cash</span>';
+
+    var amtStr = first.deposit_amount ? '$' + parseFloat(first.deposit_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : '';
+    var dateStr = first.deposit_date || '';
+    var hasID = !!first.id_photo_url;
+    var hasSigned = !!first.signed_form_url;
+
+    html += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;cursor:pointer;" onclick="openFormDetail(' + first.id + ')">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
+    html += '<div style="font-size:16px;font-weight:700;color:#fff;flex:1;">' + (first.customer_name||'Unknown') + '</div>';
+    html += typeBadge;
+    html += '</div>';
+    html += '<div style="font-size:13px;color:#888;margin-bottom:4px;">' + (first.vehicle_desc||'') + (first.stock ? ' · #' + first.stock : '') + '</div>';
+    html += '<div style="display:flex;gap:12px;font-size:12px;color:#555;">';
+    html += '<span>' + amtStr + '</span>';
+    html += '<span>' + dateStr + '</span>';
+    html += '<span>' + (hasID ? '🪪' : '') + (hasSigned ? ' 📄' : '') + '</span>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  list.innerHTML = html;
+}
+
+function openFormDetail(id) {
+  var dep = _formsData.find(function(d){ return d.id === id; });
+  if(!dep) return;
+
+  var isFinance = dep.deal_type === 'finance';
+  var typeName = isFinance ? 'Finance' : 'Cash';
+  var amtStr = dep.deposit_amount ? '$' + parseFloat(dep.deposit_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
+  var balStr = dep.balance ? '$' + parseFloat(dep.balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
+
+  var html = '<div style="padding:16px;">';
+  html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">' + (dep.customer_name||'Unknown') + '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
+  html += isFinance
+    ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">FINANCE</span>'
+    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">CASH</span>';
+  html += '<span style="font-size:12px;color:#666;">' + (dep.deposit_date||'') + '</span>';
+  html += '</div>';
+
+  // Vehicle
+  html += '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
+  html += '<div style="font-size:15px;font-weight:600;color:#fff;">' + (dep.vehicle_desc||'N/A') + '</div>';
+  if(dep.vin) html += '<div style="font-size:12px;color:#666;margin-top:2px;">VIN: ' + dep.vin + '</div>';
+  if(dep.stock) html += '<div style="font-size:12px;color:#666;">Stock: ' + dep.stock + '</div>';
+  html += '</div>';
+
+  // Transaction
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">';
+  html += '<div style="background:#111;border-radius:12px;padding:14px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Deposit</div>';
+  html += '<div style="font-size:18px;font-weight:700;color:#4ade80;margin-top:4px;">' + amtStr + '</div>';
+  html += '</div>';
+  html += '<div style="background:#111;border-radius:12px;padding:14px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">' + (isFinance ? 'Down Pmt Due' : 'Balance Due') + '</div>';
+  html += '<div style="font-size:18px;font-weight:700;color:#fff;margin-top:4px;">' + balStr + '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  if(dep.withdraw_until) {
+    html += '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Vehicle Held Until</div>';
+    html += '<div style="font-size:15px;font-weight:600;color:#fff;margin-top:4px;">' + dep.withdraw_until + '</div>';
+    html += '</div>';
+  }
+
+  // Photos
+  if(dep.id_photo_url || dep.signed_form_url) {
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    if(dep.id_photo_url) {
+      html += '<div style="background:#111;border-radius:12px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.id_photo_url + '\',\'_blank\')">';
+      html += '<img src="' + dep.id_photo_url + '" style="width:100%;height:120px;object-fit:cover;"/>';
+      html += '<div style="padding:8px;font-size:11px;color:#888;text-align:center;">Customer ID</div>';
+      html += '</div>';
+    }
+    if(dep.signed_form_url) {
+      html += '<div style="background:#111;border-radius:12px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.signed_form_url + '\',\'_blank\')">';
+      html += '<img src="' + dep.signed_form_url + '" style="width:100%;height:120px;object-fit:cover;"/>';
+      html += '<div style="padding:8px;font-size:11px;color:#888;text-align:center;">Signed Form</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Meta
+  html += '<div style="margin-top:16px;font-size:11px;color:#444;">';
+  if(dep.created_by) html += 'Created by: ' + dep.created_by + '<br>';
+  if(dep.location) html += 'Location: ' + dep.location + '<br>';
+  html += '</div>';
+
+  html += '</div>';
+
+  var body = document.getElementById('forms-body');
+  body.innerHTML = '<div style="padding-top:0;">' + html + '<div style="padding:0 16px 20px;"><button onclick="loadForms()" style="width:100%;padding:14px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">← Back to All Forms</button></div></div>';
+}
+
 // ══════════════════════════════════════════════════════════════
 // DEPOSIT FORM LOGIC
 // ══════════════════════════════════════════════════════════════
