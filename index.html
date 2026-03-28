@@ -6988,7 +6988,10 @@ function depStartBarcode() {
   }
 
   try {
-    _depCodeReader = new ZXing.BrowserMultiFormatReader();
+    var hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    _depCodeReader = new ZXing.BrowserMultiFormatReader(hints);
     _depCodeReader.decodeFromVideoDevice(null, 'dep-video', function(result, err) {
       if(result) {
         var text = result.getText();
@@ -7067,14 +7070,15 @@ function depPhotoTaken(input) {
 
     Tesseract.recognize(preview, 'eng').then(function(result) {
       var text = result.data.text;
+      console.log('OCR raw text:', text);
       var parsed = parseOCRText(text);
       if(parsed && (parsed.firstName || parsed.lastName)) {
         _depData.customer = parsed;
         depFillCustomerFields(parsed);
-        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
-        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1000);
+        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ') + '. Review on next screen.';
+        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1500);
       } else {
-        if(status) status.textContent = 'Could not read the license. Try again or enter manually.';
+        if(status) status.innerHTML = 'Could not parse license automatically.<br><br><span style="font-size:11px;color:#555;">OCR text: ' + text.substring(0,200).replace(/\n/g,'<br>') + '</span><br><br>Use manual entry or try again with better lighting.';
       }
     }).catch(function(e) {
       if(status) status.textContent = 'OCR error: ' + e.message;
@@ -7129,26 +7133,80 @@ function parseAAMVA(raw) {
 
 function parseOCRText(text) {
   var d = { firstName:'', lastName:'', dob:'', address:'', city:'', state:'', zip:'', dlNumber:'' };
-  var lines = text.split('\n');
+  var lines = text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
 
-  lines.forEach(function(line) {
-    var t = line.trim();
-    // Try AAMVA codes in OCR output too
+  lines.forEach(function(t) {
+    // AAMVA codes (if back of license was photographed)
     if(/^DCS/i.test(t)) d.lastName = t.substring(3).trim();
-    if(/^DCT/i.test(t)) d.firstName = t.substring(3).trim();
-    if(/^DAC/i.test(t)) d.firstName = t.substring(3).trim();
+    if(/^DCT/i.test(t)||/^DAC/i.test(t)) d.firstName = t.substring(3).trim();
     if(/^DAG/i.test(t)) d.address = t.substring(3).trim();
     if(/^DAI/i.test(t)) d.city = t.substring(3).trim();
     if(/^DAJ/i.test(t)) d.state = t.substring(3).trim();
     if(/^DAK/i.test(t)) d.zip = t.substring(3,8).trim();
     if(/^DAQ/i.test(t)) d.dlNumber = t.substring(3).trim();
     if(/^DBB/i.test(t)||/^DAY/i.test(t)) {
-      var dobRaw = t.substring(3).trim();
-      if(dobRaw.length >= 8) {
-        d.dob = dobRaw.substring(4,8)+'-'+dobRaw.substring(0,2)+'-'+dobRaw.substring(2,4);
-      }
+      var dr = t.substring(3).trim();
+      if(dr.length>=8) d.dob = dr.substring(4,8)+'-'+dr.substring(0,2)+'-'+dr.substring(2,4);
     }
   });
+
+  // Front-of-license parsing (Florida DL patterns)
+  var full = text.replace(/\n/g,' ');
+
+  // DL number: Florida format is letter + 12 digits (e.g. D123-456-78-901-0)
+  if(!d.dlNumber){
+    var dlMatch = full.match(/[A-Z]\s*\d[\d\s\-]{10,16}/);
+    if(dlMatch) d.dlNumber = dlMatch[0].replace(/[\s\-]/g,'').substring(0,13);
+  }
+
+  // DOB: look for MM/DD/YYYY or MM-DD-YYYY patterns near "DOB" or "BORN"
+  if(!d.dob){
+    var dobMatch = full.match(/(?:DOB|BORN|DATE\s*OF\s*BIRTH)[:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i);
+    if(!dobMatch) dobMatch = full.match(/(\d{2})[\/\-](\d{2})[\/\-]((?:19|20)\d{2})/);
+    if(dobMatch) d.dob = dobMatch[3]+'-'+dobMatch[1].padStart(2,'0')+'-'+dobMatch[2].padStart(2,'0');
+  }
+
+  // Name: look for "LN" / "FN" labels, or "LAST" / "FIRST", or numbered lines
+  if(!d.lastName){
+    var lnMatch = full.match(/(?:LN|LAST)[:\s]+([A-Z][A-Z\s']+)/i);
+    if(lnMatch) d.lastName = lnMatch[1].trim().split(/\s{2,}/)[0];
+  }
+  if(!d.firstName){
+    var fnMatch = full.match(/(?:FN|FIRST)[:\s]+([A-Z][A-Z\s']+)/i);
+    if(fnMatch) d.firstName = fnMatch[1].trim().split(/\s{2,}/)[0];
+  }
+
+  // Name from "2 LASTNAME" "1 FIRSTNAME" patterns (FL format uses numbered fields)
+  if(!d.lastName){
+    lines.forEach(function(l){
+      var m2 = l.match(/^2\s+([A-Z][A-Z'\-]+)/i);
+      if(m2) d.lastName = m2[1];
+      var m1 = l.match(/^1\s+([A-Z][A-Z'\-\s]+)/i);
+      if(m1 && !d.firstName) d.firstName = m1[1].trim().split(/\s+/)[0];
+    });
+  }
+
+  // Address: look for street number pattern
+  if(!d.address){
+    lines.forEach(function(l){
+      if(/^\d+\s+[A-Z]/i.test(l) && /\b(ST|AVE|BLVD|DR|RD|LN|CT|CIR|WAY|PL)\b/i.test(l)){
+        d.address = l;
+      }
+    });
+  }
+
+  // City/State/Zip from a line like "DEBARY, FL 32713" or "DEBARY FL 32713"
+  if(!d.city){
+    lines.forEach(function(l){
+      var csz = l.match(/([A-Z][A-Z\s]+?)[,\s]+([A-Z]{2})\s+(\d{5})/i);
+      if(csz){ d.city=csz[1].trim(); d.state=csz[2]; d.zip=csz[3]; }
+    });
+  }
+
+  // Capitalize names properly
+  function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():'';}
+  d.firstName = cap(d.firstName);
+  d.lastName = cap(d.lastName);
 
   return d;
 }
