@@ -624,6 +624,10 @@ canvas{display:none;}
       <!-- Employee Inventory View -->
       <div id="emp-inv-view" style="padding:0 14px 80px;display:none;">
         <input class="inv-search" id="emp-inv-search" placeholder="Search vehicles..." oninput="empInvFilter(this.value)" style="margin-bottom:10px;"/>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div id="emp-sync-st" style="font-size:13px;color:#555;"></div>
+          <button onclick="empSyncDeLand()" style="background:none;border:1px solid #1e1e1e;color:#888;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer;">⟳ Sync DeLand</button>
+        </div>
         <div id="emp-inv-list"></div>
       </div>
       </div>
@@ -1073,10 +1077,7 @@ canvas{display:none;}
           <div style="margin-bottom:12px;">
             <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
             <div class="sync-btns">
-              <button class="sync-btn" onclick="syncLocation('DeBary')">⟳ Sync DeBary</button>
-              <button class="sync-btn" onclick="syncLocation('DeLand')">⟳ Sync DeLand</button>
-            </div>
-            <div class="sync-btns" style="margin-top:8px;">
+              <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
               <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
@@ -3863,8 +3864,69 @@ async function syncLocation(loc){
   }catch(e){stEl.textContent='Sync failed: '+e.message;}
 }
 async function syncNow(){
-  await syncLocation('DeBary');
-  await syncLocation('DeLand');
+  var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+  var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
+  var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
+  stEl.textContent='Syncing inventory...';
+  try{
+    // Fetch both CSVs
+    var r=await fetch((S.syncUrl||DEBARY_URL)+'?t='+Date.now());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var debary=parseCSV(await r.text(),'DeBary');
+    var deland=[];
+    try{
+      var rDL=await fetch(DELAND_URL+'?t='+Date.now());
+      if(rDL.ok) deland=parseCSV(await rDL.text(),'DeLand');
+    }catch(e){console.log('DeLand CSV skipped:',e);}
+    // Merge — DeLand wins on same stock number
+    var delandStocks=new Set(deland.map(function(c){return c.stock;}));
+    var imp=deland.concat(debary.filter(function(c){return !delandStocks.has(c.stock);}));
+    if(!imp.length) throw new Error('No INSTOCK vehicles found');
+    var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+    var csvStocks=new Set(imp.map(function(c){return c.stock;}));
+    var existByStock={};var existByVin={};
+    S.inventory.forEach(function(c){if(c.stock)existByStock[c.stock]=c;if(c.vin)existByVin[c.vin]=c;});
+    var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[];
+    imp.forEach(function(c){
+      if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
+      var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
+      if(exist){
+        var patch={};
+        if(c.color&&c.color!==exist.color){exist.color=c.color;patch.color=c.color;}
+        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
+        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
+        if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
+        updated++;
+      } else {
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:c.location,photo:null});
+        added++;
+      }
+    });
+    if(toInsertSB.length){
+      stEl.textContent='Adding '+toInsertSB.length+' new cars...';
+      for(var i=0;i<toInsertSB.length;i+=50){
+        try{
+          var inserted=await sbPost('inventory',toInsertSB.slice(i,i+50));
+          if(Array.isArray(inserted)) inserted.forEach(function(row){S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});});
+        }catch(e){console.error('Insert error:',e);}
+      }
+    }
+    if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
+    // Remove cars no longer in either CSV
+    var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
+    var toRemoveDB=[];
+    S.inventory=S.inventory.filter(function(c){
+      if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
+      toRemoveDB.push(c.id);removed++;return false;
+    });
+    for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
+    localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
+    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
+    S.lastSync=Date.now();sv();
+    stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
+    tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
+    renderInv();
+  }catch(e){stEl.textContent='Sync failed: '+e.message;}
 }
 async function clearAllQueues(){
   if(!confirm('Clear ALL cars from ALL tabs?\n\nThis removes all active assignments and resets Detail / Photos / Parts queues.\n\nThis cannot be undone.')) return;
@@ -6132,27 +6194,36 @@ function empRenderInv(){
   var filter=_empInvFilter;
   var myLoc=me&&me.location?me.location:'DeBary';
   var items=(S.inventory||[]).filter(function(c){
-    if(c.location&&c.location.toLowerCase()!==myLoc.toLowerCase()) return false;
-    if(!c.location&&myLoc.toLowerCase()!=='debary') return false;
-    if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')).toLowerCase().includes(filter)) return false;
+    if((c.location||'DeBary').toLowerCase()!==myLoc.toLowerCase()) return false;
+    if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')+' '+(c.color||'')).toLowerCase().includes(filter)) return false;
     return true;
   }).sort(function(a,b){return b.id-a.id;});
+  var stEl=document.getElementById('emp-sync-st');
+  if(stEl&&!stEl.dataset.syncing) stEl.textContent=items.length+' vehicles · '+myLoc;
   list.innerHTML=items.map(function(car){
-    var ws=getWorkState(car.id);
-    var noteCount=(ws.notes&&ws.notes.length)||0;
-    var noteBadge=noteCount?'<span style="font-size:10px;background:rgba(100,210,255,.15);color:#64d2ff;border:1px solid rgba(100,210,255,.3);border-radius:4px;padding:1px 5px;font-weight:700;">'+noteCount+' note'+(noteCount===1?'':'s')+'</span>':'';
-    var thumb=car.photo?'<img style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var thumb=car.photo?'<img style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var meta=(car.stock||'')+(car.color?' · '+car.color:'')+(car.miles?' · '+(Number(car.miles)||0).toLocaleString()+' mi':'');
     return '<div onclick="empOpenCar('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">'
       +thumb
       +'<div style="flex:1;min-width:0;">'
       +'<div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>'
-      +'<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>'
-      +(noteBadge?'<div style="margin-top:4px;">'+noteBadge+'</div>':'')
+      +'<div style="font-size:11px;color:#555;margin-top:3px;">'+meta+'</div>'
       +'</div>'
       +'<div style="font-size:18px;color:#333;">›</div>'
       +'</div>';
   }).join('');
   if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
+}
+async function empSyncDeLand(){
+  var stEl=document.getElementById('emp-sync-st');
+  if(stEl){stEl.textContent='Syncing DeLand...';stEl.dataset.syncing='1';}
+  try{
+    await syncLocation('DeLand');
+    empRenderInv();
+    if(stEl){stEl.textContent='Synced!';stEl.dataset.syncing='';setTimeout(function(){empRenderInv();},2000);}
+  }catch(e){
+    if(stEl){stEl.textContent='Sync failed: '+e.message;stEl.dataset.syncing='';}
+  }
 }
 function empOpenCar(carId){
   _empCarId=carId;
