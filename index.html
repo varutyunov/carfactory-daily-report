@@ -8016,12 +8016,12 @@ async function dealSubmit() {
       total_collected: total,
       payments: JSON.stringify(payments),
       gps_serial: _dealData.gpsSerial || '',
-      pickup_payment: parseFloat(_dealData.pickupPayment) || null,
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: me ? me.location : 'DeBary',
       created_at: new Date().toISOString()
     };
+    if(_dealData.pickupPayment) record.pickup_payment = parseFloat(_dealData.pickupPayment);
 
     await sbPost('deals', record);
     dealShowStep(4);
