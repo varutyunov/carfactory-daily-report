@@ -905,24 +905,24 @@ canvas{display:none;}
         </div>
       </div><!-- /swipe-page-2 -->
 
-      <!-- FORMS VIEW OVERLAY -->
-      <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:#000;flex-direction:column;">
-        <div style="position:fixed;top:0;left:0;right:0;z-index:410;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-          <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;">&#8592;</button>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
-        </div>
-        <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-          <div style="padding:16px;">
-            <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:15px;margin-bottom:16px;outline:none;"/>
-            <div id="forms-list" style="display:flex;flex-direction:column;gap:12px;">
-              <div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       </div><!-- /swipe-container -->
     </div>
+
+<!-- FORMS VIEW OVERLAY -->
+<div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
+  </div>
+  <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;">
+      <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
+      <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- CAR ACTION SHEET -->
 <div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
@@ -7005,9 +7005,9 @@ var _formsViewingDetail = false;
 function formsBack() {
   if(_formsViewingDetail) {
     _formsViewingDetail = false;
-    // Restore the list view
+    document.getElementById('forms-header-title').textContent = 'FORMS';
     var body = document.getElementById('forms-body');
-    body.innerHTML = '<div style="padding:16px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:15px;margin-bottom:16px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:12px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
     loadForms();
   } else {
     closeFormsView();
@@ -7075,16 +7075,18 @@ function renderForms() {
     var hasID = !!first.id_photo_url;
     var hasSigned = !!first.signed_form_url;
 
-    html += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;cursor:pointer;" onclick="openFormDetail(' + first.id + ')">';
-    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
-    html += '<div style="font-size:16px;font-weight:700;color:#fff;flex:1;">' + (first.customer_name||'Unknown') + '</div>';
+    html += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);" onclick="openFormDetail(' + first.id + ')">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+    html += '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (first.customer_name||'Unknown') + '</div>';
     html += typeBadge;
     html += '</div>';
-    html += '<div style="font-size:13px;color:#888;margin-bottom:4px;">' + (first.vehicle_desc||'') + (first.stock ? ' · #' + first.stock : '') + '</div>';
-    html += '<div style="display:flex;gap:12px;font-size:12px;color:#555;">';
-    html += '<span>' + amtStr + '</span>';
+    html += '<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (first.vehicle_desc||'') + (first.stock ? ' &middot; #' + first.stock : '') + '</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">';
+    html += '<span style="font-size:16px;font-weight:700;color:#4ade80;">' + amtStr + '</span>';
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#555;">';
     html += '<span>' + dateStr + '</span>';
-    html += '<span>' + (hasID ? '🪪' : '') + (hasSigned ? ' 📄' : '') + '</span>';
+    if(hasID || hasSigned) html += '<span>' + (hasID ? '🪪' : '') + (hasSigned ? ' 📄' : '') + '</span>';
+    html += '</div>';
     html += '</div>';
     html += '</div>';
   });
@@ -7097,76 +7099,78 @@ function openFormDetail(id) {
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
 
+  document.getElementById('forms-header-title').textContent = dep.customer_name || 'Detail';
+
   var isFinance = dep.deal_type === 'finance';
-  var typeName = isFinance ? 'Finance' : 'Cash';
   var amtStr = dep.deposit_amount ? '$' + parseFloat(dep.deposit_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
   var balStr = dep.balance ? '$' + parseFloat(dep.balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
 
-  var html = '<div style="padding:16px;">';
-  html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">' + (dep.customer_name||'Unknown') + '</div>';
+  var html = '<div style="padding:16px 12px 40px;">';
+
+  // Type + date row
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
   html += isFinance
-    ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">FINANCE</span>'
-    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">CASH</span>';
-  html += '<span style="font-size:12px;color:#666;">' + (dep.deposit_date||'') + '</span>';
+    ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">FINANCE</span>'
+    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">CASH</span>';
+  html += '<span style="font-size:13px;color:#666;">' + (dep.deposit_date||'') + '</span>';
   html += '</div>';
 
   // Vehicle
-  html += '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;">';
-  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
-  html += '<div style="font-size:15px;font-weight:600;color:#fff;">' + (dep.vehicle_desc||'N/A') + '</div>';
-  if(dep.vin) html += '<div style="font-size:12px;color:#666;margin-top:2px;">VIN: ' + dep.vin + '</div>';
-  if(dep.stock) html += '<div style="font-size:12px;color:#666;">Stock: ' + dep.stock + '</div>';
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
+  html += '<div style="font-size:16px;font-weight:600;color:#fff;">' + (dep.vehicle_desc||'N/A') + '</div>';
+  if(dep.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: ' + dep.vin + '</div>';
+  if(dep.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: ' + dep.stock + '</div>';
   html += '</div>';
 
-  // Transaction
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">';
-  html += '<div style="background:#111;border-radius:12px;padding:14px;">';
+  // Transaction — deposit + balance side by side
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+  html += '<div style="background:#111;border-radius:14px;padding:16px;">';
   html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Deposit</div>';
-  html += '<div style="font-size:18px;font-weight:700;color:#4ade80;margin-top:4px;">' + amtStr + '</div>';
+  html += '<div style="font-size:20px;font-weight:700;color:#4ade80;margin-top:6px;">' + amtStr + '</div>';
   html += '</div>';
-  html += '<div style="background:#111;border-radius:12px;padding:14px;">';
+  html += '<div style="background:#111;border-radius:14px;padding:16px;">';
   html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">' + (isFinance ? 'Down Pmt Due' : 'Balance Due') + '</div>';
-  html += '<div style="font-size:18px;font-weight:700;color:#fff;margin-top:4px;">' + balStr + '</div>';
+  html += '<div style="font-size:20px;font-weight:700;color:#fff;margin-top:6px;">' + balStr + '</div>';
   html += '</div>';
   html += '</div>';
 
   if(dep.withdraw_until) {
-    html += '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;">';
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Vehicle Held Until</div>';
-    html += '<div style="font-size:15px;font-weight:600;color:#fff;margin-top:4px;">' + dep.withdraw_until + '</div>';
+    html += '<div style="font-size:16px;font-weight:600;color:#fff;margin-top:6px;">' + dep.withdraw_until + '</div>';
     html += '</div>';
   }
 
-  // Photos
+  // Documents
   if(dep.id_photo_url || dep.signed_form_url) {
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
     if(dep.id_photo_url) {
-      html += '<div style="background:#111;border-radius:12px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.id_photo_url + '\',\'_blank\')">';
-      html += '<img src="' + dep.id_photo_url + '" style="width:100%;height:120px;object-fit:cover;"/>';
-      html += '<div style="padding:8px;font-size:11px;color:#888;text-align:center;">Customer ID</div>';
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.id_photo_url + '\',\'_blank\')">';
+      html += '<img src="' + dep.id_photo_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Customer ID</div>';
       html += '</div>';
     }
     if(dep.signed_form_url) {
-      html += '<div style="background:#111;border-radius:12px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.signed_form_url + '\',\'_blank\')">';
-      html += '<img src="' + dep.signed_form_url + '" style="width:100%;height:120px;object-fit:cover;"/>';
-      html += '<div style="padding:8px;font-size:11px;color:#888;text-align:center;">Signed Form</div>';
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + dep.signed_form_url + '\',\'_blank\')">';
+      html += '<img src="' + dep.signed_form_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Signed Form</div>';
       html += '</div>';
     }
     html += '</div>';
   }
 
   // Meta
-  html += '<div style="margin-top:16px;font-size:11px;color:#444;">';
+  html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
   if(dep.created_by) html += 'Created by: ' + dep.created_by + '<br>';
-  if(dep.location) html += 'Location: ' + dep.location + '<br>';
+  if(dep.location) html += 'Location: ' + dep.location;
   html += '</div>';
 
   html += '</div>';
 
   var body = document.getElementById('forms-body');
-  body.innerHTML = '<div style="padding-top:0;">' + html + '</div>';
+  body.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════════════
