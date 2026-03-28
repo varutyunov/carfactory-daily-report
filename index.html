@@ -6690,6 +6690,10 @@ function _txInit() {
 <!-- ══════════════════════════════════════════════════════════════
      DEPOSIT FORM OVERLAY
      ══════════════════════════════════════════════════════════════ -->
+<style>
+.dep-spinner{width:20px;height:20px;border:3px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:dep-spin .8s linear infinite;flex-shrink:0;}
+@keyframes dep-spin{to{transform:rotate(360deg);}}
+</style>
 <div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column;">
 
   <!-- Back bar -->
@@ -7091,31 +7095,67 @@ function depPhotoTaken(input) {
   reader.onload = function(e) {
     preview.src = e.target.result;
     preview.style.display = 'block';
-
-    if(status) status.textContent = 'Reading license... (this takes a few seconds)';
+    // Store photo data URL so we can show it on manual entry screen as reference
+    _depData.photoDataUrl = e.target.result;
 
     if(typeof Tesseract === 'undefined') {
-      if(status) status.textContent = 'OCR not available. Use manual entry.';
+      if(status) status.innerHTML = 'OCR library did not load.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Continue to Manual Entry</button>';
       return;
     }
 
-    Tesseract.recognize(preview, 'eng').then(function(result) {
+    if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading license — downloading OCR engine...</div>';
+
+    // Timeout: if Tesseract takes more than 30 seconds, offer manual entry
+    var timedOut = false;
+    var ocrTimeout = setTimeout(function() {
+      timedOut = true;
+      if(status) status.innerHTML = 'Taking too long to read.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Continue to Manual Entry</button>';
+    }, 30000);
+
+    Tesseract.recognize(preview, 'eng', {
+      logger: function(m) {
+        if(timedOut) return;
+        if(m.status === 'loading tesseract core') {
+          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Loading OCR engine...</div>';
+        } else if(m.status === 'initializing tesseract') {
+          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Initializing...</div>';
+        } else if(m.status === 'loading language traineddata') {
+          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Downloading language data... ' + Math.round((m.progress||0)*100) + '%</div>';
+        } else if(m.status === 'recognizing text') {
+          if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading text... ' + Math.round((m.progress||0)*100) + '%</div>';
+        }
+        console.log('Tesseract:', m.status, m.progress);
+      }
+    }).then(function(result) {
+      clearTimeout(ocrTimeout);
+      if(timedOut) return;
       var text = result.data.text;
       console.log('OCR raw text:', text);
       var parsed = parseOCRText(text);
       if(parsed && (parsed.firstName || parsed.lastName)) {
         _depData.customer = parsed;
         depFillCustomerFields(parsed);
-        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ') + '. Review on next screen.';
-        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1500);
+        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
+        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1200);
       } else {
-        if(status) status.innerHTML = 'Could not parse license automatically.<br><br><span style="font-size:11px;color:#555;">OCR text: ' + text.substring(0,200).replace(/\n/g,'<br>') + '</span><br><br>Use manual entry or try again with better lighting.';
+        if(status) status.innerHTML = 'Could not read the name from this photo.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Info Manually</button><br><br><span style="font-size:11px;color:#444;">OCR saw: ' + (text||'(nothing)').substring(0,150).replace(/</g,'&lt;').replace(/\n/g,' ') + '</span>';
       }
     }).catch(function(e) {
-      if(status) status.textContent = 'OCR error: ' + e.message;
+      clearTimeout(ocrTimeout);
+      if(timedOut) return;
+      console.error('Tesseract error:', e);
+      if(status) status.innerHTML = 'OCR error: ' + (e.message||e) + '<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Info Manually</button>';
     });
   };
   reader.readAsDataURL(file);
+}
+
+// Fall through from photo to manual entry, keeping photo as reference
+function depPhotoToManual() {
+  _depData.customer = {};
+  depFillCustomerFields({});
+  depShowStep(2);
+  depLoadCarList();
 }
 
 // ── AAMVA PDF417 PARSER ──────────────────────────────────────
