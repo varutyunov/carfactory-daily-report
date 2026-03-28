@@ -3785,7 +3785,7 @@ async function importFromReport(){
 
 async function syncNow(){
   var MASTER_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
-  var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeLand.csv';
+  var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
   var url=S.syncUrl||MASTER_URL;
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
   stEl.textContent='Syncing with CSV + Supabase...';
