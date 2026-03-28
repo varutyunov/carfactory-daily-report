@@ -6704,29 +6704,44 @@ function _txInit() {
     <!-- ── STEP 1: SCAN DL ── -->
     <div id="dep-step1" style="padding:20px 16px 100px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 4 — Customer ID</div>
-      <div style="font-size:14px;color:#666;margin-bottom:20px;">Scan the barcode on the back of the driver's license</div>
+      <div style="font-size:14px;color:#666;margin-bottom:20px;">Choose how to enter customer info</div>
 
-      <!-- Camera view container -->
-      <div id="dep-camera-wrap" style="position:relative;width:100%;max-width:420px;margin:0 auto 16px;border-radius:16px;overflow:hidden;background:#0d0d0d;border:1px solid #222;">
+      <!-- Option buttons (shown first) -->
+      <div id="dep-choose" style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
+        <button onclick="depStartBarcode()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
+          <div style="font-size:28px;">📊</div>
+          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Scan Barcode</div><div style="font-size:12px;color:#555;margin-top:2px;">Point camera at the barcode on the back of the license</div></div>
+        </button>
+        <button onclick="depStartPhoto()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
+          <div style="font-size:28px;">📷</div>
+          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Take Photo</div><div style="font-size:12px;color:#555;margin-top:2px;">Photograph the front of the license to read it</div></div>
+        </button>
+        <button onclick="depositManualEntry()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
+          <div style="font-size:28px;">✍️</div>
+          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Enter Manually</div><div style="font-size:12px;color:#555;margin-top:2px;">Type the customer info by hand</div></div>
+        </button>
+      </div>
+
+      <!-- Barcode scanner view (hidden until chosen) -->
+      <div id="dep-camera-wrap" style="display:none;position:relative;width:100%;max-width:420px;margin:0 auto 16px;border-radius:16px;overflow:hidden;background:#0d0d0d;border:1px solid #222;">
         <video id="dep-video" style="width:100%;display:block;" autoplay playsinline muted></video>
-        <div id="dep-scan-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:80%;height:60%;border:2px solid #60a5fa;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
         </div>
         <div id="dep-scan-status" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:#60a5fa;background:rgba(0,0,0,0.7);padding:6px;">Scanning for barcode...</div>
+        <button onclick="depStopCamera();depShowChoose()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
       </div>
 
-      <!-- OCR fallback photo view -->
+      <!-- Photo capture view (hidden until chosen) -->
       <div id="dep-photo-wrap" style="display:none;width:100%;max-width:420px;margin:0 auto 16px;">
-        <div style="font-size:13px;color:#888;margin-bottom:8px;text-align:center;">No barcode found. Take a photo of the DL for OCR:</div>
-        <div style="text-align:center;margin-bottom:12px;">
-          <button onclick="depCapturePhoto()" style="background:#1d4ed8;color:#fff;border:none;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;">Take Photo</button>
-        </div>
-        <canvas id="dep-canvas" style="display:none;width:100%;border-radius:10px;"></canvas>
+        <div style="font-size:13px;color:#888;margin-bottom:12px;text-align:center;">Take a photo of the front of the license</div>
+        <label style="display:block;text-align:center;margin-bottom:12px;cursor:pointer;">
+          <div style="display:inline-block;background:#1d4ed8;color:#fff;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700;">📷 Open Camera</div>
+          <input type="file" accept="image/*" capture="environment" onchange="depPhotoTaken(this)" style="display:none;"/>
+        </label>
+        <img id="dep-photo-preview" style="display:none;width:100%;border-radius:10px;margin-bottom:8px;"/>
         <div id="dep-ocr-status" style="text-align:center;font-size:13px;color:#888;margin-top:8px;"></div>
-      </div>
-
-      <div style="max-width:420px;margin:0 auto;">
-        <button onclick="depositManualEntry()" style="width:100%;padding:14px;background:#111;color:#60a5fa;border:1px solid #1d4ed8;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px;">Enter Manually</button>
+        <button onclick="depShowChoose()" style="width:100%;padding:12px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:14px;cursor:pointer;margin-top:12px;">← Back</button>
       </div>
     </div>
 
@@ -6950,54 +6965,59 @@ function depShowStep(n) {
 
 function startDLScan() {
   depShowStep(1);
-  var cameraWrap = document.getElementById('dep-camera-wrap');
-  var photoWrap = document.getElementById('dep-photo-wrap');
-  cameraWrap.style.display = 'block';
-  photoWrap.style.display = 'none';
-  document.getElementById('dep-scan-status').textContent = 'Scanning for barcode...';
+  depShowChoose();
+}
 
-  // Try ZXing PDF417
+function depShowChoose() {
+  depStopCamera();
+  document.getElementById('dep-choose').style.display = 'flex';
+  document.getElementById('dep-camera-wrap').style.display = 'none';
+  document.getElementById('dep-photo-wrap').style.display = 'none';
+}
+
+function depStartBarcode() {
+  document.getElementById('dep-choose').style.display = 'none';
+  document.getElementById('dep-camera-wrap').style.display = 'block';
+  document.getElementById('dep-photo-wrap').style.display = 'none';
+  document.getElementById('dep-scan-status').textContent = 'Point at barcode on back of license...';
+
   if(typeof ZXing === 'undefined') {
-    depSetStatus('ZXing not loaded — falling back to OCR');
-    depFallbackToPhoto();
+    depSetStatus('Barcode scanner not available');
+    setTimeout(depShowChoose, 2000);
     return;
   }
 
   try {
-    var hints = new Map();
-    _depCodeReader = new ZXing.BrowserMultiFormatReader(hints);
-
+    _depCodeReader = new ZXing.BrowserMultiFormatReader();
     _depCodeReader.decodeFromVideoDevice(null, 'dep-video', function(result, err) {
       if(result) {
-        depStopCamera();
         var text = result.getText();
         var parsed = parseAAMVA(text);
-        if(parsed && parsed.dlNumber) {
+        depStopCamera();
+        if(parsed && (parsed.dlNumber || parsed.firstName)) {
           _depData.customer = parsed;
           depFillCustomerFields(parsed);
           depShowStep(2);
           depLoadCarList();
         } else {
-          depSetStatus('Barcode found but could not parse. Try manual entry.');
+          depSetStatus('Barcode found but could not parse. Try photo or manual.');
+          setTimeout(depShowChoose, 2000);
         }
       }
     });
-
-    // Capture stream reference for later cleanup
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
-      _depCameraStream = stream;
-    }).catch(function(){});
-
-    // Auto-fallback after 8 seconds
-    _depScanTimer = setTimeout(function() {
-      depStopCamera();
-      depFallbackToPhoto();
-    }, 8000);
-
   } catch(e) {
     depSetStatus('Camera error: ' + e.message);
-    depFallbackToPhoto();
+    setTimeout(depShowChoose, 2000);
   }
+}
+
+function depStartPhoto() {
+  document.getElementById('dep-choose').style.display = 'none';
+  document.getElementById('dep-camera-wrap').style.display = 'none';
+  document.getElementById('dep-photo-wrap').style.display = 'block';
+  document.getElementById('dep-ocr-status').textContent = '';
+  var preview = document.getElementById('dep-photo-preview');
+  if(preview) { preview.style.display = 'none'; preview.src = ''; }
 }
 
 function depSetStatus(msg) {
@@ -7011,12 +7031,12 @@ function depStopCamera() {
     try { _depCodeReader.reset(); } catch(e) {}
     _depCodeReader = null;
   }
-  if(_depCameraStream) {
-    _depCameraStream.getTracks().forEach(function(t){ t.stop(); });
-    _depCameraStream = null;
-  }
+  // Stop any streams on the video element
   var vid = document.getElementById('dep-video');
-  if(vid) { vid.srcObject = null; }
+  if(vid && vid.srcObject) {
+    vid.srcObject.getTracks().forEach(function(t){ t.stop(); });
+    vid.srcObject = null;
+  }
 }
 
 function depFallbackToPhoto() {
@@ -7026,64 +7046,41 @@ function depFallbackToPhoto() {
   if(photoWrap) photoWrap.style.display = 'block';
 }
 
-function depCapturePhoto() {
-  var canvas = document.getElementById('dep-canvas');
-  var video = document.getElementById('dep-video');
+function depPhotoTaken(input) {
+  if(!input.files || !input.files[0]) return;
+  var file = input.files[0];
   var status = document.getElementById('dep-ocr-status');
+  var preview = document.getElementById('dep-photo-preview');
 
-  // Try to capture from video if still alive, else open camera for photo
-  if(!video.srcObject || !_depCameraStream) {
-    // Start camera stream for photo capture
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
-      _depCameraStream = stream;
-      video.srcObject = stream;
-      video.play();
-      video.style.display = 'block';
-      var photoWrap = document.getElementById('dep-photo-wrap');
-      if(photoWrap) {
-        // Show the video feed briefly for user to position
-        var captureBtn = photoWrap.querySelector('button');
-        if(captureBtn) captureBtn.textContent = 'Capture Now';
-        captureBtn.onclick = function() { depDoOCR(canvas, video, status); };
-      }
-    }).catch(function(e){
-      if(status) status.textContent = 'Camera not available: ' + e.message;
-    });
-    return;
-  }
-  depDoOCR(canvas, video, status);
-}
+  // Show preview
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    preview.src = e.target.result;
+    preview.style.display = 'block';
 
-function depDoOCR(canvas, video, status) {
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  var ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  canvas.style.display = 'block';
-  depStopCamera();
-  video.style.display = 'none';
+    if(status) status.textContent = 'Reading license... (this takes a few seconds)';
 
-  if(status) status.textContent = 'Running OCR...';
-
-  if(typeof Tesseract === 'undefined') {
-    if(status) status.textContent = 'Tesseract not loaded. Use manual entry.';
-    return;
-  }
-
-  Tesseract.recognize(canvas, 'eng').then(function(result) {
-    var text = result.data.text;
-    var parsed = parseOCRText(text);
-    if(parsed && (parsed.firstName || parsed.lastName)) {
-      _depData.customer = parsed;
-      depFillCustomerFields(parsed);
-      depShowStep(2);
-      depLoadCarList();
-    } else {
-      if(status) status.textContent = 'OCR done but could not parse fields. Try manual entry.';
+    if(typeof Tesseract === 'undefined') {
+      if(status) status.textContent = 'OCR not available. Use manual entry.';
+      return;
     }
-  }).catch(function(e) {
-    if(status) status.textContent = 'OCR error: ' + e.message;
-  });
+
+    Tesseract.recognize(preview, 'eng').then(function(result) {
+      var text = result.data.text;
+      var parsed = parseOCRText(text);
+      if(parsed && (parsed.firstName || parsed.lastName)) {
+        _depData.customer = parsed;
+        depFillCustomerFields(parsed);
+        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
+        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1000);
+      } else {
+        if(status) status.textContent = 'Could not read the license. Try again or enter manually.';
+      }
+    }).catch(function(e) {
+      if(status) status.textContent = 'OCR error: ' + e.message;
+    });
+  };
+  reader.readAsDataURL(file);
 }
 
 // ── AAMVA PDF417 PARSER ──────────────────────────────────────
