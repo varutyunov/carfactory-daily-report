@@ -7982,7 +7982,7 @@ function dealRemovePhoto(idx) {
 }
 
 async function dealSubmit() {
-  var btn = event && event.target;
+  var btn = document.querySelector('#deal-step3 button[onclick="dealSubmit()"]');
   if(btn) { btn.textContent = 'Submitting...'; btn.disabled = true; }
 
   try {
@@ -7994,10 +7994,15 @@ async function dealSubmit() {
     var photoUrls = [];
     var validPhotos = _dealPhotos.filter(function(f){ return f !== null; });
     for(var i = 0; i < validPhotos.length; i++) {
-      var ext = validPhotos[i].name.split('.').pop() || 'jpg';
-      var path = 'deals/' + ts + '_' + i + '.' + ext;
-      var url = await sbUpload(path, validPhotos[i]);
-      photoUrls.push(url);
+      try {
+        var ext = validPhotos[i].name.split('.').pop() || 'jpg';
+        var path = 'deals/' + ts + '_' + i + '.' + ext;
+        var url = await sbUpload(path, validPhotos[i]);
+        photoUrls.push(url);
+      } catch(photoErr) {
+        console.error('Photo upload failed:', photoErr);
+        // Continue — don't block the deal over a photo
+      }
     }
 
     // Build payments JSON
