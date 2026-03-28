@@ -7468,92 +7468,75 @@ function depositPrint() {
 }
 
 function depositEmail() {
-  var d = _depData.preview || {};
-  var formEl = document.getElementById('dep-print-form');
-  if(!formEl) { alert('Form not found.'); return; }
+  try {
+    var d = _depData.preview || {};
+    var formEl = document.getElementById('dep-print-form');
+    if(!formEl) { alert('Form not found.'); return; }
 
-  // Show a loading state
-  var btn = event && event.target;
-  var origText = '';
-  if(btn) { origText = btn.textContent; btn.textContent = 'Generating PDF...'; btn.disabled = true; }
+    // Check libraries loaded
+    if(typeof html2canvas === 'undefined') { alert('PDF library not loaded. Check internet connection and try again.'); return; }
+    if(!window.jspdf || !window.jspdf.jsPDF) { alert('PDF library (jsPDF) not loaded. Check internet connection and try again.'); return; }
 
-  // Convert logo to base64 first to avoid CORS issues
-  var logoImg = formEl.querySelector('img');
-  var logoPromise = Promise.resolve();
-  if(logoImg && logoImg.src && logoImg.src.indexOf('data:') !== 0) {
-    logoPromise = new Promise(function(resolve) {
-      var c = document.createElement('canvas');
-      var img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = function() {
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        c.getContext('2d').drawImage(img, 0, 0);
-        try { logoImg.src = c.toDataURL('image/png'); } catch(e) {}
-        resolve();
-      };
-      img.onerror = function() { resolve(); };
-      img.src = logoImg.src;
+    // Show loading state
+    var btn = event && event.target;
+    var origText = '';
+    if(btn) { origText = btn.textContent; btn.textContent = 'Generating PDF...'; btn.disabled = true; }
+    function resetBtn() { if(btn) { btn.textContent = origText; btn.disabled = false; } }
+
+    // Remove logo temporarily to avoid CORS taint, we'll skip it in the PDF
+    var logoImg = formEl.querySelector('img');
+    var logoWasHidden = false;
+    if(logoImg) { logoImg.style.display = 'none'; logoWasHidden = true; }
+
+    html2canvas(formEl, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: false,
+      allowTaint: false
+    }).then(function(canvas) {
+      // Restore logo
+      if(logoWasHidden && logoImg) logoImg.style.display = '';
+
+      try {
+        var jsPDF = window.jspdf.jsPDF;
+        var imgData = canvas.toDataURL('image/jpeg', 0.92);
+        var pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
+        var pageW = 8.5;
+        var imgW = pageW;
+        var imgH = (canvas.height * pageW) / canvas.width;
+        var yOffset = imgH < 11 ? (11 - imgH) / 2 : 0;
+        pdf.addImage(imgData, 'JPEG', 0, yOffset, imgW, imgH);
+
+        var fileName = 'Deposit_' + (d.fullName||'Form').replace(/[^a-zA-Z0-9]/g,'_') + '.pdf';
+        var pdfBlob = pdf.output('blob');
+        var pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+        // Mobile: use share sheet
+        if(navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          navigator.share({
+            files: [pdfFile]
+          }).catch(function(){
+            pdf.save(fileName);
+          }).finally(resetBtn);
+        } else {
+          // Desktop: download
+          pdf.save(fileName);
+          resetBtn();
+        }
+      } catch(e2) {
+        if(logoWasHidden && logoImg) logoImg.style.display = '';
+        alert('PDF build error: ' + (e2.message||e2));
+        resetBtn();
+      }
+    }).catch(function(err) {
+      if(logoWasHidden && logoImg) logoImg.style.display = '';
+      alert('Canvas error: ' + (err.message||err));
+      resetBtn();
     });
+  } catch(e) {
+    alert('Unexpected error: ' + (e.message||e));
   }
-
-  logoPromise.then(function() {
-  // Render the form to canvas, then to PDF
-  html2canvas(formEl, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: '#ffffff',
-    logging: false
-  }).then(function(canvas) {
-    var jsPDF = window.jspdf.jsPDF;
-    var imgData = canvas.toDataURL('image/jpeg', 0.95);
-
-    // Letter size: 8.5 x 11 inches
-    var pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
-    var pageW = 8.5;
-    var pageH = 11;
-    var imgW = pageW;
-    var imgH = (canvas.height * pageW) / canvas.width;
-    // Center vertically if shorter than page
-    var yOffset = imgH < pageH ? (pageH - imgH) / 2 : 0;
-    pdf.addImage(imgData, 'JPEG', 0, yOffset, imgW, imgH);
-
-    var fileName = 'Deposit_' + (d.fullName||'Form').replace(/\s+/g,'_') + '.pdf';
-    var pdfBlob = pdf.output('blob');
-    var pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-
-    // Try Web Share API (works on mobile — lets user pick email, Messages, etc.)
-    if(navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      navigator.share({
-        title: 'Partial Payment — ' + (d.fullName||''),
-        text: 'Non-Refundable Partial Payment form for ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''),
-        files: [pdfFile]
-      }).then(function(){
-        if(btn) { btn.textContent = origText; btn.disabled = false; }
-      }).catch(function(){
-        // User cancelled share — fall back to download
-        depositDownloadPDF(pdf, fileName);
-        if(btn) { btn.textContent = origText; btn.disabled = false; }
-      });
-    } else {
-      // Desktop fallback: download PDF then open mailto
-      depositDownloadPDF(pdf, fileName);
-      var subject = encodeURIComponent('Partial Payment — ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''));
-      var body = encodeURIComponent('Please see the attached Non-Refundable Partial Payment form for ' + (d.fullName||'') + '.\n\nVehicle: ' + (d.vehicleStr||''));
-      setTimeout(function(){
-        window.location.href = 'mailto:carfactorydebaryfl@gmail.com?subject='+subject+'&body='+body;
-      }, 500);
-      if(btn) { btn.textContent = origText; btn.disabled = false; }
-    }
-  }).catch(function(err) {
-    alert('Error generating PDF: ' + (err.message||err));
-    if(btn) { btn.textContent = origText; btn.disabled = false; }
-  });
-  }); // end logoPromise
-}
-
-function depositDownloadPDF(pdf, fileName) {
-  pdf.save(fileName);
 }
 </script>
 
