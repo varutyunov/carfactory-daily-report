@@ -3793,7 +3793,7 @@ async function syncNow(){
     var r=await fetch(url+'?t='+Date.now());
     if(!r.ok) throw new Error('HTTP '+r.status);
     var csv=await r.text();
-    var imp=parseCSV(csv,'DeBary');
+    var imp=parseCSV(csv,null); // uses lotno: 2=DeLand, else DeBary
     // Also fetch DeLand CSV if not using a custom sync URL
     if(!S.syncUrl){
       try{

@@ -67,7 +67,7 @@ function parseCsv(csvPath, forceLocation) {
 
 async function main() {
   // Parse both CSV files
-  const debary = parseCsv('InventoryMaster.csv', 'DeBary');
+  const debary = parseCsv('InventoryMaster.csv', null); // uses lotno: 2=DeLand, else DeBary
   const deland = fs.existsSync('InventoryMasterDeLand.csv')
     ? parseCsv('InventoryMasterDeLand.csv', 'DeLand')
     : { cars: [], stocks: new Set() };
