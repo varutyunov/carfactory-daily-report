@@ -6706,47 +6706,33 @@ function _txInit() {
   <!-- Step content area -->
   <div id="deposit-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
-    <!-- ── STEP 1: SCAN DL ── -->
+    <!-- ── STEP 1: CUSTOMER ID ── -->
     <div id="dep-step1" style="padding:20px 16px 100px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 4 — Customer ID</div>
-      <div style="font-size:14px;color:#666;margin-bottom:20px;">Choose how to enter customer info</div>
+      <div style="font-size:14px;color:#666;margin-bottom:20px;">Take a photo of the customer's ID or enter info manually</div>
 
-      <!-- Option buttons (shown first) -->
+      <!-- Option buttons -->
       <div id="dep-choose" style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
-        <button onclick="depStartBarcode()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
-          <div style="font-size:28px;">📊</div>
-          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Scan Barcode</div><div style="font-size:12px;color:#555;margin-top:2px;">Point camera at the barcode on the back of the license</div></div>
-        </button>
-        <button onclick="depStartPhoto()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
+        <label style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin:0;">
           <div style="font-size:28px;">📷</div>
-          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Take Photo</div><div style="font-size:12px;color:#555;margin-top:2px;">Photograph the front of the license to read it</div></div>
-        </button>
+          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Take Photo of ID</div><div style="font-size:12px;color:#555;margin-top:2px;">Photograph the customer's driver license</div></div>
+          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
+        </label>
         <button onclick="depositManualEntry()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
           <div style="font-size:28px;">✍️</div>
-          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Enter Manually</div><div style="font-size:12px;color:#555;margin-top:2px;">Type the customer info by hand</div></div>
+          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Enter Manually</div><div style="font-size:12px;color:#555;margin-top:2px;">Type the customer name by hand</div></div>
         </button>
       </div>
 
-      <!-- Barcode scanner view (hidden until chosen) -->
-      <div id="dep-camera-wrap" style="display:none;position:relative;width:100%;max-width:420px;margin:0 auto 16px;border-radius:16px;overflow:hidden;background:#0d0d0d;border:1px solid #222;">
-        <video id="dep-video" style="width:100%;display:block;" autoplay playsinline muted></video>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-          <div style="width:80%;height:60%;border:2px solid #60a5fa;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
-        </div>
-        <div id="dep-scan-status" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:#60a5fa;background:rgba(0,0,0,0.7);padding:6px;">Scanning for barcode...</div>
-        <button onclick="depStopCamera();depShowChoose()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
-      </div>
-
-      <!-- Photo capture view (hidden until chosen) -->
-      <div id="dep-photo-wrap" style="display:none;width:100%;max-width:420px;margin:0 auto 16px;">
-        <div style="font-size:13px;color:#888;margin-bottom:12px;text-align:center;">Take a photo of the front of the license</div>
-        <label style="display:block;text-align:center;margin-bottom:12px;cursor:pointer;">
-          <div style="display:inline-block;background:#1d4ed8;color:#fff;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700;">📷 Open Camera</div>
-          <input type="file" accept="image/*" capture="environment" onchange="depPhotoTaken(this)" style="display:none;"/>
+      <!-- Photo preview after taking -->
+      <div id="dep-id-preview-wrap" style="display:none;width:100%;max-width:420px;margin:20px auto 0;">
+        <img id="dep-id-preview" style="width:100%;border-radius:10px;margin-bottom:12px;"/>
+        <div style="text-align:center;color:#4ade80;font-weight:600;margin-bottom:12px;">ID photo saved</div>
+        <button onclick="depIDPhotoDone()" style="width:100%;padding:16px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Select Vehicle</button>
+        <label style="display:block;text-align:center;margin-top:10px;cursor:pointer;color:#888;font-size:13px;">
+          Retake Photo
+          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
         </label>
-        <img id="dep-photo-preview" style="display:none;width:100%;border-radius:10px;margin-bottom:8px;"/>
-        <div id="dep-ocr-status" style="text-align:center;font-size:13px;color:#888;margin-top:8px;"></div>
-        <button onclick="depShowChoose()" style="width:100%;padding:12px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:14px;cursor:pointer;margin-top:12px;">← Back</button>
       </div>
     </div>
 
@@ -6901,6 +6887,24 @@ function _txInit() {
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Print / Save PDF</button>
         <button onclick="depositEmail()" style="width:100%;padding:15px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Email to Dealership</button>
+
+        <!-- Upload signed form -->
+        <div style="border-top:1px solid #222;margin-top:8px;padding-top:16px;">
+          <div style="font-size:12px;color:#666;text-align:center;margin-bottom:10px;">After printing and signing, scan the signed form back in:</div>
+          <label id="dep-signed-label" style="display:block;width:100%;padding:15px;background:#0d0d0d;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;text-align:center;color:#fff;">
+            📄 Upload Signed Form
+            <input type="file" accept="image/*" capture="environment" onchange="depSignedFormTaken(this)" style="display:none;"/>
+          </label>
+          <div id="dep-signed-preview-wrap" style="display:none;margin-top:12px;">
+            <img id="dep-signed-preview" style="width:100%;border-radius:10px;margin-bottom:8px;"/>
+            <div style="text-align:center;color:#4ade80;font-weight:600;font-size:13px;">Signed form captured</div>
+          </div>
+        </div>
+
+        <!-- Save deposit record -->
+        <button id="dep-save-btn" onclick="depositSave()" style="width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:8px;">Save Deposit Record</button>
+        <div id="dep-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
+
         <button onclick="closeDepositForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Done</button>
       </div>
     </div>
@@ -6929,24 +6933,29 @@ function _txInit() {
 // DEPOSIT FORM LOGIC
 // ══════════════════════════════════════════════════════════════
 
-var _depData = {};  // stores scanned/entered customer + car data
-var _depScanTimer = null;
-var _depCodeReader = null;
-var _depCameraStream = null;
+var _depData = {};  // stores customer + car + photo data
 
 function openDepositForm() {
   _depData = {};
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'flex';
-  // hide top bar
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
-  // show step1
   depShowStep(1);
-  startDLScan();
+  // Reset step 1 UI
+  var choose = document.getElementById('dep-choose');
+  var previewWrap = document.getElementById('dep-id-preview-wrap');
+  if(choose) choose.style.display = 'flex';
+  if(previewWrap) previewWrap.style.display = 'none';
+  // Reset step 4 upload UI
+  var signedWrap = document.getElementById('dep-signed-preview-wrap');
+  if(signedWrap) signedWrap.style.display = 'none';
+  var signedLabel = document.getElementById('dep-signed-label');
+  if(signedLabel) signedLabel.style.display = 'block';
+  var saveStatus = document.getElementById('dep-save-status');
+  if(saveStatus) saveStatus.textContent = '';
 }
 
 function closeDepositForm() {
-  depStopCamera();
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'none';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
@@ -6957,374 +6966,107 @@ function depShowStep(n) {
     var el = document.getElementById('dep-step'+i);
     if(el) el.style.display = (i===n) ? 'block' : 'none';
   });
-  var titles = {1:'SCAN ID',2:'SELECT VEHICLE',3:'COMPLETE FORM',4:'PREVIEW & SEND'};
+  var titles = {1:'CUSTOMER ID',2:'SELECT VEHICLE',3:'COMPLETE FORM',4:'PREVIEW & SEND'};
   var titleEl = document.getElementById('deposit-bar-title');
   if(titleEl) titleEl.textContent = titles[n] || 'DEPOSIT FORM';
 }
 
-// ── STEP 1: SCAN DL ──────────────────────────────────────────
+// ── STEP 1: ID PHOTO ──────────────────────────────────────────
 
-function startDLScan() {
-  depShowStep(1);
-  depShowChoose();
-}
-
-function depShowChoose() {
-  depStopCamera();
-  document.getElementById('dep-choose').style.display = 'flex';
-  document.getElementById('dep-camera-wrap').style.display = 'none';
-  document.getElementById('dep-photo-wrap').style.display = 'none';
-}
-
-function depStartBarcode() {
-  document.getElementById('dep-choose').style.display = 'none';
-  document.getElementById('dep-camera-wrap').style.display = 'block';
-  document.getElementById('dep-photo-wrap').style.display = 'none';
-  document.getElementById('dep-scan-status').textContent = 'Starting camera...';
-
-  if(typeof ZXing === 'undefined') {
-    depSetStatus('Barcode scanner library not loaded. Use Photo or Manual instead.');
-    setTimeout(depShowChoose, 3000);
-    return;
-  }
-
-  try {
-    var hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.PDF_417]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    _depCodeReader = new ZXing.BrowserMultiFormatReader(hints);
-
-    // Use listVideoInputDevices first to pick back camera
-    _depCodeReader.listVideoInputDevices().then(function(devices) {
-      console.log('Camera devices found:', devices.length, devices.map(function(d){return d.label;}));
-      if(!devices.length) {
-        depSetStatus('No camera found on this device.');
-        setTimeout(depShowChoose, 2000);
-        return;
-      }
-      // Prefer back/rear camera
-      var backCam = devices.find(function(d){ return /back|rear|environment/i.test(d.label); });
-      var deviceId = backCam ? backCam.deviceId : devices[devices.length - 1].deviceId;
-
-      depSetStatus('Point at barcode on back of license...');
-
-      _depCodeReader.decodeFromVideoDevice(deviceId, 'dep-video', function(result, err) {
-        if(result) {
-          var text = result.getText();
-          console.log('Barcode scanned, length:', text.length);
-          var parsed = parseAAMVA(text);
-          depStopCamera();
-          if(parsed && (parsed.dlNumber || parsed.firstName)) {
-            _depData.customer = parsed;
-            depFillCustomerFields(parsed);
-            depShowStep(2);
-            depLoadCarList();
-          } else {
-            depSetStatus('Barcode found but could not parse. Try photo or manual.');
-            setTimeout(depShowChoose, 2000);
-          }
-        }
-        if(err && !(err instanceof ZXing.NotFoundException)) {
-          console.error('ZXing error:', err);
-        }
-      });
-
-      // 30-second timeout — if nothing scanned, tell user
-      _depScanTimer = setTimeout(function() {
-        depSetStatus('No barcode detected after 30 seconds. Try photo or manual entry.');
-        setTimeout(function(){ depStopCamera(); depShowChoose(); }, 2500);
-      }, 30000);
-
-    }).catch(function(e) {
-      console.error('Camera list error:', e);
-      depSetStatus('Camera access denied or not available: ' + e.message);
-      setTimeout(depShowChoose, 3000);
-    });
-  } catch(e) {
-    depSetStatus('Camera error: ' + e.message);
-    setTimeout(depShowChoose, 2000);
-  }
-}
-
-function depStartPhoto() {
-  document.getElementById('dep-choose').style.display = 'none';
-  document.getElementById('dep-camera-wrap').style.display = 'none';
-  document.getElementById('dep-photo-wrap').style.display = 'block';
-  document.getElementById('dep-ocr-status').textContent = '';
-  var preview = document.getElementById('dep-photo-preview');
-  if(preview) { preview.style.display = 'none'; preview.src = ''; }
-}
-
-function depSetStatus(msg) {
-  var el = document.getElementById('dep-scan-status');
-  if(el) el.textContent = msg;
-}
-
-function depStopCamera() {
-  if(_depScanTimer) { clearTimeout(_depScanTimer); _depScanTimer = null; }
-  if(_depCodeReader) {
-    try { _depCodeReader.reset(); } catch(e) {}
-    _depCodeReader = null;
-  }
-  // Stop any streams on the video element
-  var vid = document.getElementById('dep-video');
-  if(vid && vid.srcObject) {
-    vid.srcObject.getTracks().forEach(function(t){ t.stop(); });
-    vid.srcObject = null;
-  }
-}
-
-function depFallbackToPhoto() {
-  var cameraWrap = document.getElementById('dep-camera-wrap');
-  var photoWrap = document.getElementById('dep-photo-wrap');
-  if(cameraWrap) cameraWrap.style.display = 'none';
-  if(photoWrap) photoWrap.style.display = 'block';
-}
-
-function depPhotoTaken(input) {
+function depIDPhotoTaken(input) {
   if(!input.files || !input.files[0]) return;
   var file = input.files[0];
-  var status = document.getElementById('dep-ocr-status');
-  var preview = document.getElementById('dep-photo-preview');
-
-  // Show preview
+  _depData.idPhotoFile = file;
   var reader = new FileReader();
   reader.onload = function(e) {
-    preview.src = e.target.result;
-    preview.style.display = 'block';
-    // Store photo data URL so we can show it on manual entry screen as reference
-    _depData.photoDataUrl = e.target.result;
-
-    var apiKey = getAiKey();
-    if(!apiKey) {
-      if(status) status.innerHTML = '<div style="margin-bottom:10px;">API key needed to read license photos.</div>' +
-        '<div style="margin-bottom:10px;font-size:12px;color:#666;">Paste your <code style="color:#60a5fa;">sk-ant-...</code> key below:</div>' +
-        '<input id="dep-key-input" type="text" placeholder="sk-ant-..." style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:14px;margin-bottom:10px;outline:none;" />' +
-        '<button onclick="depSaveKeyAndRetry()" style="width:100%;background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">Save & Read License</button>' +
-        '<button onclick="depPhotoToManual()" style="width:100%;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:10px;padding:10px;font-size:13px;cursor:pointer;">Skip — Enter Manually</button>';
-      return;
-    }
-
-    depReadLicenseWithAI(apiKey, e.target.result, status);
-
-    depReadLicenseWithAI(apiKey, e.target.result, status);
+    _depData.idPhotoDataUrl = e.target.result;
+    var preview = document.getElementById('dep-id-preview');
+    if(preview) { preview.src = e.target.result; }
+    document.getElementById('dep-choose').style.display = 'none';
+    document.getElementById('dep-id-preview-wrap').style.display = 'block';
   };
   reader.readAsDataURL(file);
 }
 
-// Save key from inline prompt and retry the photo read
-function depSaveKeyAndRetry() {
-  var inp = document.getElementById('dep-key-input');
-  if(!inp) return;
-  var key = inp.value.trim();
-  if(!key || !key.startsWith('sk-ant-')) {
-    inp.style.borderColor = '#ef4444';
-    inp.placeholder = 'Must start with sk-ant-...';
-    return;
-  }
-  saveAiKey(key);
-  var status = document.getElementById('dep-ocr-status');
-  var dataUrl = _depData.photoDataUrl;
-  if(dataUrl) {
-    depReadLicenseWithAI(key, dataUrl, status);
-  }
-}
-
-// Core function: send photo to Claude Vision to read DL
-function depReadLicenseWithAI(apiKey, dataUrl, status) {
-  if(status) status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:10px;"><div class="dep-spinner"></div> Reading license...</div>';
-
-  var base64 = dataUrl.split(',')[1];
-  var mediaType = (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
-
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: 'Read the first name and last name from this driver license. Return ONLY a JSON object like {"firstName":"John","lastName":"Smith"}. No markdown, no backticks, just the JSON.' }
-        ]
-      }]
-    })
-  }).then(function(resp) {
-    if(!resp.ok) return resp.text().then(function(t){ throw new Error('API ' + resp.status + ': ' + t); });
-    return resp.json();
-  }).then(function(data) {
-    var text = (data.content && data.content[0] && data.content[0].text) || '';
-    console.log('Claude vision raw:', text);
-    var jsonStr = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
-    try {
-      var parsed = JSON.parse(jsonStr);
-      if(parsed && (parsed.firstName || parsed.lastName)) {
-        _depData.customer = parsed;
-        depFillCustomerFields(parsed);
-        if(status) status.textContent = 'Found: ' + [parsed.firstName, parsed.lastName].filter(Boolean).join(' ');
-        setTimeout(function(){ depShowStep(2); depLoadCarList(); }, 1200);
-      } else {
-        if(status) status.innerHTML = 'Could not read name from photo.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
-      }
-    } catch(pe) {
-      console.error('JSON parse error:', pe, 'Raw:', text);
-      if(status) status.innerHTML = 'Could not parse response.<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
-    }
-  }).catch(function(err) {
-    console.error('Vision API error:', err);
-    if(status) status.innerHTML = 'Error: ' + (err.message||err) + '<br><br><button onclick="depPhotoToManual()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;">Enter Manually</button>';
-  });
-}
-
-// Fall through from photo to manual entry, keeping photo as reference
-function depPhotoToManual() {
-  _depData.customer = {};
-  depFillCustomerFields({});
+function depIDPhotoDone() {
   depShowStep(2);
   depLoadCarList();
 }
 
-// ── AAMVA PDF417 PARSER ──────────────────────────────────────
+// ── STEP 1: SIGNED FORM UPLOAD ────────────────────────────────
 
-function parseAAMVA(raw) {
-  if(!raw) return null;
-  var d = {};
-
-  function getField(codes) {
-    for(var i=0; i<codes.length; i++) {
-      var code = codes[i];
-      var idx = raw.indexOf(code);
-      if(idx !== -1) {
-        var val = raw.substring(idx+3).split(/[\r\n]/)[0].trim();
-        if(val) return val;
-      }
-    }
-    return '';
-  }
-
-  d.lastName  = getField(['DCS','DAB']);
-  d.firstName = getField(['DCT','DAC']);
-  d.middleName= getField(['DAD']);
-  var dobRaw  = getField(['DBB','DAY']);
-  d.address   = getField(['DAG']);
-  d.city      = getField(['DAI']);
-  d.state     = getField(['DAJ']);
-  var zipRaw  = getField(['DAK']);
-  d.zip       = zipRaw ? zipRaw.substring(0,5) : '';
-  d.dlNumber  = getField(['DAQ']);
-
-  // DOB: MMDDYYYY → YYYY-MM-DD
-  if(dobRaw && dobRaw.length >= 8) {
-    var mm = dobRaw.substring(0,2);
-    var dd = dobRaw.substring(2,4);
-    var yy = dobRaw.substring(4,8);
-    d.dob = yy + '-' + mm + '-' + dd;
-  } else {
-    d.dob = '';
-  }
-
-  return d;
+function depSignedFormTaken(input) {
+  if(!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  _depData.signedFormFile = file;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    _depData.signedFormDataUrl = e.target.result;
+    var preview = document.getElementById('dep-signed-preview');
+    if(preview) preview.src = e.target.result;
+    document.getElementById('dep-signed-preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
 }
 
-// ── OCR TEXT PARSER (fallback) ───────────────────────────────
+// ── SAVE DEPOSIT TO SUPABASE ─────────────────────────────────
 
-function parseOCRText(text) {
-  var d = { firstName:'', lastName:'', dob:'', address:'', city:'', state:'', zip:'', dlNumber:'' };
-  var lines = text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+async function depositSave() {
+  var btn = document.getElementById('dep-save-btn');
+  var status = document.getElementById('dep-save-status');
+  if(btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+  if(status) status.textContent = '';
 
-  lines.forEach(function(t) {
-    // AAMVA codes (if back of license was photographed)
-    if(/^DCS/i.test(t)) d.lastName = t.substring(3).trim();
-    if(/^DCT/i.test(t)||/^DAC/i.test(t)) d.firstName = t.substring(3).trim();
-    if(/^DAG/i.test(t)) d.address = t.substring(3).trim();
-    if(/^DAI/i.test(t)) d.city = t.substring(3).trim();
-    if(/^DAJ/i.test(t)) d.state = t.substring(3).trim();
-    if(/^DAK/i.test(t)) d.zip = t.substring(3,8).trim();
-    if(/^DAQ/i.test(t)) d.dlNumber = t.substring(3).trim();
-    if(/^DBB/i.test(t)||/^DAY/i.test(t)) {
-      var dr = t.substring(3).trim();
-      if(dr.length>=8) d.dob = dr.substring(4,8)+'-'+dr.substring(0,2)+'-'+dr.substring(2,4);
+  try {
+    var d = _depData.preview || {};
+    var ts = Date.now();
+
+    // Upload ID photo to Supabase Storage if we have one
+    var idPhotoUrl = '';
+    if(_depData.idPhotoFile) {
+      var idExt = _depData.idPhotoFile.name.split('.').pop() || 'jpg';
+      var idPath = 'deposits/' + ts + '_id.' + idExt;
+      idPhotoUrl = await sbUpload(idPath, _depData.idPhotoFile);
     }
-  });
 
-  // Front-of-license parsing (Florida DL patterns)
-  var full = text.replace(/\n/g,' ');
+    // Upload signed form photo if we have one
+    var signedFormUrl = '';
+    if(_depData.signedFormFile) {
+      var sfExt = _depData.signedFormFile.name.split('.').pop() || 'jpg';
+      var sfPath = 'deposits/' + ts + '_signed.' + sfExt;
+      signedFormUrl = await sbUpload(sfPath, _depData.signedFormFile);
+    }
 
-  // DL number: Florida format is letter + 12 digits (e.g. D123-456-78-901-0)
-  if(!d.dlNumber){
-    var dlMatch = full.match(/[A-Z]\s*\d[\d\s\-]{10,16}/);
-    if(dlMatch) d.dlNumber = dlMatch[0].replace(/[\s\-]/g,'').substring(0,13);
+    // Save deposit record
+    var record = {
+      customer_name: d.fullName || '',
+      vehicle_desc: d.vehicleStr || '',
+      vin: d.vin || '',
+      stock: d.stock || '',
+      deposit_amount: parseFloat(d.amount) || 0,
+      balance: d.balance || '',
+      deposit_date: d.dateDisp || '',
+      withdraw_until: d.withdrawDisp || '',
+      id_photo_url: idPhotoUrl,
+      signed_form_url: signedFormUrl,
+      created_by: (typeof me !== 'undefined' && me && me.name) ? me.name : '',
+      location: (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary',
+      created_at: new Date().toISOString()
+    };
+
+    await sbPost('deposits', record);
+
+    if(status) status.innerHTML = '<span style="color:#4ade80;font-weight:600;">Deposit saved successfully!</span>';
+    if(btn) { btn.textContent = 'Saved'; btn.style.background = '#166534'; }
+  } catch(err) {
+    console.error('Deposit save error:', err);
+    if(status) status.innerHTML = '<span style="color:#ef4444;">Error saving: ' + (err.message||err) + '</span>';
+    if(btn) { btn.textContent = 'Save Deposit Record'; btn.disabled = false; }
   }
-
-  // DOB: look for MM/DD/YYYY or MM-DD-YYYY patterns near "DOB" or "BORN"
-  if(!d.dob){
-    var dobMatch = full.match(/(?:DOB|BORN|DATE\s*OF\s*BIRTH)[:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i);
-    if(!dobMatch) dobMatch = full.match(/(\d{2})[\/\-](\d{2})[\/\-]((?:19|20)\d{2})/);
-    if(dobMatch) d.dob = dobMatch[3]+'-'+dobMatch[1].padStart(2,'0')+'-'+dobMatch[2].padStart(2,'0');
-  }
-
-  // Name: look for "LN" / "FN" labels, or "LAST" / "FIRST", or numbered lines
-  if(!d.lastName){
-    var lnMatch = full.match(/(?:LN|LAST)[:\s]+([A-Z][A-Z\s']+)/i);
-    if(lnMatch) d.lastName = lnMatch[1].trim().split(/\s{2,}/)[0];
-  }
-  if(!d.firstName){
-    var fnMatch = full.match(/(?:FN|FIRST)[:\s]+([A-Z][A-Z\s']+)/i);
-    if(fnMatch) d.firstName = fnMatch[1].trim().split(/\s{2,}/)[0];
-  }
-
-  // Name from "2 LASTNAME" "1 FIRSTNAME" patterns (FL format uses numbered fields)
-  if(!d.lastName){
-    lines.forEach(function(l){
-      var m2 = l.match(/^2\s+([A-Z][A-Z'\-]+)/i);
-      if(m2) d.lastName = m2[1];
-      var m1 = l.match(/^1\s+([A-Z][A-Z'\-\s]+)/i);
-      if(m1 && !d.firstName) d.firstName = m1[1].trim().split(/\s+/)[0];
-    });
-  }
-
-  // Address: look for street number pattern
-  if(!d.address){
-    lines.forEach(function(l){
-      if(/^\d+\s+[A-Z]/i.test(l) && /\b(ST|AVE|BLVD|DR|RD|LN|CT|CIR|WAY|PL)\b/i.test(l)){
-        d.address = l;
-      }
-    });
-  }
-
-  // City/State/Zip from a line like "DEBARY, FL 32713" or "DEBARY FL 32713"
-  if(!d.city){
-    lines.forEach(function(l){
-      var csz = l.match(/([A-Z][A-Z\s]+?)[,\s]+([A-Z]{2})\s+(\d{5})/i);
-      if(csz){ d.city=csz[1].trim(); d.state=csz[2]; d.zip=csz[3]; }
-    });
-  }
-
-  // Capitalize names properly
-  function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():'';}
-  d.firstName = cap(d.firstName);
-  d.lastName = cap(d.lastName);
-
-  return d;
-}
-
-function depFillCustomerFields(d) {
-  var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
-  set('dep-fname', d.firstName);
-  set('dep-lname', d.lastName);
 }
 
 function depositManualEntry() {
-  depStopCamera();
   _depData.customer = {};
-  depFillCustomerFields({});
   depShowStep(2);
   depLoadCarList();
 }
