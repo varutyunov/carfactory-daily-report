@@ -20,7 +20,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
-<!-- Tesseract removed — using Claude Vision API for DL reading -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
@@ -7468,20 +7469,69 @@ function depositPrint() {
 
 function depositEmail() {
   var d = _depData.preview || {};
-  var subject = encodeURIComponent('Partial Payment — ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''));
-  var body = encodeURIComponent(
-    'NON-REFUNDABLE PARTIAL PAYMENT\n' +
-    '==============================\n\n' +
-    'Buyer: ' + (d.fullName||'') + '\n' +
-    'Vehicle: ' + (d.vehicleStr||'') + '\n' +
-    'VIN: ' + (d.vin||'') + '\n' +
-    'Stock #: ' + (d.stock||'') + '\n\n' +
-    'Partial Payment: $' + (d.amount||'') + '\n' +
-    'Remaining Due: ' + (d.balance||'') + '\n' +
-    'Withdraw Until: ' + (d.withdrawDisp||'') + '\n' +
-    'Date: ' + (d.dateDisp||'') + '\n'
-  );
-  window.location.href = 'mailto:carfactorydebaryfl@gmail.com?subject='+subject+'&body='+body;
+  var formEl = document.getElementById('dep-print-form');
+  if(!formEl) { alert('Form not found.'); return; }
+
+  // Show a loading state
+  var btn = event && event.target;
+  var origText = '';
+  if(btn) { origText = btn.textContent; btn.textContent = 'Generating PDF...'; btn.disabled = true; }
+
+  // Render the form to canvas, then to PDF
+  html2canvas(formEl, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false
+  }).then(function(canvas) {
+    var jsPDF = window.jspdf.jsPDF;
+    var imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    // Letter size: 8.5 x 11 inches
+    var pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
+    var pageW = 8.5;
+    var pageH = 11;
+    var imgW = pageW;
+    var imgH = (canvas.height * pageW) / canvas.width;
+    // Center vertically if shorter than page
+    var yOffset = imgH < pageH ? (pageH - imgH) / 2 : 0;
+    pdf.addImage(imgData, 'JPEG', 0, yOffset, imgW, imgH);
+
+    var fileName = 'Deposit_' + (d.fullName||'Form').replace(/\s+/g,'_') + '.pdf';
+    var pdfBlob = pdf.output('blob');
+    var pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+    // Try Web Share API (works on mobile — lets user pick email, Messages, etc.)
+    if(navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      navigator.share({
+        title: 'Partial Payment — ' + (d.fullName||''),
+        text: 'Non-Refundable Partial Payment form for ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''),
+        files: [pdfFile]
+      }).then(function(){
+        if(btn) { btn.textContent = origText; btn.disabled = false; }
+      }).catch(function(){
+        // User cancelled share — fall back to download
+        depositDownloadPDF(pdf, fileName);
+        if(btn) { btn.textContent = origText; btn.disabled = false; }
+      });
+    } else {
+      // Desktop fallback: download PDF then open mailto
+      depositDownloadPDF(pdf, fileName);
+      var subject = encodeURIComponent('Partial Payment — ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''));
+      var body = encodeURIComponent('Please see the attached Non-Refundable Partial Payment form for ' + (d.fullName||'') + '.\n\nVehicle: ' + (d.vehicleStr||''));
+      setTimeout(function(){
+        window.location.href = 'mailto:carfactorydebaryfl@gmail.com?subject='+subject+'&body='+body;
+      }, 500);
+      if(btn) { btn.textContent = origText; btn.disabled = false; }
+    }
+  }).catch(function(err) {
+    alert('Error generating PDF: ' + err.message);
+    if(btn) { btn.textContent = origText; btn.disabled = false; }
+  });
+}
+
+function depositDownloadPDF(pdf, fileName) {
+  pdf.save(fileName);
 }
 </script>
 
