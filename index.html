@@ -3827,6 +3827,7 @@ async function syncNow(){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
+        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
