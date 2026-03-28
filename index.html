@@ -17,8 +17,10 @@
 <link rel="shortcut icon" href="favicon.ico?v=3">
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
@@ -1841,6 +1843,7 @@ let curEmpTab='detail';
 let empActiveCat=null;
 function empOrbitGo(section){
   if(section==='inventory'){empOpenInventory();return;}
+  if(section==='deposit'){openDepositForm();return;}
   empActiveCat=section;
   var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
@@ -1916,18 +1919,21 @@ function renderEmpHome(){
   // Inventory tile — count matches employee's location
   var myEmpLoc=me&&me.location?me.location:'DeBary';
   var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
-  // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory
-  var visible=isWidgetOnly?[invTile]:[...tiles,invTile];
+  // Deposit tile — always visible
+  var depositTile={id:'deposit',label:'Deposit',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
+  // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory + deposit
+  var visible=isWidgetOnly?[invTile,depositTile]:[...tiles,invTile,depositTile];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
   else if(visible.length){grid.style.display='grid';empty.style.display='none';}
   else{grid.style.display='none';empty.style.display='none';}
   grid.innerHTML=visible.map(function(t){
-    var dimmed=t.count===0;
+    var dimmed=!t.noCount&&t.count===0;
     var onclick='empOrbitGo(\''+t.id+'\')';
+    var countDisplay=t.noCount?'':((t.count||'—')+'');
     return '<div onclick="'+onclick+'" style="background:'+t.bg+';box-shadow:0 4px 16px '+t.glow+',0 6px 20px rgba(0,0,0,0.6);border-radius:18px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.10);border-left:1px solid rgba(255,255,255,0.05);position:relative;-webkit-tap-highlight-color:transparent;min-height:80px;opacity:'+(dimmed?'0.45':'1')+'">' +
       '<div style="width:24px;height:24px;">'+t.icon+'</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.7);">'+t.label+'</div>' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#fff;line-height:1;">'+(t.count||'—')+'</div>' +
+      (countDisplay?'<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#fff;line-height:1;">'+countDisplay+'</div>':'') +
     '</div>';
   }).join('');
   // Widget dock — fixed at bottom, shown for deal users and/or lang users
@@ -6680,5 +6686,641 @@ function _txInit() {
 </div>
 <!-- AI CHAT PANEL (legacy — chat is now inline on mgr home) -->
 <div id="m-ai-chat" style="display:none;"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEPOSIT FORM OVERLAY
+     ══════════════════════════════════════════════════════════════ -->
+<div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column;">
+
+  <!-- Back bar -->
+  <div id="deposit-back-bar" style="position:fixed;top:0;left:0;right:0;z-index:510;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeDepositForm()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span id="deposit-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEPOSIT FORM</span>
+  </div>
+
+  <!-- Step content area -->
+  <div id="deposit-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+
+    <!-- ── STEP 1: SCAN DL ── -->
+    <div id="dep-step1" style="padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 4 — Customer ID</div>
+      <div style="font-size:14px;color:#666;margin-bottom:20px;">Scan the barcode on the back of the driver's license</div>
+
+      <!-- Camera view container -->
+      <div id="dep-camera-wrap" style="position:relative;width:100%;max-width:420px;margin:0 auto 16px;border-radius:16px;overflow:hidden;background:#0d0d0d;border:1px solid #222;">
+        <video id="dep-video" style="width:100%;display:block;" autoplay playsinline muted></video>
+        <div id="dep-scan-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+          <div style="width:80%;height:60%;border:2px solid #60a5fa;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
+        </div>
+        <div id="dep-scan-status" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:#60a5fa;background:rgba(0,0,0,0.7);padding:6px;">Scanning for barcode...</div>
+      </div>
+
+      <!-- OCR fallback photo view -->
+      <div id="dep-photo-wrap" style="display:none;width:100%;max-width:420px;margin:0 auto 16px;">
+        <div style="font-size:13px;color:#888;margin-bottom:8px;text-align:center;">No barcode found. Take a photo of the DL for OCR:</div>
+        <div style="text-align:center;margin-bottom:12px;">
+          <button onclick="depCapturePhoto()" style="background:#1d4ed8;color:#fff;border:none;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;">Take Photo</button>
+        </div>
+        <canvas id="dep-canvas" style="display:none;width:100%;border-radius:10px;"></canvas>
+        <div id="dep-ocr-status" style="text-align:center;font-size:13px;color:#888;margin-top:8px;"></div>
+      </div>
+
+      <div style="max-width:420px;margin:0 auto;">
+        <button onclick="depositManualEntry()" style="width:100%;padding:14px;background:#111;color:#60a5fa;border:1px solid #1d4ed8;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px;">Enter Manually</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: SELECT CAR ── -->
+    <div id="dep-step2" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 2 of 4 — Select Vehicle</div>
+      <div style="font-size:14px;color:#666;margin-bottom:16px;">Choose from your location's inventory</div>
+      <input id="dep-car-search" placeholder="Search year, make, model, stock..." oninput="depFilterCars(this.value)"
+        style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:15px;margin-bottom:14px;outline:none;" />
+      <div id="dep-car-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
+    <!-- ── STEP 3: FORM ── -->
+    <div id="dep-step3" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 4 — Review & Complete</div>
+
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER INFO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">First Name</div>
+          <input id="dep-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="First"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Last Name</div>
+          <input id="dep-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Last"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date of Birth</div>
+          <input id="dep-dob" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">DL Number</div>
+          <input id="dep-dl" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="DL #"/>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Street Address</div>
+        <input id="dep-addr" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="123 Main St"/>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">City</div>
+          <input id="dep-city" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="City"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">State</div>
+          <input id="dep-state" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="FL" maxlength="2"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Zip</div>
+          <input id="dep-zip" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="32713" maxlength="5"/>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE INFO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Year</div>
+          <input id="dep-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="2024" readonly/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Make</div>
+          <input id="dep-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Toyota" readonly/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Model</div>
+          <input id="dep-model" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Camry" readonly/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Stock #</div>
+          <input id="dep-stock" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="A1001" readonly/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Color</div>
+          <input id="dep-color" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="" readonly/>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">VIN</div>
+        <input id="dep-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="1HGBH41JXMN109186" readonly/>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">TRANSACTION</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deposit Amount ($)</div>
+          <input id="dep-amount" type="number" min="0" step="0.01" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="500"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date</div>
+          <input id="dep-date" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Remaining Balance</div>
+        <div style="display:flex;gap:10px;align-items:stretch;">
+          <input id="dep-balance" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="e.g. 15000 or Finance"/>
+          <button onclick="depSetFinance()" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Finance</button>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Withdraw Vehicle Until</div>
+        <input id="dep-withdraw" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+      </div>
+
+      <button onclick="depositGoPreview()" style="width:100%;padding:16px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:8px;">Preview Form</button>
+    </div>
+
+    <!-- ── STEP 4: PRINTABLE PREVIEW ── -->
+    <div id="dep-step4" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 4 of 4 — Preview & Send</div>
+
+      <!-- Printable form card — matches actual Non-Refundable Partial Payment Form -->
+      <div id="dep-print-form" style="background:#fff;color:#000;border-radius:14px;padding:32px 28px;max-width:540px;margin:0 auto 20px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.7;">
+        <!-- Header -->
+        <div style="text-align:center;margin-bottom:28px;">
+          <div style="font-family:'UnifrakturMaguntia','Old English Text MT',serif;font-size:34px;letter-spacing:4px;font-weight:400;">Car Factory</div>
+          <div style="font-size:13px;margin-top:6px;line-height:1.4;">100 S Charles Richard Beall Blvd<br>Debary FL 32713<br>CarFactoryDebary.com</div>
+        </div>
+
+        <!-- Body -->
+        <p style="margin:0 0 18px;">I, <span id="pf-name" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, hereinafter referred to as "Buyer," agree to pay the amount of <span id="pf-amount" style="font-weight:700;">$______</span> as a <span style="font-variant:small-caps;">non-refundable partial payment</span> toward the purchase of a vehicle including, but not limited to, a motorcycle, scooter, or ATV, acknowledging the representation to be accurate, to the Buyer by Premier Auto Group LLC dba Car Factory, hereinafter known as "Seller," owner of said vehicle.</p>
+
+        <p style="margin:0 0 18px;">VIN/Description: <span id="pf-vin-desc" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span></p>
+
+        <p style="margin:0 0 18px;">Seller, hereby agrees in consideration of payment of said <span style="font-variant:small-caps;">non-refundable partial payment</span> to withdraw said vehicle, from the market until <span id="pf-withdraw" style="font-weight:700;border-bottom:1px solid #000;padding:0 4px;"></span>, upon receipt of the remaining amount due of <span id="pf-balance" style="font-weight:700;">$______</span> for the purchase by the Buyer. Buyer understands, acknowledges, and agrees that if he fails to pay the Seller the remaining amount due, when it is due, for the purchase of said vehicle, the <span style="font-variant:small-caps;">non-refundable partial payment</span> shall be forfeited. Buyer understands and agrees never to dispute representation of said vehicle, parts, or accessories, sold AS IS, without any kind of warranty. Seller may, at his sole discretion, issue a credit not exceeding the partial payment amount, to be applied when making a future vehicle purchase from</p>
+
+        <p style="margin:0 0 30px;font-weight:700;font-style:italic;">Premier Auto Group LLC dba Car Factory</p>
+
+        <!-- Signature block -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:20px;">
+          <div>
+            <div style="font-style:italic;font-weight:600;margin-bottom:24px;">Seller, authorized principal</div>
+            <div style="border-bottom:1px solid #000;height:28px;"></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Print</div>
+            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Signature</div>
+            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Date</div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:24px;">Buyer</div>
+            <div style="border-bottom:1px solid #000;height:28px;"><span id="pf-buyer-print" style="font-size:14px;"></span></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Print</div>
+            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Signature</div>
+            <div style="border-bottom:1px solid #000;height:28px;margin-top:18px;"><span id="pf-date" style="font-size:14px;"></span></div>
+            <div style="font-size:12px;text-align:center;margin-top:3px;">Date</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
+        <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Print / Save PDF</button>
+        <button onclick="depositEmail()" style="width:100%;padding:15px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Email to Dealership</button>
+        <button onclick="closeDepositForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Done</button>
+      </div>
+    </div>
+
+  </div><!-- /deposit-body -->
+</div><!-- /deposit-overlay -->
+
+<style>
+@media print {
+  body > *:not(#deposit-overlay) { display: none !important; }
+  #deposit-overlay { display: block !important; position: static !important; background: white !important; }
+  #deposit-back-bar { display: none !important; }
+  #deposit-body { padding-top: 0 !important; overflow: visible !important; }
+  #dep-step4 { display: block !important; padding: 0 !important; }
+  #dep-step1, #dep-step2, #dep-step3 { display: none !important; }
+  .dep-print-actions { display: none !important; }
+  #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; }
+  * { -webkit-print-color-adjust: exact; color-adjust: exact; }
+}
+</style>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// DEPOSIT FORM LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _depData = {};  // stores scanned/entered customer + car data
+var _depScanTimer = null;
+var _depCodeReader = null;
+var _depCameraStream = null;
+
+function openDepositForm() {
+  _depData = {};
+  var overlay = document.getElementById('deposit-overlay');
+  overlay.style.display = 'flex';
+  // hide top bar
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
+  // show step1
+  depShowStep(1);
+  startDLScan();
+}
+
+function closeDepositForm() {
+  depStopCamera();
+  var overlay = document.getElementById('deposit-overlay');
+  overlay.style.display = 'none';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
+}
+
+function depShowStep(n) {
+  [1,2,3,4].forEach(function(i){
+    var el = document.getElementById('dep-step'+i);
+    if(el) el.style.display = (i===n) ? 'block' : 'none';
+  });
+  var titles = {1:'SCAN ID',2:'SELECT VEHICLE',3:'COMPLETE FORM',4:'PREVIEW & SEND'};
+  var titleEl = document.getElementById('deposit-bar-title');
+  if(titleEl) titleEl.textContent = titles[n] || 'DEPOSIT FORM';
+}
+
+// ── STEP 1: SCAN DL ──────────────────────────────────────────
+
+function startDLScan() {
+  depShowStep(1);
+  var cameraWrap = document.getElementById('dep-camera-wrap');
+  var photoWrap = document.getElementById('dep-photo-wrap');
+  cameraWrap.style.display = 'block';
+  photoWrap.style.display = 'none';
+  document.getElementById('dep-scan-status').textContent = 'Scanning for barcode...';
+
+  // Try ZXing PDF417
+  if(typeof ZXing === 'undefined') {
+    depSetStatus('ZXing not loaded — falling back to OCR');
+    depFallbackToPhoto();
+    return;
+  }
+
+  try {
+    var hints = new Map();
+    _depCodeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+    _depCodeReader.decodeFromVideoDevice(null, 'dep-video', function(result, err) {
+      if(result) {
+        depStopCamera();
+        var text = result.getText();
+        var parsed = parseAAMVA(text);
+        if(parsed && parsed.dlNumber) {
+          _depData.customer = parsed;
+          depFillCustomerFields(parsed);
+          depShowStep(2);
+          depLoadCarList();
+        } else {
+          depSetStatus('Barcode found but could not parse. Try manual entry.');
+        }
+      }
+    });
+
+    // Capture stream reference for later cleanup
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+      _depCameraStream = stream;
+    }).catch(function(){});
+
+    // Auto-fallback after 8 seconds
+    _depScanTimer = setTimeout(function() {
+      depStopCamera();
+      depFallbackToPhoto();
+    }, 8000);
+
+  } catch(e) {
+    depSetStatus('Camera error: ' + e.message);
+    depFallbackToPhoto();
+  }
+}
+
+function depSetStatus(msg) {
+  var el = document.getElementById('dep-scan-status');
+  if(el) el.textContent = msg;
+}
+
+function depStopCamera() {
+  if(_depScanTimer) { clearTimeout(_depScanTimer); _depScanTimer = null; }
+  if(_depCodeReader) {
+    try { _depCodeReader.reset(); } catch(e) {}
+    _depCodeReader = null;
+  }
+  if(_depCameraStream) {
+    _depCameraStream.getTracks().forEach(function(t){ t.stop(); });
+    _depCameraStream = null;
+  }
+  var vid = document.getElementById('dep-video');
+  if(vid) { vid.srcObject = null; }
+}
+
+function depFallbackToPhoto() {
+  var cameraWrap = document.getElementById('dep-camera-wrap');
+  var photoWrap = document.getElementById('dep-photo-wrap');
+  if(cameraWrap) cameraWrap.style.display = 'none';
+  if(photoWrap) photoWrap.style.display = 'block';
+}
+
+function depCapturePhoto() {
+  var canvas = document.getElementById('dep-canvas');
+  var video = document.getElementById('dep-video');
+  var status = document.getElementById('dep-ocr-status');
+
+  // Try to capture from video if still alive, else open camera for photo
+  if(!video.srcObject || !_depCameraStream) {
+    // Start camera stream for photo capture
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+      _depCameraStream = stream;
+      video.srcObject = stream;
+      video.play();
+      video.style.display = 'block';
+      var photoWrap = document.getElementById('dep-photo-wrap');
+      if(photoWrap) {
+        // Show the video feed briefly for user to position
+        var captureBtn = photoWrap.querySelector('button');
+        if(captureBtn) captureBtn.textContent = 'Capture Now';
+        captureBtn.onclick = function() { depDoOCR(canvas, video, status); };
+      }
+    }).catch(function(e){
+      if(status) status.textContent = 'Camera not available: ' + e.message;
+    });
+    return;
+  }
+  depDoOCR(canvas, video, status);
+}
+
+function depDoOCR(canvas, video, status) {
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.style.display = 'block';
+  depStopCamera();
+  video.style.display = 'none';
+
+  if(status) status.textContent = 'Running OCR...';
+
+  if(typeof Tesseract === 'undefined') {
+    if(status) status.textContent = 'Tesseract not loaded. Use manual entry.';
+    return;
+  }
+
+  Tesseract.recognize(canvas, 'eng').then(function(result) {
+    var text = result.data.text;
+    var parsed = parseOCRText(text);
+    if(parsed && (parsed.firstName || parsed.lastName)) {
+      _depData.customer = parsed;
+      depFillCustomerFields(parsed);
+      depShowStep(2);
+      depLoadCarList();
+    } else {
+      if(status) status.textContent = 'OCR done but could not parse fields. Try manual entry.';
+    }
+  }).catch(function(e) {
+    if(status) status.textContent = 'OCR error: ' + e.message;
+  });
+}
+
+// ── AAMVA PDF417 PARSER ──────────────────────────────────────
+
+function parseAAMVA(raw) {
+  if(!raw) return null;
+  var d = {};
+
+  function getField(codes) {
+    for(var i=0; i<codes.length; i++) {
+      var code = codes[i];
+      var idx = raw.indexOf(code);
+      if(idx !== -1) {
+        var val = raw.substring(idx+3).split(/[\r\n]/)[0].trim();
+        if(val) return val;
+      }
+    }
+    return '';
+  }
+
+  d.lastName  = getField(['DCS','DAB']);
+  d.firstName = getField(['DCT','DAC']);
+  d.middleName= getField(['DAD']);
+  var dobRaw  = getField(['DBB','DAY']);
+  d.address   = getField(['DAG']);
+  d.city      = getField(['DAI']);
+  d.state     = getField(['DAJ']);
+  var zipRaw  = getField(['DAK']);
+  d.zip       = zipRaw ? zipRaw.substring(0,5) : '';
+  d.dlNumber  = getField(['DAQ']);
+
+  // DOB: MMDDYYYY → YYYY-MM-DD
+  if(dobRaw && dobRaw.length >= 8) {
+    var mm = dobRaw.substring(0,2);
+    var dd = dobRaw.substring(2,4);
+    var yy = dobRaw.substring(4,8);
+    d.dob = yy + '-' + mm + '-' + dd;
+  } else {
+    d.dob = '';
+  }
+
+  return d;
+}
+
+// ── OCR TEXT PARSER (fallback) ───────────────────────────────
+
+function parseOCRText(text) {
+  var d = { firstName:'', lastName:'', dob:'', address:'', city:'', state:'', zip:'', dlNumber:'' };
+  var lines = text.split('\n');
+
+  lines.forEach(function(line) {
+    var t = line.trim();
+    // Try AAMVA codes in OCR output too
+    if(/^DCS/i.test(t)) d.lastName = t.substring(3).trim();
+    if(/^DCT/i.test(t)) d.firstName = t.substring(3).trim();
+    if(/^DAC/i.test(t)) d.firstName = t.substring(3).trim();
+    if(/^DAG/i.test(t)) d.address = t.substring(3).trim();
+    if(/^DAI/i.test(t)) d.city = t.substring(3).trim();
+    if(/^DAJ/i.test(t)) d.state = t.substring(3).trim();
+    if(/^DAK/i.test(t)) d.zip = t.substring(3,8).trim();
+    if(/^DAQ/i.test(t)) d.dlNumber = t.substring(3).trim();
+    if(/^DBB/i.test(t)||/^DAY/i.test(t)) {
+      var dobRaw = t.substring(3).trim();
+      if(dobRaw.length >= 8) {
+        d.dob = dobRaw.substring(4,8)+'-'+dobRaw.substring(0,2)+'-'+dobRaw.substring(2,4);
+      }
+    }
+  });
+
+  return d;
+}
+
+function depFillCustomerFields(d) {
+  var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
+  set('dep-fname', d.firstName);
+  set('dep-lname', d.lastName);
+  set('dep-dob',   d.dob);
+  set('dep-dl',    d.dlNumber);
+  set('dep-addr',  d.address);
+  set('dep-city',  d.city);
+  set('dep-state', d.state);
+  set('dep-zip',   d.zip);
+}
+
+function depositManualEntry() {
+  depStopCamera();
+  _depData.customer = {};
+  depFillCustomerFields({});
+  depShowStep(2);
+  depLoadCarList();
+}
+
+// ── STEP 2: SELECT CAR ──────────────────────────────────────
+
+var _depAllCars = [];
+
+function depLoadCarList() {
+  var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+  var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
+  _depAllCars = inv.filter(function(c){ return (c.location||'DeBary') === myEmpLoc; });
+  depRenderCarList(_depAllCars);
+}
+
+function depFilterCars(q) {
+  if(!q) { depRenderCarList(_depAllCars); return; }
+  var ql = q.toLowerCase();
+  var filtered = _depAllCars.filter(function(c){
+    return [c.year,c.make,c.model,c.stock,c.vin,c.color].join(' ').toLowerCase().indexOf(ql) !== -1;
+  });
+  depRenderCarList(filtered);
+}
+
+function depRenderCarList(cars) {
+  var el = document.getElementById('dep-car-list');
+  if(!el) return;
+  if(!cars.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:14px;">No vehicles found at your location.</div>';
+    return;
+  }
+  el.innerHTML = cars.map(function(c){
+    var label = [c.year, c.make, c.model].filter(Boolean).join(' ');
+    var sub   = [c.stock ? 'Stock: '+c.stock : '', c.color||''].filter(Boolean).join(' · ');
+    return '<div onclick="depSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
+      '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
+      '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
+      (c.vin ? '<div style="font-size:11px;color:#333;margin-top:2px;">VIN: '+c.vin+'</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function depSelectCar(carId) {
+  var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
+  var car = inv.filter(function(c){ return c.id == carId; })[0];
+  if(!car) return;
+  _depData.car = car;
+  // Fill vehicle fields
+  var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
+  set('dep-year',  car.year);
+  set('dep-make',  car.make);
+  set('dep-model', car.model);
+  set('dep-stock', car.stock);
+  set('dep-vin',   car.vin);
+  set('dep-color', car.color);
+  // Default date to today
+  var today = new Date();
+  var yyyy = today.getFullYear();
+  var mm = String(today.getMonth()+1).padStart(2,'0');
+  var dd = String(today.getDate()).padStart(2,'0');
+  set('dep-date', yyyy+'-'+mm+'-'+dd);
+  depShowStep(3);
+}
+
+// ── STEP 3: FINANCE BUTTON ───────────────────────────────────
+
+function depSetFinance() {
+  var el = document.getElementById('dep-balance');
+  if(el) el.value = 'Finance';
+}
+
+// ── STEP 3 → STEP 4: PREVIEW ─────────────────────────────────
+
+function depositGoPreview() {
+  var get = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var fname = get('dep-fname');
+  var lname = get('dep-lname');
+  var dob   = get('dep-dob');
+  var dl    = get('dep-dl');
+  var addr  = get('dep-addr');
+  var city  = get('dep-city');
+  var state = get('dep-state');
+  var zip   = get('dep-zip');
+  var year  = get('dep-year');
+  var make  = get('dep-make');
+  var model = get('dep-model');
+  var stock = get('dep-stock');
+  var vin   = get('dep-vin');
+  var color = get('dep-color');
+  var amount  = get('dep-amount');
+  var balance  = get('dep-balance');
+  var date     = get('dep-date');
+  var withdraw = get('dep-withdraw');
+
+  if(!amount) { alert('Please enter the deposit amount.'); return; }
+
+  function fmtDate(d){if(!d)return'';var p=d.split('-');return p.length===3?p[1]+'/'+p[2]+'/'+p[0]:d;}
+  var dateDisp = fmtDate(date);
+  var withdrawDisp = fmtDate(withdraw);
+
+  function setText(id, val) { var el=document.getElementById(id); if(el) el.textContent = val||''; }
+
+  var fullName = [fname, lname].filter(Boolean).join(' ');
+  var vehicleStr = [year, make, model, color].filter(Boolean).join(' ');
+  var vinDesc = vin ? vin + (vehicleStr ? ' / ' + vehicleStr : '') : vehicleStr;
+  var amountFmt = amount ? '$'+parseFloat(amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  var balanceFmt = balance ? (balance.toLowerCase()==='finance' ? 'Finance' : '$'+parseFloat(balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : '';
+
+  setText('pf-name',        fullName);
+  setText('pf-amount',      amountFmt);
+  setText('pf-vin-desc',    vinDesc);
+  setText('pf-withdraw',    withdrawDisp);
+  setText('pf-balance',     balanceFmt);
+  setText('pf-buyer-print', fullName);
+  setText('pf-date',        dateDisp);
+
+  _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp};
+
+  depShowStep(4);
+}
+
+// ── STEP 4: PRINT & EMAIL ─────────────────────────────────────
+
+function depositPrint() {
+  // Show only the print form for printing
+  var step4 = document.getElementById('dep-step4');
+  var actionBtns = step4.querySelector('div[style*="flex-direction:column"]');
+  if(actionBtns) actionBtns.classList.add('dep-print-actions');
+  window.print();
+}
+
+function depositEmail() {
+  var d = _depData.preview || {};
+  var subject = encodeURIComponent('Partial Payment — ' + (d.fullName||'') + ' — ' + (d.vehicleStr||''));
+  var body = encodeURIComponent(
+    'NON-REFUNDABLE PARTIAL PAYMENT\n' +
+    '==============================\n\n' +
+    'Buyer: ' + (d.fullName||'') + '\n' +
+    'Vehicle: ' + (d.vehicleStr||'') + '\n' +
+    'VIN: ' + (d.vin||'') + '\n' +
+    'Stock #: ' + (d.stock||'') + '\n\n' +
+    'Partial Payment: $' + (d.amount||'') + '\n' +
+    'Remaining Due: ' + (d.balance||'') + '\n' +
+    'Withdraw Until: ' + (d.withdrawDisp||'') + '\n' +
+    'Date: ' + (d.dateDisp||'') + '\n'
+  );
+  window.location.href = 'mailto:carfactorydebaryfl@gmail.com?subject='+subject+'&body='+body;
+}
+</script>
+
 </body>
 </html>
