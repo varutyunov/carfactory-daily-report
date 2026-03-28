@@ -7769,11 +7769,12 @@ function dealRenderInv() {
   }).sort(function(a,b){ return b.id - a.id; });
   if(!cars.length) { el.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No vehicles found</div>'; return; }
   el.innerHTML = cars.map(function(c) {
-    var label = c.name || 'Unknown';
-    var sub = [c.stock ? '#'+c.stock : '', c.color||''].filter(Boolean).join(' · ');
+    var label = c.name || [c.year, c.make, c.model].filter(Boolean).join(' ') || 'Unknown';
+    var sub = [c.stock ? 'Stock: '+c.stock : '', c.color||'', c.location||''].filter(Boolean).join(' · ');
     return '<div onclick="dealSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
       '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
       '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
+      (c.vin ? '<div style="font-size:11px;color:#333;margin-top:2px;">VIN: '+c.vin+'</div>' : '') +
     '</div>';
   }).join('');
 }
