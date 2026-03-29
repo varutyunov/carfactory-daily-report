@@ -8307,7 +8307,7 @@ async function runPayScanOCR(imgSrc){
       '- Use empty string "" for any field you cannot find\n' +
       '- The image may be a photo of a receipt — use context to figure out correct values';
 
-    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + _gvisionKey, {
+    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + _gvisionKey, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -8394,7 +8394,7 @@ async function aiParsePaymentText(text){
       '- OCR text may have errors or jumbled ordering — use context to figure out correct values\n\n' +
       'OCR TEXT:\n' + text;
 
-    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + aiKey, {
+    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + aiKey, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
