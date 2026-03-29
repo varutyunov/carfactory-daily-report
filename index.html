@@ -1677,21 +1677,11 @@ async function enableOSNotifications(){
 
 async function sendPushNotification(targetNames, title, body){
   if(!targetNames||targetNames.length===0) return;
-  const externalIds = targetNames.map(n=>n.toLowerCase().replace(/\s+/g,'_'));
   try{
-    await fetch('https://api.onesignal.com/notifications',{
+    await fetch(SB_URL+'/rest/v1/rpc/push_notify',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
-      body:JSON.stringify({
-        app_id: OS_APP_ID,
-        include_aliases: { external_id: externalIds },
-        target_channel: 'push',
-        headings:{ en: title },
-        contents:{ en: body },
-        ios_badgeType: 'Increase',
-        ios_badgeCount: 1,
-        web_push_topic: title
-      })
+      headers:SB_HEADERS,
+      body:JSON.stringify({target_names:targetNames, title:title, body:body})
     });
   }catch(e){ console.log('Push failed:',e); }
 }
@@ -2821,7 +2811,9 @@ async function doAssign(){
       S.assignments.push({id:row.id,inventoryId:row.inventory_id,employeeId:row.employee_id,tasks:row.tasks,submitted:false,approved:false,photos:[],assignedAt:row.assigned_at});
       // Notify the newly assigned employee
       const car=S.inventory.find(c=>c.id===curAssign);
+      const emp=S.employees.find(e=>e.id===empId);
       createNotification(empId, me.name+' assigned you to '+(car?car.name:'a vehicle'), row.id, car?car.name:'');
+      if(emp) await sendPushNotification([emp.name],'🚗 New Assignment',me.name+' assigned you to '+(car?car.name:'a vehicle'));
     }
     sv();
   }catch(e){alert('Error: '+e.message);}
