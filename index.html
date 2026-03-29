@@ -1615,19 +1615,29 @@ OneSignalDeferred.push(async function(OneSignal){
     notifyButton: { enable: false },
     autoPrompt: false,
     serviceWorkerParam: { scope: '/' },
-    path: '/sw.js'
+    serviceWorkerPath: 'sw.js'
   });
 });
 
 // Call after login to link user + show enable bar if needed
 function initOneSignalUser(name){
   window._osExternalId = name.toLowerCase().replace(/\s+/g,'_');
-  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-  // Show enable bar if notifications not yet granted
-  if(perm !== 'granted'){ showNotifEnableBar(); }
+  var perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+  var dismissed = localStorage.getItem('cf_notif_dismissed');
+  // Show enable bar if notifications not yet granted AND user hasn't dismissed
+  if(perm !== 'granted' && !dismissed){ showNotifEnableBar(); }
   // Link user to OneSignal whenever SDK is ready
   function linkUser(OS){
-    try{ OS.login(window._osExternalId); }catch(e){}
+    try{
+      OS.login(window._osExternalId);
+      console.log('[OS] Logged in as:', window._osExternalId);
+      // Check subscription status
+      if(OS.User && OS.User.PushSubscription){
+        var sub = OS.User.PushSubscription;
+        console.log('[OS] Push subscription token:', sub.token);
+        console.log('[OS] Push subscription optedIn:', sub.optedIn);
+      }
+    }catch(e){ console.log('[OS] Login error:', e); }
   }
   if(window.OneSignal && typeof window.OneSignal.login==='function'){
     linkUser(window.OneSignal);
@@ -1666,15 +1676,28 @@ async function enableOSNotifications(){
   try{
     // Request via OneSignal if ready, fallback to native API
     if(window.OneSignal && window.OneSignal.Notifications){
+      console.log('[OS] Requesting permission via OneSignal...');
       await window.OneSignal.Notifications.requestPermission();
+      console.log('[OS] Permission result:', Notification.permission);
     } else if(typeof Notification !== 'undefined'){
+      console.log('[OS] Requesting permission via native API...');
       await Notification.requestPermission();
+    }
+    // Explicitly opt in to push via OneSignal
+    if(window.OneSignal && window.OneSignal.User && window.OneSignal.User.PushSubscription){
+      await window.OneSignal.User.PushSubscription.optIn();
+      console.log('[OS] Opted in, token:', window.OneSignal.User.PushSubscription.token);
     }
     // Link user after granting
     if(window._osExternalId && window.OneSignal && window.OneSignal.login){
-      window.OneSignal.login(window._osExternalId);
+      await window.OneSignal.login(window._osExternalId);
+      console.log('[OS] Logged in as:', window._osExternalId);
     }
   }catch(e){ console.log('Enable notif err:',e); }
+}
+function dismissNotifBarPermanent(){
+  dismissNotifBar();
+  localStorage.setItem('cf_notif_dismissed','1');
 }
 
 async function sendPushNotification(targetNames, title, body){
@@ -4256,7 +4279,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -8598,7 +8621,7 @@ async function dealDeleteFinal(id) {
     <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">Enable Notifications</div>
     <div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.4;">Get notified when tasks are completed, notes are added, or attention is needed.</div>
     <button onclick="enableOSNotifications()" style="width:100%;padding:14px;background:#4f46e5;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;margin-bottom:10px;">Allow Notifications</button>
-    <button onclick="dismissNotifBar()" style="width:100%;padding:12px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">Not Now</button>
+    <button onclick="dismissNotifBarPermanent()" style="width:100%;padding:12px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">Not Now</button>
   </div>
 </div>
 
