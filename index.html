@@ -4278,7 +4278,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -4674,16 +4674,16 @@ function mgrGoSection(id, label){
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
   if(id==='inventory'){invTab='all';['all','paint','detail','photos'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
-  else if(id==='tasks')renderMgrTasks();
-  else if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}
-  else if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}
-  else if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}
-  else if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}
+  else if(id==='tasks'){renderMgrTasks();markBadgeSeen('tasks');}
+  else if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();markBadgeSeen('repair');}
+  else if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();markBadgeSeen('detail');}
+  else if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();markBadgeSeen('photos');}
+  else if(id==='parts'){initCatSearchBar('parts');renderMgrParts();markBadgeSeen('parts');}
   else if(id==='tasks')renderReview();
   else if(id==='employees')renderTeam();
-  else if(id==='progress')renderProgress();
+  else if(id==='progress'){renderProgress();markBadgeSeen('progress');}
   else if(id==='calendar')renderCalendar();
-  else if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}
+  else if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();markBadgeSeen('paint');}
   updateTabBadges();
 }
 
@@ -4713,6 +4713,22 @@ function goMgrHome(){
   if(dots){var isVlad=me&&me.name.toLowerCase()==='vlad';dots.style.display=isVlad?'flex':'none';}
 }
 
+// Track which badge counts have been seen so they only show once when new
+var _seenBadges=JSON.parse(localStorage.getItem('cf_seen_badges')||'{}');
+function _badgeKey(name,color){return name+'_'+color;}
+function markBadgeSeen(category){
+  // Called when owner clicks into a section — mark current counts as seen
+  var cats=['tasks','detail','photos','repair','parts','paint','progress'];
+  if(category){
+    // Mark just this category's current counts as seen
+    var gc=document.getElementById('hbadge-'+category+'-green');
+    var rc=document.getElementById('hbadge-'+category);
+    if(gc) _seenBadges[_badgeKey(category,'green')]=parseInt(gc.textContent)||0;
+    if(rc) _seenBadges[_badgeKey(category,'red')]=parseInt(rc.textContent)||0;
+  }
+  localStorage.setItem('cf_seen_badges',JSON.stringify(_seenBadges));
+  updateHomeBadges();
+}
 function updateHomeBadges(){
   var asgns=(S.assignments||[]).filter(function(a){return !a.approved;});
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
@@ -4724,8 +4740,13 @@ function updateHomeBadges(){
   function setOrbitDual(baseName,green,red){
     var gEl=document.getElementById(baseName+'-green');
     var rEl=document.getElementById(baseName);
-    if(gEl){gEl.textContent=green;gEl.style.display=green>0?'block':'none';}
-    if(rEl){rEl.textContent=red;rEl.style.display=red>0?'block':'none';}
+    var seenG=_seenBadges[_badgeKey(baseName.replace('hbadge-',''),'green')]||0;
+    var seenR=_seenBadges[_badgeKey(baseName.replace('hbadge-',''),'red')]||0;
+    // Only show badge if count is HIGHER than what was previously seen
+    var showG=green>seenG?green:0;
+    var showR=red>seenR?red:0;
+    if(gEl){gEl.textContent=showG;gEl.style.display=showG>0?'block':'none';}
+    if(rEl){rEl.textContent=showR;rEl.style.display=showR>0?'block':'none';}
   }
   function hasPureTask(a){return (a.tasks||[]).some(function(t){if(typeof t==='object'&&t.done) return false;var txt=(typeof t==='object'?(t.name||t.text):t)||'';return !/\[(paint|detail|repair|photos|parts)\]/i.test(txt);});}
   var taskGreen=asgns.filter(function(a){return a.submitted&&!a.approved&&hasPureTask(a);}).length;
@@ -4736,7 +4757,10 @@ function updateHomeBadges(){
   setOrbitDual('hbadge-repair',reviewCount('repair'),queueCount('repair'));
   setOrbitDual('hbadge-parts',reviewCount('parts'),queueCount('parts'));
   setOrbitDual('hbadge-paint',reviewCount('paint'),queueCount('paint'));
-  var hbprog=document.getElementById('hbadge-progress'); if(hbprog){hbprog.textContent=allCount;hbprog.style.display=allCount>0?'block':'none';}
+  var hbprog=document.getElementById('hbadge-progress');
+  var seenProg=_seenBadges['progress_red']||0;
+  var showProg=allCount>seenProg?allCount:0;
+  if(hbprog){hbprog.textContent=showProg;hbprog.style.display=showProg>0?'block':'none';}
   updateAppBadge();
 }
 
