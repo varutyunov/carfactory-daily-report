@@ -943,8 +943,8 @@ canvas{display:none;}
 </div>
 
 <!-- DEAL UPLOAD OVERLAY -->
-<div id="deal-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+<div id="deal-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
     <button onclick="dealBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
     <span id="deal-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEAL UPLOAD</span>
   </div>
@@ -973,7 +973,11 @@ canvas{display:none;}
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
         <input id="deal-gps" placeholder="Enter GPS serial #" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-top:12px;">Pick Up Payment Amount <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
-        <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" oninput="dealPickupChanged()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <div id="deal-pickup-due-wrap" style="display:none;margin-top:12px;">
+          <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Pick Up Payment Due Date <span style="font-size:10px;color:#ef4444;text-transform:none;">*required</span></label>
+          <input id="deal-pickup-due" type="date" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;-webkit-appearance:none;"/>
+        </div>
       </div>
 
       <!-- Customer Name -->
@@ -7977,6 +7981,8 @@ function dealSelectCar(carId) {
   document.getElementById('deal-customer').value = '';
   document.getElementById('deal-gps').value = '';
   document.getElementById('deal-pickup-payment').value = '';
+  document.getElementById('deal-pickup-due').value = '';
+  document.getElementById('deal-pickup-due-wrap').style.display = 'none';
   _dealPayments = [];
   dealAddPayment();
   dealSetType('cash');
@@ -7998,6 +8004,12 @@ function dealSetType(type) {
     finBtn.style.background = 'transparent'; finBtn.style.color = '#888'; finBtn.style.borderColor = '#333';
     gpsWrap.style.display = 'none';
   }
+}
+
+function dealPickupChanged() {
+  var val = document.getElementById('deal-pickup-payment').value.trim();
+  var wrap = document.getElementById('deal-pickup-due-wrap');
+  wrap.style.display = (val && parseFloat(val) > 0) ? 'block' : 'none';
 }
 
 function dealAddPayment() {
@@ -8048,7 +8060,15 @@ function dealGoStep3() {
     var gps = document.getElementById('deal-gps').value.trim();
     if(!gps) { alert('Please enter the GPS serial number.'); return; }
     _dealData.gpsSerial = gps;
-    _dealData.pickupPayment = document.getElementById('deal-pickup-payment').value.trim();
+    var puAmt = document.getElementById('deal-pickup-payment').value.trim();
+    _dealData.pickupPayment = puAmt;
+    if(puAmt && parseFloat(puAmt) > 0) {
+      var puDue = document.getElementById('deal-pickup-due').value;
+      if(!puDue) { alert('Please enter the pick up payment due date.'); return; }
+      _dealData.pickupDue = puDue;
+    } else {
+      _dealData.pickupDue = null;
+    }
   }
   _dealData.customer = customer;
   _dealPhotos = [];
@@ -8141,9 +8161,10 @@ async function dealSubmit() {
       location: me ? me.location : 'DeBary',
       created_at: new Date().toISOString()
     };
-    // pickup_payment saved in payments note until DB column is added
-    if(_dealData.pickupPayment) {
-      record.gps_serial = (record.gps_serial || '') + ' | Pickup: $' + parseFloat(_dealData.pickupPayment).toFixed(2);
+    // Save pickup payment as its own columns
+    if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
+      record.pickup_payment = parseFloat(_dealData.pickupPayment);
+      record.pickup_payment_due = _dealData.pickupDue || null;
     }
 
     await sbPost('deals', record);
@@ -8186,10 +8207,11 @@ async function dealSubmit() {
       h += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">' + _dealData.gpsSerial + '</div>';
       h += '</div>';
     }
-    if(_dealData.pickupPayment) {
+    if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
       h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
       h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pick Up Payment</div>';
       h += '<div style="font-size:18px;font-weight:700;color:#f59e0b;">$' + parseFloat(_dealData.pickupPayment).toFixed(2) + '</div>';
+      if(_dealData.pickupDue) h += '<div style="font-size:13px;color:#888;margin-top:4px;">Due: ' + new Date(_dealData.pickupDue+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + '</div>';
       h += '</div>';
     }
     h += '<div style="font-size:13px;color:#555;text-align:center;margin-bottom:16px;">' + photoCount + ' photo' + (photoCount !== 1 ? 's' : '') + ' uploaded</div>';
@@ -8333,7 +8355,7 @@ function openDealDetail(id) {
 
   // GPS Serial + GPS Uploaded toggle + Pick Up Payment (finance only)
   if(isFinance && d.gps_serial) {
-    var gpsClean = d.gps_serial.split(' | Pickup:')[0].trim();
+    var gpsClean = d.gps_serial.trim();
     html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GPS Serial</div>';
     html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+gpsClean+'</div>';
@@ -8351,6 +8373,16 @@ function openDealDetail(id) {
     html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Pick Up Payment</div>';
     html += '<div style="font-size:22px;font-weight:700;color:#f59e0b;">$'+parseFloat(d.pickup_payment).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
+    if(d.pickup_payment_due) {
+      var dueDate = new Date(d.pickup_payment_due+'T00:00:00');
+      var today = new Date(); today.setHours(0,0,0,0);
+      var isPast = dueDate < today;
+      var isToday = dueDate.getTime() === today.getTime();
+      var dueFmt = dueDate.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      var dueColor = isPast ? '#ef4444' : (isToday ? '#f59e0b' : '#888');
+      var dueLabel = isPast ? 'OVERDUE — ' : (isToday ? 'DUE TODAY — ' : 'Due: ');
+      html += '<div style="font-size:13px;color:'+dueColor+';margin-top:6px;font-weight:'+(isPast||isToday?'700':'400')+';">'+dueLabel+dueFmt+'</div>';
+    }
     html += '</div>';
   }
 

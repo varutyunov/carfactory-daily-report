@@ -4,10 +4,14 @@
  * Pulls finance deals from Supabase where gps_uploaded = false,
  * registers each GPS serial in Passtime OASIS, then marks gps_uploaded = true.
  *
- * Runs daily at 9AM ET via GitHub Actions with Playwright.
+ * Usage:
+ *   LOCAL (headed, with 2FA wait): node scripts/gps-sync.js --local
+ *   CI (headless, no 2FA):         node scripts/gps-sync.js
  */
 
 const { chromium } = require('playwright');
+
+const LOCAL_MODE = process.argv.includes('--local');
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_KEY;
@@ -49,8 +53,8 @@ async function sbPatch(table, id, body) {
 // ── Parse Deal Data ──────────────────────────────────────────────────────────
 
 function parseDeal(deal) {
-  // GPS serial is stored in gps_serial field, possibly with " | Pickup: $X" appended
-  const rawSerial = (deal.gps_serial || '').split(' | Pickup:')[0].trim();
+  // GPS serial is now stored as a clean value in its own column
+  const rawSerial = (deal.gps_serial || '').trim();
 
   // Customer name — split into first/last
   const nameParts = (deal.customer_name || '').trim().split(/\s+/);
@@ -94,20 +98,58 @@ async function waitForNav(page, timeout = 15000) {
 // ── Passtime Login ───────────────────────────────────────────────────────────
 
 async function passtimeLogin(page) {
-  console.log('🔐 Logging into Passtime OASIS...');
+  console.log('🔐 Opening Passtime OASIS login...');
   await page.goto(PASSTIME_URL, { waitUntil: 'networkidle' });
   await sleep(2000);
 
-  // Fill login form
-  await page.evaluate(({ account, user, pass }) => {
-    document.getElementById('login_DealerNumber').value = account;
-    document.getElementById('login_UserName').value = user;
-    document.getElementById('login_Password').value = pass;
-    var btn = document.querySelector('input[value*="Login"]');
-    if (btn) { btn.disabled = false; btn.click(); }
-  }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS });
+  if (LOCAL_MODE) {
+    // ── Local: User logs in manually, we just wait ────────────────────────
+    // Pre-fill account number and username as a convenience
+    await page.evaluate(({ account, user }) => {
+      var acct = document.getElementById('login_DealerNumber');
+      var usr = document.getElementById('login_UserName');
+      if (acct) acct.value = account;
+      if (usr) usr.value = user;
+      var pwd = document.getElementById('login_Password');
+      if (pwd) pwd.focus();
+    }, { account: PT_ACCOUNT, user: PT_USER });
 
-  await waitForNav(page);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('   LOG IN NOW — Enter your password and complete 2FA.');
+    console.log('   The script will take over once you reach the dashboard.');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+
+    // Poll every 3 seconds for up to 5 minutes waiting for dashboard
+    const maxWait = 300000;
+    const start = Date.now();
+    let landed = false;
+    while (Date.now() - start < maxWait) {
+      await sleep(3000);
+      const currentUrl = page.url();
+      if (currentUrl.includes('CustomerRpt') || currentUrl.includes('Dashboard') || currentUrl.includes('Default') || currentUrl.includes('EliteRenewalCheck')) {
+        landed = true;
+        break;
+      }
+    }
+
+    if (!landed) {
+      console.log('❌ Timed out waiting for login (5 minutes). Exiting.');
+      return false;
+    }
+  } else {
+    // ── CI: Automated login ───────────────────────────────────────────────
+    await page.evaluate(({ account, user, pass }) => {
+      document.getElementById('login_DealerNumber').value = account;
+      document.getElementById('login_UserName').value = user;
+      document.getElementById('login_Password').value = pass;
+      var btn = document.querySelector('input[value*="Login"]');
+      if (btn) { btn.disabled = false; btn.click(); }
+    }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS });
+
+    await waitForNav(page);
+  }
 
   // Skip EliteRenewalCheck if present
   const skipBtn = await page.$('input[value*="Skip"]');
@@ -120,14 +162,14 @@ async function passtimeLogin(page) {
     await waitForNav(page);
   }
 
-  const url = page.url();
-  if (url.includes('CustomerRpt') || url.includes('Dashboard') || url.includes('Default')) {
-    console.log('✅ Login successful — on Dashboard');
+  const finalUrl = page.url();
+  if (finalUrl.includes('CustomerRpt') || finalUrl.includes('Dashboard') || finalUrl.includes('Default')) {
+    console.log('✅ Logged in — on Dashboard. Starting automation...');
     return true;
   }
 
-  console.log('⚠️  Login may have issues — current URL:', url);
-  return true; // Try to proceed anyway
+  console.log('⚠️  Login may have issues — current URL:', finalUrl);
+  return true;
 }
 
 // ── Search from Dashboard ────────────────────────────────────────────────────
@@ -383,8 +425,7 @@ async function main() {
 
   // Filter to only deals that have a GPS serial
   const dealsWithGps = deals.filter(d => {
-    const serial = (d.gps_serial || '').split(' | Pickup:')[0].trim();
-    return serial.length > 0;
+    return (d.gps_serial || '').trim().length > 0;
   });
 
   console.log(`Found ${deals.length} unprocessed finance deals, ${dealsWithGps.length} with GPS serials\n`);
@@ -394,10 +435,12 @@ async function main() {
     return;
   }
 
-  // Launch browser
-  const browser = await chromium.launch({ headless: true });
+  // Launch browser — headed in local mode so you can do 2FA
+  console.log(LOCAL_MODE ? '🖥️  Local mode — opening browser window...' : '🤖 CI mode — headless browser');
+  const browser = await chromium.launch({ headless: !LOCAL_MODE });
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: LOCAL_MODE ? { width: 1280, height: 900 } : undefined
   });
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
@@ -445,9 +488,19 @@ async function main() {
   console.log(`⏭️  Skipped: ${skipLog.length}`);
   skipLog.forEach(s => console.log(`   • ${s.name} — ${s.reason}${s.serial ? ' (Serial: ' + s.serial + ')' : ''}`));
   console.log('════════════════════════════════════════\n');
+
+  if (LOCAL_MODE) {
+    console.log('Press any key to close...');
+    await new Promise(resolve => process.stdin.once('data', resolve));
+  }
 }
 
 main().catch(err => {
   console.error('❌ Fatal error:', err);
-  process.exit(1);
+  if (LOCAL_MODE) {
+    console.log('\nPress any key to close...');
+    process.stdin.once('data', () => process.exit(1));
+  } else {
+    process.exit(1);
+  }
 });
