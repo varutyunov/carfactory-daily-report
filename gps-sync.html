@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>GPS Sync — Bookmarklet Setup</title>
+<style>
+  body { background:#000; color:#fff; font-family:system-ui,sans-serif; padding:40px; max-width:600px; margin:0 auto; }
+  h1 { color:#30d158; font-size:28px; }
+  .step { background:#111; border-radius:14px; padding:20px; margin:16px 0; }
+  .step-num { color:#30d158; font-weight:800; font-size:18px; }
+  a.bookmarklet { display:inline-block; background:#30d158; color:#000; font-weight:800; font-size:18px; padding:14px 32px; border-radius:14px; text-decoration:none; margin:10px 0; cursor:grab; }
+  a.bookmarklet:hover { background:#2bb84d; }
+  code { background:#1a1a1a; padding:2px 6px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>🛰️ GPS Sync Setup</h1>
+<p style="color:#888;">One-time setup to add the GPS sync bookmarklet to your browser.</p>
+
+<div class="step">
+  <div class="step-num">Step 1</div>
+  <p>Drag this button to your <strong>bookmarks bar</strong>:</p>
+  <p>
+    <a class="bookmarklet" href="javascript:void(fetch('https://carfactory.work/scripts/gps-bookmarklet.js').then(r=>r.text()).then(t=>eval(t)).catch(e=>alert('Error loading GPS Sync: '+e.message)));">⚡ GPS Sync</a>
+  </p>
+  <p style="color:#666;font-size:12px;">If you don't see your bookmarks bar, press <code>Ctrl+Shift+B</code></p>
+</div>
+
+<div class="step">
+  <div class="step-num">Step 2 — Every Morning</div>
+  <ol style="color:#ccc;line-height:2;">
+    <li>Go to <a href="https://secure.passtimeusa.com" target="_blank" style="color:#60a5fa;">secure.passtimeusa.com</a> and log in</li>
+    <li>Complete 2FA on your phone</li>
+    <li>Once you're on the dashboard, click <strong>⚡ GPS Sync</strong> in your bookmarks</li>
+    <li>Watch it work — it'll register each GPS and mark them done</li>
+  </ol>
+</div>
+
+<div class="step">
+  <div class="step-num">What it does</div>
+  <ul style="color:#888;line-height:2;">
+    <li>Pulls all finance deals with <code>gps_uploaded = false</code></li>
+    <li>Searches each GPS serial in Passtime</li>
+    <li>If found → edits the record with customer info</li>
+    <li>If not found → adds a new record via Encore</li>
+    <li>Marks each as done in the app</li>
+  </ul>
+</div>
+</body>
+</html>

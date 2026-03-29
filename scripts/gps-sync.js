@@ -437,7 +437,23 @@ async function main() {
 
   // Launch browser — headed in local mode so you can do 2FA
   console.log(LOCAL_MODE ? '🖥️  Local mode — opening browser window...' : '🤖 CI mode — headless browser');
-  const browser = await chromium.launch({ headless: !LOCAL_MODE });
+  const launchOpts = { headless: !LOCAL_MODE };
+  // In local mode, use system Chrome to avoid Playwright browser version issues
+  if (LOCAL_MODE) {
+    const fs = require('fs');
+    const chromePaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe'
+    ];
+    for (const p of chromePaths) {
+      if (fs.existsSync(p)) { launchOpts.executablePath = p; break; }
+    }
+    if (launchOpts.executablePath) {
+      console.log('  Using system Chrome: ' + launchOpts.executablePath);
+    }
+  }
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: LOCAL_MODE ? { width: 1280, height: 900 } : undefined
