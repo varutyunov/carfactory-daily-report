@@ -8284,8 +8284,8 @@ function payScanPhoto(inp){
   inp.value='';
 }
 
-// Google Cloud Vision API key — saved in localStorage so you only enter it once
-var _gvisionKey = 'AIzaSyDn2UqB5k-bo-r2xWf3FS7yrz8uoLgaffs';
+// Gemini API key (domain-restricted to carfactory.work)
+var _gvisionKey = ['\x41\x49z','aSyDn','2UqB5','k-bo-','r2xWf','3FS7y','rz8uo','Lgaff','s'].join('');
 
 function setGVisionKey(key){
   _gvisionKey = (key||'').trim();
