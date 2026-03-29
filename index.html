@@ -1652,8 +1652,8 @@ function showNotifEnableBar(){
   if(document.getElementById('notif-bar')) return;
   const bar = document.createElement('div');
   bar.id = 'notif-bar';
-  bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-bottom:1px solid #4f46e5;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-  bar.innerHTML='<span style="font-size:13px;color:#ccc;">🔔 Enable push notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:0 4px;">×</button>';
+  bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-top:1px solid #4f46e5;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:space-between;gap:12px;';
+  bar.innerHTML='<span style="font-size:14px;color:#ccc;">🔔 Enable notifications</span><button onclick="enableOSNotifications()" style="background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">Enable</button><button onclick="document.getElementById(\'notif-bar\').remove()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">×</button>';
   document.body.appendChild(bar);
 }
 
