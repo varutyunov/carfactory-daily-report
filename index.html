@@ -8277,10 +8277,16 @@ function renderDeals() {
       : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Cash</span>';
     var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : '';
     var dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString() : '';
+    var gpsTag = '';
+    if(isFinance && d.gps_serial) {
+      gpsTag = d.gps_uploaded
+        ? '<span style="background:rgba(48,209,88,0.15);color:#30d158;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">✓ GPS</span>'
+        : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">⏳ GPS</span>';
+    }
     return '<div onclick="openDealDetail('+d.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
         '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(d.customer_name||'Unknown')+'</div>' +
-        badge +
+        gpsTag + badge +
       '</div>' +
       '<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(d.vehicle_desc||'')+(d.stock?' &middot; #'+d.stock:'')+'</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -8325,11 +8331,20 @@ function openDealDetail(id) {
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
   html += '</div>';
 
-  // GPS Serial + Pick Up Payment (finance only)
+  // GPS Serial + GPS Uploaded toggle + Pick Up Payment (finance only)
   if(isFinance && d.gps_serial) {
+    var gpsClean = d.gps_serial.split(' | Pickup:')[0].trim();
     html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GPS Serial</div>';
-    html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+d.gps_serial+'</div>';
+    html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+gpsClean+'</div>';
+    // GPS Uploaded toggle
+    var gpsChecked = !!d.gps_uploaded;
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #1a1a1a;">';
+    html += '<div onclick="toggleGpsUploaded('+d.id+',this)" style="width:44px;height:26px;border-radius:13px;background:'+(gpsChecked?'#30d158':'#333')+';cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;">';
+    html += '<div style="width:22px;height:22px;border-radius:11px;background:#fff;position:absolute;top:2px;'+(gpsChecked?'right:2px;':'left:2px;')+'transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>';
+    html += '</div>';
+    html += '<span style="font-size:13px;color:'+(gpsChecked?'#30d158':'#666')+';font-weight:600;">'+(gpsChecked?'GPS Registered':'GPS Not Registered')+'</span>';
+    html += '</div>';
     html += '</div>';
   }
   if(isFinance && d.pickup_payment) {
@@ -8382,6 +8397,22 @@ function openDealDetail(id) {
 
   html += '</div>';
   document.getElementById('deals-view-body').innerHTML = html;
+}
+
+async function toggleGpsUploaded(id, el) {
+  var d = _dealsData.find(function(x){ return x.id === id; });
+  if(!d) return;
+  var newVal = !d.gps_uploaded;
+  try {
+    await sbPatch('deals', id, { gps_uploaded: newVal });
+    d.gps_uploaded = newVal;
+    // Update toggle visually
+    el.style.background = newVal ? '#30d158' : '#333';
+    var knob = el.querySelector('div');
+    if(knob){ knob.style.left = newVal ? '' : '2px'; knob.style.right = newVal ? '2px' : ''; }
+    var label = el.nextElementSibling;
+    if(label){ label.textContent = newVal ? 'GPS Registered' : 'GPS Not Registered'; label.style.color = newVal ? '#30d158' : '#666'; }
+  } catch(e) { alert('Error updating: ' + e.message); }
 }
 
 function dealDeleteConfirm(id) {
