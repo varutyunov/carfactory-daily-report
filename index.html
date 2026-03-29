@@ -8697,16 +8697,10 @@ function renderMgrDeals() {
 
 function openDealsView() {
   _dealsViewingDetail = false;
-  _dealsPickingLocation = true;
+  _dealsPickingLocation = false;
   document.getElementById('deals-view-overlay').style.display = 'flex';
-  document.getElementById('deals-view-title').textContent = 'DEALS';
-  // Show location picker
-  var body = document.getElementById('deals-view-body');
-  body.innerHTML = '<div style="padding:40px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;">' +
-    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Select Location</div>' +
-    '<button onclick="dealsPickLocation(\'DeBary\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);border:1px solid #a87000;border-radius:18px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeBary</button>' +
-    '<button onclick="dealsPickLocation(\'DeLand\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#001233,#003080,#1d4ed8);border:1px solid #3b82f6;border-radius:18px;color:#60a5fa;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeLand</button>' +
-  '</div>';
+  // Default to DeBary, show toggle to switch
+  dealsPickLocation(_dealsLocation || 'DeBary');
   // Mark deals as seen — clear badge
   sbGet('deals', 'select=id').then(function(rows) {
     localStorage.setItem('deals_last_seen_count', rows.length);
@@ -8718,35 +8712,27 @@ function openDealsView() {
 function dealsPickLocation(loc) {
   _dealsLocation = loc;
   _dealsPickingLocation = false;
-  document.getElementById('deals-view-title').textContent = 'DEALS — ' + loc.toUpperCase();
+  document.getElementById('deals-view-title').textContent = 'DEALS';
   var body = document.getElementById('deals-view-body');
-  body.innerHTML = '<div style="padding:12px;"><input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+  var dbActive = loc === 'DeBary';
+  var dlActive = loc === 'DeLand';
+  var toggleHtml = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+    '<button onclick="dealsPickLocation(\'DeBary\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid '+(dbActive?'#a87000':'#1e1e1e')+';background:'+(dbActive?'linear-gradient(145deg,#1a1000,#4a3000)':'#0d0d0d')+';color:'+(dbActive?'#f59e0b':'#555')+';">DeBary</button>' +
+    '<button onclick="dealsPickLocation(\'DeLand\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid '+(dlActive?'#3b82f6':'#1e1e1e')+';background:'+(dlActive?'linear-gradient(145deg,#001233,#003080)':'#0d0d0d')+';color:'+(dlActive?'#60a5fa':'#555')+';">DeLand</button>' +
+  '</div>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + '<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
 function dealsViewBack() {
   if(_dealsViewingDetail) {
     _dealsViewingDetail = false;
-    document.getElementById('deals-view-title').textContent = 'DEALS — ' + (_dealsLocation||'').toUpperCase();
-    var body = document.getElementById('deals-view-body');
-    body.innerHTML = '<div style="padding:12px;"><input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
-    loadDeals();
-  } else if(_dealsPickingLocation) {
-    _dealsPickingLocation = false;
+    dealsPickLocation(_dealsLocation);
+  } else {
     document.getElementById('deals-view-overlay').style.display = 'none';
     showView('mgr-home');
     var dealsTab = document.getElementById('tab-deals');
     if(dealsTab) dealsTab.classList.remove('on');
-  } else {
-    // Go back to location picker
-    _dealsPickingLocation = true;
-    document.getElementById('deals-view-title').textContent = 'DEALS';
-    var body = document.getElementById('deals-view-body');
-    body.innerHTML = '<div style="padding:40px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;">' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Select Location</div>' +
-      '<button onclick="dealsPickLocation(\'DeBary\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);border:1px solid #a87000;border-radius:18px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeBary</button>' +
-      '<button onclick="dealsPickLocation(\'DeLand\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#001233,#003080,#1d4ed8);border:1px solid #3b82f6;border-radius:18px;color:#60a5fa;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeLand</button>' +
-    '</div>';
   }
 }
 
