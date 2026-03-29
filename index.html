@@ -68,28 +68,39 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .car-tile:active{transform:scale(.96);}
 .car-tile.st-done{border-color:#1e3a1e;}
 .car-tile.st-review{border-color:#2a2500;}
-.tile-photo-wrap{width:100%;aspect-ratio:1;position:relative;overflow:hidden;background:#111;}
+.tile-photo-wrap{width:100%;height:145px;position:relative;overflow:hidden;background:#111;}
 .tile-photo{width:100%;height:100%;object-fit:cover;background:#111;}
 .tile-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#141414,#1c1c1c);}
 .tile-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,transparent 35%,rgba(0,0,0,.55) 100%);}
-.tile-grad{position:absolute;bottom:0;left:0;right:0;height:70%;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.4) 50%,transparent 100%);}
+.tile-grad{position:absolute;bottom:0;left:0;right:0;height:56px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
 .tile-badge{position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;z-index:2;}
 .tbd{background:rgba(48,209,88,.2);color:#30d158;border:1px solid rgba(48,209,88,.25);}
 .tbr{background:rgba(255,214,10,.2);color:#ffd60a;border:1px solid rgba(255,214,10,.25);}
 .tbp{background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);}
 .tile-urgent{position:absolute;top:9px;left:9px;background:rgba(255,69,58,.25);color:#ff453a;border:1px solid rgba(255,69,58,.3);font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;z-index:2;}
-.tile-info{position:absolute;bottom:0;left:0;right:0;padding:8px 10px 10px;z-index:3;}
-.tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tile-stock{font-size:10px;color:rgba(255,255,255,.6);}
-.tile-cam{position:absolute;bottom:8px;right:8px;z-index:4;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;-webkit-tap-highlight-color:transparent;}
+.tile-body{padding:10px 11px 12px;}
+.tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;word-break:break-word;}
+.tile-stock{font-size:11px;color:#666;}
+/* Inventory square tile grid */
+.inv-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.inv-tile{border-radius:16px;overflow:hidden;cursor:pointer;position:relative;background:#0d0d0d;border:1px solid #1e1e1e;transition:transform .15s;}
+.inv-tile:active{transform:scale(.96);}
+.inv-tile-wrap{width:100%;aspect-ratio:1;position:relative;overflow:hidden;background:#111;}
+.inv-tile-photo{width:100%;height:100%;object-fit:cover;background:#111;}
+.inv-tile-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#141414,#1c1c1c);}
+.inv-tile-grad{position:absolute;bottom:0;left:0;right:0;height:70%;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.4) 50%,transparent 100%);}
+.inv-tile-info{position:absolute;bottom:0;left:0;right:0;padding:8px 10px 10px;z-index:3;}
+.inv-tile-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inv-tile-sub{font-size:10px;color:rgba(255,255,255,.6);}
+.inv-tile-cam{position:absolute;bottom:8px;right:8px;z-index:4;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;-webkit-tap-highlight-color:transparent;}
 /* Compact employee queue cards */
 .eq-list{display:flex;flex-direction:column;gap:10px;padding:0 14px 80px;padding-top:0;}
 .eq-card{display:flex;align-items:center;gap:12px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:10px 12px;}
 .eq-card.eq-done{border-color:rgba(48,209,88,0.3);}
 .eq-card.eq-review{border-color:rgba(255,214,10,0.3);}
 .eq-card.eq-confirmed{border-color:rgba(48,209,88,0.5);}
-.eq-thumb{width:72px;height:72px;border-radius:12px;object-fit:cover;flex-shrink:0;background:#111;}
-.eq-thumb-ph{width:72px;height:72px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#161616;flex-shrink:0;font-size:22px;}
+.eq-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#111;}
+.eq-thumb-ph{width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#161616;flex-shrink:0;font-size:22px;}
 .eq-info{flex:1;min-width:0;}
 .eq-name{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .eq-sub{font-size:11px;color:#555;margin-top:1px;}
@@ -98,10 +109,11 @@ html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,Blink
 .eq-mark-btn{background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:11px;font-weight:700;border-radius:9px;padding:6px 12px;cursor:pointer;}
 .eq-review-badge{background:rgba(255,214,10,0.12);border:1px solid rgba(255,214,10,0.3);color:#ffd60a;font-size:10px;font-weight:700;border-radius:8px;padding:5px 10px;text-align:center;}
 .eq-confirmed-badge{background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:10px;font-weight:700;border-radius:8px;padding:5px 10px;text-align:center;}
-.tile-pb{height:2px;background:rgba(255,255,255,.12);border-radius:1px;overflow:hidden;margin-top:6px;}
+.tile-pb{height:2px;background:#1a1a1a;border-radius:1px;overflow:hidden;margin-top:8px;}
 .tile-pf{height:100%;border-radius:1px;transition:width .3s;}
 .pfg{background:#30d158;}
-.pfw{background:rgba(255,255,255,.35);}
+.pfw{background:#555;}
+.tile-pct{font-size:10px;color:#444;margin-top:3px;}
 
 /* TASK VIEW */
 #emp-tasks{padding:0;}
@@ -2001,7 +2013,7 @@ function renderGrid(){
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} · ${colorStr}`:vinLast6;
-    return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})"><div class="tile-photo-wrap">${photoHTML}<div class="tile-info"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div></div>${badge}${urgentBadge}<label class="tile-cam" onclick="event.stopPropagation();promptCarIcon(${car.id})">\u{1F4F7}</label></div></div>`;
+    return`<div class="car-tile st-${status}" onclick="openTaskView(${a.id})">${badge}${urgentBadge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></div>`;
   }).join('');
   applyPexels(mine.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
@@ -2290,7 +2302,8 @@ function renderPersonalTab(){
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     return`<div class="car-tile" style="border-color:#1a2a3a;">
-      <div class="tile-photo-wrap">${photoHTML}<div class="tile-info"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' \xB7 '+car.color:''}</div><div style="margin-top:4px;">${tags}</div></div><label class="tile-cam" onclick="event.stopPropagation();promptCarIcon(${car.id})">\u{1F4F7}</label></div>
+      <div class="tile-photo-wrap">${photoHTML}</div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags}</div></div>
     </div>`;
   }).join('');
   applyPexels(cars);
@@ -2619,19 +2632,19 @@ function renderInv(){
     if(invRecentOnly) _stEl.textContent='Showing '+items.length+' vehicle'+(items.length===1?'':'s')+' added in the last 2 weeks';
     else _stEl.textContent='Ready to sync  ·  v Mar-24';
   }
-  document.getElementById('inv-list').innerHTML=items.map(car=>{
+  document.getElementById('inv-list').innerHTML='<div class="inv-grid">'+items.map(car=>{
     const asgns=S.assignments.filter(a=>a.inventoryId===car.id&&!a.approved);
     const pxI=!car.photo&&pxCache[String(car.id)];
     const ws=getWorkState(car.id);
     const carSel=ws.selected||false;
-    const thImg=car.photo?`<img class="inv-thumb" src="${car.photo}"/>`:pxI?`<img class="inv-thumb" src="${pxI}"/>`:`<div class="inv-thumb-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const tags=asgns.filter(a=>a.tasks&&a.tasks.length>0).map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<div class="inv-assigned-tag">\u2192 ${e?e.name:'?'}</div>`;}).join('');
+    const photoHTML=car.photo?`<img class="inv-tile-photo" src="${car.photo}"/>`:pxI?`<img class="inv-tile-photo" src="${pxI}"/>`:`<div class="inv-tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
+    const tags=asgns.filter(a=>a.tasks&&a.tasks.length>0).map(a=>{const e=S.employees.find(x=>x.id===a.employeeId);return`<span style="font-size:9px;color:#64d2ff;">\u2192 ${e?e.name:'?'}</span>`;}).join(' ');
     const _tabChip={paint:{e:'🎨',c:'#ec4899'},detail:{e:'✨',c:'#a78bfa'},repair:{e:'🔧',c:'#fb923c'},photos:{e:'📷',c:'#c056f3'},parts:{e:'📦',c:'#fbbf24'}};
-    const statusChips=Object.keys(_tabChip).filter(k=>ws.categories&&ws.categories[k]&&ws.categories[k].sectionPool).map(k=>`<span style="font-size:10px;background:${_tabChip[k].c}22;color:${_tabChip[k].c};border:1px solid ${_tabChip[k].c}44;border-radius:4px;padding:2px 5px;font-weight:700;">${_tabChip[k].e} ${k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join('');
-    const statusRow=statusChips?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;">${statusChips}</div>`:'';
-    return`<div class="inv-card" style="border:2px solid ${carSel?'#30d158':'rgba(255,255,255,.15)'};transition:border-color .2s,box-shadow .2s;box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};"><div class="inv-card-top"><a href="javascript:void(0)" onclick="openCarActions(${car.id});return false;" style="flex-shrink:0;display:block;-webkit-tap-highlight-color:rgba(0,0,0,0);touch-action:manipulation;">${thImg}</a><div class="inv-info" onclick="openCarActions(${car.id})"><div class="inv-name">${car.name}</div><div class="inv-meta">${car.stock||(car.vin?car.vin.slice(-6):'')}${car.color?' \xB7 '+car.color:''}${car.miles?' \xB7 '+(Number(car.miles)||0).toLocaleString()+' mi':''}</div>${tags}${statusRow}</div><button onclick="event.stopPropagation();toggleCarWorkSel(${car.id})" style="width:22px;height:22px;border-radius:50%;border:2px solid ${carSel?'#30d158':'transparent'};background:${carSel?'#30d158':'transparent'};flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:0;opacity:${carSel?'1':'0'};"></button>`
-    + `</div></div>`;
-  }).join('');
+    const statusChips=Object.keys(_tabChip).filter(k=>ws.categories&&ws.categories[k]&&ws.categories[k].sectionPool).map(k=>`<span style="font-size:9px;background:${_tabChip[k].c}22;color:${_tabChip[k].c};border-radius:3px;padding:1px 4px;font-weight:700;">${_tabChip[k].e}</span>`).join('');
+    const meta=car.stock||(car.vin?car.vin.slice(-6):'');
+    const colorMiles=[car.color,car.miles?(Number(car.miles)||0).toLocaleString()+' mi':''].filter(Boolean).join(' · ');
+    return`<div class="inv-tile" style="border-color:${carSel?'#30d158':'#1e1e1e'};box-shadow:${carSel?'0 0 12px rgba(48,209,88,.3)':'none'};" onclick="openCarActions(${car.id})"><div class="inv-tile-wrap">${photoHTML}<div class="inv-tile-grad"></div><div class="inv-tile-info"><div class="inv-tile-name">${car.name}</div><div class="inv-tile-sub">${meta}${colorMiles?' · '+colorMiles:''}</div>${tags?'<div style="margin-top:2px;">'+tags+'</div>':''}${statusChips?'<div style="display:flex;gap:2px;margin-top:3px;">'+statusChips+'</div>':''}</div><label class="inv-tile-cam" onclick="event.stopPropagation();promptCarIcon(${car.id})">\u{1F4F7}</label></div></div>`;
+  }).join('')+'</div>';
   applyPexels(items);
 }
 
@@ -2854,7 +2867,7 @@ function renderAssigned(){
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
     const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const colorStr=car.color?car.color:'';const tileSubLine=colorStr?`${vinLast6} \xB7 ${colorStr}`:vinLast6;
-    return`<a href="javascript:openMgrAssign('${a.id}')" class="car-tile st-${status}" style="display:block;text-decoration:none;color:inherit;"><div class="tile-photo-wrap">${photoHTML}<div class="tile-info"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:10px;color:#64d2ff;margin-top:2px;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div></div>${badge}</div></a>`;
+    return`<a href="javascript:openMgrAssign('${a.id}')" class="car-tile st-${status}" style="display:block;text-decoration:none;color:inherit;">${badge}<div class="tile-photo-wrap">${photoHTML}</div><div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${tileSubLine}</div><div style="font-size:11px;color:#64d2ff;margin:2px 0;">\u2192 ${emp?emp.name:'?'}</div><div class="tile-pb"><div class="tile-pf ${status==='done'||status==='review'?'pfg':'pfw'}" style="width:${pct}%"></div></div><div class="tile-pct">${pct}% complete</div></div></a>`;
   }).join('')+'</div>';
   applyPexels(allAsgns.map(a=>S.inventory.find(c=>c.id===a.inventoryId)).filter(Boolean));
 }
@@ -6496,18 +6509,12 @@ function empRenderInv(){
   }).sort(function(a,b){return b.id-a.id;});
   var stEl=document.getElementById('emp-sync-st');
   if(stEl&&!stEl.dataset.syncing) stEl.textContent=items.length+' vehicles · '+myLoc;
-  list.innerHTML=items.map(function(car){
-    var thumb=car.photo?'<img style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;" src="'+car.photo+'"/>':'<div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+  list.innerHTML='<div class="inv-grid">'+items.map(function(car){
+    var pxI=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?'<img class="inv-tile-photo" src="'+car.photo+'"/>':pxI?'<img class="inv-tile-photo" src="'+pxI+'"/>':'<div class="inv-tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
     var meta=(car.stock||'')+(car.color?' · '+car.color:'')+(car.miles?' · '+(Number(car.miles)||0).toLocaleString()+' mi':'');
-    return '<div onclick="empOpenCar('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">'
-      +thumb
-      +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>'
-      +'<div style="font-size:11px;color:#555;margin-top:3px;">'+meta+'</div>'
-      +'</div>'
-      +'<div style="font-size:18px;color:#333;">›</div>'
-      +'</div>';
-  }).join('');
+    return '<div class="inv-tile" onclick="empOpenCar('+car.id+')"><div class="inv-tile-wrap">'+photoHTML+'<div class="inv-tile-grad"></div><div class="inv-tile-info"><div class="inv-tile-name">'+car.name+'</div><div class="inv-tile-sub">'+meta+'</div></div><label class="inv-tile-cam" onclick="event.stopPropagation();promptCarIcon('+car.id+')">\u{1F4F7}</label></div></div>';
+  }).join('')+'</div>';
   if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
 }
 async function empSyncInv(){
