@@ -1,0 +1,21 @@
+name: Car Factory Inventory Sync
+on:
+  schedule:
+    - cron: '0 12 * * *'  # 8AM ET daily
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+  push:
+    paths:
+      - 'InventoryMaster.csv'  # also run whenever the CSV is updated
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install node-fetch@2
+      - run: node scripts/inventory-sync.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

@@ -1,0 +1,9 @@
+Done. Here's what's saved for the next Claude:
+
+**`project_handoff.md`** — Full technical briefing: every function, every CSS class, the navigation system, git workflow, Supabase, service worker, what's broken, what works. The most important file.
+
+**`user_profile.md`** — Who you are, how you work, your credentials, your devices, the real logo location.
+
+**`feedback_patches.md`** — Every mistake made and the correct pattern: don't re-run patch scripts, always push both branches, the real logo is in `CarFactory 2026/`, the .tb/.mgr-back-bar overlap fix, the broken `doSync()`.
+
+Any future Claude session on this project will load these automatically. The two things that burned the most time — the master/main branch confusion and the icon situation — are both fully documented so they won't happen again.

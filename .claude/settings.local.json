@@ -1,0 +1,35 @@
+{
+  "dangerouslySkipPermissions": true,
+  "permissions": {
+    "allow": [
+      "Bash(netlify status:*)",
+      "Bash(npx netlify-cli:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git checkout:*)",
+      "Bash(GIT_TERMINAL_PROMPT=0 git push origin master:main)",
+      "Bash(gh run:*)",
+      "Bash(find C:/Users/Vlad/Desktop/carfactory/.claude -name *.json -o -name *.md)",
+      "Bash(xargs grep:*)",
+      "Bash(python3 -:*)",
+      "Bash(C:/Users/Vlad/AppData/Local/Programs/Python/Python314/python.exe -:*)",
+      "Bash(C:/Users/Vlad/AppData/Local/Programs/Python/Python314/python.exe -m pip install numpy pillow --quiet)",
+      "Bash(find C:/Users/Vlad -name *WHITE* -o -name *logo*)",
+      "Bash(find C:/Users/Vlad/Downloads -name *Car_Factory* -o -name *car_factory*)",
+      "Bash(find C:/Users/Vlad/Downloads -name *WHITE* -o -name *logo* -o -name *factory*)",
+      "Bash(find C:/Users/Vlad/Downloads -name *.jpg -o -name *.png -o -name *.jpeg)",
+      "Bash(ls -lt C:/Users/Vlad/Downloads/*.jpg C:/Users/Vlad/Downloads/*.png C:/Users/Vlad/Downloads/*.jpeg)",
+      "Bash(C:/Users/Vlad/AppData/Local/Programs/Python/Python314/python.exe -c \":*)",
+      "Bash(grep -v \"base64\\|^[0-9]*:.\\{200,\\}\")",
+      "Bash(find C:/Users/Vlad/ -name *.jpg -o -name *.png -o -name *.jpeg)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -v \"^[0-9]*:.\\{300,\\}\")",
+      "Bash(grep -v \"base64\\|^[0-9]*:.\\{300,\\}\")",
+      "WebSearch"
+    ]
+  }
+}
