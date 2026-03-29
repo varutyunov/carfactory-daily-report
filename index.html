@@ -1023,7 +1023,7 @@ canvas{display:none;}
       <div style="display:flex;gap:10px;">
         <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
           📷 Take Photo
-          <input type="file" accept="image/*" capture="environment" onchange="dealPhotosAdded(this)" style="display:none;"/>
+          <input type="file" accept="image/*" onchange="dealPhotosAdded(this)" style="display:none;"/>
         </label>
         <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
           📁 Upload
@@ -6608,7 +6608,7 @@ function promptCarIcon(carId){
   var inp=document.getElementById('shared-car-icon-inp');
   if(!inp){
     inp=document.createElement('input');
-    inp.type='file';inp.accept='image/*';inp.capture='environment';
+    inp.type='file';inp.accept='image/*';
     inp.id='shared-car-icon-inp';inp.style.display='none';
     inp.onchange=function(){
       var f=inp.files[0];if(!f||!_iconUploadCarId)return;
@@ -7092,7 +7092,7 @@ function _txInit() {
         <label style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin:0;">
           <div style="font-size:28px;">📷</div>
           <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Take Photo of ID</div><div style="font-size:12px;color:#555;margin-top:2px;">Photograph the customer's driver license</div></div>
-          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
+          <input type="file" accept="image/*" onchange="depIDPhotoTaken(this)" style="display:none;"/>
         </label>
         <button onclick="depositManualEntry()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
           <div style="font-size:28px;">✍️</div>
@@ -7107,7 +7107,7 @@ function _txInit() {
         <button onclick="depIDPhotoDone()" style="width:100%;padding:16px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Select Vehicle</button>
         <label style="display:block;text-align:center;margin-top:10px;cursor:pointer;color:#888;font-size:13px;">
           Retake Photo
-          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
+          <input type="file" accept="image/*" onchange="depIDPhotoTaken(this)" style="display:none;"/>
         </label>
       </div>
     </div>
@@ -7274,7 +7274,7 @@ function _txInit() {
           <div style="font-size:12px;color:#666;text-align:center;margin-bottom:10px;">After printing and signing, scan the signed form back in:</div>
           <label id="dep-signed-label" style="display:block;width:100%;padding:15px;background:#0d0d0d;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;text-align:center;color:#fff;">
             📄 Upload Signed Form
-            <input type="file" accept="image/*" capture="environment" onchange="depSignedFormTaken(this)" style="display:none;"/>
+            <input type="file" accept="image/*" onchange="depSignedFormTaken(this)" style="display:none;"/>
           </label>
           <div id="dep-signed-preview-wrap" style="display:none;margin-top:12px;">
             <img id="dep-signed-preview" style="width:100%;border-radius:10px;margin-bottom:8px;"/>
