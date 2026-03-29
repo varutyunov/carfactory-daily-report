@@ -8310,12 +8310,28 @@ async function payScanSave(){
   closePayScan();
 }
 
-function openDealForm() {
-  _dealData = { type: 'cash' };
+function openDealForm(forceLoc) {
+  var userName = me ? me.name.toLowerCase() : '';
+  // Determine deal location: Jesse→DeLand, Manny→DeBary, Scott→pick
+  var dealLoc = forceLoc || null;
+  if(!dealLoc) {
+    if(userName === 'jesse') dealLoc = 'DeLand';
+    else if(userName === 'manny') dealLoc = 'DeBary';
+    else if(userName === 'scott') {
+      // Show location picker for Scott
+      showDealLocationPicker();
+      return;
+    } else {
+      // Default to user's location or DeBary
+      dealLoc = (me && me.location) ? me.location : 'DeBary';
+    }
+  }
+  _dealData = { type: 'cash', dealLocation: dealLoc };
   _dealPayments = [];
   _dealPhotos = [];
   _dealStep = 1;
   document.getElementById('deal-overlay').style.display = 'flex';
+  document.getElementById('deal-bar-title').textContent = 'DEAL UPLOAD — ' + dealLoc.toUpperCase();
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
   dealShowStep(1);
   // Clear all inputs
@@ -8327,6 +8343,33 @@ function openDealForm() {
   dealSetType('cash');
   dealRenderInv();
   dealAddPayment(); // start with one payment row
+}
+
+function showDealLocationPicker() {
+  var o = document.getElementById('deal-overlay');
+  o.style.display = 'flex';
+  var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
+  document.getElementById('deal-bar-title').textContent = 'DEAL UPLOAD';
+  // Hide all steps, show picker
+  [1,2,3,4].forEach(function(n){ var s=document.getElementById('deal-step'+n); if(s) s.style.display='none'; });
+  var body = document.getElementById('deal-body');
+  // Remove old picker if exists
+  var old = document.getElementById('deal-loc-picker');
+  if(old) old.remove();
+  var picker = document.createElement('div');
+  picker.id = 'deal-loc-picker';
+  picker.style.cssText = 'padding:40px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;';
+  picker.innerHTML =
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Select Location</div>' +
+    '<button onclick="dealPickedLocation(\'DeBary\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);border:1px solid #a87000;border-radius:18px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeBary</button>' +
+    '<button onclick="dealPickedLocation(\'DeLand\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#001233,#003080,#1d4ed8);border:1px solid #3b82f6;border-radius:18px;color:#60a5fa;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeLand</button>';
+  body.appendChild(picker);
+}
+
+function dealPickedLocation(loc) {
+  var picker = document.getElementById('deal-loc-picker');
+  if(picker) picker.remove();
+  openDealForm(loc);
 }
 
 function closeDealForm() {
@@ -8350,7 +8393,8 @@ function dealShowStep(n) {
     if(el) el.style.display = (i === n) ? 'block' : 'none';
   });
   var titles = {1:'Select Vehicle',2:'Deal Info',3:'Upload Photos',4:'Done'};
-  document.getElementById('deal-bar-title').textContent = titles[n] || 'DEAL UPLOAD';
+  var loc = _dealData && _dealData.dealLocation ? ' — '+_dealData.dealLocation.toUpperCase() : '';
+  document.getElementById('deal-bar-title').textContent = (titles[n] || 'DEAL UPLOAD') + loc;
 }
 
 // ── STEP 1: Vehicle selection ──
@@ -8362,7 +8406,7 @@ function dealInvFilter(val) {
 function dealRenderInv() {
   var el = document.getElementById('deal-inv-list');
   var filter = (_dealData.filter || '').toLowerCase();
-  var myLoc = me && me.location ? me.location : 'DeBary';
+  var myLoc = _dealData && _dealData.dealLocation ? _dealData.dealLocation : (me && me.location ? me.location : 'DeBary');
   var cars = (S.inventory || []).filter(function(c) {
     if((c.location || 'DeBary').toLowerCase() !== myLoc.toLowerCase()) return false;
     if(filter && !(c.name + ' ' + (c.stock||'') + ' ' + (c.vin||'')).toLowerCase().includes(filter)) return false;
@@ -8569,7 +8613,7 @@ async function dealSubmit() {
       gps_serial: _dealData.gpsSerial || '',
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
-      location: me ? me.location : 'DeBary',
+      location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
       created_at: new Date().toISOString()
     };
     // Save pickup payment as its own columns
@@ -8643,6 +8687,8 @@ async function dealSubmit() {
 var _dealsData = [];
 var _dealsFiltered = [];
 var _dealsViewingDetail = false;
+var _dealsLocation = '';  // 'DeBary' or 'DeLand'
+var _dealsPickingLocation = false;
 
 function renderMgrDeals() {
   var list = document.getElementById('mgr-deals-list');
@@ -8651,31 +8697,56 @@ function renderMgrDeals() {
 
 function openDealsView() {
   _dealsViewingDetail = false;
+  _dealsPickingLocation = true;
   document.getElementById('deals-view-overlay').style.display = 'flex';
   document.getElementById('deals-view-title').textContent = 'DEALS';
+  // Show location picker
+  var body = document.getElementById('deals-view-body');
+  body.innerHTML = '<div style="padding:40px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;">' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Select Location</div>' +
+    '<button onclick="dealsPickLocation(\'DeBary\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);border:1px solid #a87000;border-radius:18px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeBary</button>' +
+    '<button onclick="dealsPickLocation(\'DeLand\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#001233,#003080,#1d4ed8);border:1px solid #3b82f6;border-radius:18px;color:#60a5fa;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeLand</button>' +
+  '</div>';
   // Mark deals as seen — clear badge
   sbGet('deals', 'select=id').then(function(rows) {
     localStorage.setItem('deals_last_seen_count', rows.length);
     var countEl = document.getElementById('tools-deals-count');
     if(countEl) countEl.style.display = 'none';
   }).catch(function(){});
+}
+
+function dealsPickLocation(loc) {
+  _dealsLocation = loc;
+  _dealsPickingLocation = false;
+  document.getElementById('deals-view-title').textContent = 'DEALS — ' + loc.toUpperCase();
+  var body = document.getElementById('deals-view-body');
+  body.innerHTML = '<div style="padding:12px;"><input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
 function dealsViewBack() {
   if(_dealsViewingDetail) {
     _dealsViewingDetail = false;
-    document.getElementById('deals-view-title').textContent = 'DEALS';
+    document.getElementById('deals-view-title').textContent = 'DEALS — ' + (_dealsLocation||'').toUpperCase();
     var body = document.getElementById('deals-view-body');
     body.innerHTML = '<div style="padding:12px;"><input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
     loadDeals();
-  } else {
+  } else if(_dealsPickingLocation) {
+    _dealsPickingLocation = false;
     document.getElementById('deals-view-overlay').style.display = 'none';
-    // Return to manager home — showView restores mgr-home visibility
     showView('mgr-home');
-    // Clear the deals tab highlight
     var dealsTab = document.getElementById('tab-deals');
     if(dealsTab) dealsTab.classList.remove('on');
+  } else {
+    // Go back to location picker
+    _dealsPickingLocation = true;
+    document.getElementById('deals-view-title').textContent = 'DEALS';
+    var body = document.getElementById('deals-view-body');
+    body.innerHTML = '<div style="padding:40px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Select Location</div>' +
+      '<button onclick="dealsPickLocation(\'DeBary\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#1a1000,#4a3000,#7a5000);border:1px solid #a87000;border-radius:18px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeBary</button>' +
+      '<button onclick="dealsPickLocation(\'DeLand\')" style="width:100%;max-width:320px;padding:24px;background:linear-gradient(145deg,#001233,#003080,#1d4ed8);border:1px solid #3b82f6;border-radius:18px;color:#60a5fa;font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">DeLand</button>' +
+    '</div>';
   }
 }
 
@@ -8684,7 +8755,9 @@ async function loadDeals() {
   if(!list) return;
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
-    _dealsData = await sbGet('deals', 'order=created_at.desc');
+    var allDeals = await sbGet('deals', 'order=created_at.desc');
+    // Filter by selected location
+    _dealsData = allDeals.filter(function(d){ return (d.location||'DeBary') === _dealsLocation; });
     _dealsFiltered = _dealsData;
     renderDeals();
   } catch(e) {
