@@ -529,7 +529,6 @@ canvas{display:none;}
     }).catch(function(){});
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -4368,7 +4367,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -8166,29 +8165,70 @@ function payScanPhoto(inp){
   inp.value='';
 }
 
+// Google Cloud Vision API key — saved in localStorage so you only enter it once
+var _gvisionKey = localStorage.getItem('cf_gvision_key') || '';
+
+function setGVisionKey(key){
+  _gvisionKey = (key||'').trim();
+  localStorage.setItem('cf_gvision_key', _gvisionKey);
+}
+
 async function runPayScanOCR(imgSrc){
   var prog=document.getElementById('pay-scan-progress');
   var bar=document.getElementById('pay-scan-bar');
   var status=document.getElementById('pay-scan-status');
   prog.style.display='block';
-  bar.style.width='0%';
-  status.textContent='Initializing...';
+  bar.style.width='10%';
+  status.textContent='Reading document...';
+
+  // Check for API key
+  if(!_gvisionKey){
+    prog.style.display='none';
+    var key = prompt('Enter your Google Cloud Vision API key (saved for future use):');
+    if(!key){ document.getElementById('pay-scan-fields').style.display='block'; return; }
+    setGVisionKey(key);
+    prog.style.display='block';
+  }
 
   try{
-    var result = await Tesseract.recognize(imgSrc, 'eng', {
-      logger: function(m){
-        if(m.status==='recognizing text'){
-          var pct=Math.round((m.progress||0)*100);
-          bar.style.width=pct+'%';
-          status.textContent='Reading... '+pct+'%';
-        } else {
-          status.textContent=m.status||'Processing...';
-        }
-      }
+    // Strip data URL prefix to get raw base64
+    var base64 = imgSrc.replace(/^data:image\/[a-z]+;base64,/, '');
+
+    bar.style.width='30%';
+    status.textContent='Sending to Google Vision...';
+
+    var resp = await fetch('https://vision.googleapis.com/v1/images:annotate?key=' + _gvisionKey, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        requests: [{
+          image: { content: base64 },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 }]
+        }]
+      })
     });
 
+    bar.style.width='80%';
+    status.textContent='Processing results...';
+
+    var data = await resp.json();
+
+    if(data.error){
+      throw new Error(data.error.message || 'API error');
+    }
+    if(data.responses && data.responses[0] && data.responses[0].error){
+      throw new Error(data.responses[0].error.message || 'Vision API error');
+    }
+
+    var text = '';
+    if(data.responses && data.responses[0] && data.responses[0].fullTextAnnotation){
+      text = data.responses[0].fullTextAnnotation.text;
+    } else if(data.responses && data.responses[0] && data.responses[0].textAnnotations && data.responses[0].textAnnotations[0]){
+      text = data.responses[0].textAnnotations[0].description;
+    }
+
+    bar.style.width='100%';
     prog.style.display='none';
-    var text=result.data.text||'';
     document.getElementById('pay-scan-raw').textContent=text;
 
     // Parse extracted text
@@ -8200,9 +8240,16 @@ async function runPayScanOCR(imgSrc){
 
     document.getElementById('pay-scan-fields').style.display='block';
   }catch(err){
-    console.error('OCR error:',err);
+    console.error('Vision OCR error:',err);
     prog.style.display='none';
-    status.textContent='Error reading image';
+    // If auth error, clear saved key so they can re-enter
+    if(err.message && (err.message.includes('API key') || err.message.includes('403') || err.message.includes('401'))){
+      localStorage.removeItem('cf_gvision_key');
+      _gvisionKey = '';
+      alert('Invalid API key. Please try again.');
+    } else {
+      alert('Error reading image: ' + (err.message||err));
+    }
     // Still show fields so user can fill manually
     document.getElementById('pay-scan-fields').style.display='block';
   }
