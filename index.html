@@ -642,7 +642,10 @@ canvas{display:none;}
         <input class="inv-search" id="emp-inv-search" placeholder="Search vehicles..." oninput="empInvFilter(this.value)" style="margin-bottom:10px;"/>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div id="emp-sync-st" style="font-size:13px;color:#555;"></div>
-          <button onclick="empSyncInv()" id="emp-sync-btn" style="background:none;border:1px solid #1e1e1e;color:#888;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer;">⟳ Sync</button>
+          <div style="display:flex;gap:6px;">
+            <button onclick="toggleEmpRecentFilter()" id="emp-recent-btn" class="sync-btn">🕐 Recent</button>
+            <button onclick="empSyncInv()" id="emp-sync-btn" style="background:none;border:1px solid #1e1e1e;color:#888;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer;">⟳ Sync</button>
+          </div>
         </div>
         <div id="emp-inv-list"></div>
       </div>
@@ -2624,21 +2627,27 @@ async function quickAddToDetail(){
   updateTabBadges();updateHomeBadges();
 }
 function renderInv(){
-  const cutoff=Date.now()-14*24*60*60*1000;
-  const items=S.inventory.filter(function(c){
+  var filtered=S.inventory.filter(function(c){
     if(invFilter&&!(c.name+c.stock).toLowerCase().includes(invFilter)) return false;
-    if(invRecentOnly){if(!c.created_at||new Date(c.created_at).getTime()<cutoff) return false;}
     return true;
-  }).sort((a,b)=>{
-    const aHas=S.assignments.some(x=>x.inventoryId===a.id&&!x.approved)?1:0;
-    const bHas=S.assignments.some(x=>x.inventoryId===b.id&&!x.approved)?1:0;
-    if(bHas!==aHas) return bHas-aHas;
-    return b.id-a.id;
   });
+  // Sort by stock number descending (highest = newest purchase)
+  if(invRecentOnly){
+    filtered.sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
+    filtered=filtered.slice(0,20);
+  } else {
+    filtered.sort(function(a,b){
+      var aHas=S.assignments.some(function(x){return x.inventoryId===a.id&&!x.approved;})?1:0;
+      var bHas=S.assignments.some(function(x){return x.inventoryId===b.id&&!x.approved;})?1:0;
+      if(bHas!==aHas) return bHas-aHas;
+      return b.id-a.id;
+    });
+  }
+  const items=filtered;
   if(S.lastSync)document.getElementById('sync-tm').textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
   var _stEl=document.getElementById('sync-st');
   if(_stEl){
-    if(invRecentOnly) _stEl.textContent='Showing '+items.length+' vehicle'+(items.length===1?'':'s')+' added in the last 2 weeks';
+    if(invRecentOnly) _stEl.textContent='Showing newest '+items.length+' vehicles by stock #';
     else _stEl.textContent='Ready to sync  ·  v Mar-24';
   }
   document.getElementById('inv-list').innerHTML='<div class="inv-grid">'+items.map(car=>{
@@ -6482,7 +6491,7 @@ async function sendAIVoice(text){
 }
 
 /* ── EMPLOYEE INVENTORY ─────────────────────────────────────────────────── */
-var _empInvFilter='';
+var _empInvFilter='',_empInvRecent=false;
 var _empCarId=null;
 function empOpenInventory(){
   var orb=document.getElementById('emp-orbit-home');if(orb)orb.style.display='none';
@@ -6503,6 +6512,12 @@ function empInvFilter(val){
   _empInvFilter=(val||'').toLowerCase();
   empRenderInv();
 }
+function toggleEmpRecentFilter(){
+  _empInvRecent=!_empInvRecent;
+  var btn=document.getElementById('emp-recent-btn');
+  if(btn){btn.style.background=_empInvRecent?'#fff':'';btn.style.color=_empInvRecent?'#000':'';btn.style.borderColor=_empInvRecent?'#fff':'';}
+  empRenderInv();
+}
 function empRenderInv(){
   var list=document.getElementById('emp-inv-list');if(!list)return;
   var filter=_empInvFilter;
@@ -6511,9 +6526,15 @@ function empRenderInv(){
     if((c.location||'DeBary').toLowerCase()!==myLoc.toLowerCase()) return false;
     if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')+' '+(c.color||'')).toLowerCase().includes(filter)) return false;
     return true;
-  }).sort(function(a,b){return b.id-a.id;});
+  });
+  if(_empInvRecent){
+    items.sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
+    items=items.slice(0,20);
+  } else {
+    items.sort(function(a,b){return b.id-a.id;});
+  }
   var stEl=document.getElementById('emp-sync-st');
-  if(stEl&&!stEl.dataset.syncing) stEl.textContent=items.length+' vehicles · '+myLoc;
+  if(stEl&&!stEl.dataset.syncing) stEl.textContent=(_empInvRecent?'Newest '+items.length+' vehicles':items.length+' vehicles')+' · '+myLoc;
   list.innerHTML='<div class="inv-grid">'+items.map(function(car){
     var pxI=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?'<img class="inv-tile-photo" src="'+car.photo+'"/>':pxI?'<img class="inv-tile-photo" src="'+pxI+'"/>':'<div class="inv-tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
