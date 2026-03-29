@@ -8271,7 +8271,7 @@ function payScanPhoto(inp){
 }
 
 // Google Cloud Vision API key — saved in localStorage so you only enter it once
-var _gvisionKey = localStorage.getItem('cf_gvision_key') || '';
+var _gvisionKey = 'AIzaSyDr2XC2_WeCg7s0o6QI27vqAvF8FMqhFWE';
 
 function setGVisionKey(key){
   _gvisionKey = (key||'').trim();
@@ -8286,30 +8286,38 @@ async function runPayScanOCR(imgSrc){
   bar.style.width='10%';
   status.textContent='Reading document...';
 
-  // Check for API key
-  if(!_gvisionKey){
-    prog.style.display='none';
-    var key = prompt('Enter your Google Cloud Vision API key (saved for future use):');
-    if(!key){ document.getElementById('pay-scan-fields').style.display='block'; return; }
-    setGVisionKey(key);
-    prog.style.display='block';
-  }
-
   try{
-    // Strip data URL prefix to get raw base64
+    // Strip data URL prefix to get raw base64, detect mime type
+    var mimeMatch = imgSrc.match(/^data:(image\/[a-z]+);base64,/);
+    var mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     var base64 = imgSrc.replace(/^data:image\/[a-z]+;base64,/, '');
 
     bar.style.width='30%';
-    status.textContent='Sending to Google Vision...';
+    status.textContent='Sending to Gemini AI...';
 
-    var resp = await fetch('https://vision.googleapis.com/v1/images:annotate?key=' + _gvisionKey, {
+    var prompt = 'You are a payment document parser for a car dealership. Look at this image of a payment receipt and extract the following fields.\n\n' +
+      'Return ONLY a JSON object with these keys:\n\n' +
+      '1. "name" — Customer name. Found at the top left of the document, usually right below the date/time of payment.\n\n' +
+      '2. "date" — Date and time of payment. Found at the top left, above the customer name. Return in YYYY-MM-DD format. Convert any format to this.\n\n' +
+      '3. "vehicle" — The vehicle info. Found in the upper right area of the document. Include the Year, Make, Model, and VIN number. Format as "YEAR MAKE MODEL | VIN: XXXXXXXXX"\n\n' +
+      '4. "amount" — The payment amount. This is the value next to "Total Paid Today" on the document. Return as a dollar string like "$1,234.56".\n\n' +
+      '5. "rawText" — All the text you can read from the document, as-is.\n\n' +
+      'RULES:\n' +
+      '- Return ONLY valid JSON, no explanation, no markdown\n' +
+      '- Use empty string "" for any field you cannot find\n' +
+      '- The image may be a photo of a receipt — use context to figure out correct values';
+
+    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + _gvisionKey, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        requests: [{
-          image: { content: base64 },
-          features: [{ type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 }]
-        }]
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: base64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
       })
     });
 
@@ -8317,27 +8325,35 @@ async function runPayScanOCR(imgSrc){
     status.textContent='Processing results...';
 
     var data = await resp.json();
+    console.log('[PayScan] Gemini response:', JSON.stringify(data).substring(0,500));
 
     if(data.error){
-      throw new Error(data.error.message || 'API error');
-    }
-    if(data.responses && data.responses[0] && data.responses[0].error){
-      throw new Error(data.responses[0].error.message || 'Vision API error');
+      throw new Error(data.error.message || 'Gemini API error');
     }
 
-    var text = '';
-    if(data.responses && data.responses[0] && data.responses[0].fullTextAnnotation){
-      text = data.responses[0].fullTextAnnotation.text;
-    } else if(data.responses && data.responses[0] && data.responses[0].textAnnotations && data.responses[0].textAnnotations[0]){
-      text = data.responses[0].textAnnotations[0].description;
+    var aiText = '';
+    if(data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts){
+      aiText = data.candidates[0].content.parts[0].text || '';
+    }
+    console.log('[PayScan] Gemini AI text:', aiText);
+
+    var parsed = { name:'', date:'', car:'', amount:'' };
+    var rawText = '';
+    var jsonMatch = aiText.match(/\{[\s\S]*\}/);
+    if(jsonMatch){
+      var result = JSON.parse(jsonMatch[0]);
+      console.log('[PayScan] AI parsed result:', JSON.stringify(result));
+      parsed.name = result.name || '';
+      parsed.date = result.date || '';
+      parsed.car = result.vehicle || '';
+      parsed.amount = result.amount || '';
+      rawText = result.rawText || '';
     }
 
     bar.style.width='100%';
     prog.style.display='none';
-    document.getElementById('pay-scan-raw').textContent=text;
+    document.getElementById('pay-scan-raw').textContent = rawText || aiText;
 
-    // Parse extracted text — try AI first, fall back to regex
-    var parsed = await aiParsePaymentText(text);
     document.getElementById('pay-scan-name').value=parsed.name||'';
     document.getElementById('pay-scan-date').value=parsed.date||'';
     document.getElementById('pay-scan-car').value=parsed.car||'';
@@ -8345,16 +8361,9 @@ async function runPayScanOCR(imgSrc){
 
     document.getElementById('pay-scan-fields').style.display='block';
   }catch(err){
-    console.error('Vision OCR error:',err);
+    console.error('PayScan OCR error:',err);
     prog.style.display='none';
-    // If auth error, clear saved key so they can re-enter
-    if(err.message && (err.message.includes('API key') || err.message.includes('403') || err.message.includes('401'))){
-      localStorage.removeItem('cf_gvision_key');
-      _gvisionKey = '';
-      alert('Invalid API key. Please try again.');
-    } else {
-      alert('Error reading image: ' + (err.message||err));
-    }
+    alert('Error reading image: ' + (err.message||err));
     // Still show fields so user can fill manually
     document.getElementById('pay-scan-fields').style.display='block';
   }
