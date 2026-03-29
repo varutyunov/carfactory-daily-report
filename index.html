@@ -1613,7 +1613,9 @@ OneSignalDeferred.push(async function(OneSignal){
     appId: OS_APP_ID,
     safari_web_id: 'web.onesignal.auto.3437296f-1581-4c9c-99a7-ef947df2b18c',
     notifyButton: { enable: false },
-    autoPrompt: false
+    autoPrompt: false,
+    serviceWorkerParam: { scope: '/' },
+    path: '/sw.js'
   });
 });
 
