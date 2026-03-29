@@ -912,6 +912,14 @@ canvas{display:none;}
             <span id="tools-deals-count" style="position:absolute;top:-8px;right:-8px;z-index:10;background:#f59e0b;color:#000;border-radius:12px;font-size:13px;font-weight:800;padding:3px 7px;min-width:22px;text-align:center;line-height:16px;box-shadow:0 2px 10px rgba(245,158,11,0.7),0 0 0 2px #000;display:none;"></span>
           </div>
 
+          <!-- Deal Calc tile -->
+          <div class="orbit-tile" style="background:linear-gradient(145deg,#001a0e,#003d1c,#005a28);box-shadow:0 4px 20px rgba(34,197,94,0.22);width:88px;height:88px;" onclick="openDealCalc()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/>
+            </svg>
+            <div class="orbit-tile-label">Deal<br>Calc</div>
+          </div>
+
         </div>
       </div><!-- /swipe-page-2 -->
 
@@ -1904,7 +1912,7 @@ async function doLogin(){
   await syncFromSupabase();
   fetchNotifications();
   var _isOwner=['vlad','tommy'].includes(e.name.toLowerCase());var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=_isOwner?'':'none';
-  if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');initSwipe();setSwipePage(0);var _dots=document.getElementById('swipe-dots');if(_dots)_dots.style.display=['vlad'].includes(e.name.toLowerCase())?'flex':'none';updateTabBadges();updateHomeBadges();}
+  if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm=e.name.toLowerCase();var _hasCarPay=['vlad'].includes(_nm);var _hasTools=['vlad','tommy'].includes(_nm);if(_hasCarPay){_swipePages=[0,1,2];}else if(_hasTools){_swipePages=[0,2];}else{_swipePages=[0];}var _dots=document.getElementById('swipe-dots');if(_dots){if(_swipePages.length>1){_dots.style.display='flex';_dots.innerHTML='';for(var _di=0;_di<_swipePages.length;_di++){var _dot=document.createElement('span');_dot.className='swipe-dot'+(_di===0?' active':'');_dots.appendChild(_dot);}}else{_dots.style.display='none';}}initSwipe();setSwipePage(0);updateTabBadges();updateHomeBadges();}
   else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
   // Start translation system if previously in Spanish mode
   if(typeof _txInit==='function') _txInit();
@@ -4238,7 +4246,7 @@ if(_savedSession){
       var _rOwner=['vlad','tommy'].includes(me.name.toLowerCase());var _rBtn=document.getElementById('ai-brain-btn');if(_rBtn)_rBtn.style.display=_rOwner?'':'none';
       syncFromSupabase().then(()=>{
         fetchNotifications();
-        if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');initSwipe();setSwipePage(0);var _dots2=document.getElementById('swipe-dots');if(_dots2)_dots2.style.display=['vlad'].includes(me.name.toLowerCase())?'flex':'none';updateTabBadges();updateHomeBadges();}
+        if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm2=me.name.toLowerCase();var _hasCarPay2=['vlad'].includes(_nm2);var _hasTools2=['vlad','tommy'].includes(_nm2);if(_hasCarPay2){_swipePages=[0,1,2];}else if(_hasTools2){_swipePages=[0,2];}else{_swipePages=[0];}var _dots2=document.getElementById('swipe-dots');if(_dots2){if(_swipePages.length>1){_dots2.style.display='flex';_dots2.innerHTML='';for(var _di2=0;_di2<_swipePages.length;_di2++){var _dot2=document.createElement('span');_dot2.className='swipe-dot'+(_di2===0?' active':'');_dots2.appendChild(_dot2);}}else{_dots2.style.display='none';}}initSwipe();setSwipePage(0);updateTabBadges();updateHomeBadges();}
         else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
         // Auto-sync CSV in background to catch any new/removed cars not yet in Supabase
         setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 500);
@@ -5991,10 +5999,14 @@ function aiShowTyping(){
 }
 function aiHideTyping(){ var el=document.getElementById('ai-typing'); if(el) el.remove(); }
 
-/* ── SWIPE PAGES (Home ↔ CarPay) ──────────────────────────────────────────── */
+/* ── SWIPE PAGES (Home ↔ CarPay ↔ Tools) ──────────────────────────────────── */
 var _swipePage=0;
 var _swipeInited=false;
 var _swStartX=0,_swStartY=0,_swDx=0,_swDir=null; // dir: null=undecided, 'h'=horizontal, 'v'=vertical
+// _swipePages maps swipe index to actual page numbers. Vlad=[0,1,2], Tommy=[0,2] (skip CarPay)
+var _swipePages=[0,1,2];
+var _swipeIdx=0; // current index into _swipePages
+
 function initSwipe(){
   if(_swipeInited) return;
   _swipeInited=true;
@@ -6024,7 +6036,8 @@ function initSwipe(){
     e.preventDefault();
     e.stopPropagation();
     _swDx=dx;
-    var base=_swipePage*-33.333;
+    var realPage=_swipePages[_swipeIdx];
+    var base=realPage*-33.333;
     var pct=base+(dx/home.offsetWidth)*33.333;
     pct=Math.max(-66.666,Math.min(0,pct));
     el.style.transform='translateX('+pct+'%)';
@@ -6035,25 +6048,28 @@ function initSwipe(){
     el.style.transition='';
     el.style.transform='';
     if(Math.abs(_swDx)>40){
-      if(_swDx<0&&_swipePage<2) setSwipePage(_swipePage+1);
-      else if(_swDx>0&&_swipePage>0) setSwipePage(_swipePage-1);
+      if(_swDx<0&&_swipeIdx<_swipePages.length-1) setSwipePage(_swipeIdx+1);
+      else if(_swDx>0&&_swipeIdx>0) setSwipePage(_swipeIdx-1);
     }
     _swDir=null;
   },true);
 }
-function setSwipePage(p){
-  _swipePage=p;
+function setSwipePage(idx){
+  if(idx<0||idx>=_swipePages.length) return;
+  _swipeIdx=idx;
+  var realPage=_swipePages[idx];
+  _swipePage=realPage;
   var el=document.getElementById('swipe-container');
   if(!el) return;
   el.style.transition='';
   el.style.transform='';
   el.classList.remove('at-page-1','at-page-2');
-  if(p===1) el.classList.add('at-page-1');
-  else if(p===2) el.classList.add('at-page-2');
+  if(realPage===1) el.classList.add('at-page-1');
+  else if(realPage===2) el.classList.add('at-page-2');
   var dots=document.querySelectorAll('#swipe-dots .swipe-dot');
-  dots.forEach(function(d,i){d.classList.toggle('active',i===p);});
-  // Load forms/deals count when landing on tools page
-  if(p===2) { loadFormsCount(); loadDealsCount(); }
+  dots.forEach(function(d,i){d.classList.toggle('active',i===idx);});
+  // Load forms/deals count when landing on tools page (real page 2)
+  if(realPage===2) { loadFormsCount(); loadDealsCount(); }
 }
 // Also allow tapping the dots to switch
 document.addEventListener('click',function(e){
