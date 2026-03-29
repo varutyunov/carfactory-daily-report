@@ -1080,12 +1080,12 @@ canvas{display:none;}
           <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;">
             <span style="font-size:28px;">📷</span>
             Take Photo
-            <input type="file" accept="image/*" capture="environment" onchange="payScanPhoto(this)" style="display:none;"/>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" onchange="payScanPhoto(this)" style="display:none;"/>
           </label>
           <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;">
             <span style="font-size:28px;">📁</span>
             Upload
-            <input type="file" accept="image/*" onchange="payScanPhoto(this)" style="display:none;"/>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onchange="payScanPhoto(this)" style="display:none;"/>
           </label>
         </div>
       </div>
@@ -8303,7 +8303,10 @@ async function runPayScanOCR(imgSrc){
   try{
     // Strip data URL prefix to get raw base64, detect mime type
     var mimeMatch = imgSrc.match(/^data:(image\/[a-zA-Z0-9._+-]+);base64,/);
-    var mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    var detectedMime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    // Gemini only accepts standard web image types — force jpeg for exotic formats like DNG
+    var supportedMimes = ['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif'];
+    var mimeType = supportedMimes.indexOf(detectedMime) >= 0 ? detectedMime : 'image/jpeg';
     var base64 = imgSrc.replace(/^data:image\/[a-zA-Z0-9._+-]+;base64,/, '');
 
     bar.style.width='30%';
