@@ -8261,6 +8261,11 @@ function dealsViewBack() {
     loadDeals();
   } else {
     document.getElementById('deals-view-overlay').style.display = 'none';
+    // Return to manager home — showView restores mgr-home visibility
+    showView('mgr-home');
+    // Clear the deals tab highlight
+    var dealsTab = document.getElementById('tab-deals');
+    if(dealsTab) dealsTab.classList.remove('on');
   }
 }
 
