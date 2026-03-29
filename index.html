@@ -4049,7 +4049,7 @@ async function syncLocation(loc){
       try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){console.error('Delete error:',e);}
     }
     localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
-    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
+    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=fixColor(colorMap[c.vin]||colorMap[c.stock]);});
     S.lastSync=Date.now();sv();
     stEl.textContent=loc+' synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
@@ -4081,17 +4081,18 @@ async function syncNow(){
     S.inventory.forEach(function(c){if(c.stock)existByStock[c.stock]=c;if(c.vin)existByVin[c.vin]=c;});
     var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[];
     imp.forEach(function(c){
-      if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
+      var _fc=fixColor(c.color);
+      if(_fc){if(c.vin)colorMap[c.vin]=_fc;if(c.stock)colorMap[c.stock]=_fc;}
       var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
       if(exist){
         var patch={};
-        if(c.color&&c.color!==exist.color){exist.color=c.color;patch.color=c.color;}
+        if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
         if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:c.location,photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',location:c.location,photo:null});
         added++;
       }
     });
@@ -4100,7 +4101,7 @@ async function syncNow(){
       for(var i=0;i<toInsertSB.length;i+=50){
         try{
           var inserted=await sbPost('inventory',toInsertSB.slice(i,i+50));
-          if(Array.isArray(inserted)) inserted.forEach(function(row){S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:row.color||'',miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});});
+          if(Array.isArray(inserted)) inserted.forEach(function(row){S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});});
         }catch(e){console.error('Insert error:',e);}
       }
     }
@@ -4114,7 +4115,7 @@ async function syncNow(){
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
     localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
-    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=colorMap[c.vin]||colorMap[c.stock];});
+    S.inventory.forEach(function(c){if(!c.color&&(colorMap[c.vin]||colorMap[c.stock]))c.color=fixColor(colorMap[c.vin]||colorMap[c.stock]);});
     S.lastSync=Date.now();sv();
     stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
