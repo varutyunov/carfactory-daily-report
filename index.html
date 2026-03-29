@@ -8152,6 +8152,7 @@ async function dealSubmit() {
       vehicle_desc: car.name || '',
       vin: car.vin || '',
       stock: car.stock || '',
+      color: car.color || '',
       deal_type: _dealData.type,
       total_collected: total,
       payments: JSON.stringify(payments),
@@ -8351,6 +8352,7 @@ function openDealDetail(id) {
   html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
   if(d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
+  if(d.color) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Color: '+d.color+'</div>';
   html += '</div>';
 
   // GPS Serial + GPS Uploaded toggle + Pick Up Payment (finance only)

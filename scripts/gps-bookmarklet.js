@@ -1,8 +1,10 @@
 /**
  * GPS Sync Bookmarklet — runs in-browser on the Passtime OASIS site
  *
- * Uses a popup window for navigation (same session, no iframe restrictions).
- * The main page stays untouched — just shows a status panel.
+ * Opens a worker popup window (same session) to navigate through pages
+ * while the main window shows a live status panel.
+ *
+ * If popup is blocked: user must allow popups for passtimeusa.com
  */
 (async function() {
   'use strict';
@@ -25,7 +27,7 @@
   var panel = document.createElement('div');
   panel.id = 'gps-sync-panel';
   panel.style.cssText = 'position:fixed;top:10px;right:10px;width:420px;max-height:90vh;overflow-y:auto;background:#111;color:#fff;border:2px solid #30d158;border-radius:16px;padding:20px;z-index:99999;font-family:system-ui,sans-serif;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);';
-  panel.innerHTML = '<div style="font-size:20px;font-weight:800;margin-bottom:12px;color:#30d158;">🛰️ GPS Sync</div><div id="gps-sync-log" style="white-space:pre-wrap;line-height:1.6;"></div>';
+  panel.innerHTML = '<div style="font-size:20px;font-weight:800;margin-bottom:12px;color:#30d158;">\u{1F6F0}\uFE0F GPS Sync</div><div id="gps-sync-log" style="white-space:pre-wrap;line-height:1.6;"></div>';
   document.body.appendChild(panel);
 
   var logEl = document.getElementById('gps-sync-log');
@@ -76,92 +78,19 @@
     };
   }
 
-  // ── Popup window for navigation ─────────────────────────────────────────────
-  var popup = window.open('about:blank', 'gps_sync_window', 'width=900,height=600,left=100,top=100');
-  if (!popup) {
-    log('❌ Popup blocked! Allow popups for this site and try again.', '#ef4444');
-    return;
-  }
-
-  function navTo(url) {
-    return new Promise(function(resolve) {
-      popup.location.href = url;
-      // Poll until loaded
-      var checks = 0;
-      var interval = setInterval(function() {
-        checks++;
-        try {
-          if (popup.document.readyState === 'complete' && popup.location.href.includes('passtimeusa.com')) {
-            clearInterval(interval);
-            setTimeout(resolve, 1500);
-          }
-        } catch(e) { /* cross-origin, keep waiting */ }
-        if (checks > 40) { clearInterval(interval); resolve(); } // 20s timeout
-      }, 500);
-    });
-  }
-
-  function popDoc() {
-    try { return popup.document; }
-    catch(e) { return null; }
-  }
-
-  function waitForPopupNav() {
-    return new Promise(function(resolve) {
-      var checks = 0;
-      var interval = setInterval(function() {
-        checks++;
-        try {
-          if (popup.document.readyState === 'complete') {
-            clearInterval(interval);
-            setTimeout(resolve, 1500);
-          }
-        } catch(e) { /* keep waiting */ }
-        if (checks > 40) { clearInterval(interval); resolve(); }
-      }, 500);
-    });
-  }
-
-  // Click something in popup and wait for page load
-  function clickAndWait(element) {
-    return new Promise(function(resolve) {
-      var oldUrl = '';
-      try { oldUrl = popup.location.href; } catch(e) {}
-      element.click();
-      // Wait for navigation
-      var checks = 0;
-      var interval = setInterval(function() {
-        checks++;
-        try {
-          if (popup.document.readyState === 'complete') {
-            var newUrl = popup.location.href;
-            if (newUrl !== oldUrl || checks > 5) {
-              clearInterval(interval);
-              setTimeout(resolve, 1500);
-              return;
-            }
-          }
-        } catch(e) { /* keep waiting */ }
-        if (checks > 40) { clearInterval(interval); resolve(); }
-      }, 500);
-    });
-  }
-
   // ── Check we're on Passtime ─────────────────────────────────────────────────
   if (!location.hostname.includes('passtimeusa.com')) {
-    log('❌ Not on Passtime — go to secure.passtimeusa.com first', '#ef4444');
-    popup.close();
+    log('\u274C Not on Passtime \u2014 go to secure.passtimeusa.com first', '#ef4444');
     return;
   }
 
   // ── Fetch deals ─────────────────────────────────────────────────────────────
-  log('📡 Fetching deals from Supabase...');
+  log('\u{1F4E1} Fetching deals from Supabase...');
   var deals;
   try {
     deals = await sbGet('deals', 'deal_type=eq.finance&gps_uploaded=eq.false&order=created_at.asc');
   } catch(e) {
-    log('❌ ' + e.message, '#ef4444');
-    popup.close();
+    log('\u274C ' + e.message, '#ef4444');
     return;
   }
 
@@ -172,9 +101,80 @@
   log('Found ' + deals.length + ' unprocessed, ' + dealsWithGps.length + ' with GPS serials');
 
   if (!dealsWithGps.length) {
-    log('✅ Nothing to process — all up to date!', '#30d158');
-    popup.close();
+    log('\u2705 Nothing to process \u2014 all up to date!', '#30d158');
     return;
+  }
+
+  // ── Open worker popup ───────────────────────────────────────────────────────
+  log('\u{1F680} Opening worker window...');
+  var popup = window.open(BASE + 'CustomerRpt.aspx', 'gps_sync_worker', 'width=800,height=600,left=50,top=50');
+  if (!popup || popup.closed) {
+    log('', '#ef4444');
+    log('\u274C Popup was blocked!', '#ef4444');
+    log('', '#ef4444');
+    log('To fix:', '#f59e0b');
+    log('1. Click the popup-blocked icon in the address bar', '#f59e0b');
+    log('2. Select "Always allow popups from this site"', '#f59e0b');
+    log('3. Click the bookmarklet again', '#f59e0b');
+    return;
+  }
+
+  // Wait for popup to load
+  function waitForPopup(urlContains, maxWait) {
+    maxWait = maxWait || 20000;
+    return new Promise(function(resolve) {
+      var start = Date.now();
+      var interval = setInterval(function() {
+        try {
+          if (popup.closed) {
+            clearInterval(interval);
+            resolve(false);
+            return;
+          }
+          var ready = popup.document.readyState === 'complete';
+          var urlOk = !urlContains || popup.location.href.includes(urlContains);
+          if (ready && urlOk) {
+            clearInterval(interval);
+            setTimeout(function() { resolve(true); }, 1000);
+            return;
+          }
+        } catch(e) { /* cross-origin or loading */ }
+        if (Date.now() - start > maxWait) {
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, 300);
+    });
+  }
+
+  function popDoc() {
+    try { return popup.document; }
+    catch(e) { return null; }
+  }
+
+  function popUrl() {
+    try { return popup.location.href; }
+    catch(e) { return ''; }
+  }
+
+  // Wait for initial dashboard load
+  var loaded = await waitForPopup('passtimeusa.com');
+  if (!loaded) {
+    log('\u274C Worker window failed to load', '#ef4444');
+    return;
+  }
+  await sleep(1000);
+
+  // Check if we hit the EliteRenewalCheck page
+  if (popUrl().includes('EliteRenewalCheck')) {
+    log('Skipping renewal check...');
+    var doc = popDoc();
+    if (doc) {
+      var skipBtn = doc.querySelector('input[value*="Skip"]');
+      if (skipBtn) skipBtn.click();
+      await waitForPopup('CustomerRpt');
+      await sleep(1000);
+    }
   }
 
   var successCount = 0;
@@ -183,24 +183,31 @@
   // ── Process each deal ───────────────────────────────────────────────────────
   for (var i = 0; i < dealsWithGps.length; i++) {
     var deal = parseDeal(dealsWithGps[i]);
-    log('\n═══ ' + (i+1) + '/' + dealsWithGps.length + ': ' + deal.firstName + ' ' + deal.lastName + ' ═══');
+    log('');
+    log('\u2550\u2550\u2550 ' + (i+1) + '/' + dealsWithGps.length + ': ' + deal.firstName + ' ' + deal.lastName + ' \u2550\u2550\u2550');
     log('Serial: ' + deal.serial + ' | VIN: ' + deal.vin);
 
     if (!deal.serial) {
-      log('⏭️  No serial — skipping', '#f59e0b');
+      log('\u23ED\uFE0F  No serial \u2014 skipping', '#f59e0b');
       skipCount++;
       continue;
     }
 
+    if (popup.closed) {
+      log('\u274C Worker window was closed \u2014 stopping', '#ef4444');
+      break;
+    }
+
     try {
-      // Step 1: Search by serial from Dashboard
-      log('🔍 Searching...');
-      await navTo(BASE + 'CustomerRpt.aspx');
-      await sleep(500);
+      // Step 1: Navigate to dashboard and search
+      log('\u{1F50D} Searching...');
+      popup.location.href = BASE + 'CustomerRpt.aspx';
+      await waitForPopup('passtimeusa.com');
+      await sleep(1000);
 
       var doc = popDoc();
       if (!doc) {
-        log('❌ Cannot access popup — possible session issue', '#ef4444');
+        log('\u274C Cannot access worker window', '#ef4444');
         skipCount++;
         continue;
       }
@@ -209,39 +216,71 @@
       var txt = doc.getElementById('searchCustomerCTL_searchTxt');
       var btn = doc.getElementById('searchCustomerCTL_searchBtn');
       if (!dd || !txt || !btn) {
-        log('❌ Search controls not found — are you logged in?', '#ef4444');
+        log('\u274C Search controls not found \u2014 are you logged in?', '#ef4444');
         skipCount++;
         continue;
       }
 
       dd.value = 'SerialNumber';
       txt.value = deal.serial;
-      await clickAndWait(btn);
+      btn.click();
+
+      // Wait for search result page
+      await sleep(2000);
+      await waitForPopup('passtimeusa.com');
+      await sleep(1000);
 
       doc = popDoc();
-      var currentUrl = '';
-      try { currentUrl = popup.location.href; } catch(e) {}
+      var currentUrl = popUrl();
 
       if (currentUrl.includes('ViewDetail.aspx')) {
         // ── Path A: Record found — edit it ──────────────────────────────────
-        log('📝 Found — editing...');
+        log('\u{1F4DD} Found \u2014 editing...');
 
-        // Open edit form via postback
-        try {
-          popup.WebForm_DoPostBackWithOptions(
-            new popup.WebForm_PostBackOptions(
-              "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
-            )
-          );
-        } catch(e) {
-          log('❌ Could not open edit form: ' + e.message, '#ef4444');
-          skipCount++;
-          continue;
+        // Click Edit Consumer Details link
+        var editLink = doc.querySelector('#MainContent_ViewDetailMenu1_BtnEditCustomer3');
+        if (!editLink) {
+          // Try alternate selectors
+          var allLinks = doc.querySelectorAll('a');
+          for (var li = 0; li < allLinks.length; li++) {
+            if (allLinks[li].textContent.trim() === 'Edit Consumer Details') {
+              editLink = allLinks[li];
+              break;
+            }
+          }
         }
-        await waitForPopupNav();
+
+        if (editLink) {
+          editLink.click();
+        } else {
+          // Fallback: use postback
+          try {
+            popup.WebForm_DoPostBackWithOptions(
+              new popup.WebForm_PostBackOptions(
+                "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
+              )
+            );
+          } catch(e) {
+            popup.location.href = currentUrl.split('?')[0] + '?M=ED';
+          }
+        }
+
+        await waitForPopup('M=ED', 10000);
+        if (!popUrl().includes('M=ED')) {
+          // Try direct nav
+          popup.location.href = BASE + 'ViewDetail.aspx?M=ED';
+          await waitForPopup('M=ED', 10000);
+        }
         await sleep(1000);
 
         doc = popDoc();
+        if (!doc || !doc.getElementById('MainContent_btnEditSubmit')) {
+          log('\u274C Could not open edit form', '#ef4444');
+          skipCount++;
+          continue;
+        }
+
+        // Fill the form
         var el;
         el = doc.getElementById('MainContent_eAccountNumber'); if (el) el.value = deal.account;
         el = doc.getElementById('MainContent_efirstname'); if (el) el.value = deal.firstName;
@@ -250,82 +289,119 @@
         el = doc.getElementById('MainContent_eColor'); if (el) el.value = deal.color;
         el = doc.getElementById('MainContent_eInventoryStockNumber'); if (el) el.value = deal.account;
 
+        // Submit
         var submitBtn = doc.getElementById('MainContent_btnEditSubmit');
-        if (submitBtn) {
-          await clickAndWait(submitBtn);
-        }
+        submitBtn.click();
 
-        try { currentUrl = popup.location.href; } catch(e) { currentUrl = ''; }
-        if (currentUrl.includes('ViewDetail.aspx')) {
-          log('✅ Updated!', '#30d158');
+        await sleep(2000);
+        await waitForPopup('passtimeusa.com');
+        await sleep(1000);
+
+        currentUrl = popUrl();
+        if (currentUrl.includes('ViewDetail.aspx') && !currentUrl.includes('M=ED')) {
+          log('\u2705 Updated!', '#30d158');
           await sbPatch('deals', deal.id, { gps_uploaded: true });
-          log('📤 Marked done in Supabase', '#30d158');
+          log('\u{1F4E4} Marked done in Supabase', '#30d158');
           successCount++;
         } else {
-          log('❌ Edit may have failed', '#ef4444');
+          log('\u274C Edit may have failed', '#ef4444');
           skipCount++;
         }
 
       } else {
-        // Check listing page for results
+        // Check listing page or dashboard results
         var bodyText = doc ? doc.body.innerText : '';
-        var isListing = currentUrl.includes('CustomerSearchListing');
+        var hasResults = false;
 
-        if (isListing && !bodyText.includes('No records found') && !bodyText.includes('0 records')) {
-          var firstLink = doc.querySelector('#MainContent_gvCustomers a');
-          if (firstLink) {
-            await clickAndWait(firstLink);
-            try { currentUrl = popup.location.href; } catch(e) { currentUrl = ''; }
-            if (currentUrl.includes('ViewDetail.aspx')) {
-              log('📝 Found via listing — editing...');
-              try {
-                popup.WebForm_DoPostBackWithOptions(
-                  new popup.WebForm_PostBackOptions(
-                    "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
-                  )
-                );
-              } catch(e) {}
-              await waitForPopupNav();
+        if (currentUrl.includes('CustomerSearchListing')) {
+          if (!bodyText.includes('No records found') && !bodyText.includes('0 records')) {
+            var firstLink = doc.querySelector('#MainContent_gvCustomers a');
+            if (firstLink) {
+              hasResults = true;
+              firstLink.click();
+              await waitForPopup('ViewDetail');
               await sleep(1000);
-              doc = popDoc();
-              el = doc.getElementById('MainContent_eAccountNumber'); if (el) el.value = deal.account;
-              el = doc.getElementById('MainContent_efirstname'); if (el) el.value = deal.firstName;
-              el = doc.getElementById('MainContent_elastname'); if (el) el.value = deal.lastName;
-              el = doc.getElementById('MainContent_eVIN'); if (el) el.value = deal.vin;
-              el = doc.getElementById('MainContent_eColor'); if (el) el.value = deal.color;
-              el = doc.getElementById('MainContent_eInventoryStockNumber'); if (el) el.value = deal.account;
-              submitBtn = doc.getElementById('MainContent_btnEditSubmit');
-              if (submitBtn) await clickAndWait(submitBtn);
-              try { currentUrl = popup.location.href; } catch(e) { currentUrl = ''; }
-              if (currentUrl.includes('ViewDetail.aspx')) {
-                log('✅ Updated!', '#30d158');
-                await sbPatch('deals', deal.id, { gps_uploaded: true });
-                log('📤 Marked done in Supabase', '#30d158');
-                successCount++;
-                continue;
-              }
+              currentUrl = popUrl();
             }
           }
         }
 
-        // ── Path B: Not found — add new ─────────────────────────────────────
-        log('➕ Not found — adding new...');
-        await navTo(BASE + 'Add.aspx');
-        await sleep(500);
+        if (hasResults && currentUrl.includes('ViewDetail.aspx')) {
+          // Got to ViewDetail from listing — now edit
+          log('\u{1F4DD} Found via listing \u2014 editing...');
+          doc = popDoc();
+          var editLink2 = null;
+          var allLinks2 = doc.querySelectorAll('a');
+          for (var li2 = 0; li2 < allLinks2.length; li2++) {
+            if (allLinks2[li2].textContent.trim() === 'Edit Consumer Details') {
+              editLink2 = allLinks2[li2];
+              break;
+            }
+          }
+          if (editLink2) {
+            editLink2.click();
+          } else {
+            try {
+              popup.WebForm_DoPostBackWithOptions(
+                new popup.WebForm_PostBackOptions(
+                  "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
+                )
+              );
+            } catch(e) {}
+          }
 
-        doc = popDoc();
-        var imgEncore = doc ? doc.getElementById('MainContent_imgEncore') : null;
-        if (!imgEncore) {
-          log('❌ Encore image not found', '#ef4444');
+          await waitForPopup('M=ED', 10000);
+          await sleep(1000);
+          doc = popDoc();
+
+          if (doc && doc.getElementById('MainContent_btnEditSubmit')) {
+            el = doc.getElementById('MainContent_eAccountNumber'); if (el) el.value = deal.account;
+            el = doc.getElementById('MainContent_efirstname'); if (el) el.value = deal.firstName;
+            el = doc.getElementById('MainContent_elastname'); if (el) el.value = deal.lastName;
+            el = doc.getElementById('MainContent_eVIN'); if (el) el.value = deal.vin;
+            el = doc.getElementById('MainContent_eColor'); if (el) el.value = deal.color;
+            el = doc.getElementById('MainContent_eInventoryStockNumber'); if (el) el.value = deal.account;
+
+            doc.getElementById('MainContent_btnEditSubmit').click();
+            await sleep(2000);
+            await waitForPopup('passtimeusa.com');
+            await sleep(1000);
+
+            currentUrl = popUrl();
+            if (currentUrl.includes('ViewDetail.aspx') && !currentUrl.includes('M=ED')) {
+              log('\u2705 Updated!', '#30d158');
+              await sbPatch('deals', deal.id, { gps_uploaded: true });
+              log('\u{1F4E4} Marked done in Supabase', '#30d158');
+              successCount++;
+              continue;
+            }
+          }
+          log('\u274C Edit via listing failed', '#ef4444');
           skipCount++;
           continue;
         }
 
-        await clickAndWait(imgEncore);
+        // ── Path B: Not found — add new ─────────────────────────────────────
+        log('\u2795 Not found \u2014 adding new...');
+        popup.location.href = BASE + 'Add.aspx';
+        await waitForPopup('Add.aspx');
+        await sleep(1000);
 
-        try { currentUrl = popup.location.href; } catch(e) { currentUrl = ''; }
+        doc = popDoc();
+        var imgEncore = doc ? doc.getElementById('MainContent_imgEncore') : null;
+        if (!imgEncore) {
+          log('\u274C Encore image not found on Add page', '#ef4444');
+          skipCount++;
+          continue;
+        }
+
+        imgEncore.click();
+        await waitForPopup('addelite', 15000);
+        await sleep(1000);
+
+        currentUrl = popUrl().toLowerCase();
         if (!currentUrl.includes('addelite.aspx')) {
-          log('❌ Did not reach add form', '#ef4444');
+          log('\u274C Did not reach add form', '#ef4444');
           skipCount++;
           continue;
         }
@@ -333,7 +409,7 @@
         doc = popDoc();
         var dropdown = doc.getElementById('MainContent_DropDownList1');
         if (!dropdown) {
-          log('❌ Serial dropdown not found', '#ef4444');
+          log('\u274C Serial dropdown not found', '#ef4444');
           skipCount++;
           continue;
         }
@@ -345,7 +421,7 @@
           }
         }
         if (!found) {
-          log('⏭️  Serial ' + deal.serial + ' not in inventory', '#f59e0b');
+          log('\u23ED\uFE0F  Serial ' + deal.serial + ' not in inventory', '#f59e0b');
           skipCount++;
           continue;
         }
@@ -360,26 +436,30 @@
         doc.getElementById('MainContent_Color').value = deal.color;
 
         var addBtn = doc.getElementById('MainContent_btnAddCust');
-        if (addBtn) await clickAndWait(addBtn);
+        if (addBtn) addBtn.click();
 
-        try { currentUrl = popup.location.href.toLowerCase(); } catch(e) { currentUrl = ''; }
+        await sleep(2000);
+        await waitForPopup('passtimeusa.com');
+        await sleep(1000);
+
+        currentUrl = popUrl().toLowerCase();
         if (currentUrl.includes('viewdetail.aspx')) {
-          log('✅ Added!', '#30d158');
+          log('\u2705 Added!', '#30d158');
           await sbPatch('deals', deal.id, { gps_uploaded: true });
-          log('📤 Marked done in Supabase', '#30d158');
+          log('\u{1F4E4} Marked done in Supabase', '#30d158');
           successCount++;
         } else {
           doc = popDoc();
           if (doc && doc.body.innerText.includes('OASIS Error')) {
-            log('❌ OASIS Error — try again', '#ef4444');
+            log('\u274C OASIS Error \u2014 try again', '#ef4444');
           } else {
-            log('❌ Add may have failed', '#ef4444');
+            log('\u274C Add may have failed', '#ef4444');
           }
           skipCount++;
         }
       }
     } catch(err) {
-      log('❌ Error: ' + err.message, '#ef4444');
+      log('\u274C Error: ' + err.message, '#ef4444');
       skipCount++;
     }
 
@@ -387,10 +467,11 @@
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
-  popup.close();
-  log('\n════════════════════════════════');
-  log('📊 DONE — ✅ ' + successCount + ' registered, ⏭️ ' + skipCount + ' skipped', successCount > 0 ? '#30d158' : '#f59e0b');
-  log('════════════════════════════════');
+  if (!popup.closed) popup.close();
+  log('');
+  log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
+  log('\u{1F4CA} DONE \u2014 \u2705 ' + successCount + ' registered, \u23ED\uFE0F ' + skipCount + ' skipped', successCount > 0 ? '#30d158' : '#f59e0b');
+  log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
 
   var closeBtn = document.createElement('button');
   closeBtn.textContent = 'Close';
