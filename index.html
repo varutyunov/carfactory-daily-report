@@ -559,6 +559,7 @@ canvas{display:none;}
     <div class="tb-right">
       <div class="ub" id="ub">Employee</div>
 
+      <button id="notif-bell" onclick="openNotifPanel()" style="position:relative;background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;" title="Notifications">&#x1F514;<span id="notif-count" style="display:none;position:absolute;top:0;right:0;background:#ff453a;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;line-height:1;">0</span></button>
       <button id="sync-btn" onclick="doSync()" title="Sync latest data" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;">&#x21BB;</button>
       <button id="lang-toggle-btn" onclick="toggleLang()" style="display:none;background:none;border:none;font-size:20px;cursor:pointer;padding:6px;line-height:1;flex-shrink:0;" title="Toggle language"></button>
       <button class="so" onclick="doLogout()">&#x2715;</button>
@@ -1676,13 +1677,13 @@ async function sendPushNotification(targetNames, title, body){
   if(!targetNames||targetNames.length===0) return;
   const externalIds = targetNames.map(n=>n.toLowerCase().replace(/\s+/g,'_'));
   try{
-    await fetch('https://onesignal.com/api/v1/notifications',{
+    await fetch('https://api.onesignal.com/notifications',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
       body:JSON.stringify({
         app_id: OS_APP_ID,
-        include_external_user_ids: externalIds,
-        channel_for_external_user_ids: 'push',
+        include_aliases: { external_id: externalIds },
+        target_channel: 'push',
         headings:{ en: title },
         contents:{ en: body },
         ios_badgeType: 'Increase',
@@ -1761,6 +1762,8 @@ async function fetchNotifications(){
     updateNotifBadge();
   }catch(e){ S.notifications=[]; }
 }
+// Poll for new notifications every 30 seconds
+setInterval(function(){if(me)fetchNotifications();},30000);
 async function createNotification(recipientId, message, assignmentId, carName){
   try{
     await sbPost('notifications',{recipient_id:recipientId,message,assignment_id:assignmentId,car_name:carName,created_by:me.name,read:false});
@@ -1770,7 +1773,7 @@ function updateNotifBadge(){
   const count=S.notifications.filter(n=>!n.read).length;
   const badge=document.getElementById('notif-count');
   if(!badge) return;
-  if(count>0){badge.style.display='block';badge.textContent=count>9?'9+':count;}
+  if(count>0){badge.style.display='flex';badge.textContent=count>9?'9+':count;}
   else{badge.style.display='none';}
   updateAppBadge();
 }
@@ -4273,6 +4276,7 @@ if(_savedSession){
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
+      initOneSignalUser(me.name);
       var _rOwner=['vlad','tommy'].includes(me.name.toLowerCase());var _rBtn=document.getElementById('ai-brain-btn');if(_rBtn)_rBtn.style.display=_rOwner?'':'none';
       syncFromSupabase().then(()=>{
         fetchNotifications();
