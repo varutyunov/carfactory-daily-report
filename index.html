@@ -1053,11 +1053,24 @@ canvas{display:none;}
 <!-- PAYMENT SCANNER OVERLAY -->
 <div id="pay-scan-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="closePayScan()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">LOG PAYMENT</span>
+    <button onclick="payViewBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="pay-view-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYMENTS</span>
   </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="padding:16px 12px 100px;">
+  <div id="pay-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+
+    <!-- PAYMENTS LIST VIEW -->
+    <div id="pay-list-view" style="padding:12px 12px 100px;">
+      <button onclick="openPayScanForm()" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a1628,#122a5c,#1d4ed8);border:1px solid #3b82f6;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent;">
+        <span style="font-size:20px;">📷</span> Scan New Payment
+      </button>
+      <input id="pay-list-search" placeholder="Search payments..." oninput="payListFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
+      <div id="pay-list-items" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;color:#555;padding:40px 0;">Loading payments...</div>
+      </div>
+    </div>
+
+    <!-- SCAN FORM VIEW -->
+    <div id="pay-scan-view" style="display:none;padding:16px 12px 100px;">
 
       <!-- Camera / Upload -->
       <div id="pay-scan-capture" style="margin-bottom:16px;">
@@ -8124,11 +8137,27 @@ var _dealPhotos = [];
 var _dealStep = 1;
 
 /* ── Payment Scanner (OCR) ── */
+var _payViewMode = 'list'; // 'list' or 'scan'
+var _scannedPayments = [];
+var _scannedFiltered = [];
+
 function openPayScan(){
   var o=document.getElementById('pay-scan-overlay');
   if(!o)return;
   o.style.display='flex';
-  // Reset state
+  _payViewMode='list';
+  document.getElementById('pay-view-title').textContent='PAYMENTS';
+  document.getElementById('pay-list-view').style.display='block';
+  document.getElementById('pay-scan-view').style.display='none';
+  loadScannedPayments();
+}
+
+function openPayScanForm(){
+  _payViewMode='scan';
+  document.getElementById('pay-view-title').textContent='SCAN PAYMENT';
+  document.getElementById('pay-list-view').style.display='none';
+  document.getElementById('pay-scan-view').style.display='block';
+  // Reset scan state
   document.getElementById('pay-scan-preview').style.display='none';
   document.getElementById('pay-scan-progress').style.display='none';
   document.getElementById('pay-scan-fields').style.display='none';
@@ -8139,14 +8168,90 @@ function openPayScan(){
   document.getElementById('pay-scan-amount').value='';
   document.getElementById('pay-scan-raw').textContent='';
 }
-function closePayScan(){
-  var o=document.getElementById('pay-scan-overlay');
-  if(o) o.style.display='none';
+
+function payViewBack(){
+  if(_payViewMode==='scan'){
+    // Back to list
+    _payViewMode='list';
+    document.getElementById('pay-view-title').textContent='PAYMENTS';
+    document.getElementById('pay-list-view').style.display='block';
+    document.getElementById('pay-scan-view').style.display='none';
+    loadScannedPayments();
+  } else {
+    document.getElementById('pay-scan-overlay').style.display='none';
+  }
 }
+
+function closePayScan(){
+  document.getElementById('pay-scan-overlay').style.display='none';
+}
+
 function payScanRetake(){
   document.getElementById('pay-scan-preview').style.display='none';
   document.getElementById('pay-scan-fields').style.display='none';
   document.getElementById('pay-scan-capture').style.display='block';
+}
+
+async function loadScannedPayments(){
+  var list=document.getElementById('pay-list-items');
+  if(!list)return;
+  list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  try{
+    _scannedPayments = await sbGet('scanned_payments','order=created_at.desc');
+    _scannedFiltered = _scannedPayments;
+    renderScannedPayments();
+  }catch(e){
+    // Fallback to localStorage if table doesn't exist yet
+    _scannedPayments = JSON.parse(localStorage.getItem('cf_payments')||'[]');
+    _scannedFiltered = _scannedPayments;
+    renderScannedPayments();
+    if(_scannedPayments.length===0){
+      list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No payments yet.<br><span style="font-size:12px;color:#333;">Scan your first payment above.</span></div>';
+    }
+  }
+}
+
+function payListFilter(q){
+  q=(q||'').toLowerCase().trim();
+  if(!q){ _scannedFiltered=_scannedPayments; }
+  else {
+    _scannedFiltered=_scannedPayments.filter(function(p){
+      return (p.customer_name||p.name||'').toLowerCase().includes(q)||
+             (p.vehicle||p.car||'').toLowerCase().includes(q)||
+             (p.amount||'').toLowerCase().includes(q)||
+             (p.logged_by||'').toLowerCase().includes(q);
+    });
+  }
+  renderScannedPayments();
+}
+
+function renderScannedPayments(){
+  var list=document.getElementById('pay-list-items');
+  if(!_scannedFiltered.length){
+    list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No payments found</div>';
+    return;
+  }
+  list.innerHTML=_scannedFiltered.map(function(p){
+    var name=p.customer_name||p.name||'Unknown';
+    var amt=p.amount||'';
+    var car=p.vehicle||p.car||'';
+    var date=p.payment_date||p.date||'';
+    if(date&&date.includes('-')){
+      try{ date=new Date(date+'T00:00:00').toLocaleDateString(); }catch(e){}
+    }
+    var by=p.logged_by||'';
+    return '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+        '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>' +
+        '<span style="font-size:18px;font-weight:700;color:#4ade80;">'+amt+'</span>' +
+      '</div>' +
+      (car?'<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car+'</div>':'') +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">' +
+        '<span style="font-size:12px;color:#555;">'+date+'</span>' +
+        '<span style="font-size:12px;color:#555;">'+by+'</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function payScanPhoto(inp){
@@ -8337,24 +8442,31 @@ async function payScanSave(){
   var amount=document.getElementById('pay-scan-amount').value.trim();
   if(!amount){alert('Please enter an amount.');return;}
 
-  // Save to Supabase payments table (or localStorage for now)
-  var payment={
-    name:name,
-    date:date||new Date().toISOString().split('T')[0],
-    car:car,
+  var record={
+    customer_name:name,
+    payment_date:date||new Date().toISOString().split('T')[0],
+    vehicle:car,
     amount:amount,
     logged_by:me?me.name:'',
     created_at:new Date().toISOString()
   };
 
-  // Store locally
-  var payments=JSON.parse(localStorage.getItem('cf_payments')||'[]');
-  payments.unshift(payment);
-  localStorage.setItem('cf_payments',JSON.stringify(payments));
+  try{
+    await sbPost('scanned_payments', record);
+  }catch(e){
+    // Fallback: save to localStorage if table doesn't exist
+    console.warn('Supabase save failed, using localStorage:', e);
+    var payments=JSON.parse(localStorage.getItem('cf_payments')||'[]');
+    payments.unshift(record);
+    localStorage.setItem('cf_payments',JSON.stringify(payments));
+  }
 
-  // Show confirmation
-  alert('Payment logged: '+amount+(name?' from '+name:''));
-  closePayScan();
+  // Go back to list
+  _payViewMode='list';
+  document.getElementById('pay-view-title').textContent='PAYMENTS';
+  document.getElementById('pay-list-view').style.display='block';
+  document.getElementById('pay-scan-view').style.display='none';
+  loadScannedPayments();
 }
 
 function openDealForm(forceLoc) {
