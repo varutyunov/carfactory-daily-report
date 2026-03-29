@@ -8263,8 +8263,22 @@ function payScanPhoto(inp){
     img.src=e.target.result;
     document.getElementById('pay-scan-preview').style.display='block';
     document.getElementById('pay-scan-capture').style.display='none';
-    // Run OCR
-    runPayScanOCR(e.target.result);
+    // Convert to JPEG via canvas (handles DNG/ProRAW and other exotic formats)
+    var convImg = new Image();
+    convImg.onload = function(){
+      var canvas = document.createElement('canvas');
+      canvas.width = convImg.naturalWidth;
+      canvas.height = convImg.naturalHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(convImg, 0, 0);
+      var jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      runPayScanOCR(jpegDataUrl);
+    };
+    convImg.onerror = function(){
+      // Fallback: send original if canvas conversion fails
+      runPayScanOCR(e.target.result);
+    };
+    convImg.src = e.target.result;
   };
   reader.readAsDataURL(file);
   inp.value='';
@@ -8288,9 +8302,9 @@ async function runPayScanOCR(imgSrc){
 
   try{
     // Strip data URL prefix to get raw base64, detect mime type
-    var mimeMatch = imgSrc.match(/^data:(image\/[a-z]+);base64,/);
+    var mimeMatch = imgSrc.match(/^data:(image\/[a-zA-Z0-9._+-]+);base64,/);
     var mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    var base64 = imgSrc.replace(/^data:image\/[a-z]+;base64,/, '');
+    var base64 = imgSrc.replace(/^data:image\/[a-zA-Z0-9._+-]+;base64,/, '');
 
     bar.style.width='30%';
     status.textContent='Sending to Gemini AI...';
