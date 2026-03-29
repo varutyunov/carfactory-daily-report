@@ -1650,29 +1650,12 @@ async function sendNotification(empId, message, subtitle, carName){
 }
 
 function showNotifEnableBar(){
-  if(document.getElementById('notif-bar')) return;
-  var bar = document.createElement('div');
-  bar.id = 'notif-bar';
-  bar.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;';
-  var card = document.createElement('div');
-  card.style.cssText='background:#111;border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;';
-  card.innerHTML='<div style="font-size:40px;margin-bottom:12px;">🔔</div>'
-    +'<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">Enable Notifications</div>'
-    +'<div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.4;">Get notified when tasks are completed, notes are added, or attention is needed.</div>';
-  var allowBtn = document.createElement('button');
-  allowBtn.textContent='Allow Notifications';
-  allowBtn.style.cssText='width:100%;padding:14px;background:#4f46e5;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;margin-bottom:10px;';
-  allowBtn.addEventListener('click',function(e){e.stopPropagation();enableOSNotifications();});
-  allowBtn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();enableOSNotifications();});
-  var dismissBtn = document.createElement('button');
-  dismissBtn.textContent='Not Now';
-  dismissBtn.style.cssText='width:100%;padding:12px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
-  dismissBtn.addEventListener('click',function(){document.getElementById('notif-bar').remove();});
-  dismissBtn.addEventListener('touchend',function(e){e.preventDefault();document.getElementById('notif-bar').remove();});
-  card.appendChild(allowBtn);
-  card.appendChild(dismissBtn);
-  bar.appendChild(card);
-  document.body.appendChild(bar);
+  var bar=document.getElementById('notif-bar');
+  if(bar) bar.style.display='flex';
+}
+function dismissNotifBar(){
+  var bar=document.getElementById('notif-bar');
+  if(bar) bar.style.display='none';
 }
 
 async function enableOSNotifications(){
@@ -1683,7 +1666,7 @@ async function enableOSNotifications(){
     } else {
       await Notification.requestPermission();
     }
-    document.getElementById('notif-bar')?.remove();
+    dismissNotifBar();
     // Link user after granting
     if(window._osExternalId && window.OneSignal && window.OneSignal.login){
       window.OneSignal.login(window._osExternalId);
@@ -8612,6 +8595,17 @@ async function dealDeleteFinal(id) {
 }
 
 </script>
+
+<!-- STATIC notification permission modal — must be in HTML for iOS PWA tap reliability -->
+<div id="notif-bar" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">
+  <div style="background:#111;border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;">
+    <div style="font-size:40px;margin-bottom:12px;">&#x1F514;</div>
+    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">Enable Notifications</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.4;">Get notified when tasks are completed, notes are added, or attention is needed.</div>
+    <button onclick="enableOSNotifications()" style="width:100%;padding:14px;background:#4f46e5;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;margin-bottom:10px;">Allow Notifications</button>
+    <button onclick="dismissNotifBar()" style="width:100%;padding:12px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">Not Now</button>
+  </div>
+</div>
 
 </body>
 </html>
