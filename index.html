@@ -1632,29 +1632,37 @@ canvas{display:none;}
 
 <!-- PHOTO GALLERY MODAL -->
 <div class="mb" id="m-photo-gallery" style="z-index:1200;">
-  <div class="msheet" style="max-width:420px;max-height:85vh;overflow-y:auto;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div id="pg-title" style="font-size:16px;font-weight:700;color:#fff;"></div>
-      <button onclick="closeM('m-photo-gallery')" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:18px;font-weight:700;cursor:pointer;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+  <div class="md" style="max-width:420px;">
+    <div style="width:36px;height:4px;background:#1e1e1e;border-radius:2px;margin:0 auto 16px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div id="pg-title" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;"></div>
+      <button onclick="closeM('m-photo-gallery')" style="background:rgba(255,255,255,.06);border:1px solid #1e1e1e;color:#666;font-size:16px;cursor:pointer;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
     </div>
-    <label id="pg-upload-label" for="pg-file-inp" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:#0a0a0a;border:2px dashed #333;border-radius:12px;cursor:pointer;margin-bottom:12px;">
-      <span style="font-size:28px;">📷</span>
-      <span style="color:#888;font-size:13px;margin-top:4px;">Tap to take or upload photos</span>
-      <span style="color:#444;font-size:11px;margin-top:2px;">Full quality preserved</span>
+    <label id="pg-upload-label" for="pg-file-inp" style="display:flex;align-items:center;gap:14px;padding:16px 18px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent;transition:transform .15s;" ontouchstart="this.style.transform='scale(.97)'" ontouchend="this.style.transform=''">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(29,78,216,.15);border:1px solid rgba(29,78,216,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-size:20px;">📷</span></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#fff;">Upload Photos</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Tap to take or choose from gallery</div>
+      </div>
+      <span style="font-size:18px;color:#1d4ed8;">›</span>
     </label>
     <input type="file" id="pg-file-inp" accept="image/*" multiple onchange="pgHandleFiles(event)" style="display:none;"/>
-    <div id="pg-uploading" style="display:none;text-align:center;padding:12px;color:#64d2ff;font-size:13px;">Uploading...</div>
-    <div id="pg-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
+    <div id="pg-uploading" style="display:none;padding:10px 14px;margin-bottom:10px;background:rgba(100,210,255,.08);border:1px solid rgba(100,210,255,.15);border-radius:10px;color:#64d2ff;font-size:12px;font-weight:600;text-align:center;">Uploading...</div>
+    <div id="pg-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
   </div>
 </div>
 
 <!-- PHOTO VIEWER MODAL -->
 <div class="mb" id="m-photo-view" style="z-index:1300;" onclick="closeM('m-photo-view')">
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:16px;">
-    <img id="pv-img" src="" style="max-width:100%;max-height:80vh;border-radius:8px;object-fit:contain;"/>
-    <div style="display:flex;gap:12px;margin-top:12px;">
-      <a id="pv-download" href="" download style="padding:10px 20px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#fff;font-size:14px;text-decoration:none;font-weight:600;">⬇ Download</a>
-      <button id="pv-delete-btn" onclick="event.stopPropagation();pvDeletePhoto()" style="padding:10px 20px;background:rgba(255,69,58,.15);border:1px solid rgba(255,69,58,.3);border-radius:10px;color:#ff453a;font-size:14px;cursor:pointer;font-weight:600;">🗑 Delete</button>
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:16px;gap:16px;">
+    <img id="pv-img" src="" style="max-width:100%;max-height:75vh;border-radius:14px;object-fit:contain;box-shadow:0 8px 32px rgba(0,0,0,.6);"/>
+    <div style="display:flex;gap:10px;" onclick="event.stopPropagation()">
+      <a id="pv-download" href="" download style="padding:12px 22px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;font-size:14px;text-decoration:none;font-weight:700;display:flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent;">
+        <span style="font-size:16px;">⬇</span> Save
+      </a>
+      <button id="pv-delete-btn" onclick="pvDeletePhoto()" style="padding:12px 22px;background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.2);border-radius:12px;color:#ff453a;font-size:14px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent;">
+        <span style="font-size:16px;">🗑</span> Delete
+      </button>
     </div>
   </div>
 </div>
@@ -3025,10 +3033,11 @@ async function openPhotoGallery(carId, category, title){
 }
 function pgRenderGrid(){
   const grid=document.getElementById('pg-grid');
-  if(!_pgPhotos.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#555;font-size:13px;">No photos yet</div>';return;}
-  grid.innerHTML=_pgPhotos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#111;cursor:pointer;" onclick="pgViewPhoto(${i})">
+  if(!_pgPhotos.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px 10px;color:#444;font-size:13px;">No photos yet — tap upload to add</div>';return;}
+  grid.innerHTML=_pgPhotos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#111;cursor:pointer;border:1px solid #1e1e1e;transition:transform .15s;-webkit-tap-highlight-color:transparent;" onclick="pgViewPhoto(${i})" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform=''">
     <img src="${p.url}" style="width:100%;height:100%;object-fit:cover;"/>
-    <div style="position:absolute;bottom:0;left:0;right:0;padding:3px 6px;background:rgba(0,0,0,.7);font-size:9px;color:#888;">${p.uploaded_by||''}</div>
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,transparent 50%,rgba(0,0,0,.35) 100%);pointer-events:none;"></div>
+    ${p.uploaded_by?`<div style="position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:10px;color:#888;pointer-events:none;">${p.uploaded_by}</div>`:''}
   </div>`).join('');
 }
 async function pgHandleFiles(e){
@@ -7545,16 +7554,18 @@ function _txInit() {
      DEPOSIT FORM OVERLAY
      ══════════════════════════════════════════════════════════════ -->
 <!-- Photo upload bottom sheet — top-level so fixed positioning always works -->
-<div id="photo-sheet" style="display:none;position:fixed;inset:0;z-index:600;flex-direction:column;justify-content:flex-end;" onclick="if(event.target===this)closePhotoSheet()">
-  <div style="background:#111;border-radius:24px 24px 0 0;padding:20px 16px 36px;display:flex;flex-direction:column;gap:10px;">
-    <div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto 8px;"></div>
-    <div id="photo-sheet-title" style="font-size:17px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-    <label id="photo-sheet-load-btn" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:17px;background:#1d4ed8;color:#fff;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box;">
-      📷 Load Photos
+<div id="photo-sheet" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.7);flex-direction:column;justify-content:flex-end;" onclick="if(event.target===this)closePhotoSheet()">
+  <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-bottom:none;border-radius:20px 20px 0 0;padding:20px 16px 40px;display:flex;flex-direction:column;gap:10px;">
+    <div style="width:36px;height:4px;background:#1e1e1e;border-radius:2px;margin:0 auto 10px;"></div>
+    <div id="photo-sheet-title" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;text-align:center;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    <label id="photo-sheet-load-btn" style="display:flex;align-items:center;gap:14px;width:100%;padding:16px 18px;background:rgba(29,78,216,.1);border:1px solid rgba(29,78,216,.3);border-radius:14px;cursor:pointer;box-sizing:border-box;-webkit-tap-highlight-color:transparent;">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(29,78,216,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-size:20px;">📷</span></div>
+      <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;color:#fff;">Upload Photos</div><div style="font-size:11px;color:#555;margin-top:2px;">Tap to take or choose from gallery</div></div>
+      <span style="font-size:18px;color:#1d4ed8;">›</span>
       <input type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,_photoSheetCarId)" style="display:none;"/>
     </label>
-    <button id="photo-sheet-done-btn" onclick="photoSheetMarkDone()" style="width:100%;padding:17px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">✓ Mark Done</button>
-    <button onclick="closePhotoSheet()" style="width:100%;padding:14px;background:none;border:1px solid #2a2a2a;border-radius:14px;font-size:15px;color:#666;cursor:pointer;">Cancel</button>
+    <button id="photo-sheet-done-btn" onclick="photoSheetMarkDone()" style="width:100%;padding:16px;background:rgba(22,101,52,.15);border:1px solid rgba(48,209,88,.3);color:#30d158;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">✓ Mark Done</button>
+    <button onclick="closePhotoSheet()" style="width:100%;padding:14px;background:none;border:1px solid #1e1e1e;border-radius:14px;font-size:14px;color:#555;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancel</button>
   </div>
 </div>
 <style>
