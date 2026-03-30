@@ -65,69 +65,96 @@ function parseCsv(csvPath, forceLocation) {
   return { cars, stocks };
 }
 
-async function syncLoc(loc, csvPath) {
-  const { cars: csvCars, stocks: csvStocks } = parseCsv(csvPath, loc);
-  console.log(`\n=== Syncing ${loc} from ${csvPath} (${csvCars.length} cars) ===`);
+async function main() {
+  // Parse both CSV files
+  const debary = parseCsv('InventoryMaster.csv', null); // uses lotno: 2=DeLand, else DeBary
+  const deland = fs.existsSync('InventoryMasterDeLand.csv')
+    ? parseCsv('InventoryMasterDeLand.csv', 'DeLand')
+    : { cars: [], stocks: new Set() };
 
-  // Get existing cars for this location only
-  const url = `${SB_URL}/rest/v1/inventory?select=id,stock,vin,name,location,color&location=eq.${encodeURIComponent(loc)}&limit=2000`;
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`GET inventory failed: ${await res.text()}`);
-  const existing = await res.json();
+  const allCsvCars = [...debary.cars, ...deland.cars];
+  const allCsvStocks = new Set([...debary.stocks, ...deland.stocks]);
+
+  // Deduplicate by VIN across both files
+  const seen = new Set();
+  const csvCars = allCsvCars.filter(c => {
+    if (c.vin && seen.has(c.vin)) return false;
+    if (c.vin) seen.add(c.vin);
+    return true;
+  });
+
+  console.log('Total INSTOCK (both lots):', csvCars.length);
+
+  // Get ALL existing vehicles from Supabase (paginated)
+  const existing = await sbGetAll('inventory', 'id,stock,vin,name');
   const existingByStock = new Map(existing.map(c => [c.stock, c]));
-  console.log(`${loc} currently in DB:`, existing.length);
+  const existingByVin = new Map(existing.filter(c => c.vin).map(c => [c.vin, c]));
+  console.log('Currently in DB:', existing.length);
 
   // --- ADD NEW CARS ---
-  const toInsert = csvCars.filter(c => !existingByStock.has(c.stock));
+  const toInsert = csvCars.filter(c => {
+    if (existingByStock.has(c.stock)) return false;
+    if (c.vin && existingByVin.has(c.vin)) return false;
+    return true;
+  });
+
   let added = 0;
   if (toInsert.length > 0) {
+    console.log('New cars to add:', toInsert.length);
     for (let i = 0; i < toInsert.length; i += 50) {
       const batch = toInsert.slice(i, i + 50);
-      const r = await fetch(SB_URL + '/rest/v1/inventory', {
+      const res = await fetch(SB_URL + '/rest/v1/inventory', {
         method: 'POST', headers: HEADERS, body: JSON.stringify(batch)
       });
-      if (r.ok) { added += (await r.json()).length; }
-      else { console.error('Insert error:', await r.text()); }
+      if (res.ok) { added += (await res.json()).length; }
+      else { console.error('Insert batch error:', await res.text()); }
     }
   }
 
-  // --- UPDATE EXISTING CARS (color + location) ---
+  // --- UPDATE EXISTING CARS (location + color) ---
+  const toUpdate = csvCars.filter(c => existingByStock.has(c.stock));
   let updated = 0;
-  for (const c of csvCars) {
+  for (const c of toUpdate) {
     const ex = existingByStock.get(c.stock);
-    if (!ex) continue;
     const patch = {};
-    if (c.color && c.color !== ex.color) patch.color = c.color;
-    if (c.location !== ex.location) patch.location = c.location;
+    if (c.color) patch.color = c.color;
+    if (c.location) patch.location = c.location;
     if (!Object.keys(patch).length) continue;
-    const r = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
+    const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
     });
-    if (r.ok) updated++;
-    else console.error('Update error for', c.stock, ':', await r.text());
+    if (res.ok) updated++;
+    else console.error('Update error for', c.stock, ':', await res.text());
   }
+  console.log('Updated:', updated);
 
-  // --- REMOVE SOLD CARS (this location only) ---
+  // --- REMOVE SOLD CARS ---
   const assignments = await sbGetAll('assignments', 'inventory_id,approved');
-  const activeIds = new Set(assignments.filter(a => !a.approved).map(a => a.inventory_id));
-  const toRemove = existing.filter(c => c.stock && !csvStocks.has(c.stock) && !activeIds.has(c.id));
+  const activeAssignments = new Set(
+    assignments.filter(a => !a.approved).map(a => a.inventory_id)
+  );
+
+  const toRemove = existing.filter(c => {
+    if (!c.stock) return false;
+    if (allCsvStocks.has(c.stock)) return false;
+    if (activeAssignments.has(c.id)) return false;
+    return true;
+  });
+
   let removed = 0;
-  for (const car of toRemove) {
-    const r = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${car.id}`, { method: 'DELETE', headers: HEADERS });
-    if (r.ok) removed++;
-    else console.error('Delete error for', car.stock, ':', await r.text());
+  if (toRemove.length > 0) {
+    console.log('Sold/removed cars to delete:', toRemove.length);
+    for (const car of toRemove) {
+      const res = await fetch(
+        `${SB_URL}/rest/v1/inventory?id=eq.${car.id}`,
+        { method: 'DELETE', headers: HEADERS }
+      );
+      if (res.ok) { removed++; }
+      else { console.error('Delete error for', car.stock, ':', await res.text()); }
+    }
   }
 
-  console.log(`${loc}: Added ${added} | Updated ${updated} | Removed ${removed}`);
-}
-
-async function main() {
-  await syncLoc('DeBary', 'InventoryMaster.csv');
-  if (fs.existsSync('InventoryMasterDeland.csv')) {
-    await syncLoc('DeLand', 'InventoryMasterDeland.csv');
-  } else {
-    console.log('InventoryMasterDeland.csv not found — skipping DeLand sync');
-  }
-  console.log('\n=== SYNC COMPLETE ===');
+  console.log('=== SYNC COMPLETE ===');
+  console.log('Added:', added, '| Removed:', removed, '| Total now:', existing.length + added - removed);
 }
 main().catch(e => { console.error(e); process.exit(1); });
