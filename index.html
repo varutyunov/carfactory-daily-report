@@ -7724,7 +7724,7 @@ function _txInit() {
       <!-- Printable form — professional layout -->
       <div id="dep-print-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:15.6px;line-height:1.35;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
         <!-- Page container with print margins -->
-        <div style="padding:0.35in 0.5in 0.3in;">
+        <div style="padding:0.25in 0.45in 0.25in;">
 
           <!-- Header: logo + address -->
           <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #000;">
@@ -7817,18 +7817,19 @@ function _txInit() {
 
 <style>
 @media print {
-  body, html { background: white !important; }
+  body, html { background: white !important; height: auto !important; }
   body > *:not(#deposit-overlay) { display: none !important; }
-  #deposit-overlay { display: block !important; position: static !important; background: white !important; color: #000 !important; }
+  #deposit-overlay { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
   #deposit-back-bar { display: none !important; }
-  #deposit-body { padding-top: 0 !important; overflow: visible !important; background: white !important; }
-  #dep-step4 { display: block !important; padding: 0 !important; background: white !important; }
-  #dep-step4 > div:first-child { display: none !important; } /* hide step title */
-  #dep-step4 > div:last-child { display: none !important; } /* hide action buttons */
+  #deposit-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
+  #dep-step4 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  #dep-step4 > div:first-child { display: none !important; }
+  #dep-step4 > div:last-child { display: none !important; }
   #dep-step1, #dep-step2, #dep-step3 { display: none !important; }
   .dep-print-actions { display: none !important; }
-  #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; }
-  @page { margin: 0.3in; size: letter; }
+  #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
+  #dep-print-form > div { page-break-inside: avoid; }
+  @page { margin: 0.4in; size: letter portrait; }
 }
 </style>
 
