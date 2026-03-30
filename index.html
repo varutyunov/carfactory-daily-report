@@ -625,6 +625,19 @@ canvas{display:none;}
         <div class="car-grid" id="photos-grid"></div>
         <div class="empty" id="photos-empty" style="display:none;"><div class="ei">📷</div><div class="et">No vehicles in photos queue.</div></div>
       </div>
+<!-- Photo upload bottom sheet -->
+<div id="photo-sheet" style="display:none;position:fixed;inset:0;z-index:600;flex-direction:column;justify-content:flex-end;" onclick="if(event.target===this)closePhotoSheet()">
+  <div style="background:#111;border-radius:24px 24px 0 0;padding:20px 16px 36px;display:flex;flex-direction:column;gap:10px;">
+    <div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto 8px;"></div>
+    <div id="photo-sheet-title" style="font-size:17px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    <label id="photo-sheet-load-btn" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:17px;background:#1d4ed8;color:#fff;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box;">
+      📷 Load Photos
+      <input type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,_photoSheetCarId)" style="display:none;"/>
+    </label>
+    <button id="photo-sheet-done-btn" onclick="photoSheetMarkDone()" style="width:100%;padding:17px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">✓ Mark Done</button>
+    <button onclick="closePhotoSheet()" style="width:100%;padding:14px;background:none;border:1px solid #2a2a2a;border-radius:14px;font-size:15px;color:#666;cursor:pointer;">Cancel</button>
+  </div>
+</div>
       <div id="emp-tab-parts" style="padding:0 14px 80px;display:none;">
         <div style="padding:14px 0 8px;"><div class="greeting">Parts Queue</div></div>
         <div class="car-grid" id="parts-grid"></div>
@@ -3379,29 +3392,50 @@ function renderPhotosQueue(){
     var thumbSrc=car.photo||pxUrl||'';
     var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     var borderCol=done?'rgba(48,209,88,0.35)':'#222';
-    var inputId='qpu-input-'+car.id;
-    // Entire row is a label — tapping anywhere opens the file picker
-    o+='<label for="'+inputId+'" style="display:flex;align-items:center;gap:12px;padding:14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:14px;cursor:pointer;">';
+    o+='<div onclick="openPhotoSheet('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
     o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
     o+='<div id="qpu-status-'+car.id+'" style="font-size:12px;margin-top:4px;height:16px;font-weight:600;"></div>';
     o+='</div>';
-    if(done){
-      o+='<span style="font-size:22px;flex-shrink:0;">✅</span>';
-    } else {
-      o+='<span style="font-size:22px;flex-shrink:0;">📷</span>';
-    }
-    o+='<input id="'+inputId+'" type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,'+car.id+')" style="display:none;"/>';
-    o+='</label>';
+    o+='<span style="font-size:22px;flex-shrink:0;">'+(done?'✅':'📷')+'</span>';
+    o+='</div>';
   });
   o+='</div>';
   grid.innerHTML=o;
 }
+var _photoSheetCarId=null;
+function openPhotoSheet(carId){
+  _photoSheetCarId=carId;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(!car) return;
+  var ws=getWorkState(carId);
+  var done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
+  var sheet=document.getElementById('photo-sheet');
+  document.getElementById('photo-sheet-title').textContent=car.name;
+  var doneBtn=document.getElementById('photo-sheet-done-btn');
+  doneBtn.textContent=done?'✓ Mark Undone':'✓ Mark Done';
+  doneBtn.style.background=done?'#1a2a1a':'#166534';
+  doneBtn.style.color=done?'#4ade80':'#fff';
+  sheet.style.display='flex';
+}
+function closePhotoSheet(){
+  document.getElementById('photo-sheet').style.display='none';
+  _photoSheetCarId=null;
+}
+async function photoSheetMarkDone(){
+  if(!_photoSheetCarId) return;
+  await markPhotosDone(_photoSheetCarId);
+  closePhotoSheet();
+  renderPhotosQueue();
+}
 async function queuePhotoUpload(e, carId){
   var files=Array.from(e.target.files);
   if(!files.length) return;
+  var sheet=document.getElementById('photo-sheet');
+  var loadBtn=document.getElementById('photo-sheet-load-btn');
+  if(loadBtn){loadBtn.textContent='Uploading...';loadBtn.disabled=true;}
   var statusEl=document.getElementById('qpu-status-'+carId);
   if(statusEl){statusEl.textContent='Uploading...';statusEl.style.color='#60a5fa';}
   var ok=0;
@@ -3409,8 +3443,10 @@ async function queuePhotoUpload(e, carId){
     try{await uploadCarPhoto(carId,'photos',files[i]);ok++;}catch(err){console.error('Photo upload error:',err);}
   }
   e.target.value='';
+  if(loadBtn){loadBtn.textContent='📷 Load Photos';loadBtn.disabled=false;}
   if(statusEl){statusEl.textContent='✓ '+ok+' photo'+(ok!==1?'s':'')+' uploaded';statusEl.style.color='#4ade80';}
-  setTimeout(function(){renderPhotosQueue();},2000);
+  closePhotoSheet();
+  setTimeout(function(){renderPhotosQueue();},1500);
 }
 function openPhotosDoneModal(carId){
   const car=S.inventory.find(c=>c.id===carId);
