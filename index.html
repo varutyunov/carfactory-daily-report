@@ -1053,7 +1053,7 @@ canvas{display:none;}
 <!-- PAYMENT TILE OVERLAY -->
 <div id="pay-scan-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="payViewBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:12px 8px;line-height:1;">&#8592;</button>
+    <button onclick="payViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
     <span id="pay-view-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYMENTS</span>
     <span id="pay-loc-label" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:#60a5fa;letter-spacing:1px;text-transform:uppercase;"></span>
   </div>
@@ -8403,6 +8403,9 @@ function payCloseLightbox(){
 }
 
 function payViewBack(){
+  // Always close lightbox if open
+  var lb=document.getElementById('pay-photo-lightbox');
+  if(lb&&lb.style.display!=='none'){payCloseLightbox();return;}
   if(_payViewMode==='scan'||_payViewMode==='detail'){
     _payViewMode='list';
     document.getElementById('pay-view-title').textContent='PAYMENTS';
@@ -8410,7 +8413,7 @@ function payViewBack(){
     document.getElementById('pay-scan-view').style.display='none';
     document.getElementById('pay-detail-view').style.display='none';
     var vb=document.getElementById('pay-view-body');if(vb)vb.scrollTop=0;
-    loadPaymentWeek();
+    try{loadPaymentWeek();}catch(e){console.warn('payViewBack load error:',e);}
   } else {
     payCloseAll();
   }
@@ -8422,10 +8425,12 @@ function closePayScan(){
 
 function payCloseAll(){
   _payViewMode='list';
+  var lb=document.getElementById('pay-photo-lightbox');if(lb)lb.style.display='none';
   document.getElementById('pay-scan-overlay').style.display='none';
   document.getElementById('pay-list-view').style.display='block';
   document.getElementById('pay-scan-view').style.display='none';
   document.getElementById('pay-detail-view').style.display='none';
+  var vb=document.getElementById('pay-view-body');if(vb)vb.scrollTop=0;
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
