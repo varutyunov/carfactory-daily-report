@@ -6120,19 +6120,42 @@ var AI_TOOLS = [
     name: 'get_deals',
     description: 'Get deal upload records. Can search by customer name, vehicle, employee, or get all. Returns deals with customer, vehicle, payments, deal type (cash/finance), photos.',
     input_schema: { type:'object', properties:{ query:{type:'string',description:'Customer name, vehicle, employee name, or "all" to list recent deals'} } }
+  },
+  {
+    name: 'get_payments',
+    description: 'Get scanned payment records logged by staff. Use query "summary" or "week" for this week totals by method, "today" for today only, "cash"/"card"/"check"/"other" to filter by method, or a customer/employee name to search. Returns amounts, methods, vehicles, dates, who logged it.',
+    input_schema: { type:'object', properties:{ query:{type:'string',description:'One of: "summary", "week", "today", "cash", "card", "check", "other", or a customer/employee name'}, location:{type:'string',enum:['DeBary','DeLand'],description:'Filter by location — omit for all'} } }
   }
 ];
 
 function buildAISystemPrompt(){
   var emps = (S.employees||[]).map(function(e){ return e.name+' (ID:'+e.id+', role:'+e.role+', loc:'+(e.location||'DeBary')+')'; }).join('\n');
-  var inv = (S.inventory||[]).map(function(c){ return '  ID:'+c.id+' | '+c.name+' | stock:'+( c.stock||'?')+' | color:'+(c.color||'?')+' | loc:'+(c.location||'?'); }).join('\n');
+  var inv = (S.inventory||[]).map(function(c){ return '  ID:'+c.id+' | '+c.name+' | stock:'+(c.stock||'?')+' | color:'+(c.color||'?')+' | loc:'+(c.location||'?')+' | VIN:'+(c.vin||'?'); }).join('\n');
   var pending = (S.assignments||[]).filter(function(a){ return !a.approved; }).length;
   var cpCusts = (_cpData.customers||[]).length;
   var cpLate = (_cpData.customers||[]).filter(function(c){ return parseInt(c.daysLate)>0; }).length;
   var cpPays = (_cpData.payments||[]).length;
   var formCount = _formsData ? _formsData.length : 0;
   var dealCount = _dealsData ? _dealsData.length : 0;
+  // Build this-week payment snapshot from live data
+  var weekPays = (_payWeekData||[]).filter(function(p){return !p.delete_requested;});
+  var wkCash=0,wkCard=0,wkCheck=0,wkOther=0;
+  weekPays.forEach(function(p){
+    var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+    var m=(p.payment_method||'cash').toLowerCase();
+    if(m==='cash') wkCash+=v; else if(m==='card') wkCard+=v; else if(m==='check') wkCheck+=v; else wkOther+=v;
+  });
+  var wkTotal=wkCash+wkCard+wkCheck+wkOther;
+  var fmtK=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
+  var weekSnap = weekPays.length
+    ? weekPays.length+' payments | Cash '+fmtK(wkCash)+' | Card '+fmtK(wkCard)+' | Check '+fmtK(wkCheck)+(wkOther?(' | Other '+fmtK(wkOther)):'')+' | Total '+fmtK(wkTotal)
+    : 'No payments loaded for current week yet';
+  var todayStr = new Date().toISOString().split('T')[0];
+  var todayPays = weekPays.filter(function(p){return p.payment_date===todayStr;});
+  var todayTotal = todayPays.reduce(function(s,p){return s+(parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0);},0);
+  var todaySnap = todayPays.length ? todayPays.length+' payments, '+fmtK(todayTotal)+' total' : 'None logged yet today';
   return 'You are Factory AI, the intelligent assistant for Car Factory — a used car dealership management app. You have full access to ALL sections of the app.\n\n'
+    + 'TODAY: '+new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'\n\n'
     + 'APP SECTIONS YOU CAN ACCESS:\n'
     + '• Home (orbit command center with all tiles)\n'
     + '• Inventory — all vehicles across locations\n'
@@ -6142,14 +6165,18 @@ function buildAISystemPrompt(){
     + '• Team/Employees — staff management\n'
     + '• CarPay — customer payment tracking ('+cpCusts+' customers, '+cpLate+' late, '+cpPays+' payment records)\n'
     + '• Forms — deposit records ('+formCount+' forms)\n'
-    + '• Deals — deal uploads with photos, payments, cash/finance ('+dealCount+' deals)\n\n'
+    + '• Deals — deal uploads with photos, payments, cash/finance ('+dealCount+' deals)\n'
+    + '• Payments — scanned payment receipts logged by staff\n\n'
     + 'EMPLOYEES:\n'+emps+'\n\n'
     + 'INVENTORY ('+((S.inventory||[]).length)+' vehicles):\n'+inv+'\n\n'
     + 'PENDING ASSIGNMENTS: '+pending+'\n\n'
+    + 'THIS WEEK PAYMENTS (live): '+weekSnap+'\n'
+    + 'TODAY PAYMENTS: '+todaySnap+'\n\n'
     + 'CAPABILITIES:\n'
-    + '• Search and find any vehicle in inventory\n'
+    + '• Search and find any vehicle in inventory (VIN, stock, color, name)\n'
     + '• Assign work (repair, task, paint, parts, photos) to employees\n'
     + '• Look up CarPay data — customer payment status, late accounts, payment history\n'
+    + '• Look up scanned payments — this week totals, today, by method, by employee, by customer\n'
     + '• Look up deposit forms — customer deposits, vehicle holds, balances\n'
     + '• Look up deals — deal uploads, payment breakdowns, cash vs finance\n'
     + '• Navigate to any section of the app\n'
@@ -6295,6 +6322,42 @@ async function executeAITool(toolName, input){
     var dMatches=deals.filter(function(d){return ((d.customer_name||'')+(d.vehicle_desc||'')+(d.vin||'')+(d.stock||'')+(d.created_by||'')).toLowerCase().includes(q3);});
     if(!dMatches.length) return {message:'No deals found matching "'+input.query+'"'};
     return {found:dMatches.length,deals:dMatches.slice(0,20).map(function(d){return {id:d.id,customer:d.customer_name,vehicle:d.vehicle_desc,vin:d.vin,deal_type:d.deal_type,total_collected:d.total_collected,payments:d.payments,gps_serial:d.gps_serial,pickup_payment:d.pickup_payment,photo_count:(d.photo_urls||[]).length,created_by:d.created_by,location:d.location,created_at:d.created_at};})};
+  }
+  if(toolName === 'get_payments'){
+    var q4=(input.query||'week').toLowerCase();
+    var loc4=input.location||null;
+    var fmt4=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+    var mapPay=function(p){return {customer:p.customer_name,amount:p.amount,method:p.payment_method,date:p.payment_date,time:p.payment_time,vehicle:[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' '),logged_by:p.logged_by,location:p.location};};
+    try{
+      var params4='order=payment_date.desc,created_at.desc&delete_requested=eq.false';
+      if(loc4) params4+='&location=eq.'+loc4;
+      var allP=await sbGet('payments',params4);
+      if(q4==='summary'||q4==='week'){
+        // Use already-loaded week data if available, else use all fetched
+        var src=(_payWeekData&&_payWeekData.length)?_payWeekData.filter(function(p){return !p.delete_requested;}):allP.slice(0,200);
+        var c4=0,cd4=0,ck4=0,ot4=0;
+        src.forEach(function(p){var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;var m=(p.payment_method||'cash').toLowerCase();if(m==='cash')c4+=v;else if(m==='card')cd4+=v;else if(m==='check')ck4+=v;else ot4+=v;});
+        return {period:'this_week',total_payments:src.length,cash:fmt4(c4),card:fmt4(cd4),check:fmt4(ck4),other:fmt4(ot4),grand_total:fmt4(c4+cd4+ck4+ot4)};
+      }
+      if(q4==='today'){
+        var tod=new Date().toISOString().split('T')[0];
+        var todP=allP.filter(function(p){return p.payment_date===tod;});
+        var todTot=todP.reduce(function(s,p){return s+(parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0);},0);
+        return {date:tod,count:todP.length,total:fmt4(todTot),payments:todP.slice(0,30).map(mapPay)};
+      }
+      if(q4==='cash'||q4==='card'||q4==='check'||q4==='other'){
+        var mP=allP.filter(function(p){return (p.payment_method||'cash').toLowerCase()===q4;});
+        var mTot=mP.reduce(function(s,p){return s+(parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0);},0);
+        return {method:q4,count:mP.length,total:fmt4(mTot),payments:mP.slice(0,30).map(mapPay)};
+      }
+      // Search by customer or employee name
+      var nameP=allP.filter(function(p){return ((p.customer_name||'').toLowerCase().includes(q4)||(p.logged_by||'').toLowerCase().includes(q4));});
+      if(!nameP.length) return {message:'No payments found matching "'+input.query+'"'};
+      var nameTot=nameP.reduce(function(s,p){return s+(parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0);},0);
+      return {found:nameP.length,total:fmt4(nameTot),payments:nameP.slice(0,30).map(mapPay)};
+    }catch(e4){
+      return {error:'Payment query failed: '+e4.message};
+    }
   }
   return {error:'Unknown tool: '+toolName};
 }
