@@ -1254,10 +1254,15 @@ canvas{display:none;}
 
 <!-- PAYMENT BREAKDOWN SHEET -->
 <div id="pay-breakdown-sheet" onclick="payCloseBreakdown()" style="display:none;position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.7);">
-  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;padding:0 16px 44px;">
-    <div style="text-align:center;padding:12px 0 16px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
-    <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">Payment Breakdown</div>
-    <div id="pay-breakdown-content" style="display:flex;flex-direction:column;gap:2px;"></div>
+  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:82vh;display:flex;flex-direction:column;">
+    <div style="padding:12px 16px 0;flex-shrink:0;">
+      <div style="text-align:center;margin-bottom:10px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <button id="pay-breakdown-back" onclick="payShowBreakdown()" style="display:none;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:6px 10px 6px 0;min-width:36px;min-height:44px;-webkit-tap-highlight-color:transparent;">&#8592;</button>
+        <div id="pay-breakdown-title" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;">Payment Breakdown</div>
+      </div>
+    </div>
+    <div id="pay-breakdown-content" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 44px;flex:1;display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 </div>
 
@@ -8571,28 +8576,85 @@ function _payUpdateStats(){
 function payShowBreakdown(){
   var sheet=document.getElementById('pay-breakdown-sheet');
   var content=document.getElementById('pay-breakdown-content');
+  var title=document.getElementById('pay-breakdown-title');
+  var backBtn=document.getElementById('pay-breakdown-back');
   if(!sheet||!content)return;
+  if(title) title.textContent='Payment Breakdown';
+  if(backBtn) backBtn.style.display='none';
   var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var rows=[
-    {label:'Cash',value:_payBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
-    {label:'Card',value:_payBreakdown.card,color:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.2)'},
-    {label:'Check',value:_payBreakdown.check,color:'#fbbf24',bg:'rgba(251,191,36,.1)',border:'rgba(251,191,36,.2)'},
-    {label:'Other',value:_payBreakdown.other,color:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.2)'}
+    {method:'cash', label:'Cash',value:_payBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
+    {method:'card', label:'Card',value:_payBreakdown.card,color:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.2)'},
+    {method:'check',label:'Check',value:_payBreakdown.check,color:'#fbbf24',bg:'rgba(251,191,36,.1)',border:'rgba(251,191,36,.2)'},
+    {method:'other',label:'Other',value:_payBreakdown.other,color:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.2)'}
   ];
   var html='';
   rows.forEach(function(r){
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:'+r.bg+';border:1px solid '+r.border+';border-radius:12px;margin-bottom:6px;">';
-    html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:'+r.color+';letter-spacing:1px;text-transform:uppercase;">'+r.label+'</span>';
-    html+='<span style="font-size:18px;font-weight:700;color:'+r.color+';">'+fmt(r.value)+'</span>';
+    var count=_payWeekData.filter(function(p){return !p.delete_requested&&(p.payment_method||'cash').toLowerCase()===r.method;}).length;
+    html+='<div onclick="payShowCategoryDetail(\''+r.method+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:'+r.bg+';border:1px solid '+r.border+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    html+='<div><span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:'+r.color+';letter-spacing:1px;text-transform:uppercase;">'+r.label+'</span>';
+    if(count>0) html+='<span style="font-size:11px;color:'+r.color+';opacity:.6;margin-left:8px;">'+count+' payment'+(count===1?'':'s')+'</span>';
     html+='</div>';
+    html+='<div style="display:flex;align-items:center;gap:10px;">';
+    html+='<span style="font-size:18px;font-weight:700;color:'+r.color+';">'+fmt(r.value)+'</span>';
+    html+='<span style="color:#444;font-size:18px;">&#8250;</span>';
+    html+='</div></div>';
   });
-  html+='<div style="height:1px;background:#222;margin:10px 0;"></div>';
+  html+='<div style="height:1px;background:#222;margin:4px 0;"></div>';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;">';
   html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:900;color:#fff;letter-spacing:1px;text-transform:uppercase;">Total</span>';
   html+='<span style="font-size:20px;font-weight:900;color:#4ade80;">'+fmt(_payBreakdown.total)+'</span>';
   html+='</div>';
   content.innerHTML=html;
   sheet.style.display='block';
+}
+
+function payShowCategoryDetail(method){
+  var content=document.getElementById('pay-breakdown-content');
+  var title=document.getElementById('pay-breakdown-title');
+  var backBtn=document.getElementById('pay-breakdown-back');
+  if(!content)return;
+  var labels={cash:'Cash',card:'Card',check:'Check',other:'Other'};
+  var colors={cash:'#30d158',card:'#60a5fa',check:'#fbbf24',other:'#a78bfa'};
+  if(title) title.textContent=(labels[method]||method).toUpperCase()+' PAYMENTS';
+  if(backBtn) backBtn.style.display='block';
+  var pays=_payWeekData.filter(function(p){return !p.delete_requested&&(p.payment_method||'cash').toLowerCase()===method;});
+  var color=colors[method]||'#fff';
+  var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var html='';
+  if(!pays.length){
+    html='<div style="text-align:center;color:#555;padding:32px 0;font-size:14px;">No '+labels[method]+' payments this week.</div>';
+  } else {
+    var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    pays.forEach(function(p){
+      var amt=p.amount||'$0';
+      var name=p.customer_name||'Unknown';
+      var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
+      var time=p.payment_time||'';
+      var dateStr=p.payment_date||'';
+      var dateLabel='';
+      if(dateStr){var dt=new Date(dateStr+'T12:00:00');dateLabel=days[dt.getDay()]+' '+m[dt.getMonth()]+' '+dt.getDate();}
+      var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
+      html+='<div onclick="payCloseBreakdown();payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;-webkit-tap-highlight-color:transparent;">';
+      if(thumb) html+=thumb;
+      html+='<div style="flex:1;min-width:0;">';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">';
+      html+='<div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;">'+name+'</div>';
+      html+='<span style="font-size:15px;font-weight:700;color:'+color+';">'+amt+'</span>';
+      html+='</div>';
+      if(veh) html+='<div style="font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+'</div>';
+      html+='<div style="font-size:11px;color:#444;margin-top:2px;">'+dateLabel+(time?' · '+time:'')+'</div>';
+      html+='</div></div>';
+    });
+    var total=pays.reduce(function(s,p){return s+(parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0);},0);
+    html+='<div style="display:flex;justify-content:space-between;padding:12px 16px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;margin-top:4px;">';
+    html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;color:#fff;letter-spacing:1px;text-transform:uppercase;">'+labels[method]+' Total</span>';
+    html+='<span style="font-size:18px;font-weight:900;color:'+color+';">'+fmt(total)+'</span>';
+    html+='</div>';
+  }
+  content.innerHTML=html;
+  content.scrollTop=0;
 }
 
 function payCloseBreakdown(){
