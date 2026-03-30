@@ -7561,9 +7561,15 @@ function _txInit() {
   <div class="cal-form">
     <div class="cal-form-title">Add Event</div>
     <input id="cal-ev-title" class="cal-input" placeholder="Event title *" />
-    <div class="cal-row2">
-      <input id="cal-ev-date" class="cal-input" type="date" style="margin-bottom:0;" />
-      <input id="cal-ev-time" class="cal-input" type="time" style="margin-bottom:0;" oninput="window._calTimeCache=this.value" onchange="window._calTimeCache=this.value" />
+    <div class="cal-row2" style="margin-bottom:10px;">
+      <div>
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Date</div>
+        <input id="cal-ev-date" class="cal-input" type="date" style="margin-bottom:0;" />
+      </div>
+      <div>
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Time <span style="color:#444;font-size:10px;text-transform:none;letter-spacing:0;">(optional)</span></div>
+        <input id="cal-ev-time" class="cal-input" type="time" style="margin-bottom:0;" oninput="window._calTimeCache=this.value" onchange="window._calTimeCache=this.value" />
+      </div>
     </div>
     <textarea id="cal-ev-notes" class="cal-input" placeholder="Notes (optional)" rows="3" style="resize:none;margin-top:10px;"></textarea>
     <div class="cal-toggle-row">
