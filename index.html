@@ -8303,6 +8303,7 @@ function openPayScan(){
   if(!o)return;
   o.style.display='flex';
   _payViewMode='list';
+  history.pushState({payOverlay:true},'');
   _payLocation=_payDefaultLoc();
   _payCurrentWeekStart=_payGetWeekStart(new Date());
   // Setup location toggle
@@ -8392,6 +8393,29 @@ function payFormSkipPhoto(){
   document.getElementById('pay-skip-photo-btn').style.display='none';
 }
 
+// Swipe-right to go back in payment overlay
+(function(){
+  var startX=0,startY=0,tracking=false;
+  var el=document.getElementById('pay-scan-overlay');
+  if(!el)return;
+  el.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){startX=e.touches[0].clientX;startY=e.touches[0].clientY;tracking=startX<40;}
+  },{passive:true});
+  el.addEventListener('touchend',function(e){
+    if(!tracking)return;tracking=false;
+    var endX=e.changedTouches[0].clientX,endY=e.changedTouches[0].clientY;
+    var dx=endX-startX,dy=Math.abs(endY-startY);
+    if(dx>80&&dy<100){payViewBack();}
+  },{passive:true});
+})();
+
+// Browser back button support for payment overlay
+window.addEventListener('popstate',function(e){
+  var overlay=document.getElementById('pay-scan-overlay');
+  if(overlay&&overlay.style.display!=='none'){
+    payViewBack();
+  }
+});
 function payOpenLightbox(url){
   var lb=document.getElementById('pay-photo-lightbox');
   document.getElementById('pay-photo-lightbox-img').src=url;
@@ -8562,6 +8586,7 @@ function payViewDetail(id){
   var p=_payWeekData.find(function(x){return x.id===id;});
   if(!p)return;
   _payViewMode='detail';
+  history.pushState({payDetail:true},'');
   document.getElementById('pay-view-title').textContent='PAYMENT DETAIL';
   document.getElementById('pay-list-view').style.display='none';
   document.getElementById('pay-scan-view').style.display='none';
