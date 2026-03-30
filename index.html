@@ -5399,6 +5399,7 @@ async function progToggleAssign(carId,cat,empId,btn){
 
 /* ── CALENDAR VIEW ── */
 var _calDate=new Date();
+var _calEditId=null;
 function renderCalendar(){
   var el=document.getElementById('mgr-calendar-content');
   if(!el) return;
@@ -5479,7 +5480,9 @@ function _calDayHTML(d,year,month,arrivalMap,customMap,MON,MON3){
     if(ev.event_time) out+='<div class="cal-event-meta">'+_fmtTime(ev.event_time)+'</div>';
     if(ev.notes) out+='<div class="cal-event-meta">'+_esc(ev.notes)+'</div>';
     if(ev.notify) out+='<div class="cal-event-notif">&#128276; Notification set</div>';
-    out+='</div><button class="cal-event-del" onclick="calDeleteEvent(\''+ev.id+'\')">&#x2715;</button></div>';
+    out+='</div>';
+    out+='<button class="cal-event-del" onclick="calEditEvent(\''+ev.id+'\')" style="color:#60a5fa;font-size:15px;margin-right:2px;">&#9998;</button>';
+    out+='<button class="cal-event-del" onclick="calDeleteEvent(\''+ev.id+'\')">&#x2715;</button></div>';
   });
   return out;
 }
@@ -5503,7 +5506,9 @@ function _calUpcomingHTML(today,MON3){
       if(ev.event_time) out+='<div class="upcoming-time">'+_fmtTime(ev.event_time)+'</div>';
       if(ev.notes) out+='<div class="upcoming-notes-text">'+_esc(ev.notes)+'</div>';
       if(ev.notify) out+='<span class="upcoming-notif-badge">&#128276; notified</span>';
-      out+='</div><button class="upcoming-del" onclick="calDeleteEvent(\''+ev.id+'\')">✕</button></div>';
+      out+='</div>';
+      out+='<button class="upcoming-del" onclick="calEditEvent(\''+ev.id+'\')" style="color:#60a5fa;font-size:16px;margin-right:4px;">&#9998;</button>';
+      out+='<button class="upcoming-del" onclick="calDeleteEvent(\''+ev.id+'\')">✕</button></div>';
     });
   }
   return out+'</div>';
@@ -5547,6 +5552,8 @@ function calSelectDay(d){
 function calAddEvent(dateStr){
   var modal=document.getElementById('cal-add-modal');
   if(!modal) return;
+  _calEditId=null;
+  document.querySelector('.cal-form-title').textContent='Add Event';
   document.getElementById('cal-ev-title').value='';
   document.getElementById('cal-ev-notes').value='';
   document.getElementById('cal-ev-time').value='';
@@ -5559,6 +5566,22 @@ function calAddEvent(dateStr){
     dateStr=now.getFullYear()+'-'+m2+'-'+d2;
   }
   document.getElementById('cal-ev-date').value=dateStr;
+  modal.classList.add('open');
+  setTimeout(function(){document.getElementById('cal-ev-title').focus();},200);
+}
+function calEditEvent(id){
+  var ev=(S.calendarEvents||[]).find(function(e){return String(e.id)===String(id);});
+  if(!ev) return;
+  var modal=document.getElementById('cal-add-modal');
+  if(!modal) return;
+  _calEditId=id;
+  document.querySelector('.cal-form-title').textContent='Edit Event';
+  document.getElementById('cal-ev-title').value=ev.title||'';
+  document.getElementById('cal-ev-date').value=ev.event_date||'';
+  document.getElementById('cal-ev-time').value=ev.event_time||'';
+  document.getElementById('cal-ev-notes').value=ev.notes||'';
+  var nb=document.getElementById('cal-notif-toggle');
+  if(nb){if(ev.notify)nb.classList.add('on');else nb.classList.remove('on');}
   modal.classList.add('open');
   setTimeout(function(){document.getElementById('cal-ev-title').focus();},200);
 }
@@ -5576,6 +5599,28 @@ async function calSaveEvent(){
   if(!date){alert('Please select a date.');return;}
   var btn=document.querySelector('.cal-save-btn');
   if(btn){btn.textContent='Saving...';btn.disabled=true;}
+  if(!S.calendarEvents) S.calendarEvents=[];
+  if(_calEditId){
+    // Edit existing event
+    var idx=S.calendarEvents.findIndex(function(e){return String(e.id)===String(_calEditId);});
+    if(idx!==-1){
+      S.calendarEvents[idx].title=title;
+      S.calendarEvents[idx].event_date=date;
+      S.calendarEvents[idx].event_time=time||null;
+      S.calendarEvents[idx].notes=notes||null;
+      S.calendarEvents[idx].notify=notify;
+    }
+    S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
+    try{localStorage.setItem('cf_cal_ev',JSON.stringify(S.calendarEvents));}catch(e2){}
+    _calEditId=null;
+    calCloseModal();
+    if(btn){btn.textContent='Save Event';btn.disabled=false;}
+    var p=date.split('-');
+    _calDate=new Date(parseInt(p[0]),parseInt(p[1])-1,1);
+    renderCalendar();
+    setTimeout(function(){calSelectDay(parseInt(p[2]));},50);
+    return;
+  }
   var evObj={title:title,event_date:date,event_time:time,notes:notes,notify:notify,created_by:me?me.name:''};
   var saved=null;
   try{
@@ -5586,7 +5631,6 @@ async function calSaveEvent(){
     evObj.id='local_'+Date.now();
     saved=evObj;
   }
-  if(!S.calendarEvents) S.calendarEvents=[];
   S.calendarEvents.push(saved);
   S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
   // Always persist to localStorage so events survive syncs
