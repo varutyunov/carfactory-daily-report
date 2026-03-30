@@ -2077,10 +2077,10 @@ function hideLoading(){document.getElementById('load-overlay').style.display='no
 
 // ── SUPABASE DATA SYNC ─────────────────────────────────────────────────────────
 var _syncInProgress=false;
-async function syncFromSupabase(){
+async function syncFromSupabase(showUI){
   if(_syncInProgress) return;
   _syncInProgress=true;
-  showLoading('Syncing data...');
+  if(showUI) showLoading('Syncing data...');
   for(var _attempt=0; _attempt<3; _attempt++){
     try{
       // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
@@ -2117,7 +2117,7 @@ async function syncFromSupabase(){
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
       if(_attempt < 2){
-        showLoading('Sync failed — retrying...');
+        if(showUI) showLoading('Sync failed — retrying...');
         await new Promise(function(r){ setTimeout(r, 2000); });
       }
     }
@@ -2167,15 +2167,20 @@ async function doLogin(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('ub').textContent=e.name;
-  await syncFromSupabase();
-  fetchNotifications();
+  // Show UI immediately, sync in background
   var _isOwner=['vlad','tommy'].includes(e.name.toLowerCase());var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display=_isOwner?'':'none';
-  if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm=e.name.toLowerCase();var _hasCarPay=['vlad'].includes(_nm);var _hasTools=['vlad','tommy'].includes(_nm);if(_hasCarPay){_swipePages=[0,1,2];}else if(_hasTools){_swipePages=[0,2];}else{_swipePages=[0];}var _dots=document.getElementById('swipe-dots');if(_dots){if(_swipePages.length>1){_dots.style.display='flex';_dots.innerHTML='';for(var _di=0;_di<_swipePages.length;_di++){var _dot=document.createElement('span');_dot.className='swipe-dot'+(_di===0?' active':'');_dots.appendChild(_dot);}}else{_dots.style.display='none';}}initSwipe();setSwipePage(0);updateTabBadges();updateHomeBadges();}
-  else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
+  if(e.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm=e.name.toLowerCase();var _hasCarPay=['vlad'].includes(_nm);var _hasTools=['vlad','tommy'].includes(_nm);if(_hasCarPay){_swipePages=[0,1,2];}else if(_hasTools){_swipePages=[0,2];}else{_swipePages=[0];}var _dots=document.getElementById('swipe-dots');if(_dots){if(_swipePages.length>1){_dots.style.display='flex';_dots.innerHTML='';for(var _di=0;_di<_swipePages.length;_di++){var _dot=document.createElement('span');_dot.className='swipe-dot'+(_di===0?' active':'');_dots.appendChild(_dot);}}else{_dots.style.display='none';}}initSwipe();setSwipePage(0);}
+  else{document.getElementById('mtabs').style.display='none';document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=e.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+e.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=e.name.split(' ')[0]+"'s Assignments";showView('emp-home');}
   // Start translation system if previously in Spanish mode
   if(typeof _txInit==='function') _txInit();
-  // Auto-sync CSV in background to catch any new/removed cars not yet in Supabase
-  setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 500);
+  // Sync data in background — don't block the UI
+  syncFromSupabase().then(function(){
+    fetchNotifications();
+    if(e.role==='manager'){updateTabBadges();updateHomeBadges();}
+    else{goEmpHome();}
+    // CSV sync delayed to avoid overloading on login
+    setTimeout(function(){ syncNow().catch(function(er){console.log('Background CSV sync skipped:',er);}); }, 5000);
+  }).catch(function(){});
 }
 function doSync(){
   const btn=document.getElementById('sync-btn');
@@ -4511,12 +4516,15 @@ if(_savedSession){
       document.getElementById('ub').textContent=me.name;
       initOneSignalUser(me.name);
       var _rOwner=['vlad','tommy'].includes(me.name.toLowerCase());var _rBtn=document.getElementById('ai-brain-btn');if(_rBtn)_rBtn.style.display=_rOwner?'':'none';
+      // Show UI immediately
+      if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm2=me.name.toLowerCase();var _hasCarPay2=['vlad'].includes(_nm2);var _hasTools2=['vlad','tommy'].includes(_nm2);if(_hasCarPay2){_swipePages=[0,1,2];}else if(_hasTools2){_swipePages=[0,2];}else{_swipePages=[0];}var _dots2=document.getElementById('swipe-dots');if(_dots2){if(_swipePages.length>1){_dots2.style.display='flex';_dots2.innerHTML='';for(var _di2=0;_di2<_swipePages.length;_di2++){var _dot2=document.createElement('span');_dot2.className='swipe-dot'+(_di2===0?' active':'');_dots2.appendChild(_dot2);}}else{_dots2.style.display='none';}}initSwipe();setSwipePage(0);}
+      else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');}
+      // Sync in background
       syncFromSupabase().then(()=>{
         fetchNotifications();
-        if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm2=me.name.toLowerCase();var _hasCarPay2=['vlad'].includes(_nm2);var _hasTools2=['vlad','tommy'].includes(_nm2);if(_hasCarPay2){_swipePages=[0,1,2];}else if(_hasTools2){_swipePages=[0,2];}else{_swipePages=[0];}var _dots2=document.getElementById('swipe-dots');if(_dots2){if(_swipePages.length>1){_dots2.style.display='flex';_dots2.innerHTML='';for(var _di2=0;_di2<_swipePages.length;_di2++){var _dot2=document.createElement('span');_dot2.className='swipe-dot'+(_di2===0?' active':'');_dots2.appendChild(_dot2);}}else{_dots2.style.display='none';}}initSwipe();setSwipePage(0);updateTabBadges();updateHomeBadges();}
-        else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');goEmpHome();}
-        // Auto-sync CSV in background to catch any new/removed cars not yet in Supabase
-        setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 500);
+        if(me.role==='manager'){updateTabBadges();updateHomeBadges();}
+        else{goEmpHome();}
+        setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 5000);
       });
     }
   }catch(e){}
@@ -4552,7 +4560,6 @@ setInterval(function(){
 // Full re-sync when app resumes from background (iOS PWA suspension)
 function _resumeSync(){
   if(!me || document.getElementById('app').style.display==='none') return;
-  showLoading('Refreshing...');
   syncFromSupabase().then(function(){
     if(me.role==='manager'){updateTabBadges();updateHomeBadges();renderInv();}
     else{goEmpHome();}
