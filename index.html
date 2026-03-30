@@ -8599,14 +8599,13 @@ async function payRequestDeleteFinal(id){
   btn.textContent='Requesting...'; btn.disabled=true; btn.style.opacity='0.5';
   try{
     await sbPatch('payments',id,{delete_requested:true,delete_requested_by:me.name,delete_requested_at:new Date().toISOString()});
-    // Update local data
     var p=_payWeekData.find(function(x){return x.id===id;});
     if(p){p.delete_requested=true;p.delete_requested_by=me.name;}
-    payViewBack();
   }catch(e){
-    btn.textContent='Error: '+(e.message||e);
-    btn.style.background='#1a0505';btn.disabled=false;btn.style.opacity='1';
+    console.error('Request delete error:',e);
+    alert('Error: '+(e.message||e));
   }
+  payViewBack();
 }
 
 // === Owner: two-tap confirm delete ===
@@ -8626,24 +8625,30 @@ async function payDeleteFinal(id){
     var p=_payWeekData.find(function(x){return x.id===id;});
     if(p){
       var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
-      await sbPost('payment_deletions',{
-        payment_id:p.id,
-        customer_name:p.customer_name||'',
-        payment_date:p.payment_date||'',
-        amount:p.amount||'',
-        vehicle:veh,
-        location:p.location||'',
-        logged_by:p.logged_by||'',
-        deleted_by:me.name,
-        delete_reason:p.delete_requested?'employee_requested':'owner_direct'
-      });
+      // Audit log — don't let it block deletion if it fails
+      try{
+        await sbPost('payment_deletions',{
+          payment_id:p.id,
+          customer_name:p.customer_name||'',
+          payment_date:p.payment_date||'',
+          amount:p.amount||'',
+          vehicle:veh,
+          location:p.location||'',
+          logged_by:p.logged_by||'',
+          deleted_by:me.name,
+          delete_reason:p.delete_requested?'employee_requested':'owner_direct'
+        });
+      }catch(logErr){ console.warn('Audit log error:',logErr); }
     }
     await sbDelete('payments',id);
     _payWeekData=_payWeekData.filter(function(x){return x.id!==id;});
     payViewBack();
   }catch(e){
-    btn.textContent='Error: '+(e.message||e);
-    btn.style.background='#1a0505';btn.disabled=false;btn.style.opacity='1';
+    console.error('Payment delete error:',e);
+    alert('Delete error: '+(e.message||e));
+    // Still navigate back so user isn't stuck
+    _payWeekData=_payWeekData.filter(function(x){return x.id!==id;});
+    payViewBack();
   }
 }
 
@@ -8653,10 +8658,11 @@ async function payDenyDelete(id){
     await sbPatch('payments',id,{delete_requested:false,delete_requested_by:null,delete_requested_at:null});
     var p=_payWeekData.find(function(x){return x.id===id;});
     if(p){p.delete_requested=false;p.delete_requested_by=null;}
-    payViewBack();
   }catch(e){
+    console.error('Deny delete error:',e);
     alert('Error: '+(e.message||e));
   }
+  payViewBack();
 }
 
 function payScanPhoto(inp){
