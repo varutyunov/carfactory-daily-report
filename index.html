@@ -7133,6 +7133,11 @@ function empOpenCar(carId){
   _empCarId=carId;
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(!car)return;
+  // Photos section: skip modal, go straight to photo upload
+  if(empActiveCat==='photos'){
+    openPhotoGallery(carId,'photos','📷 '+car.name+' Photos');
+    return;
+  }
   document.getElementById('ecar-name').textContent=car.name;
   var info=[];
   if(car.stock) info.push('Stock # '+car.stock);
