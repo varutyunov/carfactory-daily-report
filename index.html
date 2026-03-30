@@ -448,8 +448,10 @@ canvas{display:none;}
 .cal-event-text{font-size:13px;color:#bbb;font-weight:500;}
 .cal-event-meta{font-size:11px;color:#888;margin-top:2px;}
 .cal-event-notif{font-size:11px;color:#30d158;margin-top:1px;}
-.cal-event-del{background:none;border:none;color:#555;font-size:16px;cursor:pointer;padding:2px 4px;margin-left:auto;flex-shrink:0;}
-.cal-event-del:active{color:#ff453a;}
+.cal-event-del{border:none;font-size:16px;cursor:pointer;padding:7px 10px;border-radius:8px;flex-shrink:0;line-height:1;}
+.cal-event-del:active{opacity:.7;}
+.cal-event-edit-btn{background:#1a2640;color:#60a5fa;margin-left:auto;margin-right:4px;}
+.cal-event-del-btn{background:#2a1a1a;color:#ff453a;}
 .cal-modal{position:fixed;inset:0;z-index:800;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.75);}
 .cal-modal.open{display:flex;}
 .cal-form{background:#111;border-radius:20px 20px 0 0;width:100%;max-width:500px;padding:24px 20px 32px;border:1px solid #222;border-bottom:none;max-height:90vh;overflow-y:auto;}
@@ -479,7 +481,8 @@ canvas{display:none;}
 .upcoming-time{font-size:12px;color:#a78bfa;margin-top:3px;}
 .upcoming-notes-text{font-size:12px;color:#444;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .upcoming-notif-badge{display:inline-block;font-size:10px;color:#30d158;background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.2);border-radius:4px;padding:2px 5px;margin-top:4px;}
-.upcoming-del{background:none;border:none;color:#2a2a2a;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;margin-top:2px;}
+.upcoming-del{border:none;font-size:16px;cursor:pointer;padding:7px 10px;border-radius:8px;flex-shrink:0;margin-top:2px;line-height:1;}
+.upcoming-del:active{opacity:.7;}
 .upcoming-del:active{color:#ff453a;}
 .wf-emp-btn{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;color:#666;font-size:13px;font-weight:600;padding:8px 16px;cursor:pointer;}
 .wf-assign-active{background:rgba(139,92,246,0.2)!important;border-color:rgba(139,92,246,0.4)!important;color:#a78bfa!important;}
@@ -5483,8 +5486,8 @@ function _calDayHTML(d,year,month,arrivalMap,customMap,MON,MON3){
     if(ev.notes) out+='<div class="cal-event-meta">'+_esc(ev.notes)+'</div>';
     if(ev.notify) out+='<div class="cal-event-notif">&#128276; Notification set</div>';
     out+='</div>';
-    out+='<button class="cal-event-del" onclick="calEditEvent(\''+ev.id+'\')" style="color:#60a5fa;font-size:15px;margin-right:2px;">&#9998;</button>';
-    out+='<button class="cal-event-del" onclick="calDeleteEvent(\''+ev.id+'\')">&#x2715;</button></div>';
+    out+='<button class="cal-event-del cal-event-edit-btn" onclick="calEditEvent(\''+ev.id+'\')">&#9998;</button>';
+    out+='<button class="cal-event-del cal-event-del-btn" onclick="calDeleteEvent(\''+ev.id+'\')">&#x2715;</button></div>';
   });
   return out;
 }
@@ -5509,8 +5512,8 @@ function _calUpcomingHTML(today,MON3){
       if(ev.notes) out+='<div class="upcoming-notes-text">'+_esc(ev.notes)+'</div>';
       if(ev.notify) out+='<span class="upcoming-notif-badge">&#128276; notified</span>';
       out+='</div>';
-      out+='<button class="upcoming-del" onclick="calEditEvent(\''+ev.id+'\')" style="color:#60a5fa;font-size:16px;margin-right:4px;">&#9998;</button>';
-      out+='<button class="upcoming-del" onclick="calDeleteEvent(\''+ev.id+'\')">✕</button></div>';
+      out+='<button class="upcoming-del cal-event-edit-btn" onclick="calEditEvent(\''+ev.id+'\')">&#9998;</button>';
+      out+='<button class="upcoming-del cal-event-del-btn" onclick="calDeleteEvent(\''+ev.id+'\')">&#x2715;</button></div>';
     });
   }
   return out+'</div>';
