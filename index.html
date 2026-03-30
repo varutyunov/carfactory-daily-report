@@ -8320,6 +8320,7 @@ function openPayScan(){
   var o=document.getElementById('pay-scan-overlay');
   if(!o)return;
   o.style.display='flex';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   _payViewMode='list';
   history.pushState({payOverlay:true},'');
   _payLocation=_payDefaultLoc();
