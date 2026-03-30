@@ -2712,7 +2712,7 @@ function togTask(aid,idx){
   // Async save to Supabase (non-blocking)
   sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));
 }
-function togUrgent(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].urgent=!a.tasks[idx].urgent;sv();renderTaskItems(a);renderGrid();}
+function togUrgent(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].urgent=!a.tasks[idx].urgent;sv();renderTaskItems(a);renderGrid();sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));}
 function toggleNote(aid,idx){const a=S.assignments.find(x=>x.id===aid);a.tasks[idx].editingNote=!a.tasks[idx].editingNote;sv();renderTaskItems(a);}
 function saveNote(aid,idx,val){
   const a=S.assignments.find(x=>x.id===aid);
@@ -4503,7 +4503,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=localStorage.getItem('cf_cal_ev');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepCalEv)localStorage.setItem('cf_cal_ev',_keepCalEv);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -4604,7 +4604,7 @@ async function saveWorkState(carId){
   if(!car) return;
   const ws=getWorkState(carId);
   try{localStorage.setItem('cf_work_'+carId, JSON.stringify(ws));}catch(e){}
-  try{await sbPatch('inventory',carId,{work:ws});}catch(e){}
+  try{await sbPatch('inventory',carId,{work:ws});}catch(e){console.warn('saveWorkState failed:',e);}
 }
 function getCarMiles(carId){try{return localStorage.getItem('cf_miles_'+carId)||null;}catch(e){return null;}}
 function saveCarMilesLocal(carId,val){try{if(val)localStorage.setItem('cf_miles_'+carId,String(val));else localStorage.removeItem('cf_miles_'+carId);}catch(e){}}
@@ -4906,7 +4906,6 @@ function mgrGoSection(id, label){
   else if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();markBadgeSeen('detail');}
   else if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();markBadgeSeen('photos');}
   else if(id==='parts'){initCatSearchBar('parts');renderMgrParts();markBadgeSeen('parts');}
-  else if(id==='tasks')renderReview();
   else if(id==='employees')renderTeam();
   else if(id==='progress'){renderProgress();markBadgeSeen('progress');}
   else if(id==='calendar')renderCalendar();
@@ -8177,7 +8176,7 @@ function depositEmail() {
     if(!window.jspdf || !window.jspdf.jsPDF) { alert('PDF library (jsPDF) not loaded. Check internet connection and try again.'); return; }
 
     // Show loading state
-    var btn = event && event.target;
+    var btn = (typeof event!=='undefined' && event && event.target) ? event.target : null;
     var origText = '';
     if(btn) { origText = btn.textContent; btn.textContent = 'Generating PDF...'; btn.disabled = true; }
     function resetBtn() { if(btn) { btn.textContent = origText; btn.disabled = false; } }
