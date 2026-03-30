@@ -4454,12 +4454,18 @@ if('serviceWorker' in navigator){
         if(nw.state==='installed'&&navigator.serviceWorker.controller) nw.postMessage('SKIP_WAITING');
       });
     });
-    // Reload when new SW takes control — guard against reload loops
-    var _swReloading=false;
-    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_swReloading)return;_swReloading=true;window.location.reload();});
+    // Reload when new SW takes control — throttle to prevent reload loops
+    // Uses localStorage timestamp so the guard persists across page loads
+    function _swSafeReload(){
+      var last=parseInt(localStorage.getItem('_swReload')||'0');
+      if(Date.now()-last<8000) return; // already reloaded within last 8s — skip
+      localStorage.setItem('_swReload',String(Date.now()));
+      window.location.reload();
+    }
+    navigator.serviceWorker.addEventListener('controllerchange',_swSafeReload);
     // Listen for messages from SW
     navigator.serviceWorker.addEventListener('message', e=>{
-      if(e.data==='UPDATED'){if(_swReloading)return;_swReloading=true;window.location.reload();}
+      if(e.data==='UPDATED') _swSafeReload();
       else if(e.data==='SYNC_FAILED'){
         const btn=document.getElementById('sync-btn');
         if(btn){btn.style.color='#ff453a';setTimeout(()=>{btn.style.color='#555';btn.style.pointerEvents='auto';},2000);}
@@ -4504,7 +4510,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=localStorage.getItem('cf_cal_ev');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepCalEv)localStorage.setItem('cf_cal_ev',_keepCalEv);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=localStorage.getItem('cf_cal_ev');var _keepSwReload=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepCalEv)localStorage.setItem('cf_cal_ev',_keepCalEv);if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
