@@ -1056,7 +1056,6 @@ canvas{display:none;}
     <button onclick="payViewBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:12px 8px;line-height:1;">&#8592;</button>
     <span id="pay-view-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYMENTS</span>
     <span id="pay-loc-label" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:#60a5fa;letter-spacing:1px;text-transform:uppercase;"></span>
-    <button onclick="payCloseAll()" style="background:none;border:none;color:#888;font-size:28px;cursor:pointer;padding:12px 8px;line-height:1;">&#10005;</button>
   </div>
   <div id="pay-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
@@ -8396,20 +8395,21 @@ function payViewBack(){
     document.getElementById('pay-detail-view').style.display='none';
     loadPaymentWeek();
   } else {
-    document.getElementById('pay-scan-overlay').style.display='none';
-    var tb=document.querySelector('.tb');if(tb)tb.style.display='flex';
+    payCloseAll();
   }
 }
 
 function closePayScan(){
-  document.getElementById('pay-scan-overlay').style.display='none';
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='flex';
+  payCloseAll();
 }
 
 function payCloseAll(){
   _payViewMode='list';
   document.getElementById('pay-scan-overlay').style.display='none';
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='flex';
+  document.getElementById('pay-list-view').style.display='block';
+  document.getElementById('pay-scan-view').style.display='none';
+  document.getElementById('pay-detail-view').style.display='none';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
 function payScanRetake(){
