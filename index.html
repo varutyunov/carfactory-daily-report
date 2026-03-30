@@ -2481,16 +2481,9 @@ function renderEmpCatCars(section){
   }
   function makeThumb(car){
     var pxUrl=!car.photo&&pxCache[String(car.id)];
-    if(section==='photos'){
-      // Photos section: no onclick on thumb — whole card handles it
-      if(car.photo) return '<img class="eq-thumb" src="'+car.photo+'" style="pointer-events:none;"/>';
-      if(pxUrl) return '<img class="eq-thumb" src="'+pxUrl+'" style="pointer-events:none;"/>';
-      return '<div class="eq-thumb-ph" style="pointer-events:none;" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
-    }
-    var oc='onclick="empOpenCar('+car.id+')" title="Change car icon"';
-    if(car.photo) return '<img class="eq-thumb" style="cursor:pointer;" '+oc+' src="'+car.photo+'"/>';
-    if(pxUrl) return '<img class="eq-thumb" style="cursor:pointer;" '+oc+' src="'+pxUrl+'"/>';
-    return '<div class="eq-thumb-ph" style="cursor:pointer;" '+oc+' data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    if(car.photo) return '<img class="eq-thumb" src="'+car.photo+'" style="pointer-events:none;"/>';
+    if(pxUrl) return '<img class="eq-thumb" src="'+pxUrl+'" style="pointer-events:none;"/>';
+    return '<div class="eq-thumb-ph" style="pointer-events:none;" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
   }
   var assignedHTML=filtered.map(function(a){
     var car=S.inventory.find(function(c){return c.id===a.inventoryId;});if(!car)return'';
@@ -2501,23 +2494,13 @@ function renderEmpCatCars(section){
     var isConfirmed=catWs.confirmed||false;
     var cardCls='eq-card'+(isConfirmed?' eq-confirmed':isPending?' eq-review':isDone?' eq-done':'');
     var actHTML='';
-    if(section==='photos'){
-      // Photos section: Load Photos button + Mark Done
-      if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
-      else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
-      else{actHTML='<button class="eq-mark-btn" style="background:#1d4ed8;color:#fff;" onclick="event.stopPropagation();openPhotoSheet('+car.id+')">📷 Load</button>';}
-    } else {
-      if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
-      else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
-      else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
-      else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
-    }
+    if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
+    else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
+    else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="event.stopPropagation();empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
+    else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
     var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     var sub=vinLast6+(car.color?' · '+car.color:'');
-    if(section==='photos'){
-      return '<button class="'+cardCls+'" onclick="openPhotoSheet('+car.id+')" style="display:flex;align-items:center;width:100%;text-align:left;background:inherit;border:inherit;border-radius:inherit;padding:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;"><div style="pointer-events:none;">'+makeThumb(car)+'</div><div class="eq-info" style="pointer-events:none;"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div></div><div class="eq-actions" style="pointer-events:auto;">'+actHTML+'</div></button>';
-    }
-    return '<div class="'+cardCls+'">'+makeThumb(car)+'<div class="eq-info"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div></div><div class="eq-actions">'+actHTML+'</div></div>';
+    return '<div class="'+cardCls+'" onclick="empOpenCar('+car.id+')" style="cursor:pointer;">'+makeThumb(car)+'<div class="eq-info" style="pointer-events:none;"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div></div><div class="eq-actions">'+actHTML+'</div></div>';
   }).join('');
   var poolHTML=poolCars.map(function(car){
     var ws=getWorkState(car.id);
@@ -2528,22 +2511,13 @@ function renderEmpCatCars(section){
     var isConfirmed=catWs.confirmed||false;
     var cardCls='eq-card'+(isConfirmed?' eq-confirmed':isPending?' eq-review':isDone?' eq-done':'');
     var actHTML='';
-    if(section==='photos'){
-      if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
-      else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
-      else{actHTML='<button class="eq-mark-btn" style="background:#1d4ed8;color:#fff;" onclick="event.stopPropagation();openPhotoSheet('+car.id+')">📷 Load</button>';}
-    } else {
-      if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
-      else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
-      else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
-      else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
-    }
+    if(isConfirmed){actHTML='<div class="eq-confirmed-badge">✓ Confirmed</div>';}
+    else if(isPending){actHTML='<div class="eq-review-badge">⏳ In Review</div>';}
+    else if(!isDone){actHTML='<button class="eq-mark-btn" onclick="event.stopPropagation();empMarkDone('+car.id+',\''+section+'\')">Mark Done</button>';}
+    else{actHTML='<div class="eq-confirmed-badge">✓ Done</div>';}
     var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
     var sub=vinLast6+(car.color?' · '+car.color:'');
-    if(section==='photos'){
-      return '<button class="'+cardCls+'" onclick="openPhotoSheet('+car.id+')" style="display:flex;align-items:center;width:100%;text-align:left;background:inherit;border:inherit;border-radius:inherit;padding:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;"><div style="pointer-events:none;">'+makeThumb(car)+'</div><div class="eq-info" style="pointer-events:none;"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div>'+(notes?'<div class="eq-note">"'+notes+'"</div>':'')+'</div><div class="eq-actions" style="pointer-events:auto;">'+actHTML+'</div></button>';
-    }
-    return '<div class="'+cardCls+'">'+makeThumb(car)+'<div class="eq-info"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div>'+(notes?'<div class="eq-note">"'+notes+'"</div>':'')+'</div><div class="eq-actions">'+actHTML+'</div></div>';
+    return '<div class="'+cardCls+'" onclick="empOpenCar('+car.id+')" style="cursor:pointer;">'+makeThumb(car)+'<div class="eq-info" style="pointer-events:none;"><div class="eq-name">'+car.name+'</div><div class="eq-sub">'+sub+'</div>'+(notes?'<div class="eq-note">"'+notes+'"</div>':'')+'</div><div class="eq-actions">'+actHTML+'</div></div>';
   }).join('');
   container.innerHTML='<div class="eq-list">'+assignedHTML+poolHTML+'</div>';
   var allCars=filtered.map(function(a){return S.inventory.find(function(c){return c.id===a.inventoryId;});}).concat(poolCars).filter(Boolean);
