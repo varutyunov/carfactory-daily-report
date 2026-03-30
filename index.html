@@ -4454,11 +4454,12 @@ if('serviceWorker' in navigator){
         if(nw.state==='installed'&&navigator.serviceWorker.controller) nw.postMessage('SKIP_WAITING');
       });
     });
-    // Reload when new SW takes control
-    navigator.serviceWorker.addEventListener('controllerchange',()=>window.location.reload());
+    // Reload when new SW takes control — guard against reload loops
+    var _swReloading=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_swReloading)return;_swReloading=true;window.location.reload();});
     // Listen for messages from SW
     navigator.serviceWorker.addEventListener('message', e=>{
-      if(e.data==='UPDATED') window.location.reload();
+      if(e.data==='UPDATED'){if(_swReloading)return;_swReloading=true;window.location.reload();}
       else if(e.data==='SYNC_FAILED'){
         const btn=document.getElementById('sync-btn');
         if(btn){btn.style.color='#ff453a';setTimeout(()=>{btn.style.color='#555';btn.style.pointerEvents='auto';},2000);}
