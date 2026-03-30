@@ -3377,24 +3377,24 @@ function renderPhotosQueue(){
     var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
-    o+='<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;">';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var borderCol=done?'rgba(48,209,88,0.35)':'#222';
+    var inputId='qpu-input-'+car.id;
+    // Entire row is a label — tapping anywhere opens the file picker
+    o+='<label for="'+inputId+'" style="display:flex;align-items:center;gap:12px;padding:14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:14px;cursor:pointer;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
     o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
-    o+='<div id="qpu-status-'+car.id+'" style="font-size:11px;margin-top:3px;height:14px;"></div>';
+    o+='<div id="qpu-status-'+car.id+'" style="font-size:12px;margin-top:4px;height:16px;font-weight:600;"></div>';
     o+='</div>';
     if(done){
-      o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;margin-right:4px;">✓</span>';
+      o+='<span style="font-size:22px;flex-shrink:0;">✅</span>';
+    } else {
+      o+='<span style="font-size:22px;flex-shrink:0;">📷</span>';
     }
-    // Direct upload button
-    o+='<label onclick="event.stopPropagation();" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:#0a1428;border:1px solid #1d4ed8;border-radius:10px;cursor:pointer;flex-shrink:0;">';
-    o+='<span style="font-size:22px;line-height:1;">📷</span>';
-    o+='<input type="file" accept="image/*" multiple capture="environment" onchange="queuePhotoUpload(event,'+car.id+')" style="display:none;"/>';
+    o+='<input id="'+inputId+'" type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,'+car.id+')" style="display:none;"/>';
     o+='</label>';
-    o+='</div>';
   });
   o+='</div>';
   grid.innerHTML=o;
