@@ -625,19 +625,6 @@ canvas{display:none;}
         <div class="car-grid" id="photos-grid"></div>
         <div class="empty" id="photos-empty" style="display:none;"><div class="ei">📷</div><div class="et">No vehicles in photos queue.</div></div>
       </div>
-<!-- Photo upload bottom sheet -->
-<div id="photo-sheet" style="display:none;position:fixed;inset:0;z-index:600;flex-direction:column;justify-content:flex-end;" onclick="if(event.target===this)closePhotoSheet()">
-  <div style="background:#111;border-radius:24px 24px 0 0;padding:20px 16px 36px;display:flex;flex-direction:column;gap:10px;">
-    <div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto 8px;"></div>
-    <div id="photo-sheet-title" style="font-size:17px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-    <label id="photo-sheet-load-btn" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:17px;background:#1d4ed8;color:#fff;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box;">
-      📷 Load Photos
-      <input type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,_photoSheetCarId)" style="display:none;"/>
-    </label>
-    <button id="photo-sheet-done-btn" onclick="photoSheetMarkDone()" style="width:100%;padding:17px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">✓ Mark Done</button>
-    <button onclick="closePhotoSheet()" style="width:100%;padding:14px;background:none;border:1px solid #2a2a2a;border-radius:14px;font-size:15px;color:#666;cursor:pointer;">Cancel</button>
-  </div>
-</div>
       <div id="emp-tab-parts" style="padding:0 14px 80px;display:none;">
         <div style="padding:14px 0 8px;"><div class="greeting">Parts Queue</div></div>
         <div class="car-grid" id="parts-grid"></div>
@@ -7645,6 +7632,19 @@ function _txInit() {
 <!-- ══════════════════════════════════════════════════════════════
      DEPOSIT FORM OVERLAY
      ══════════════════════════════════════════════════════════════ -->
+<!-- Photo upload bottom sheet — top-level so fixed positioning always works -->
+<div id="photo-sheet" style="display:none;position:fixed;inset:0;z-index:600;flex-direction:column;justify-content:flex-end;" onclick="if(event.target===this)closePhotoSheet()">
+  <div style="background:#111;border-radius:24px 24px 0 0;padding:20px 16px 36px;display:flex;flex-direction:column;gap:10px;">
+    <div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto 8px;"></div>
+    <div id="photo-sheet-title" style="font-size:17px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    <label id="photo-sheet-load-btn" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:17px;background:#1d4ed8;color:#fff;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box;">
+      📷 Load Photos
+      <input type="file" accept="image/*" multiple onchange="queuePhotoUpload(event,_photoSheetCarId)" style="display:none;"/>
+    </label>
+    <button id="photo-sheet-done-btn" onclick="photoSheetMarkDone()" style="width:100%;padding:17px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">✓ Mark Done</button>
+    <button onclick="closePhotoSheet()" style="width:100%;padding:14px;background:none;border:1px solid #2a2a2a;border-radius:14px;font-size:15px;color:#666;cursor:pointer;">Cancel</button>
+  </div>
+</div>
 <style>
 .dep-spinner{width:20px;height:20px;border:3px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:dep-spin .8s linear infinite;flex-shrink:0;}
 @keyframes dep-spin{to{transform:rotate(360deg);}}
