@@ -2129,7 +2129,7 @@ async function syncFromSupabase(showUI){
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
       // Merge local-only events (table may not exist in Supabase)
       try{
-        var _lsCalEv=JSON.parse(localStorage.getItem('cf_cal_ev')||'[]');
+        var _lsCalEv=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');
         var _localOnly=_lsCalEv.filter(function(e){return String(e.id||'').startsWith('local_');});
         if(_localOnly.length){
           S.calendarEvents=S.calendarEvents.concat(_localOnly);
@@ -4553,7 +4553,8 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=localStorage.getItem('cf_cal_ev');var _keepSwReload=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepCalEv)localStorage.setItem('cf_cal_ev',_keepCalEv);if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=null;var _keepSwReload=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);// cf_work_cal is excluded from wipe (cf_work_ prefix) — no restore needed
+try{S.calendarEvents=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');}catch(e){}if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
 if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
@@ -5611,7 +5612,7 @@ async function calSaveEvent(){
       S.calendarEvents[idx].notify=notify;
     }
     S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
-    try{localStorage.setItem('cf_cal_ev',JSON.stringify(S.calendarEvents));}catch(e2){}
+    try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e2){}
     _calEditId=null;
     calCloseModal();
     if(btn){btn.textContent='Save Event';btn.disabled=false;}
@@ -5634,7 +5635,7 @@ async function calSaveEvent(){
   S.calendarEvents.push(saved);
   S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
   // Always persist to localStorage so events survive syncs
-  try{localStorage.setItem('cf_cal_ev',JSON.stringify(S.calendarEvents));}catch(e2){}
+  try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e2){}
   if(notify&&saved) calScheduleNotification(saved);
   calCloseModal();
   if(btn){btn.textContent='Save Event';btn.disabled=false;}
@@ -5647,7 +5648,7 @@ async function calDeleteEvent(id){
   if(!id) return;
   if(!confirm('Delete this event?')) return;
   S.calendarEvents=(S.calendarEvents||[]).filter(function(e){return e.id!==id;});
-  try{localStorage.setItem('cf_cal_ev',JSON.stringify(S.calendarEvents));}catch(e){}
+  try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e){}
   if(!String(id).startsWith('local_')){
     try{await sbDelete('calendar_events',id);}catch(e){}
   }
