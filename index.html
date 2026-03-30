@@ -3361,7 +3361,7 @@ async function removeFromDetailQueue(carId){
   updateTabBadges();
 }
 
-// ── PHOTOS QUEUE (mirrors Detail exactly) ───────────────────────────────────
+// ── PHOTOS QUEUE ────────────────────────────────────────────────────────────
 function renderPhotosQueue(){
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
   var grid=document.getElementById('photos-grid');
@@ -3377,20 +3377,40 @@ function renderPhotosQueue(){
     var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
     var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrGoSection(\'progress\',\'Progress\');setTimeout(function(){openProgCar('+car.id+');toggleProgCat(\'photos\');},150);" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    o+='<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;">';
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
     o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    o+='<div id="qpu-status-'+car.id+'" style="font-size:11px;margin-top:3px;height:14px;"></div>';
     o+='</div>';
-    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
-    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
+    if(done){
+      o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;margin-right:4px;">✓</span>';
+    }
+    // Direct upload button
+    o+='<label onclick="event.stopPropagation();" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:#0a1428;border:1px solid #1d4ed8;border-radius:10px;cursor:pointer;flex-shrink:0;">';
+    o+='<span style="font-size:22px;line-height:1;">📷</span>';
+    o+='<input type="file" accept="image/*" multiple capture="environment" onchange="queuePhotoUpload(event,'+car.id+')" style="display:none;"/>';
+    o+='</label>';
     o+='</div>';
   });
   o+='</div>';
   grid.innerHTML=o;
+}
+async function queuePhotoUpload(e, carId){
+  var files=Array.from(e.target.files);
+  if(!files.length) return;
+  var statusEl=document.getElementById('qpu-status-'+carId);
+  if(statusEl){statusEl.textContent='Uploading...';statusEl.style.color='#60a5fa';}
+  var ok=0;
+  for(var i=0;i<files.length;i++){
+    try{await uploadCarPhoto(carId,'photos',files[i]);ok++;}catch(err){console.error('Photo upload error:',err);}
+  }
+  e.target.value='';
+  if(statusEl){statusEl.textContent='✓ '+ok+' photo'+(ok!==1?'s':'')+' uploaded';statusEl.style.color='#4ade80';}
+  setTimeout(function(){renderPhotosQueue();},2000);
 }
 function openPhotosDoneModal(carId){
   const car=S.inventory.find(c=>c.id===carId);
