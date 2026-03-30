@@ -3747,22 +3747,20 @@ function renderCatSearchResults(cat){
     return (car.name+(car.stock||'')+(car.color||'')).toLowerCase().includes(q);
   }).slice(0,6);
   if(!matches.length){el.innerHTML='<div style="font-size:12px;color:#444;padding:6px 4px;">No matches</div>';return;}
-  var o='<div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">';
+  var o='<div class="car-grid" style="margin-top:10px;">';
   matches.forEach(function(car){
     var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    o+='<div onclick="addCarToTab('+car.id+',\''+cat+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    o+=thumbHTML;
-    o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="font-size:13px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
-    o+='</div>';
-    o+='<span style="font-size:12px;color:#30d158;font-weight:700;flex-shrink:0;">+ Add</span>';
+    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+    o+='<div class="car-tile" onclick="addCarToTab('+car.id+',\''+cat+'\')" style="border-color:#1d4ed8;">';
+    o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Add</span>';
+    o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
+    o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
     o+='</div>';
   });
   o+='</div>';
   el.innerHTML=o;
+  applyPexels(matches);
 }
 async function addCarToTab(carId,cat){
   var car=S.inventory.find(function(c){return c.id===carId;});
