@@ -7607,29 +7607,26 @@ function _txInit() {
     <!-- ── STEP 1: CUSTOMER ID ── -->
     <div id="dep-step1" style="padding:20px 16px 100px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 4 — Customer ID</div>
-      <div style="font-size:14px;color:#666;margin-bottom:20px;">Take a photo of the customer's ID or enter info manually</div>
+      <div style="font-size:14px;color:#666;margin-bottom:24px;">Photograph the customer's driver license or state ID</div>
 
-      <!-- Option buttons -->
-      <div id="dep-choose" style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
-        <label style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin:0;">
-          <div style="font-size:28px;">📷</div>
-          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Take Photo of ID</div><div style="font-size:12px;color:#555;margin-top:2px;">Photograph the customer's driver license</div></div>
-          <input type="file" accept="image/*" onchange="depIDPhotoTaken(this)" style="display:none;"/>
+      <!-- Camera button -->
+      <div id="dep-choose" style="max-width:420px;margin:0 auto;">
+        <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;padding:40px 20px;background:#0d0d0d;border:2px dashed #1d4ed8;border-radius:18px;cursor:pointer;gap:14px;box-sizing:border-box;">
+          <div style="font-size:60px;line-height:1;">📷</div>
+          <div style="font-size:20px;font-weight:800;color:#fff;text-align:center;letter-spacing:.3px;">Take Photo of Customer ID</div>
+          <div style="font-size:13px;color:#555;text-align:center;">Driver license, state ID, or passport</div>
+          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
         </label>
-        <button onclick="depositManualEntry()" style="width:100%;padding:18px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;">
-          <div style="font-size:28px;">✍️</div>
-          <div style="text-align:left;"><div style="font-size:16px;font-weight:700;color:#fff;">Enter Manually</div><div style="font-size:12px;color:#555;margin-top:2px;">Type the customer name by hand</div></div>
-        </button>
       </div>
 
       <!-- Photo preview after taking -->
       <div id="dep-id-preview-wrap" style="display:none;width:100%;max-width:420px;margin:20px auto 0;">
         <img id="dep-id-preview" style="width:100%;border-radius:10px;margin-bottom:12px;"/>
-        <div style="text-align:center;color:#4ade80;font-weight:600;margin-bottom:12px;">ID photo saved</div>
+        <div style="text-align:center;color:#4ade80;font-weight:600;margin-bottom:12px;">✓ ID photo captured</div>
         <button onclick="depIDPhotoDone()" style="width:100%;padding:16px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Select Vehicle</button>
-        <label style="display:block;text-align:center;margin-top:10px;cursor:pointer;color:#888;font-size:13px;">
+        <label style="display:block;text-align:center;margin-top:12px;cursor:pointer;color:#666;font-size:13px;">
           Retake Photo
-          <input type="file" accept="image/*" onchange="depIDPhotoTaken(this)" style="display:none;"/>
+          <input type="file" accept="image/*" capture="environment" onchange="depIDPhotoTaken(this)" style="display:none;"/>
         </label>
       </div>
     </div>
@@ -7788,27 +7785,31 @@ function _txInit() {
 
       <!-- Action buttons -->
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
-        <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Print / Save PDF</button>
-        <button onclick="depositEmail()" style="width:100%;padding:15px;background:#1d4ed8;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Email to Dealership</button>
+        <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Form</button>
 
-        <!-- Upload signed form -->
-        <div style="border-top:1px solid #222;margin-top:8px;padding-top:16px;">
-          <div style="font-size:12px;color:#666;text-align:center;margin-bottom:10px;">After printing and signing, scan the signed form back in:</div>
-          <label id="dep-signed-label" style="display:block;width:100%;padding:15px;background:#0d0d0d;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;text-align:center;color:#fff;">
-            📄 Upload Signed Form
-            <input type="file" accept="image/*" onchange="depSignedFormTaken(this)" style="display:none;"/>
+        <!-- AGGRESSIVE signed form prompt -->
+        <div id="dep-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
+          <div style="color:#ea580c;font-size:19px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">⚠️ Required: Signed Form</div>
+          <div style="color:#aaa;font-size:13px;text-align:center;margin-bottom:16px;line-height:1.5;">Print the form above, have the customer sign it, then photograph the signed copy. <strong style="color:#fff;">You cannot save without this.</strong></div>
+          <label id="dep-signed-label" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px;background:#7c2d12;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;text-align:center;color:#fff;box-sizing:border-box;">
+            📸 Take Photo of Signed Form
+            <input type="file" accept="image/*" capture="environment" onchange="depSignedFormTaken(this)" style="display:none;"/>
           </label>
-          <div id="dep-signed-preview-wrap" style="display:none;margin-top:12px;">
-            <img id="dep-signed-preview" style="width:100%;border-radius:10px;margin-bottom:8px;"/>
-            <div style="text-align:center;color:#4ade80;font-weight:600;font-size:13px;">Signed form captured</div>
+          <div id="dep-signed-preview-wrap" style="display:none;margin-top:14px;">
+            <img id="dep-signed-preview" style="width:100%;border-radius:10px;margin-bottom:10px;"/>
+            <div style="text-align:center;color:#4ade80;font-weight:700;font-size:15px;">✓ Signed form captured</div>
+            <label style="display:block;text-align:center;margin-top:8px;cursor:pointer;color:#666;font-size:12px;">
+              Retake
+              <input type="file" accept="image/*" capture="environment" onchange="depSignedFormTaken(this)" style="display:none;"/>
+            </label>
           </div>
         </div>
 
-        <!-- Save deposit record -->
-        <button id="dep-save-btn" onclick="depositSave()" style="width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:8px;">Save Deposit Record</button>
+        <!-- Save deposit record — disabled until signed photo taken -->
+        <button id="dep-save-btn" onclick="depositSave()" disabled style="width:100%;padding:16px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:not-allowed;margin-top:4px;opacity:0.4;">Save Deposit Record</button>
         <div id="dep-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
 
-        <button onclick="closeDepositForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Done</button>
+        <button onclick="closeDepositForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
       </div>
     </div>
 
@@ -8113,14 +8114,25 @@ function openDepositForm() {
   if(signedWrap) signedWrap.style.display = 'none';
   var signedLabel = document.getElementById('dep-signed-label');
   if(signedLabel) signedLabel.style.display = 'block';
-  // Reset save button
+  // Reset save button — locked until signed photo taken
   var saveBtn = document.getElementById('dep-save-btn');
-  if(saveBtn) { saveBtn.textContent = 'Save Deposit Record'; saveBtn.disabled = false; saveBtn.style.background = '#16a34a'; }
+  if(saveBtn){ saveBtn.textContent='Save Deposit Record'; saveBtn.disabled=true; saveBtn.style.background='#166534'; saveBtn.style.opacity='0.4'; saveBtn.style.cursor='not-allowed'; }
   var saveStatus = document.getElementById('dep-save-status');
-  if(saveStatus) saveStatus.textContent = '';
+  if(saveStatus) saveStatus.textContent='';
+  // Reset signed section styling
+  var sec = document.getElementById('dep-signed-section');
+  if(sec){ sec.style.borderColor='#ea580c'; sec.style.background='#1c0a00'; }
 }
 
 function closeDepositForm() {
+  // Warn if step 4 is visible and form hasn't been saved with a signed photo
+  var step4 = document.getElementById('dep-step4');
+  var saveBtn = document.getElementById('dep-save-btn');
+  var onStep4 = step4 && step4.style.display !== 'none';
+  var alreadySaved = saveBtn && saveBtn.textContent === 'Saved';
+  if(onStep4 && !alreadySaved) {
+    if(!confirm('⚠️ Form not saved.\n\nThe deposit record has not been saved. Are you sure you want to exit?')) return;
+  }
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'none';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
@@ -8170,6 +8182,12 @@ function depSignedFormTaken(input) {
     var preview = document.getElementById('dep-signed-preview');
     if(preview) preview.src = e.target.result;
     document.getElementById('dep-signed-preview-wrap').style.display = 'block';
+    // Unlock save button
+    var btn = document.getElementById('dep-save-btn');
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer'; }
+    // Green border on signed section to confirm
+    var sec = document.getElementById('dep-signed-section');
+    if(sec){ sec.style.borderColor='#4ade80'; sec.style.background='#0a1f0a'; }
   };
   reader.readAsDataURL(file);
 }
@@ -8177,6 +8195,10 @@ function depSignedFormTaken(input) {
 // ── SAVE DEPOSIT TO SUPABASE ─────────────────────────────────
 
 async function depositSave() {
+  if(!_depData.signedFormFile) {
+    alert('⚠️ Please take a photo of the signed form before saving.');
+    return;
+  }
   var btn = document.getElementById('dep-save-btn');
   var status = document.getElementById('dep-save-status');
   if(btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
