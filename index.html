@@ -2077,8 +2077,11 @@ function hideLoading(){document.getElementById('load-overlay').style.display='no
 
 // ── SUPABASE DATA SYNC ─────────────────────────────────────────────────────────
 var _syncInProgress=false;
+var _lastSyncDone=0;
 async function syncFromSupabase(showUI){
   if(_syncInProgress) return;
+  // Cooldown: skip if last sync finished less than 10s ago (unless explicit UI sync)
+  if(!showUI && Date.now()-_lastSyncDone<10000) return;
   _syncInProgress=true;
   if(showUI) showLoading('Syncing data...');
   for(var _attempt=0; _attempt<3; _attempt++){
@@ -2111,6 +2114,7 @@ async function syncFromSupabase(showUI){
       sv();
       console.log('Synced from Supabase:', S.inventory.length, 'cars,', S.employees.length, 'employees,', _cpData.customers.length, 'CarPay customers');
       _syncInProgress=false;
+      _lastSyncDone=Date.now();
       hideLoading();
       try{cpRenderAll();}catch(e){}
       return; // success — resolve promise only after data is loaded
@@ -2124,6 +2128,7 @@ async function syncFromSupabase(showUI){
   }
   // All retries exhausted
   _syncInProgress=false;
+  _lastSyncDone=Date.now();
   hideLoading();
   console.error('Sync failed after 3 attempts');
 }
