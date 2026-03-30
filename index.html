@@ -3277,34 +3277,25 @@ async function mgrRemoveTask(idx){
 }
 
 // ── REVIEW ─────────────────────────────────────────────────────────────────────
+function mgrCatTile(car, cat, onclick){
+  var ws=getWorkState(car.id);
+  var catWs=(ws.categories&&ws.categories[cat])||{};
+  var isDone=catWs.done||false;
+  var needsReview=isDone&&!catWs.reviewed;
+  var isConfirmed=catWs.confirmed||false;
+  var status=isConfirmed?'done':needsReview?'review':isDone?'done':'prog';
+  var badge=needsReview?'<span class="tile-badge tbr">Review</span>':isConfirmed?'<span class="tile-badge tbd">✓</span>':isDone?'<span class="tile-badge tbd">Done</span>':'';
+  var pxUrl=!car.photo&&pxCache[String(car.id)];
+  var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+  var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+  return '<div class="car-tile st-'+status+'" onclick="'+onclick+'">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div></div>';
+}
 function renderMgrDetail(){
   var el=document.getElementById('mgr-detail-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No vehicles in Detail queue</div></div>';return;}
-  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
-  cars.forEach(function(car){
-    var ws=getWorkState(car.id);
-    var done=ws.categories.detail.done;
-    var needsReview=done&&!ws.categories.detail.reviewed;
-    var assignedTo=(ws.categories.detail.assignedTo||[]);
-    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrCatSheet('+car.id+',\'detail\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    o+=thumbHTML;
-    o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
-    o+='</div>';
-    if(needsReview) o+='<span style="font-size:11px;color:#ff453a;font-weight:700;flex-shrink:0;">⚠ Review</span>';
-    else if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
-    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
-    o+='</div>';
-  });
-  o+='</div>';
-  el.innerHTML=o;
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'detail','mgrCatSheet('+car.id+',\\\'detail\\\')');}).join('')+'</div>';
+  applyPexels(cars);
 }
 async function approveDetail(carId){
   const ws=getWorkState(carId);
@@ -3471,30 +3462,8 @@ function renderMgrPhotos(){
   var el=document.getElementById('mgr-photos-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
-  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
-  cars.forEach(function(car){
-    var ws=getWorkState(car.id);
-    var done=ws.categories.photos.done;
-    var needsReview=done&&!ws.categories.photos.reviewed;
-    var assignedTo=(ws.categories.photos.assignedTo||[]);
-    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    var borderCol=done?'rgba(48,209,88,0.3)':needsReview?'rgba(255,69,58,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrCatSheet('+car.id+',\'photos\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    o+=thumbHTML;
-    o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
-    o+='</div>';
-    if(needsReview) o+='<span style="font-size:11px;color:#ff453a;font-weight:700;flex-shrink:0;">⚠ Review</span>';
-    else if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
-    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
-    o+='</div>';
-  });
-  o+='</div>';
-  el.innerHTML=o;
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'photos','mgrCatSheet('+car.id+',\\\'photos\\\')');}).join('')+'</div>';
+  applyPexels(cars);
 }
 async function approvePhotos(carId){
   const ws=getWorkState(carId);
@@ -3823,42 +3792,8 @@ function renderMgrRepair(){
   if(!el) return;
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div><div class="es" style="font-size:12px;color:#444;margin-top:6px;">Search above to add a vehicle</div></div>';return;}
-  var o='';
-  cars.forEach(function(car){
-    var ws=getWorkState(car.id);
-    var rc=ws.categories.repair||{};
-    var items=rc.items||[];
-    var openN=items.filter(function(x){return !x.done;}).length;
-    var doneN=items.filter(function(x){return x.done;}).length;
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:50px;height:50px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:50px;height:50px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    var statusHTML='';
-    var doneN2=items.filter(function(x){return x.done;}).length;
-    if(rc.confirmed) statusHTML='<span style="font-size:11px;background:#0d2a1e;color:#30d158;padding:3px 9px;border-radius:20px;font-weight:600;">Complete</span>';
-    else if(rc.done) statusHTML='<span style="font-size:11px;background:#2a1e0d;color:#ff9f0a;padding:3px 9px;border-radius:20px;font-weight:600;">In Review</span>';
-    else if(items.length) statusHTML='<span style="font-size:11px;background:#1a1a1a;color:#fb923c;padding:3px 9px;border-radius:20px;font-weight:600;">'+doneN2+'/'+items.length+'</span>';
-    else statusHTML='<span style="font-size:11px;background:#151515;color:#444;padding:3px 9px;border-radius:20px;font-weight:600;">No items</span>';
-    var tagsHTML='';
-    if(doneN){
-      tagsHTML='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">';
-      tagsHTML+='<span style="font-size:10px;background:#151515;color:#444;padding:2px 7px;border-radius:8px;font-weight:600;">✓ '+doneN+' done</span>';
-      tagsHTML+='</div>';
-    }
-    o+='<div onclick="mgrRepairSheet('+car.id+')" style="display:flex;align-items:center;gap:12px;padding:14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;margin-bottom:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    o+=thumbHTML;
-    o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
-    o+='<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">'+car.name+'</div>';
-    o+=statusHTML;
-    o+='</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
-    o+=tagsHTML;
-    o+='</div>';
-    o+='<div style="color:#2a2a2a;font-size:20px;flex-shrink:0;">›</div>';
-    o+='</div>';
-  });
-  el.innerHTML=o;
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'repair','mgrRepairSheet('+car.id+')');}).join('')+'</div>';
+  applyPexels(cars);
 }
 async function removeFromRepairQueue(carId){
   showLoading('Removing...');
@@ -6149,29 +6084,8 @@ function renderMgrPaint(){
   if(!el) return;
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No vehicles in Paint queue</div></div>';return;}
-  var o='<div style="display:flex;flex-direction:column;gap:8px;">';
-  cars.forEach(function(car){
-    var ws=getWorkState(car.id);
-    var pd=ws.categories.paint||{};
-    var done=pd.done;
-    var assignedTo=pd.assignedTo||[];
-    var empNames=assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var thumbSrc=car.photo||pxUrl||'';
-    var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
-    var borderCol=done?'rgba(48,209,88,0.3)':'#1e1e1e';
-    o+='<div onclick="mgrCatSheet('+car.id+',\'paint\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid '+borderCol+';border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    o+=thumbHTML;
-    o+='<div style="flex:1;min-width:0;">';
-    o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
-    o+='</div>';
-    if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
-    o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
-    o+='</div>';
-  });
-  o+='</div>';
-  el.innerHTML=o;
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'paint','mgrCatSheet('+car.id+',\\\'paint\\\')');}).join('')+'</div>';
+  applyPexels(cars);
 }
 
 // ── AI BRAIN ─────────────────────────────────────────────────────────────────
