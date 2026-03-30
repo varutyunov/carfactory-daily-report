@@ -1246,6 +1246,12 @@ canvas{display:none;}
   </div>
 </div>
 
+<!-- PAYMENT PHOTO LIGHTBOX -->
+<div id="pay-photo-lightbox" onclick="payCloseLightbox()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.95);justify-content:center;align-items:center;flex-direction:column;">
+  <button onclick="payCloseLightbox()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;z-index:10000;padding:8px;">✕</button>
+  <img id="pay-photo-lightbox-img" src="" style="max-width:95%;max-height:90vh;object-fit:contain;border-radius:8px;"/>
+</div>
+
 <!-- OWNER DEALS VIEW OVERLAY -->
 <div id="deals-view-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
@@ -8386,6 +8392,16 @@ function payFormSkipPhoto(){
   document.getElementById('pay-skip-photo-btn').style.display='none';
 }
 
+function payOpenLightbox(url){
+  var lb=document.getElementById('pay-photo-lightbox');
+  document.getElementById('pay-photo-lightbox-img').src=url;
+  lb.style.display='flex';
+}
+function payCloseLightbox(){
+  document.getElementById('pay-photo-lightbox').style.display='none';
+  document.getElementById('pay-photo-lightbox-img').src='';
+}
+
 function payViewBack(){
   if(_payViewMode==='scan'||_payViewMode==='detail'){
     _payViewMode='list';
@@ -8393,6 +8409,7 @@ function payViewBack(){
     document.getElementById('pay-list-view').style.display='block';
     document.getElementById('pay-scan-view').style.display='none';
     document.getElementById('pay-detail-view').style.display='none';
+    var vb=document.getElementById('pay-view-body');if(vb)vb.scrollTop=0;
     loadPaymentWeek();
   } else {
     payCloseAll();
@@ -8544,10 +8561,11 @@ function payViewDetail(id){
   document.getElementById('pay-list-view').style.display='none';
   document.getElementById('pay-scan-view').style.display='none';
   document.getElementById('pay-detail-view').style.display='block';
+  var vb=document.getElementById('pay-view-body');if(vb)vb.scrollTop=0;
   var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
   var method=(p.payment_method||'cash').toUpperCase();
   var html='';
-  if(p.receipt_photo_url) html+='<img src="'+p.receipt_photo_url+'" style="width:100%;border-radius:14px;border:1px solid #1e1e1e;max-height:300px;object-fit:contain;background:#0a0a0a;margin-bottom:16px;"/>';
+  if(p.receipt_photo_url) html+='<div onclick="payOpenLightbox(\''+p.receipt_photo_url.replace(/'/g,"\\'")+'\')" style="cursor:pointer;position:relative;"><img src="'+p.receipt_photo_url+'" style="width:100%;border-radius:14px;border:1px solid #1e1e1e;max-height:300px;object-fit:contain;background:#0a0a0a;margin-bottom:16px;"/><div style="position:absolute;bottom:24px;right:8px;background:rgba(0,0,0,.7);border-radius:8px;padding:4px 10px;font-size:11px;color:#fff;">Tap to view</div></div>';
   html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
   html+='<div style="font-size:24px;font-weight:700;color:#4ade80;margin-bottom:8px;">'+((p.amount||'$0'))+'</div>';
   html+='<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px;">'+((p.customer_name||'Unknown'))+'</div>';
