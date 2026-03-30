@@ -1085,9 +1085,15 @@ canvas{display:none;}
         </div>
         <div style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
           <div id="pay-stat-total" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">$0</div>
-          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Collected</div>
+          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash</div>
         </div>
       </div>
+
+      <!-- Payment Breakdown Button -->
+      <button id="pay-breakdown-btn" onclick="payShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">
+        <span>View Full Breakdown</span>
+        <span style="color:#555;font-size:16px;">&#9776;</span>
+      </button>
 
       <!-- Scan New Payment Button -->
       <button onclick="openPayScanForm()" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a1628,#122a5c,#1d4ed8);border:1px solid #3b82f6;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent;" id="pay-add-btn">
@@ -1243,6 +1249,15 @@ canvas{display:none;}
       <div id="pay-detail-content"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- PAYMENT BREAKDOWN SHEET -->
+<div id="pay-breakdown-sheet" onclick="payCloseBreakdown()" style="display:none;position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.7);">
+  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;padding:0 16px 44px;">
+    <div style="text-align:center;padding:12px 0 16px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">Payment Breakdown</div>
+    <div id="pay-breakdown-content" style="display:flex;flex-direction:column;gap:2px;"></div>
   </div>
 </div>
 
@@ -8272,6 +8287,7 @@ var _payViewMode = 'list'; // 'list', 'scan', 'detail'
 var _payLocation = 'DeBary';
 var _payCurrentWeekStart = null;
 var _payWeekData = [];
+var _payBreakdown = {cash:0, card:0, check:0, other:0, total:0};
 var _payReceiptDataUrl = null;
 var _payMethod = 'cash';
 var _payCardFeeAdded = false;
@@ -8538,13 +8554,50 @@ async function loadPaymentWeek(){
 function _payUpdateStats(){
   var active=_payWeekData.filter(function(p){return !p.delete_requested;});
   var count=active.length;
-  var total=0;
+  var cash=0,card=0,check=0,other=0;
   active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
-    total+=v;
+    var m=(p.payment_method||'cash').toLowerCase();
+    if(m==='cash') cash+=v;
+    else if(m==='card') card+=v;
+    else if(m==='check') check+=v;
+    else other+=v;
   });
+  _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
   document.getElementById('pay-stat-count').textContent=count;
-  document.getElementById('pay-stat-total').textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  document.getElementById('pay-stat-total').textContent='$'+cash.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+function payShowBreakdown(){
+  var sheet=document.getElementById('pay-breakdown-sheet');
+  var content=document.getElementById('pay-breakdown-content');
+  if(!sheet||!content)return;
+  var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var rows=[
+    {label:'Cash',value:_payBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
+    {label:'Card',value:_payBreakdown.card,color:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.2)'},
+    {label:'Check',value:_payBreakdown.check,color:'#fbbf24',bg:'rgba(251,191,36,.1)',border:'rgba(251,191,36,.2)'},
+    {label:'Other',value:_payBreakdown.other,color:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.2)'}
+  ];
+  var html='';
+  rows.forEach(function(r){
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:'+r.bg+';border:1px solid '+r.border+';border-radius:12px;margin-bottom:6px;">';
+    html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:'+r.color+';letter-spacing:1px;text-transform:uppercase;">'+r.label+'</span>';
+    html+='<span style="font-size:18px;font-weight:700;color:'+r.color+';">'+fmt(r.value)+'</span>';
+    html+='</div>';
+  });
+  html+='<div style="height:1px;background:#222;margin:10px 0;"></div>';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;">';
+  html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:17px;font-weight:900;color:#fff;letter-spacing:1px;text-transform:uppercase;">Total</span>';
+  html+='<span style="font-size:20px;font-weight:900;color:#4ade80;">'+fmt(_payBreakdown.total)+'</span>';
+  html+='</div>';
+  content.innerHTML=html;
+  sheet.style.display='block';
+}
+
+function payCloseBreakdown(){
+  var sheet=document.getElementById('pay-breakdown-sheet');
+  if(sheet)sheet.style.display='none';
 }
 
 function _payRenderCards(){
