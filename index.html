@@ -8556,23 +8556,35 @@ function payScanPhoto(inp){
     document.getElementById('pay-scan-capture').style.display='none';
     document.getElementById('pay-skip-photo-btn').style.display='none';
     document.getElementById('pay-scan-fields').style.display='block';
-    // Convert to JPEG via canvas (handles DNG/ProRAW and other exotic formats)
+    // Convert to JPEG via canvas + resize to max 1600px (handles large camera photos & HEIC)
     var convImg = new Image();
     convImg.onload = function(){
+      var MAX=1600;
+      var w=convImg.naturalWidth, h=convImg.naturalHeight;
+      if(w>MAX||h>MAX){
+        if(w>h){ h=Math.round(h*(MAX/w)); w=MAX; }
+        else{ w=Math.round(w*(MAX/h)); h=MAX; }
+      }
       var canvas = document.createElement('canvas');
-      canvas.width = convImg.naturalWidth;
-      canvas.height = convImg.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
       var ctx = canvas.getContext('2d');
-      ctx.drawImage(convImg, 0, 0);
-      var jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      ctx.drawImage(convImg, 0, 0, w, h);
+      var jpegDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      console.log('[PayScan] Resized to '+w+'x'+h+', payload ~'+Math.round(jpegDataUrl.length/1024)+'KB');
       _payReceiptDataUrl = jpegDataUrl;
       runPayScanOCR(jpegDataUrl);
     };
     convImg.onerror = function(){
+      console.warn('[PayScan] Image decode failed, trying raw data');
       _payReceiptDataUrl = e.target.result;
       runPayScanOCR(e.target.result);
     };
     convImg.src = e.target.result;
+  };
+  reader.onerror = function(){
+    console.error('[PayScan] FileReader error');
+    alert('Could not read photo. Please try again or use Upload instead.');
   };
   reader.readAsDataURL(file);
   inp.value='';
