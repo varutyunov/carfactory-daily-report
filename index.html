@@ -8338,6 +8338,12 @@ function paySetLocation(loc){
 function payWeekNav(dir){
   var ws=new Date(_payCurrentWeekStart);
   ws.setDate(ws.getDate()+(dir*7));
+  // Block employees from navigating to future weeks
+  if(!_payIsOwner() && dir>0){
+    var now=new Date();
+    var currentWeekStart=_payGetWeekStart(now);
+    if(ws>currentWeekStart) return;
+  }
   _payCurrentWeekStart=ws;
   _payUpdateWeekLabel();
   loadPaymentWeek();
@@ -8441,7 +8447,13 @@ async function loadPaymentWeek(){
   var wk=_payWeekKey(_payCurrentWeekStart);
   try{
     var params='week_start=eq.'+wk+'&location=eq.'+_payLocation+'&order=payment_date.desc,created_at.desc';
-    _payWeekData=await sbGet('payments',params);
+    var allData=await sbGet('payments',params);
+    // Owners see everything (flagged items highlighted); employees don't see delete_requested
+    if(_payIsOwner()){
+      _payWeekData=allData;
+    } else {
+      _payWeekData=allData.filter(function(p){return !p.delete_requested;});
+    }
   }catch(e){
     console.warn('Payment load error:',e);
     _payWeekData=[];
@@ -8451,9 +8463,10 @@ async function loadPaymentWeek(){
 }
 
 function _payUpdateStats(){
-  var count=_payWeekData.length;
+  var active=_payWeekData.filter(function(p){return !p.delete_requested;});
+  var count=active.length;
   var total=0;
-  _payWeekData.forEach(function(p){
+  active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
     total+=v;
   });
@@ -8495,7 +8508,8 @@ function _payRenderCards(){
       else if(method==='check') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);">CHECK</span>';
       else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
       var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
-      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;">';
+      var delFlag=p.delete_requested?'border-left:3px solid #ef4444;':'';
+      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+'">';
       if(thumb) html+=thumb;
       html+='<div style="flex:1;min-width:0;">';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
@@ -8506,6 +8520,7 @@ function _payRenderCards(){
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
       html+=methodBadge;
       if(time) html+='<span style="font-size:11px;color:#555;">'+time+'</span>';
+      if(p.delete_requested) html+='<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25);margin-left:4px;">DELETE REQ</span>';
       html+='<span style="font-size:11px;color:#555;margin-left:auto;">'+((p.logged_by||''))+'</span>';
       html+='</div></div></div>';
     });
@@ -8542,7 +8557,106 @@ function payViewDetail(id){
     html+='</div>';
   }
   html+='</div>';
+
+  // Delete section
+  if(_payIsOwner()){
+    // Owner: if delete_requested, show approve/deny; otherwise show direct delete
+    if(p.delete_requested){
+      html+='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:14px;margin-bottom:12px;">';
+      html+='<div style="font-size:13px;font-weight:700;color:#ef4444;margin-bottom:4px;">⚠️ Delete Requested</div>';
+      html+='<div style="font-size:12px;color:#888;">Requested by '+((p.delete_requested_by||'employee'))+'</div>';
+      html+='</div>';
+      html+='<button id="pay-delete-btn" onclick="payDeleteConfirm1('+p.id+')" style="width:100%;margin-top:8px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Approve & Delete</button>';
+      html+='<button onclick="payDenyDelete('+p.id+')" style="width:100%;margin-top:8px;padding:14px;background:none;border:1px solid #1a2a1a;border-radius:14px;color:#4ade80;font-size:15px;font-weight:600;cursor:pointer;">Deny Request</button>';
+    } else {
+      html+='<button id="pay-delete-btn" onclick="payDeleteConfirm1('+p.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Payment</button>';
+    }
+  } else {
+    // Employee: request deletion
+    if(p.delete_requested){
+      html+='<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:14px;padding:14px;margin-top:28px;text-align:center;">';
+      html+='<div style="font-size:13px;font-weight:700;color:#fbbf24;">⏳ Delete Pending Owner Review</div>';
+      html+='</div>';
+    } else {
+      html+='<button id="pay-delete-btn" onclick="payRequestDelete1('+p.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Request Delete</button>';
+    }
+  }
+
   document.getElementById('pay-detail-content').innerHTML=html;
+}
+
+// === Employee: two-tap request delete ===
+function payRequestDelete1(id){
+  var btn=document.getElementById('pay-delete-btn');
+  btn.textContent='Tap again to request delete';
+  btn.style.background='#ef4444';
+  btn.style.color='#fff';
+  btn.style.borderColor='#ef4444';
+  btn.onclick=function(){ payRequestDeleteFinal(id); };
+}
+async function payRequestDeleteFinal(id){
+  var btn=document.getElementById('pay-delete-btn');
+  btn.textContent='Requesting...'; btn.disabled=true; btn.style.opacity='0.5';
+  try{
+    await sbPatch('payments',id,{delete_requested:true,delete_requested_by:me.name,delete_requested_at:new Date().toISOString()});
+    // Update local data
+    var p=_payWeekData.find(function(x){return x.id===id;});
+    if(p){p.delete_requested=true;p.delete_requested_by=me.name;}
+    payViewBack();
+  }catch(e){
+    btn.textContent='Error: '+(e.message||e);
+    btn.style.background='#1a0505';btn.disabled=false;btn.style.opacity='1';
+  }
+}
+
+// === Owner: two-tap confirm delete ===
+function payDeleteConfirm1(id){
+  var btn=document.getElementById('pay-delete-btn');
+  btn.textContent='Tap again to permanently delete';
+  btn.style.background='#ef4444';
+  btn.style.color='#fff';
+  btn.style.borderColor='#ef4444';
+  btn.onclick=function(){ payDeleteFinal(id); };
+}
+async function payDeleteFinal(id){
+  var btn=document.getElementById('pay-delete-btn');
+  btn.textContent='Deleting...'; btn.disabled=true; btn.style.opacity='0.5';
+  try{
+    // Get payment data for audit log
+    var p=_payWeekData.find(function(x){return x.id===id;});
+    if(p){
+      var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
+      await sbPost('payment_deletions',{
+        payment_id:p.id,
+        customer_name:p.customer_name||'',
+        payment_date:p.payment_date||'',
+        amount:p.amount||'',
+        vehicle:veh,
+        location:p.location||'',
+        logged_by:p.logged_by||'',
+        deleted_by:me.name,
+        delete_reason:p.delete_requested?'employee_requested':'owner_direct'
+      });
+    }
+    await sbDelete('payments',id);
+    _payWeekData=_payWeekData.filter(function(x){return x.id!==id;});
+    payViewBack();
+  }catch(e){
+    btn.textContent='Error: '+(e.message||e);
+    btn.style.background='#1a0505';btn.disabled=false;btn.style.opacity='1';
+  }
+}
+
+// === Owner: deny delete request ===
+async function payDenyDelete(id){
+  try{
+    await sbPatch('payments',id,{delete_requested:false,delete_requested_by:null,delete_requested_at:null});
+    var p=_payWeekData.find(function(x){return x.id===id;});
+    if(p){p.delete_requested=false;p.delete_requested_by=null;}
+    payViewBack();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
 }
 
 function payScanPhoto(inp){
