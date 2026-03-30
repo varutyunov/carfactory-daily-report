@@ -1252,6 +1252,17 @@ canvas{display:none;}
   </div>
 </div>
 
+<!-- CARPAY ACCOUNT DETAIL OVERLAY -->
+<div id="cp-account-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="cpCloseAccount()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
+    <span id="cp-acct-title" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">ACCOUNT</span>
+  </div>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div id="cp-acct-content" style="padding:16px 12px 60px;"></div>
+  </div>
+</div>
+
 <!-- PAYMENT BREAKDOWN SHEET -->
 <div id="pay-breakdown-sheet" onclick="payCloseBreakdown()" style="display:none;position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.7);">
   <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:82vh;display:flex;flex-direction:column;">
@@ -2112,12 +2123,15 @@ async function syncFromSupabase(showUI){
         sbGet('inventory', 'order=name&limit=2000&select=*'),
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
         sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
-        sbGet('carpay_customers', 'order=name&limit=5000').catch(()=>[]),
-        sbGet('carpay_payments', 'order=synced_at.desc&limit=5000').catch(()=>[])
+        sbGet('carpay_customers', 'select=*&order=name&limit=5000').catch(()=>[]),
+        sbGet('carpay_payments', 'select=*&order=synced_at.desc&limit=5000').catch(()=>[])
       ]);
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
       // CarPay data
-      _cpData.customers=(Array.isArray(cpCusts)?cpCusts:[]).map(function(c){return{name:c.name,account:c.account,daysLate:String(c.days_late||0),nextPayment:c.next_payment||'',autoPay:!!c.auto_pay,location:c.location||'debary'};});
+      _cpData.customers=(Array.isArray(cpCusts)?cpCusts:[]).map(function(c){
+        var veh=[c.year||c.vehicle_year,c.make||c.vehicle_make,c.model||c.vehicle_model].filter(Boolean).join(' ')||c.vehicle||c.vehicle_desc||c.vehicle_info||'';
+        return{name:c.name,account:c.account,daysLate:String(c.days_late||0),nextPayment:c.next_payment||'',autoPay:!!c.auto_pay,location:c.location||'debary',vehicle:veh,vin:c.vin||'',color:c.color||c.vehicle_color||'',paymentAmount:c.payment_amount||c.monthly_payment||''};
+      });
       _cpData.payments=(Array.isArray(cpPays)?cpPays:[]).map(function(p){return{name:p.name,account:p.account,amountSent:p.amount_sent||'$0.00',date:p.date||'',time:p.time||'',method:p.method||'',reference:p.reference||'',location:p.location||'debary'};});
       _cpData.synced=true;
       if(!emps || !inv) throw new Error('Empty response from Supabase');
@@ -6513,7 +6527,7 @@ function cpRenderToday(){
     html+='<div id="'+dayId+'" class="cp-day-body" style="display:'+(isToday&&pays.length?'block':'none')+'">';
     if(pays.length){
       html+=pays.map(function(p){
-        return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.time+' · Acct #'+p.account+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
+        return '<div class="cp-card" onclick="cpOpenAccount(\''+p.account+'\')" style="cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.time+' · Acct #'+p.account+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
       }).join('');
     }
     html+='</div></div>';
@@ -6537,7 +6551,7 @@ function cpRenderCustomers(){
   list.innerHTML=filtered.map(function(c){
     var daysNum=parseInt(c.daysLate)||0;
     var lateClass=daysNum>0?'cp-late':daysNum===0?'cp-current':'';
-    return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+c.name+'</div><span class="'+lateClass+'" style="font-weight:700;font-size:14px;">'+c.daysLate+' days</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div><div class="cp-card-method">'+(c.autoPay?'Auto-Pay':'Manual')+'</div></div></div>';
+    return '<div class="cp-card" onclick="cpOpenAccount(\''+c.account+'\')" style="cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+c.name+'</div><span class="'+lateClass+'" style="font-weight:700;font-size:14px;">'+c.daysLate+' days</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div><div class="cp-card-method">'+(c.autoPay?'Auto-Pay':'Manual')+'</div></div></div>';
   }).join('');
 }
 function cpFilterCustomers(){cpRenderCustomers();}
@@ -6550,7 +6564,7 @@ function cpRenderLate(){
   var list=document.getElementById('cp-late-list');
   if(!late.length){list.innerHTML='<div class="cp-empty">No late accounts</div>';return;}
   list.innerHTML=late.map(function(c){
-    return '<div class="cp-card" style="border-color:rgba(255,69,58,.2);"><div class="cp-card-row"><div class="cp-card-name">'+c.name+'</div><span class="cp-late" style="font-weight:800;font-size:16px;">'+c.daysLate+' days late</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div></div></div>';
+    return '<div class="cp-card" onclick="cpOpenAccount(\''+c.account+'\')" style="border-color:rgba(255,69,58,.2);cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+c.name+'</div><span class="cp-late" style="font-weight:800;font-size:16px;">'+c.daysLate+' days late</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div></div></div>';
   }).join('');
 }
 function cpRenderHistory(){
@@ -6561,10 +6575,95 @@ function cpRenderHistory(){
   var filtered=locPays;
   if(q)filtered=filtered.filter(function(p){return p.name.toLowerCase().indexOf(q.toLowerCase())!==-1||p.account.indexOf(q)!==-1;});
   list.innerHTML=filtered.slice(0,100).map(function(p){
-    return '<div class="cp-card"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.date+' '+p.time+' · #'+p.reference+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
+    return '<div class="cp-card" onclick="cpOpenAccount(\''+p.account+'\')" style="cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+p.name+'</div><div class="cp-card-amount">'+p.amountSent+'</div></div><div class="cp-card-row"><div class="cp-card-date">'+p.date+' '+p.time+' · #'+p.reference+'</div><div class="cp-card-method">'+p.method+'</div></div></div>';
   }).join('');
 }
 function cpFilterHistory(){cpRenderHistory();}
+
+function cpOpenAccount(account){
+  var overlay=document.getElementById('cp-account-overlay');
+  var content=document.getElementById('cp-acct-content');
+  var titleEl=document.getElementById('cp-acct-title');
+  if(!overlay||!content)return;
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  var pays=_cpData.payments.filter(function(p){return p.account===account;});
+  // Cross-reference deals for car info if carpay doesn't have it
+  var dealCar=null;
+  if(cust&&_dealsData&&_dealsData.length){
+    dealCar=_dealsData.find(function(d){return d.customer_name&&cust.name&&d.customer_name.toLowerCase()===cust.name.toLowerCase();});
+  }
+  if(titleEl) titleEl.textContent=cust?cust.name.toUpperCase():'ACCOUNT #'+account;
+  var html='';
+  // ── Account Status ──
+  if(cust){
+    var daysNum=parseInt(cust.daysLate)||0;
+    var statusColor=daysNum>0?'#ff453a':'#30d158';
+    var statusText=daysNum>0?daysNum+' DAYS LATE':'CURRENT';
+    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">';
+    html+='<div><div style="font-size:18px;font-weight:700;color:#fff;">'+cust.name+'</div>';
+    html+='<div style="font-size:12px;color:#555;margin-top:3px;">Account #'+cust.account+'</div></div>';
+    html+='<span style="font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px;background:'+statusColor+'22;color:'+statusColor+';border:1px solid '+statusColor+'44;">'+statusText+'</span>';
+    html+='</div>';
+    html+='<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+    html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Next Payment</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:3px;">'+(cust.nextPayment||'—')+'</div></div>';
+    if(cust.paymentAmount) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount Due</div><div style="font-size:14px;color:#4ade80;font-weight:600;margin-top:3px;">'+cust.paymentAmount+'</div></div>';
+    html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Auto-Pay</div><div style="font-size:14px;color:'+(cust.autoPay?'#30d158':'#888')+';font-weight:600;margin-top:3px;">'+(cust.autoPay?'Yes':'No')+'</div></div>';
+    html+='</div></div>';
+  }
+  // ── Vehicle Info ──
+  var vehicleStr=cust&&cust.vehicle?cust.vehicle:'';
+  var vinStr=cust&&cust.vin?cust.vin:'';
+  var colorStr=cust&&cust.color?cust.color:'';
+  // Fall back to deals cross-reference
+  if(!vehicleStr&&dealCar){vehicleStr=dealCar.vehicle_desc||'';vinStr=vinStr||dealCar.vin||'';}
+  if(vehicleStr||vinStr||dealCar){
+    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Vehicle</div>';
+    if(vehicleStr) html+='<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+vehicleStr+(colorStr?' · '+colorStr:'')+'</div>';
+    if(vinStr) html+='<div style="font-size:12px;color:#555;margin-bottom:8px;">VIN: '+vinStr+'</div>';
+    if(dealCar){
+      html+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;">';
+      if(dealCar.deal_type) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Deal Type</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.deal_type+'</div></div>';
+      if(dealCar.total_collected) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Total Collected</div><div style="font-size:13px;color:#4ade80;font-weight:600;margin-top:2px;">'+dealCar.total_collected+'</div></div>';
+      if(dealCar.gps_serial) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">GPS Serial</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.gps_serial+'</div></div>';
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+  // ── Payment History ──
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin:6px 0 8px;">Payment History ('+pays.length+')</div>';
+  if(!pays.length){
+    html+='<div style="text-align:center;color:#444;padding:28px 0;font-size:14px;">No payment history on record</div>';
+  } else {
+    var total=pays.reduce(function(s,p){return s+(parseFloat((p.amountSent||'').replace(/[$,]/g,''))||0);},0);
+    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;">';
+    html+='<span style="font-size:13px;color:#888;">'+pays.length+' payment'+(pays.length===1?'':'s')+'</span>';
+    html+='<span style="font-size:14px;font-weight:700;color:#4ade80;">$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>';
+    html+='</div>';
+    pays.forEach(function(p){
+      var methodColor={'cash':'#30d158','card':'#60a5fa','check':'#fbbf24'}[p.method]||'#888';
+      html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;padding:12px 14px;margin-bottom:6px;">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      html+='<div style="font-size:15px;font-weight:700;color:#fff;">'+p.amountSent+'</div>';
+      html+='<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:'+methodColor+'22;color:'+methodColor+';border:1px solid '+methodColor+'44;">'+p.method.toUpperCase()+'</span>';
+      html+='</div>';
+      html+='<div style="font-size:12px;color:#555;">'+p.date+(p.time?' · '+p.time:'')+(p.reference?' · Ref #'+p.reference:'')+'</div>';
+      html+='</div>';
+    });
+  }
+  content.innerHTML=html;
+  overlay.style.display='flex';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
+  history.pushState({cpAccount:true},'');
+}
+
+function cpCloseAccount(){
+  var overlay=document.getElementById('cp-account-overlay');
+  if(overlay)overlay.style.display='none';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
+}
+
 function cpRenderAll(){cpRenderToday();cpRenderCustomers();cpRenderLate();cpRenderHistory();}
 
 /* ── VOICE AI ──────────────────────────────────────────────────────────────── */
@@ -8514,6 +8613,10 @@ function payFormSkipPhoto(){
 
 // Browser back button support for payment overlay
 window.addEventListener('popstate',function(e){
+  var cpOverlay=document.getElementById('cp-account-overlay');
+  if(cpOverlay&&cpOverlay.style.display!=='none'){
+    cpCloseAccount();return;
+  }
   var overlay=document.getElementById('pay-scan-overlay');
   if(overlay&&overlay.style.display!=='none'){
     payViewBack();
