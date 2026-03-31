@@ -7707,10 +7707,10 @@ function _txInit() {
 .dep-spinner{width:20px;height:20px;border:3px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:dep-spin .8s linear infinite;flex-shrink:0;}
 @keyframes dep-spin{to{transform:rotate(360deg);}}
 </style>
-<div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column;">
+<div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
 
   <!-- Back bar -->
-  <div id="deposit-back-bar" style="position:fixed;top:0;left:0;right:0;z-index:510;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+  <div id="deposit-back-bar" style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
     <button onclick="closeDepositForm()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
     <span id="deposit-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEPOSIT FORM</span>
   </div>
