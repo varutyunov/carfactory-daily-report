@@ -8977,6 +8977,12 @@ function payViewDetail(id){
   }
   html+='</div>';
 
+  // Move location (owners only)
+  if(_payIsOwner()){
+    var otherLoc=p.location==='DeBary'?'DeLand':'DeBary';
+    html+='<button onclick="payMoveLocation('+p.id+',\''+otherLoc+'\')" style="width:100%;margin-top:8px;padding:14px;background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.25);border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;">↗ Move to '+otherLoc+'</button>';
+  }
+
   // Delete section
   if(_payIsOwner()){
     // Owner: if delete_requested, show approve/deny; otherwise show direct delete
@@ -9002,6 +9008,17 @@ function payViewDetail(id){
   }
 
   document.getElementById('pay-detail-content').innerHTML=html;
+}
+
+// === Owner: move payment between locations ===
+async function payMoveLocation(id,newLoc){
+  if(!confirm('Move this payment to '+newLoc+'?')) return;
+  showLoading('Moving to '+newLoc+'...');
+  try{
+    await sbPatch('payments',id,{location:newLoc});
+    hideLoading();
+    payViewBack();
+  }catch(e){hideLoading();alert('Error: '+e.message);}
 }
 
 // === Employee: two-tap request delete ===
