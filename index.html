@@ -1657,30 +1657,31 @@ canvas{display:none;}
         <div id="pg-count" style="font-size:12px;color:#444;font-weight:600;flex-shrink:0;"></div>
       </div>
     </div>
+    <!-- Control panel -->
+    <div style="padding:0 20px;flex-shrink:0;">
+      <input type="file" id="pg-file-inp" accept="image/*" multiple onchange="pgHandleFiles(event)" style="display:none;"/>
+      <div id="pg-controls" style="display:flex;gap:8px;margin-bottom:14px;">
+        <label id="pg-upload-label" for="pg-file-inp" style="display:flex;flex:1;align-items:center;justify-content:center;gap:7px;padding:12px 0;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;" ontouchstart="this.style.background='#252525'" ontouchend="this.style.background='#1a1a1a'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span style="font-size:13px;font-weight:600;color:#fff;">Add</span>
+        </label>
+        <button id="pg-download-all" onclick="pgDownloadAll()" style="display:none;flex:1;align-items:center;justify-content:center;gap:7px;padding:12px 0;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;font-family:inherit;" ontouchstart="this.style.background='#252525'" ontouchend="this.style.background='#1a1a1a'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span style="font-size:13px;font-weight:600;color:#fff;">Save All</span>
+        </button>
+        <button id="pg-remove-btn" style="display:none;flex:1;align-items:center;justify-content:center;gap:7px;padding:12px 0;background:#1a1a1a;border:1px solid rgba(255,69,58,.2);border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;font-family:inherit;" ontouchstart="this.style.background='#252525'" ontouchend="this.style.background='#1a1a1a'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ff453a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span style="font-size:13px;font-weight:600;color:#ff453a;">Remove</span>
+        </button>
+      </div>
+      <div id="pg-uploading" style="display:none;padding:10px 14px;margin-bottom:12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:600;text-align:center;">Uploading...</div>
+    </div>
     <!-- Scrollable content -->
     <div style="flex:1;overflow-y:auto;padding:0 20px 40px;-webkit-overflow-scrolling:touch;">
-      <!-- Upload tile -->
-      <label id="pg-upload-label" for="pg-file-inp" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(29,78,216,.08),rgba(29,78,216,.03));border:1px solid rgba(29,78,216,.2);border-radius:16px;cursor:pointer;margin-bottom:16px;-webkit-tap-highlight-color:transparent;transition:transform .12s,border-color .2s;" ontouchstart="this.style.transform='scale(.97)';this.style.borderColor='rgba(29,78,216,.45)'" ontouchend="this.style.transform='';this.style.borderColor='rgba(29,78,216,.2)'">
-        <div style="width:46px;height:46px;border-radius:13px;background:rgba(29,78,216,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:.2px;">Add Photos</div>
-          <div style="font-size:12px;color:#555;margin-top:1px;">Camera or gallery</div>
-        </div>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </label>
-      <input type="file" id="pg-file-inp" accept="image/*" multiple onchange="pgHandleFiles(event)" style="display:none;"/>
-      <!-- Upload progress -->
-      <div id="pg-uploading" style="display:none;padding:12px 16px;margin-bottom:14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:12px;color:#60a5fa;font-size:13px;font-weight:600;text-align:center;letter-spacing:.3px;">Uploading...</div>
       <!-- Photo grid -->
       <div id="pg-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
-      <!-- Action buttons -->
-      <button id="pg-download-all" onclick="pgDownloadAll()" style="display:none;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:16px;padding:14px;background:rgba(255,255,255,.04);border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download All
-      </button>
-      <div id="pg-review-actions" style="display:none;gap:10px;margin-top:12px;"></div>
-      <button id="pg-remove-btn" style="display:none;width:100%;margin-top:10px;padding:13px;background:none;border:1px solid rgba(255,69,58,.15);border-radius:14px;color:#ff453a;font-size:13px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;letter-spacing:.2px;">Remove from Queue</button>
+      <!-- Review actions -->
+      <div id="pg-review-actions" style="display:none;gap:10px;margin-top:14px;"></div>
     </div>
   </div>
 </div>
@@ -3083,7 +3084,7 @@ async function openPhotoGallery(carId, category, title){
   var dl=document.getElementById('pg-download-all');if(dl)dl.style.display='none';
   var rm=document.getElementById('pg-remove-btn');if(rm)rm.style.display='none';
   // Show upload button (employee/inventory flow)
-  var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='';
+  var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='flex';
   openM('m-photo-gallery');
   _pgPhotos=await loadCarPhotos(carId,category);
   pgRenderGrid();
@@ -3782,7 +3783,7 @@ async function mgrPhotoReview(carId){
     // Use the proven openPhotoGallery path first
     await openPhotoGallery(carId,'photos','📷 '+car.name);
     // Now customize for owner review: keep upload visible (owners can add photos too), show review buttons
-    var rmBtn=document.getElementById('pg-remove-btn');if(rmBtn)rmBtn.style.display='block';
+    var rmBtn=document.getElementById('pg-remove-btn');if(rmBtn)rmBtn.style.display='flex';
     // Set remove handler
     var removeEl=document.getElementById('pg-remove-btn');
     if(removeEl) removeEl.onclick=function(){closeM('m-photo-gallery');removeCatFromProgress(carId,'photos');};
