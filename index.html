@@ -1005,7 +1005,7 @@ canvas{display:none;}
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
         <input id="deal-gps" placeholder="Enter GPS serial #" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-top:12px;">Pick Up Payment Amount <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
-        <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" oninput="dealPickupChanged()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);dealPickupChanged()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
         <div id="deal-pickup-due-wrap" style="display:none;margin-top:12px;">
           <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Pick Up Payment Due Date <span style="font-size:10px;color:#ef4444;text-transform:none;">*required</span></label>
           <input id="deal-pickup-due" type="date" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;-webkit-appearance:none;"/>
@@ -1198,7 +1198,7 @@ canvas{display:none;}
         <!-- Amount -->
         <div style="margin-bottom:12px;">
           <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount <span style="color:#ff453a;">*</span></label>
-          <input id="pay-scan-amount" placeholder="$0.00" inputmode="decimal" oninput="payCalcCardFee()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:20px;font-weight:700;outline:none;"/>
+          <input id="pay-scan-amount" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payCalcCardFee()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:20px;font-weight:700;outline:none;"/>
         </div>
 
         <!-- Card Fee Section (hidden unless card selected) -->
@@ -1345,7 +1345,7 @@ canvas{display:none;}
         <div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">
           <div style="display:flex;gap:8px;margin-bottom:8px;">
             <input id="cp-paid-to" placeholder="Paid to (name)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;"/>
-            <input id="cp-amount" type="number" inputmode="decimal" placeholder="$0" style="width:100px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;text-align:right;"/>
+            <input id="cp-amount" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="width:100px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;text-align:right;"/>
           </div>
           <button onclick="cashPayoutAdd()" style="width:100%;padding:12px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:10px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payout</button>
         </div>
@@ -1887,6 +1887,16 @@ const CAR_SVG={
 };
 function fixColor(c){if(!c)return'';return c.toLowerCase()==='aluminum'?'Silver':c;}
 // Fuzzy search: splits query into tokens, strips hyphens/dashes, each token must match at least one field
+function moneyInput(el){
+  var v=(el.value||'').replace(/[^0-9.]/g,'');
+  if(v&&v.indexOf('$')!==0) el.value='$'+v;
+  else if(!v) el.value='';
+}
+function moneyVal(el){
+  if(!el)return 0;
+  var v=(typeof el==='string'?el:el.value)||'';
+  return parseFloat(v.replace(/[^0-9.]/g,''))||0;
+}
 function fuzzyMatch(fields, query){
   var norm=function(s){return(s||'').toLowerCase().replace(/[-]/g,'');};
   var tokens=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -7846,7 +7856,7 @@ function _txInit() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deposit Amount ($)</div>
-          <input id="dep-amount" type="number" min="0" step="0.01" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="500"/>
+          <input id="dep-amount" type="text" inputmode="decimal" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="$500" oninput="moneyInput(this)"/>
         </div>
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date</div>
@@ -7860,7 +7870,7 @@ function _txInit() {
           <button id="dep-type-finance" onclick="depSetDealType('finance')" style="flex:1;padding:12px;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Finance</button>
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;" id="dep-balance-label">Remaining Balance</div>
-        <input id="dep-balance" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Remaining amount due"/>
+        <input id="dep-balance" type="text" inputmode="decimal" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="$0" oninput="moneyInput(this)"/>
       </div>
       <div style="margin-bottom:20px;">
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Withdraw Vehicle Until</div>
@@ -8686,7 +8696,7 @@ function depSetDealType(type) {
 // ── STEP 3 → STEP 4: PREVIEW ─────────────────────────────────
 
 function depositGoPreview() {
-  var get = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var get = function(id){ var el=document.getElementById(id); var v=el?el.value.trim():''; return['dep-amount','dep-balance'].indexOf(id)!==-1?v.replace(/[^0-9.]/g,''):v; };
   var fname = get('dep-fname');
   var lname = get('dep-lname');
   var year  = get('dep-year');
@@ -9100,7 +9110,7 @@ function invRenderLines(){
     return '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:12px;">'+
       '<div style="display:flex;gap:8px;align-items:center;">'+
         '<input value="'+(l.desc||'').replace(/"/g,'&quot;')+'" oninput="_invLines['+i+'].desc=this.value" placeholder="Service or part description" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;min-width:0;"/>'+
-        '<input type="number" value="'+(l.amount||'')+'" oninput="_invLines['+i+'].amount=this.value;invUpdateTotal()" placeholder="$" style="width:80px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;text-align:right;"/>'+
+        '<input type="text" inputmode="decimal" value="'+(l.amount?'$'+l.amount:'')+'" oninput="moneyInput(this);_invLines['+i+'].amount=this.value.replace(/[^0-9.]/g,\'\');invUpdateTotal()" placeholder="$" style="width:80px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;text-align:right;"/>'+
         '<button onclick="invRemoveLine('+i+')" style="background:none;border:none;color:#ff453a;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>'+
       '</div>'+
     '</div>';
@@ -9951,7 +9961,8 @@ async function runPayScanOCR(imgSrc){
     document.getElementById('pay-scan-make').value=parsed.vehicle_make||'';
     document.getElementById('pay-scan-model').value=parsed.vehicle_model||'';
     document.getElementById('pay-scan-vin').value=parsed.vehicle_vin||'';
-    document.getElementById('pay-scan-amount').value=parsed.amount||'';
+    var parsedAmt=(parsed.amount||'').replace(/[^0-9.]/g,'');
+    document.getElementById('pay-scan-amount').value=parsedAmt?'$'+parsedAmt:'';
     if(parsed.payment_method&&['cash','card','check','other'].indexOf(parsed.payment_method)!==-1){
       payMethodSelect(parsed.payment_method);
     }
@@ -9977,7 +9988,7 @@ async function payScanSave(){
   var name=document.getElementById('pay-scan-name').value.trim();
   var date=document.getElementById('pay-scan-date').value;
   var time=document.getElementById('pay-scan-time').value;
-  var amount=document.getElementById('pay-scan-amount').value.trim();
+  var amount=document.getElementById('pay-scan-amount').value.trim().replace(/[^0-9.$]/g,'');
   var year=document.getElementById('pay-scan-year').value.trim();
   var make=document.getElementById('pay-scan-make').value.trim();
   var model=document.getElementById('pay-scan-model').value.trim();
@@ -10215,7 +10226,7 @@ function dealSetType(type) {
 }
 
 function dealPickupChanged() {
-  var val = document.getElementById('deal-pickup-payment').value.trim();
+  var val = document.getElementById('deal-pickup-payment').value.replace(/[^0-9.]/g,'');
   var wrap = document.getElementById('deal-pickup-due-wrap');
   wrap.style.display = (val && parseFloat(val) > 0) ? 'block' : 'none';
 }
@@ -10240,7 +10251,7 @@ function dealRenderPayments() {
   var el = document.getElementById('deal-payments');
   el.innerHTML = _dealPayments.map(function(p, i) {
     return '<div style="display:flex;gap:8px;align-items:center;">' +
-      '<input type="number" inputmode="decimal" placeholder="$0.00" value="'+(p.amount||'')+'" oninput="dealUpdatePayment('+i+',\'amount\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>' +
+      '<input type="text" inputmode="decimal" placeholder="$0.00" value="'+(p.amount?'$'+p.amount:'')+'" oninput="moneyInput(this);dealUpdatePayment('+i+',\'amount\',this.value.replace(/[^0-9.]/g,\'\'))" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>' +
       '<select onchange="dealUpdatePayment('+i+',\'method\',this.value)" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 8px;font-size:14px;outline:none;appearance:auto;">' +
         '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>' +
         '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>' +
@@ -10268,7 +10279,7 @@ function dealGoStep3() {
     var gps = document.getElementById('deal-gps').value.trim();
     if(!gps) { alert('Please enter the GPS serial number.'); return; }
     _dealData.gpsSerial = gps;
-    var puAmt = document.getElementById('deal-pickup-payment').value.trim();
+    var puAmt = document.getElementById('deal-pickup-payment').value.replace(/[^0-9.]/g,'');
     _dealData.pickupPayment = puAmt;
     if(puAmt && parseFloat(puAmt) > 0) {
       var puDue = document.getElementById('deal-pickup-due').value;
@@ -10802,7 +10813,7 @@ async function cashPayoutsLoad(){
 
 async function cashPayoutAdd(){
   var paidTo=(document.getElementById('cp-paid-to').value||'').trim();
-  var amount=parseFloat(document.getElementById('cp-amount').value)||0;
+  var amount=moneyVal(document.getElementById('cp-amount'));
   if(!paidTo){alert('Enter who was paid.');return;}
   if(amount<=0){alert('Enter amount.');return;}
   var wk=_payWeekKey(_payCurrentWeekStart);
@@ -10958,7 +10969,7 @@ function payrollRender(who){
   html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Add Extra</div>';
   html+='<div style="display:flex;gap:8px;margin-bottom:8px;">';
   html+='<input id="pr-extra-reason" placeholder="Reason" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;"/>';
-  html+='<input id="pr-extra-amount" type="number" inputmode="decimal" placeholder="$0" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;text-align:right;"/>';
+  html+='<input id="pr-extra-amount" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;text-align:right;"/>';
   html+='</div>';
   html+='<button onclick="payrollAddExtra(\''+who+'\')" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#888;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>';
   html+='</div>';
@@ -10995,7 +11006,7 @@ function payrollAdjustCars(who,dir){
 
 function payrollAddExtra(who){
   var reason=(document.getElementById('pr-extra-reason').value||'').trim();
-  var amount=parseFloat(document.getElementById('pr-extra-amount').value)||0;
+  var amount=moneyVal(document.getElementById('pr-extra-amount'));
   if(!reason){alert('Enter a reason.');return;}
   if(amount<=0){alert('Enter an amount.');return;}
   _payrollExtras.push({reason:reason,amount:amount});
