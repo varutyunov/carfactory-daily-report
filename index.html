@@ -2438,7 +2438,7 @@ let curEmpTab='detail';
 let empActiveCat=null;
 function empOrbitGo(section){
   if(section==='inventory'){empOpenInventory();return;}
-  if(section==='deposit'){openDepositForm();return;}
+  if(section==='deposit'||section==='forms'){openFormsView();return;}
   if(section==='dealupload'){openDealForm();return;}
   empActiveCat=section;
   var labels={detail:'Detail',photos:'Photos',parts:'Parts',tasks:'Tasks',repair:'Repairs',paint:'Paint'};
@@ -2515,8 +2515,8 @@ function renderEmpHome(){
   // Inventory tile — count matches employee's location
   var myEmpLoc=me&&me.location?me.location:'DeBary';
   var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
-  // Deposit tile — always visible
-  var depositTile={id:'deposit',label:'Deposit',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
+  // Forms tile — always visible
+  var depositTile={id:'forms',label:'Forms',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
   // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory
   var visible=isWidgetOnly?[invTile]:[...tiles,invTile];
   if(!visible.length&&!hasDock){grid.style.display='none';empty.style.display='flex';}
@@ -2546,9 +2546,9 @@ function renderEmpHome(){
         '<div style="font-size:20px;line-height:1;">💵</div>' +
         '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Deal Calc</div>' +
       '</div>';
-      whtml+='<div onclick="openDepositForm()" style="'+wStyle+'background:linear-gradient(145deg,#001233,#003080,#1d4ed8);box-shadow:0 4px 18px rgba(96,165,250,0.22),0 6px 24px rgba(0,0,0,0.6);">' +
+      whtml+='<div onclick="openFormsView()" style="'+wStyle+'background:linear-gradient(145deg,#001233,#003080,#1d4ed8);box-shadow:0 4px 18px rgba(96,165,250,0.22),0 6px 24px rgba(0,0,0,0.6);">' +
         '<div style="font-size:20px;line-height:1;">📋</div>' +
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Deposit</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase;text-align:center;">Forms</div>' +
       '</div>';
       whtml+='<div onclick="openDealsView()" style="'+wStyle+'background:linear-gradient(145deg,#1a1000,#3a2800,#5a4000);box-shadow:0 4px 18px rgba(245,158,11,0.15),0 6px 24px rgba(0,0,0,0.6);">' +
         '<div style="font-size:20px;line-height:1;">📊</div>' +
