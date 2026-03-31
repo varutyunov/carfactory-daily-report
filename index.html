@@ -3686,7 +3686,7 @@ async function mgrApproveSubmitted(aid){
 }
 function mgrCatSheet(carId,cat){
   // Photos: open full photo review instead of simple sheet
-  if(cat==='photos'){mgrPhotoReview(carId);return;}
+  if(cat==='photos'){mgrPhotoReview(carId).catch(function(e){alert('Photo error: '+e.message);});return;}
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(!car) return;
   var ws=getWorkState(carId);
@@ -3720,48 +3720,44 @@ function mgrCatSheet(carId,cat){
     '</div>';
   openM('m-detail-done');
 }
-// Owner photo review — loads photos, shows grid, approve/reject/download
+// Owner photo review — uses openPhotoGallery then adds review buttons
 async function mgrPhotoReview(carId){
-  var car=S.inventory.find(function(c){return c.id===carId;});
-  if(!car) return;
-  var ws=getWorkState(carId);
-  var cd=(ws.categories&&ws.categories.photos)||{};
-  var isDone=cd.done||false;
-  var needsReview=isDone&&!cd.reviewed;
-  _pgCarId=carId; _pgCategory='photos';
-  document.getElementById('pg-title').textContent=car.name;
-  // Hide upload button (owner reviews, doesn't upload)
-  var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='none';
-  // Show remove button
-  var rmBtn=document.getElementById('pg-remove-btn');if(rmBtn)rmBtn.style.display='block';
-  // Build action buttons based on state
-  var actionsEl=document.getElementById('pg-review-actions');
-  if(actionsEl){
-    if(needsReview){
-      actionsEl.innerHTML=
-        '<button onclick="mgrPhotoApprove('+carId+')" style="flex:1;padding:14px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.35);border-radius:12px;color:#30d158;font-size:15px;font-weight:700;cursor:pointer;">✓ Approve</button>'+
-        '<button onclick="mgrPhotoReject('+carId+')" style="flex:1;padding:14px;background:rgba(255,69,58,.08);border:1px solid rgba(255,69,58,.25);border-radius:12px;color:#ff453a;font-size:15px;font-weight:700;cursor:pointer;">↩ Send Back</button>';
-      actionsEl.style.display='flex';
-    } else if(isDone){
-      actionsEl.innerHTML=
-        '<button onclick="mgrPhotoApprove('+carId+')" style="flex:1;padding:14px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.35);border-radius:12px;color:#30d158;font-size:15px;font-weight:700;cursor:pointer;">✓ Approve</button>';
-      actionsEl.style.display='flex';
-    } else {
-      actionsEl.innerHTML='';
-      actionsEl.style.display='none';
+  try{
+    var car=S.inventory.find(function(c){return c.id===carId;});
+    if(!car) return;
+    var ws=getWorkState(carId);
+    var cd=(ws.categories&&ws.categories.photos)||{};
+    var isDone=cd.done||false;
+    var needsReview=isDone&&!cd.reviewed;
+    // Use the proven openPhotoGallery path first
+    await openPhotoGallery(carId,'photos','📷 '+car.name);
+    // Now customize for owner review: hide upload, show review buttons
+    var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='none';
+    var rmBtn=document.getElementById('pg-remove-btn');if(rmBtn)rmBtn.style.display='block';
+    // Set remove handler
+    var removeEl=document.getElementById('pg-remove-btn');
+    if(removeEl) removeEl.onclick=function(){closeM('m-photo-gallery');removeCatFromProgress(carId,'photos');};
+    // Build action buttons based on state
+    var actionsEl=document.getElementById('pg-review-actions');
+    if(actionsEl){
+      if(needsReview){
+        actionsEl.innerHTML=
+          '<button onclick="mgrPhotoApprove('+carId+')" style="flex:1;padding:14px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.35);border-radius:12px;color:#30d158;font-size:15px;font-weight:700;cursor:pointer;">✓ Approve</button>'+
+          '<button onclick="mgrPhotoReject('+carId+')" style="flex:1;padding:14px;background:rgba(255,69,58,.08);border:1px solid rgba(255,69,58,.25);border-radius:12px;color:#ff453a;font-size:15px;font-weight:700;cursor:pointer;">↩ Send Back</button>';
+        actionsEl.style.display='flex';
+      } else if(isDone){
+        actionsEl.innerHTML=
+          '<button onclick="mgrPhotoApprove('+carId+')" style="flex:1;padding:14px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.35);border-radius:12px;color:#30d158;font-size:15px;font-weight:700;cursor:pointer;">✓ Approve</button>';
+        actionsEl.style.display='flex';
+      } else {
+        actionsEl.innerHTML='';
+        actionsEl.style.display='none';
+      }
     }
-  }
-  // Show remove button
-  var removeEl=document.getElementById('pg-remove-btn');
-  if(removeEl) removeEl.onclick=function(){closeM('m-photo-gallery');removeCatFromProgress(carId,'photos');};
-  document.getElementById('pg-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#555;font-size:13px;">Loading...</div>';
-  document.getElementById('pg-uploading').style.display='none';
-  openM('m-photo-gallery');
-  _pgPhotos=await loadCarPhotos(carId,'photos');
-  pgRenderGrid();
-  // Show download all button if photos exist
-  var dlEl=document.getElementById('pg-download-all');
-  if(dlEl) dlEl.style.display=_pgPhotos.length?'flex':'none';
+    // Show download all if photos exist
+    var dlEl=document.getElementById('pg-download-all');
+    if(dlEl) dlEl.style.display=_pgPhotos.length?'flex':'none';
+  }catch(e){console.error('mgrPhotoReview error:',e);alert('Error opening photos: '+e.message);}
 }
 async function mgrPhotoApprove(carId){
   closeM('m-photo-gallery');
