@@ -3325,7 +3325,7 @@ function renderMgrDetail(){
   var el=document.getElementById('mgr-detail-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.detail&&ws.categories.detail.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">✨</div><div class="et">No vehicles in Detail queue</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'detail','mgrCatSheet('+car.id+',\\\'detail\\\')');}).join('')+'</div>';
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'detail',"mgrCatSheet("+car.id+",'detail')");}).join('')+'</div>';
   applyPexels(cars);
 }
 async function approveDetail(carId){
@@ -3493,7 +3493,7 @@ function renderMgrPhotos(){
   var el=document.getElementById('mgr-photos-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'photos','mgrCatSheet('+car.id+',\\\'photos\\\')');}).join('')+'</div>';
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'photos',"mgrCatSheet("+car.id+",'photos')");}).join('')+'</div>';
   applyPexels(cars);
 }
 async function approvePhotos(carId){
@@ -6171,7 +6171,7 @@ function renderMgrPaint(){
   if(!el) return;
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.paint&&ws.categories.paint.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🎨</div><div class="et">No vehicles in Paint queue</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'paint','mgrCatSheet('+car.id+',\\\'paint\\\')');}).join('')+'</div>';
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'paint',"mgrCatSheet("+car.id+",'paint')");}).join('')+'</div>';
   applyPexels(cars);
 }
 
