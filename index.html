@@ -8022,6 +8022,10 @@ function _txInit() {
           </div>
           <button onclick="invClearVehicle()" style="background:none;border:none;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;padding:4px 8px;">Change</button>
         </div>
+        <div style="margin-top:10px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Mileage</div>
+          <input id="inv-sel-mileage" type="text" inputmode="numeric" placeholder="Enter mileage" oninput="var el=document.getElementById('inv-mileage');if(el)el.value=this.value;" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;"/>
+        </div>
       </div>
       <div id="inv-car-manual-toggle" style="margin-bottom:10px;">
         <button onclick="invShowManualVehicle()" style="background:none;border:none;color:#f59e0b;font-size:13px;font-weight:600;cursor:pointer;padding:0;">+ Enter vehicle manually</button>
@@ -9027,7 +9031,8 @@ function invSelectVehicle(idx,q){
   // Fill hidden fields
   var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   set('inv-year',v.year);set('inv-make',v.make);set('inv-model',v.model);
-  set('inv-vin',v.vin);set('inv-mileage',v.mileage);
+  set('inv-vin',v.vin);set('inv-mileage',v.mileage||'');
+  var selMil=document.getElementById('inv-sel-mileage');if(selMil)selMil.value=v.mileage||'';
   // Auto-fill customer from deal if customer fields are empty
   if(v.customer&&!document.getElementById('inv-fname').value){
     var cParts=v.customer.split(' ');
@@ -9048,6 +9053,7 @@ function invSelectVehicle(idx,q){
 
 function invClearVehicle(){
   ['inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var selMil=document.getElementById('inv-sel-mileage');if(selMil)selMil.value='';
   document.getElementById('inv-car-selected').style.display='none';
   document.getElementById('inv-car-search').style.display='';
   document.getElementById('inv-car-search').value='';
