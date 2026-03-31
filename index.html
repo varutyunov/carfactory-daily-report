@@ -1817,6 +1817,17 @@ const CAR_SVG={
 '_sport':_S('M12 38h6a6 6 0 0112 0h52a6 6 0 0112 0h6c3 0 4-2 4-4v-3l-8-5-14-13c-3-2-6-3-9-3H40c-4 0-7 1-9 3L18 24l-10 5v5c0 2 1 4 4 4zM24 38a4 4 0 108 0 4 4 0 00-8 0zM88 38a4 4 0 108 0 4 4 0 00-8 0z')
 };
 function fixColor(c){if(!c)return'';return c.toLowerCase()==='aluminum'?'Silver':c;}
+// Fuzzy search: splits query into tokens, strips hyphens/dashes, each token must match at least one field
+function fuzzyMatch(fields, query){
+  var norm=function(s){return(s||'').toLowerCase().replace(/[-]/g,'');};
+  var tokens=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!tokens.length) return true;
+  var nFields=fields.map(norm);
+  return tokens.every(function(tok){
+    var nt=tok.replace(/[-]/g,'');
+    return nFields.some(function(f){return f.indexOf(nt)!==-1;});
+  });
+}
 function carImage(n){
   var cat=carCategory(n);
   var src=CAT_PHOTO[cat]||'stock-sedan.png';
@@ -2940,7 +2951,7 @@ async function quickAddToDetail(){
 }
 function renderInv(){
   var filtered=S.inventory.filter(function(c){
-    if(invFilter&&!(c.name+c.stock).toLowerCase().includes(invFilter)) return false;
+    if(invFilter&&!fuzzyMatch([c.name,c.stock||'',c.vin||'',c.color||''],invFilter)) return false;
     return true;
   });
   // Sort by stock number descending (highest = newest purchase)
@@ -3836,7 +3847,7 @@ function renderCatSearchResults(cat){
     var ws=getWorkState(car.id);
     var already=ws.categories&&ws.categories[cat]&&(ws.categories[cat].sectionPool||ws.categories[cat].confirmed);
     if(already) return false;
-    return (car.name+(car.stock||'')+(car.color||'')).toLowerCase().includes(q);
+    return fuzzyMatch([car.name,car.stock||'',car.vin||'',car.color||''],q);
   }).slice(0,6);
   if(!matches.length){el.innerHTML='<div style="font-size:12px;color:#444;padding:6px 4px;">No matches</div>';return;}
   var o='<div class="car-grid" style="margin-top:10px;">';
@@ -7082,7 +7093,7 @@ function empRenderInv(){
   var myLoc=me&&me.location?me.location:'DeBary';
   var items=(S.inventory||[]).filter(function(c){
     if((c.location||'DeBary').toLowerCase()!==myLoc.toLowerCase()) return false;
-    if(filter&&!(c.name+' '+c.stock+' '+(c.vin||'')+' '+(c.color||'')).toLowerCase().includes(filter)) return false;
+    if(filter&&!fuzzyMatch([c.name,c.stock||'',c.vin||'',c.color||''],filter)) return false;
     return true;
   });
   if(_empInvRecent){
@@ -7979,10 +7990,7 @@ function formsFilter(q) {
   if(!q) { _formsFiltered = _formsData; }
   else {
     _formsFiltered = _formsData.filter(function(d) {
-      return (d.customer_name||'').toLowerCase().indexOf(q) !== -1 ||
-             (d.vehicle_desc||'').toLowerCase().indexOf(q) !== -1 ||
-             (d.stock||'').toLowerCase().indexOf(q) !== -1 ||
-             (d.vin||'').toLowerCase().indexOf(q) !== -1;
+      return fuzzyMatch([d.customer_name||'',d.vehicle_desc||'',d.stock||'',d.vin||''],q);
     });
   }
   renderForms();
@@ -9536,7 +9544,7 @@ function dealRenderInv() {
   var myLoc = _dealData && _dealData.dealLocation ? _dealData.dealLocation : (me && me.location ? me.location : 'DeBary');
   var cars = (S.inventory || []).filter(function(c) {
     if((c.location || 'DeBary').toLowerCase() !== myLoc.toLowerCase()) return false;
-    if(filter && !(c.name + ' ' + (c.stock||'') + ' ' + (c.vin||'')).toLowerCase().includes(filter)) return false;
+    if(filter && !fuzzyMatch([c.name,c.stock||'',c.vin||'',c.color||''],filter)) return false;
     return true;
   }).sort(function(a,b){ return b.id - a.id; });
   if(!cars.length) { el.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No vehicles found</div>'; return; }
@@ -9941,10 +9949,7 @@ function dealsFilter(q) {
   if(!q) { _dealsFiltered = _dealsData; }
   else {
     _dealsFiltered = _dealsData.filter(function(d) {
-      return (d.customer_name||'').toLowerCase().includes(q) ||
-             (d.vehicle_desc||'').toLowerCase().includes(q) ||
-             (d.stock||'').toLowerCase().includes(q) ||
-             (d.created_by||'').toLowerCase().includes(q);
+      return fuzzyMatch([d.customer_name||'',d.vehicle_desc||'',d.stock||'',d.created_by||''],q);
     });
   }
   renderDeals();
