@@ -3452,28 +3452,36 @@ function renderPhotosQueue(){
   grid.innerHTML=o;
 }
 var _photoSheetCarId=null;
-function openPhotoSheet(carId){
+async function openPhotoSheet(carId){
   _photoSheetCarId=carId;
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(!car) return;
   var ws=getWorkState(carId);
   var done=ws.categories&&ws.categories.photos&&ws.categories.photos.done;
-  var sheet=document.getElementById('photo-sheet');
-  document.getElementById('photo-sheet-title').textContent=car.name;
-  var doneBtn=document.getElementById('photo-sheet-done-btn');
-  doneBtn.textContent=done?'✓ Mark Undone':'✓ Mark Done';
-  doneBtn.style.background=done?'#1a2a1a':'#166534';
-  doneBtn.style.color=done?'#4ade80':'#fff';
-  sheet.style.display='flex';
+  await openPhotoGallery(carId,'photos','📷 '+car.name);
+  // Show Mark Done button for employee photo queue
+  var actionsEl=document.getElementById('pg-review-actions');
+  if(actionsEl){
+    actionsEl.innerHTML=
+      '<button onclick="pgPhotoSheetDone('+carId+')" style="flex:1;padding:14px;background:'+(done?'rgba(48,209,88,.08)':'rgba(48,209,88,.12)')+';border:1px solid rgba(48,209,88,.35);border-radius:14px;color:#30d158;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.2px;">'+(done?'✓ Marked Done':'✓ Mark Done')+'</button>';
+    actionsEl.style.display='flex';
+  }
 }
 function closePhotoSheet(){
-  document.getElementById('photo-sheet').style.display='none';
+  closeM('m-photo-gallery');
   _photoSheetCarId=null;
+}
+async function pgPhotoSheetDone(carId){
+  await markPhotosDone(carId);
+  closeM('m-photo-gallery');
+  _photoSheetCarId=null;
+  renderPhotosQueue();
 }
 async function photoSheetMarkDone(){
   if(!_photoSheetCarId) return;
   await markPhotosDone(_photoSheetCarId);
-  closePhotoSheet();
+  closeM('m-photo-gallery');
+  _photoSheetCarId=null;
   renderPhotosQueue();
 }
 async function queuePhotoUpload(e, carId){
