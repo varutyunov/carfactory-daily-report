@@ -3745,8 +3745,7 @@ async function mgrPhotoReview(carId){
     var needsReview=isDone&&!cd.reviewed;
     // Use the proven openPhotoGallery path first
     await openPhotoGallery(carId,'photos','📷 '+car.name);
-    // Now customize for owner review: hide upload, show review buttons
-    var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='none';
+    // Now customize for owner review: keep upload visible (owners can add photos too), show review buttons
     var rmBtn=document.getElementById('pg-remove-btn');if(rmBtn)rmBtn.style.display='block';
     // Set remove handler
     var removeEl=document.getElementById('pg-remove-btn');
