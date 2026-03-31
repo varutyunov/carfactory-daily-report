@@ -953,11 +953,17 @@ canvas{display:none;}
 
 <!-- FORMS VIEW OVERLAY -->
 <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;display:flex;flex-direction:column;">
+    <div style="height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+      <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+      <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
+    </div>
+    <div id="forms-inner-tabs" style="display:flex;gap:0;padding:0 16px 10px;">
+      <button onclick="formsInnerTab('deposits')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>
+      <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
+    </div>
   </div>
-  <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+  <div id="forms-body" style="padding-top:100px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;">
       <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
       <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;">
@@ -7925,6 +7931,151 @@ function _txInit() {
   </div><!-- /deposit-body -->
 </div><!-- /deposit-overlay -->
 
+<!-- MECHANIC INVOICE OVERLAY -->
+<div id="inv-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeInvoiceForm()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span id="inv-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">MECHANIC INVOICE</span>
+  </div>
+  <div id="inv-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+
+    <!-- STEP 1: CUSTOMER INFO -->
+    <div id="inv-step1" style="padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 3 — Customer & Vehicle</div>
+      <div style="font-size:14px;color:#666;margin-bottom:20px;">Enter customer and vehicle information</div>
+
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">First Name</div>
+          <input id="inv-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="First"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Last Name</div>
+          <input id="inv-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Last"/>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Phone</div>
+        <input id="inv-phone" type="tel" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="(555) 123-4567"/>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Year</div>
+          <input id="inv-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="2024"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Make</div>
+          <input id="inv-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Toyota"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Model</div>
+          <input id="inv-model" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Camry"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">VIN</div>
+          <input id="inv-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Mileage</div>
+          <input id="inv-mileage" type="number" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+        </div>
+      </div>
+
+      <button onclick="invGoStep2()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Add Services</button>
+    </div>
+
+    <!-- STEP 2: SERVICES / LINE ITEMS -->
+    <div id="inv-step2" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 2 of 3 — Services & Parts</div>
+      <div style="font-size:14px;color:#666;margin-bottom:16px;">Add each service or part as a line item</div>
+
+      <div id="inv-lines" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
+
+      <button onclick="invAddLine()" style="width:100%;padding:13px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:20px;">+ Add Line Item</button>
+
+      <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:14px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;">Total</span>
+          <span id="inv-total" style="font-size:22px;font-weight:900;color:#fff;">$0.00</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="invSetPayMethod('cash')" id="inv-pay-cash" style="flex:1;min-width:70px;padding:11px;background:#f59e0b;color:#000;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Cash</button>
+          <button onclick="invSetPayMethod('card')" id="inv-pay-card" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Card</button>
+          <button onclick="invSetPayMethod('check')" id="inv-pay-check" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Check</button>
+          <button onclick="invSetPayMethod('zelle')" id="inv-pay-zelle" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Zelle</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Notes</div>
+        <textarea id="inv-notes" rows="3" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;" placeholder="Additional notes (optional)"></textarea>
+      </div>
+
+      <button onclick="invGoPreview()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Preview Invoice</button>
+    </div>
+
+    <!-- STEP 3: PREVIEW & SAVE -->
+    <div id="inv-step3" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 3 — Preview & Save</div>
+
+      <div id="inv-print-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:14px;line-height:1.28;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
+        <div style="padding:0.18in 0.42in 0.15in;">
+          <div style="text-align:center;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #000;">
+            <div style="font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:2px;">Car Factory Mobile Mechanic Works</div>
+            <div id="inv-pf-address" style="font-size:12px;color:#555;margin-top:2px;"></div>
+          </div>
+          <div style="text-align:center;margin:8px 0;">
+            <div style="font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Mechanic Invoice</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;">
+            <span>Date: <span id="inv-pf-date" style="font-weight:600;border-bottom:1px solid #000;padding:0 12px;"></span></span>
+            <span>Invoice #: <span id="inv-pf-num" style="font-weight:600;"></span></span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;font-size:13px;">
+            <div><div style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;color:#555;margin-bottom:4px;">Customer</div><div id="inv-pf-customer"></div><div id="inv-pf-phone" style="color:#555;"></div></div>
+            <div><div style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;color:#555;margin-bottom:4px;">Vehicle</div><div id="inv-pf-vehicle"></div><div id="inv-pf-vin" style="color:#555;font-size:11px;"></div></div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+            <thead><tr style="border-bottom:2px solid #000;">
+              <th style="text-align:left;padding:6px 4px;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Description</th>
+              <th style="text-align:right;padding:6px 4px;font-size:12px;text-transform:uppercase;letter-spacing:1px;width:80px;">Amount</th>
+            </tr></thead>
+            <tbody id="inv-pf-lines"></tbody>
+            <tfoot><tr style="border-top:2px solid #000;">
+              <td style="padding:8px 4px;font-weight:700;font-size:15px;">TOTAL</td>
+              <td id="inv-pf-total" style="text-align:right;padding:8px 4px;font-weight:700;font-size:15px;"></td>
+            </tr></tfoot>
+          </table>
+          <div style="font-size:12px;color:#555;margin-bottom:8px;">Payment Method: <span id="inv-pf-method" style="font-weight:600;color:#000;"></span></div>
+          <div id="inv-pf-notes" style="font-size:12px;color:#555;margin-bottom:12px;"></div>
+          <div style="margin-top:20px;max-width:200px;">
+            <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Customer</div>
+            <div style="border-bottom:1px solid #000;height:22px;margin-bottom:2px;"></div>
+            <div style="font-size:11px;color:#666;">Signature</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
+        <button onclick="invPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Invoice</button>
+        <button id="inv-save-btn" onclick="invSave()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Save Invoice</button>
+        <div id="inv-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
+        <button onclick="closeInvoiceForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /inv-overlay -->
+
 <style>
 @media print {
   body, html { background: white !important; height: auto !important; }
@@ -7986,7 +8137,9 @@ function openFormsView() {
     var countEl = document.getElementById('tools-forms-count');
     if(countEl) countEl.style.display = 'none';
   }).catch(function(){});
-  loadForms();
+  // Show inner tabs and initialize to deposits
+  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
+  formsInnerTab('deposits');
 }
 
 var _formsViewingDetail = false;
@@ -7995,9 +8148,10 @@ function formsBack() {
   if(_formsViewingDetail) {
     _formsViewingDetail = false;
     document.getElementById('forms-header-title').textContent = 'FORMS';
+    var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
     var body = document.getElementById('forms-body');
     body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
-    loadForms();
+    formsInnerTab(_formsActiveTab||'deposits');
   } else {
     closeFormsView();
   }
@@ -8034,8 +8188,9 @@ function formsFilter(q) {
 
 function renderForms() {
   var list = document.getElementById('forms-list');
+  var newBtn='<button onclick="openDepositForm()" style="width:100%;padding:16px;background:#4ade80;color:#000;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Deposit</button>';
   if(!_formsFiltered.length) {
-    list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No forms found</div>';
+    list.innerHTML = newBtn+'<div style="text-align:center;color:#555;padding:30px 0;">No deposits yet</div>';
     return;
   }
 
@@ -8047,7 +8202,7 @@ function renderForms() {
     deals[key].push(d);
   });
 
-  var html = '';
+  var html = newBtn;
   Object.keys(deals).forEach(function(key) {
     var group = deals[key];
     var first = group[0];
@@ -8082,6 +8237,7 @@ function renderForms() {
 
 function openFormDetail(id) {
   _formsViewingDetail = true;
+  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
 
@@ -8627,6 +8783,232 @@ function depositEmail() {
     });
   } catch(e) {
     alert('Unexpected error: ' + (e.message||e));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MECHANIC INVOICE LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _invData = {};
+var _invLines = [];
+var _invPayMethod = 'cash';
+var _formsActiveTab = 'deposits';
+var _invData_list = [];
+var _invFiltered = [];
+
+function formsInnerTab(tab){
+  _formsActiveTab = tab;
+  ['deposits','invoices'].forEach(function(t){
+    var btn=document.getElementById('forms-tab-'+t);
+    if(btn){btn.style.background=t===tab?'#fff':'#111';btn.style.color=t===tab?'#000':'#666';}
+  });
+  if(tab==='deposits'){
+    document.getElementById('forms-search').placeholder='Search by name, vehicle, stock...';
+    document.getElementById('forms-search').oninput=function(){formsFilter(this.value);};
+    document.getElementById('forms-search').value='';
+    loadForms();
+  } else {
+    document.getElementById('forms-search').placeholder='Search invoices...';
+    document.getElementById('forms-search').oninput=function(){invFilterList(this.value);};
+    document.getElementById('forms-search').value='';
+    loadInvoices();
+  }
+}
+
+async function loadInvoices(){
+  var list=document.getElementById('forms-list');
+  list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  try{
+    _invData_list=await sbGet('invoices','order=created_at.desc');
+    _invFiltered=_invData_list;
+    renderInvoicesList();
+  }catch(e){
+    list.innerHTML='<div style="text-align:center;color:#ef4444;padding:40px 0;">Error: '+(e.message||e)+'</div>';
+  }
+}
+
+function invFilterList(q){
+  q=(q||'').toLowerCase().trim();
+  if(!q){_invFiltered=_invData_list;}
+  else{_invFiltered=_invData_list.filter(function(d){return fuzzyMatch([d.customer_name||'',d.vehicle_desc||'',d.invoice_num||''],q);});}
+  renderInvoicesList();
+}
+
+function renderInvoicesList(){
+  var list=document.getElementById('forms-list');
+  // New invoice button
+  var newBtn='<button onclick="openInvoiceForm()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Invoice</button>';
+  if(!_invFiltered.length){
+    list.innerHTML=newBtn+'<div style="text-align:center;color:#555;padding:30px 0;">No invoices yet</div>';
+    return;
+  }
+  var html=newBtn;
+  _invFiltered.forEach(function(inv){
+    var dt=inv.created_at?new Date(inv.created_at):null;
+    var dateStr=dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    var total=inv.total?'$'+parseFloat(inv.total).toLocaleString('en-US',{minimumFractionDigits:2}):'';
+    html+='<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(inv.customer_name||'Unknown')+'</div>'+
+          '<div style="font-size:12px;color:#555;margin-top:2px;">'+(inv.vehicle_desc||'')+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0;margin-left:12px;">'+
+          '<div style="font-size:15px;font-weight:700;color:#f59e0b;">'+total+'</div>'+
+          '<div style="font-size:11px;color:#444;margin-top:2px;">'+dateStr+'</div>'+
+        '</div>'+
+      '</div>'+
+      (inv.invoice_num?'<div style="font-size:11px;color:#333;margin-top:4px;">#'+inv.invoice_num+'</div>':'')+
+    '</div>';
+  });
+  list.innerHTML=html;
+}
+
+function openInvoiceForm(){
+  _invData={};_invLines=[];_invPayMethod='cash';
+  document.getElementById('inv-overlay').style.display='flex';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
+  invShowStep(1);
+  ['inv-fname','inv-lname','inv-phone','inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  var notes=document.getElementById('inv-notes');if(notes)notes.value='';
+  invSetPayMethod('cash');
+  invRenderLines();
+}
+
+function closeInvoiceForm(){
+  var step3=document.getElementById('inv-step3');
+  var btn=document.getElementById('inv-save-btn');
+  if(step3&&step3.style.display!=='none'&&btn&&btn.textContent!=='Saved'){
+    if(!confirm('Invoice not saved. Exit anyway?'))return;
+  }
+  document.getElementById('inv-overlay').style.display='none';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
+}
+
+function invShowStep(n){
+  [1,2,3].forEach(function(i){var el=document.getElementById('inv-step'+i);if(el)el.style.display=i===n?'block':'none';});
+  var titles={1:'CUSTOMER & VEHICLE',2:'SERVICES & PARTS',3:'PREVIEW & SAVE'};
+  var t=document.getElementById('inv-bar-title');if(t)t.textContent=titles[n]||'MECHANIC INVOICE';
+}
+
+function invGoStep2(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+  if(!g('inv-fname')||!g('inv-lname')){alert('Please enter customer name.');return;}
+  if(!g('inv-year')||!g('inv-make')||!g('inv-model')){alert('Please enter vehicle info.');return;}
+  _invData.fname=g('inv-fname');_invData.lname=g('inv-lname');_invData.phone=g('inv-phone');
+  _invData.year=g('inv-year');_invData.make=g('inv-make');_invData.model=g('inv-model');
+  _invData.vin=g('inv-vin');_invData.mileage=g('inv-mileage');
+  if(!_invLines.length) invAddLine();
+  invShowStep(2);
+}
+
+function invAddLine(){
+  _invLines.push({desc:'',amount:''});
+  invRenderLines();
+}
+
+function invRemoveLine(idx){
+  _invLines.splice(idx,1);
+  invRenderLines();
+}
+
+function invRenderLines(){
+  var el=document.getElementById('inv-lines');if(!el)return;
+  if(!_invLines.length){el.innerHTML='<div style="text-align:center;color:#444;padding:10px;font-size:13px;">No line items yet</div>';invUpdateTotal();return;}
+  el.innerHTML=_invLines.map(function(l,i){
+    return '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:12px;">'+
+      '<div style="display:flex;gap:8px;align-items:center;">'+
+        '<input value="'+(l.desc||'').replace(/"/g,'&quot;')+'" oninput="_invLines['+i+'].desc=this.value" placeholder="Service or part description" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;min-width:0;"/>'+
+        '<input type="number" value="'+(l.amount||'')+'" oninput="_invLines['+i+'].amount=this.value;invUpdateTotal()" placeholder="$" style="width:80px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;text-align:right;"/>'+
+        '<button onclick="invRemoveLine('+i+')" style="background:none;border:none;color:#ff453a;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  invUpdateTotal();
+}
+
+function invUpdateTotal(){
+  var sum=0;_invLines.forEach(function(l){sum+=parseFloat(l.amount)||0;});
+  var el=document.getElementById('inv-total');if(el)el.textContent='$'+sum.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function invSetPayMethod(m){
+  _invPayMethod=m;
+  ['cash','card','check','zelle'].forEach(function(t){
+    var btn=document.getElementById('inv-pay-'+t);
+    if(btn){btn.style.background=t===m?'#f59e0b':'#111';btn.style.color=t===m?'#000':'#666';btn.style.border=t===m?'none':'1px solid #1e1e1e';}
+  });
+}
+
+function invGoPreview(){
+  var validLines=_invLines.filter(function(l){return l.desc&&l.amount;});
+  if(!validLines.length){alert('Please add at least one line item with description and amount.');return;}
+  var sum=0;validLines.forEach(function(l){sum+=parseFloat(l.amount)||0;});
+  var fullName=[_invData.fname,_invData.lname].filter(Boolean).join(' ');
+  var vehicle=[_invData.year,_invData.make,_invData.model].filter(Boolean).join(' ');
+  var invNum='INV-'+Date.now().toString(36).toUpperCase();
+  var now=new Date();
+  var dateStr=(now.getMonth()+1)+'/'+now.getDate()+'/'+now.getFullYear();
+
+  // Location
+  var isDeLand=me&&me.location==='DeLand';
+  var addr=document.getElementById('inv-pf-address');
+  if(addr)addr.innerHTML=isDeLand?'1117 N Woodland Blvd, DeLand, FL 32720':'100 S Charles Richard Beall Blvd, DeBary, FL 32713';
+
+  var el;
+  el=document.getElementById('inv-pf-date');if(el)el.textContent=dateStr;
+  el=document.getElementById('inv-pf-num');if(el)el.textContent=invNum;
+  el=document.getElementById('inv-pf-customer');if(el)el.textContent=fullName;
+  el=document.getElementById('inv-pf-phone');if(el)el.textContent=_invData.phone||'';
+  el=document.getElementById('inv-pf-vehicle');if(el)el.textContent=vehicle+(_invData.mileage?' · '+Number(_invData.mileage).toLocaleString()+' mi':'');
+  el=document.getElementById('inv-pf-vin');if(el)el.textContent=_invData.vin?'VIN: '+_invData.vin:'';
+  el=document.getElementById('inv-pf-method');if(el)el.textContent=_invPayMethod.charAt(0).toUpperCase()+_invPayMethod.slice(1);
+  var notesEl=document.getElementById('inv-pf-notes');
+  var notesVal=(document.getElementById('inv-notes')||{}).value||'';
+  if(notesEl)notesEl.textContent=notesVal?'Notes: '+notesVal:'';
+
+  // Line items table
+  var tbody=document.getElementById('inv-pf-lines');
+  if(tbody) tbody.innerHTML=validLines.map(function(l){
+    return '<tr style="border-bottom:1px solid #ddd;"><td style="padding:6px 4px;">'+l.desc+'</td><td style="text-align:right;padding:6px 4px;">$'+parseFloat(l.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>';
+  }).join('');
+  el=document.getElementById('inv-pf-total');if(el)el.textContent='$'+sum.toLocaleString('en-US',{minimumFractionDigits:2});
+
+  _invData.preview={fullName:fullName,vehicle:vehicle,vin:_invData.vin,mileage:_invData.mileage,lines:validLines,total:sum,method:_invPayMethod,notes:notesVal,invoiceNum:invNum,date:dateStr};
+  invShowStep(3);
+}
+
+function invPrint(){window.print();}
+
+async function invSave(){
+  var btn=document.getElementById('inv-save-btn');
+  var status=document.getElementById('inv-save-status');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;}
+  try{
+    var p=_invData.preview||{};
+    var record={
+      customer_name:p.fullName||'',
+      vehicle_desc:p.vehicle||'',
+      vin:_invData.vin||'',
+      total:p.total||0,
+      payment_method:p.method||'cash',
+      notes:p.notes||'',
+      invoice_num:p.invoiceNum||'',
+      lines:JSON.stringify(p.lines||[]),
+      created_by:(me&&me.name)||'',
+      location:(me&&me.location)||'DeBary',
+      created_at:new Date().toISOString()
+    };
+    await sbPost('invoices',record);
+    if(status)status.innerHTML='<span style="color:#4ade80;font-weight:600;">Invoice saved!</span>';
+    if(btn){btn.textContent='Saved';btn.style.background='#166534';btn.style.color='#fff';}
+  }catch(e){
+    console.error('Invoice save error:',e);
+    if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
+    if(btn){btn.textContent='Save Invoice';btn.disabled=false;}
   }
 }
 
