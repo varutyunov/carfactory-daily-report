@@ -1332,20 +1332,32 @@ canvas{display:none;}
 
 <!-- CASH PAYOUTS SHEET -->
 <div id="cash-payouts-sheet" onclick="cashPayoutsClose()" style="display:none;position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.7);">
-  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:82vh;display:flex;flex-direction:column;">
+  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:88vh;display:flex;flex-direction:column;">
     <div style="padding:12px 16px 0;flex-shrink:0;">
       <div style="text-align:center;margin-bottom:10px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <div id="cp-header" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
         <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;">Cash Paid Out</div>
         <button onclick="cashPayoutsClose()" style="background:rgba(255,255,255,.06);border:1px solid #1e1e1e;color:#666;font-size:16px;cursor:pointer;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>
       </div>
-      <!-- Add payout form -->
-      <div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:14px;">
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <input id="cp-paid-to" placeholder="Paid to (name)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;"/>
-          <input id="cp-amount" type="number" inputmode="decimal" placeholder="$0" style="width:100px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;text-align:right;"/>
+      <!-- Main payout view -->
+      <div id="cp-main-view">
+        <!-- Add payout form -->
+        <div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="cp-paid-to" placeholder="Paid to (name)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;"/>
+            <input id="cp-amount" type="number" inputmode="decimal" placeholder="$0" style="width:100px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;text-align:right;"/>
+          </div>
+          <button onclick="cashPayoutAdd()" style="width:100%;padding:12px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:10px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payout</button>
         </div>
-        <button onclick="cashPayoutAdd()" style="width:100%;padding:12px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:10px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payout</button>
+        <!-- Payroll buttons -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button onclick="payrollOpen('ricky')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a2e,#2d1050);border:1px solid rgba(167,139,250,.3);border-radius:12px;color:#a78bfa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Ricky Payroll</button>
+          <button onclick="payrollOpen('scott')" style="flex:1;padding:12px;background:linear-gradient(145deg,#0a1628,#122a5c);border:1px solid rgba(96,165,250,.3);border-radius:12px;color:#60a5fa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Scott Payroll</button>
+        </div>
+      </div>
+      <!-- Payroll calculator view (hidden by default) -->
+      <div id="cp-payroll-view" style="display:none;">
+        <div id="cp-payroll-content"></div>
       </div>
     </div>
     <div id="cash-payouts-list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 44px;flex:1;display:flex;flex-direction:column;gap:6px;"></div>
@@ -10881,6 +10893,202 @@ function _cashPayoutsRenderInline(){
   });
   html+='<div style="display:flex;justify-content:flex-end;padding:4px 0 8px;"><span style="font-size:13px;font-weight:700;color:#ef4444;">Total: -'+fmt(total)+'</span></div>';
   el.innerHTML=html;
+}
+
+// === PAYROLL CALCULATOR ===
+var _payrollExtras=[];
+
+function payrollOpen(who){
+  _payrollExtras=[];
+  document.getElementById('cp-main-view').style.display='none';
+  document.getElementById('cash-payouts-list').style.display='none';
+  document.getElementById('cp-payroll-view').style.display='block';
+  payrollRender(who);
+}
+
+function payrollBack(){
+  document.getElementById('cp-payroll-view').style.display='none';
+  document.getElementById('cp-main-view').style.display='block';
+  document.getElementById('cash-payouts-list').style.display='flex';
+}
+
+function payrollRender(who){
+  var content=document.getElementById('cp-payroll-content');
+  var isRicky=who==='ricky';
+  var name=isRicky?'Ricky':'Scott';
+  var dayRate=isRicky?170:125;
+  var color=isRicky?'#a78bfa':'#60a5fa';
+  var bg=isRicky?'rgba(167,139,250,.1)':'rgba(96,165,250,.1)';
+  var border=isRicky?'rgba(167,139,250,.2)':'rgba(96,165,250,.2)';
+
+  var html='<div style="margin-bottom:14px;">';
+  // Back button + title
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">';
+  html+='<button onclick="payrollBack()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 8px 4px 0;-webkit-tap-highlight-color:transparent;">&#8592;</button>';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:'+color+';letter-spacing:2px;text-transform:uppercase;">'+name+' Payroll</div>';
+  html+='</div>';
+
+  // Days worked
+  html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
+  html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Days Worked</div>';
+  html+='<div style="display:flex;align-items:center;gap:12px;">';
+  html+='<button onclick="payrollAdjustDays(\''+who+'\',-1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">−</button>';
+  html+='<div id="pr-days" style="font-family:\'Barlow Condensed\',sans-serif;font-size:36px;font-weight:900;color:#fff;min-width:50px;text-align:center;">0</div>';
+  html+='<button onclick="payrollAdjustDays(\''+who+'\',1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
+  html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $'+dayRate+'/day</span><br/><span id="pr-days-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
+  html+='</div></div>';
+
+  // Cars sold (Scott only)
+  if(!isRicky){
+    html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
+    html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Cars Sold</div>';
+    html+='<div style="display:flex;align-items:center;gap:12px;">';
+    html+='<button onclick="payrollAdjustCars(\''+who+'\',-1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">−</button>';
+    html+='<div id="pr-cars" style="font-family:\'Barlow Condensed\',sans-serif;font-size:36px;font-weight:900;color:#fff;min-width:50px;text-align:center;">0</div>';
+    html+='<button onclick="payrollAdjustCars(\''+who+'\',1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
+    html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $100/car</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
+    html+='</div></div>';
+  }
+
+  // Extras list
+  html+='<div id="pr-extras-list"></div>';
+
+  // Add extra
+  html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
+  html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Add Extra</div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px;">';
+  html+='<input id="pr-extra-reason" placeholder="Reason" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;"/>';
+  html+='<input id="pr-extra-amount" type="number" inputmode="decimal" placeholder="$0" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;text-align:right;"/>';
+  html+='</div>';
+  html+='<button onclick="payrollAddExtra(\''+who+'\')" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#888;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>';
+  html+='</div>';
+
+  // Total
+  html+='<div style="background:'+bg+';border:1px solid '+border+';border-radius:14px;padding:16px;margin-bottom:10px;text-align:center;">';
+  html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Owed</div>';
+  html+='<div id="pr-grand-total" style="font-family:\'Barlow Condensed\',sans-serif;font-size:36px;font-weight:900;color:'+color+';">$0</div>';
+  html+='</div>';
+
+  // Submit
+  html+='<button onclick="payrollSubmit(\''+who+'\')" style="width:100%;padding:14px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:12px;color:#34d399;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Pay '+name+'</button>';
+
+  html+='</div>';
+  content.innerHTML=html;
+}
+
+function payrollAdjustDays(who,dir){
+  var el=document.getElementById('pr-days');
+  var v=parseInt(el.textContent)||0;
+  v=Math.max(0,v+dir);
+  el.textContent=v;
+  payrollRecalc(who);
+}
+
+function payrollAdjustCars(who,dir){
+  var el=document.getElementById('pr-cars');
+  if(!el)return;
+  var v=parseInt(el.textContent)||0;
+  v=Math.max(0,v+dir);
+  el.textContent=v;
+  payrollRecalc(who);
+}
+
+function payrollAddExtra(who){
+  var reason=(document.getElementById('pr-extra-reason').value||'').trim();
+  var amount=parseFloat(document.getElementById('pr-extra-amount').value)||0;
+  if(!reason){alert('Enter a reason.');return;}
+  if(amount<=0){alert('Enter an amount.');return;}
+  _payrollExtras.push({reason:reason,amount:amount});
+  document.getElementById('pr-extra-reason').value='';
+  document.getElementById('pr-extra-amount').value='';
+  payrollRenderExtras(who);
+  payrollRecalc(who);
+}
+
+function payrollRemoveExtra(who,idx){
+  _payrollExtras.splice(idx,1);
+  payrollRenderExtras(who);
+  payrollRecalc(who);
+}
+
+function payrollRenderExtras(who){
+  var el=document.getElementById('pr-extras-list');
+  if(!el)return;
+  if(!_payrollExtras.length){el.innerHTML='';return;}
+  var html='';
+  _payrollExtras.forEach(function(e,i){
+    html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+    html+='<span style="font-size:13px;color:#fff;">'+e.reason+'</span>';
+    html+='<div style="display:flex;align-items:center;gap:8px;">';
+    html+='<span style="font-size:14px;font-weight:700;color:#4ade80;">+$'+e.amount.toFixed(2)+'</span>';
+    html+='<button onclick="payrollRemoveExtra(\''+who+'\','+i+')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:12px;cursor:pointer;border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">✕</button>';
+    html+='</div></div>';
+  });
+  el.innerHTML=html;
+}
+
+function payrollRecalc(who){
+  var isRicky=who==='ricky';
+  var dayRate=isRicky?170:125;
+  var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
+  var daysTotal=days*dayRate;
+  var dt=document.getElementById('pr-days-total');
+  if(dt) dt.textContent='$'+daysTotal.toLocaleString();
+
+  var carsTotal=0;
+  if(!isRicky){
+    var cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
+    carsTotal=cars*100;
+    var ct=document.getElementById('pr-cars-total');
+    if(ct) ct.textContent='$'+carsTotal.toLocaleString();
+  }
+
+  var extrasTotal=0;
+  _payrollExtras.forEach(function(e){extrasTotal+=e.amount;});
+
+  var grand=daysTotal+carsTotal+extrasTotal;
+  var ge=document.getElementById('pr-grand-total');
+  if(ge) ge.textContent='$'+grand.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+async function payrollSubmit(who){
+  var isRicky=who==='ricky';
+  var name=isRicky?'Ricky':'Scott';
+  var dayRate=isRicky?170:125;
+  var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
+  var cars=0;
+  if(!isRicky) cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
+  var daysTotal=days*dayRate;
+  var carsTotal=cars*100;
+  var extrasTotal=0;
+  _payrollExtras.forEach(function(e){extrasTotal+=e.amount;});
+  var grand=daysTotal+carsTotal+extrasTotal;
+  if(grand<=0){alert('Nothing to pay.');return;}
+
+  // Build description
+  var desc=days+' day'+(days===1?'':'s')+' ($'+daysTotal+')';
+  if(!isRicky&&cars>0) desc+=', '+cars+' car'+(cars===1?'':'s')+' ($'+carsTotal+')';
+  if(_payrollExtras.length){
+    _payrollExtras.forEach(function(e){desc+=', '+e.reason+' ($'+e.amount+')';});
+  }
+
+  var wk=_payWeekKey(_payCurrentWeekStart);
+  try{
+    await sbPost('cash_payouts',{
+      paid_to:name+' — Payroll',
+      amount:grand,
+      week_start:wk,
+      location:_payLocation,
+      logged_by:(me?me.name:'')+ ' | '+desc
+    });
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+    payrollBack();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
 }
 
 function openDealDetail(id) {
