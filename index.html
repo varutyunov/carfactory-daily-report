@@ -7992,11 +7992,11 @@ function _txInit() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
             <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">VIN</div>
-            <input id="inv-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+            <input id="inv-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="VIN number"/>
           </div>
           <div>
             <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Mileage</div>
-            <input id="inv-mileage" type="number" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+            <input id="inv-mileage" type="number" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Mileage"/>
           </div>
         </div>
       </div>
@@ -9032,6 +9032,8 @@ function invGoStep2(){
   var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
   if(!g('inv-fname')||!g('inv-lname')){alert('Please enter customer name.');return;}
   if(!g('inv-year')||!g('inv-make')||!g('inv-model')){alert('Please enter vehicle info.');return;}
+  if(!g('inv-vin')){alert('Please enter VIN.');return;}
+  if(!g('inv-mileage')){alert('Please enter mileage.');return;}
   _invData.fname=g('inv-fname');_invData.lname=g('inv-lname');_invData.phone=g('inv-phone');
   _invData.year=g('inv-year');_invData.make=g('inv-make');_invData.model=g('inv-model');
   _invData.vin=g('inv-vin');_invData.mileage=g('inv-mileage');
