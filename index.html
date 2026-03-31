@@ -7961,28 +7961,44 @@ function _txInit() {
       </div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Year</div>
-          <input id="inv-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="2024"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Make</div>
-          <input id="inv-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Toyota"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Model</div>
-          <input id="inv-model" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Camry"/>
+      <input id="inv-car-search" placeholder="Search inventory or past deals..." oninput="invFilterVehicles(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;margin-bottom:10px;"/>
+      <div id="inv-car-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;max-height:220px;overflow-y:auto;"></div>
+      <div id="inv-car-selected" style="display:none;background:#111;border:1px solid #f59e0b44;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div id="inv-car-sel-name" style="font-size:15px;font-weight:700;color:#fff;"></div>
+            <div id="inv-car-sel-detail" style="font-size:12px;color:#666;margin-top:2px;"></div>
+          </div>
+          <button onclick="invClearVehicle()" style="background:none;border:none;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;padding:4px 8px;">Change</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">VIN</div>
-          <input id="inv-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+      <div id="inv-car-manual-toggle" style="margin-bottom:10px;">
+        <button onclick="invShowManualVehicle()" style="background:none;border:none;color:#f59e0b;font-size:13px;font-weight:600;cursor:pointer;padding:0;">+ Enter vehicle manually</button>
+      </div>
+      <div id="inv-car-manual" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Year</div>
+            <input id="inv-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="2024"/>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Make</div>
+            <input id="inv-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Toyota"/>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Model</div>
+            <input id="inv-model" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Camry"/>
+          </div>
         </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Mileage</div>
-          <input id="inv-mileage" type="number" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">VIN</div>
+            <input id="inv-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Mileage</div>
+            <input id="inv-mileage" type="number" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Optional"/>
+          </div>
         </div>
       </div>
 
@@ -8865,6 +8881,8 @@ function renderInvoicesList(){
   list.innerHTML=html;
 }
 
+var _invVehicles=[];
+
 function openInvoiceForm(){
   _invData={};_invLines=[];_invPayMethod='cash';
   document.getElementById('inv-overlay').style.display='flex';
@@ -8876,6 +8894,109 @@ function openInvoiceForm(){
   var notes=document.getElementById('inv-notes');if(notes)notes.value='';
   invSetPayMethod('cash');
   invRenderLines();
+  // Reset vehicle search UI
+  var cs=document.getElementById('inv-car-search');if(cs){cs.value='';cs.style.display='';}
+  var cl=document.getElementById('inv-car-list');if(cl){cl.innerHTML='';cl.style.display='';}
+  var sel=document.getElementById('inv-car-selected');if(sel)sel.style.display='none';
+  var mt=document.getElementById('inv-car-manual-toggle');if(mt)mt.style.display='';
+  var man=document.getElementById('inv-car-manual');if(man)man.style.display='none';
+  invLoadVehicles();
+}
+
+async function invLoadVehicles(){
+  _invVehicles=[];
+  // Pull from inventory
+  var inv=(typeof S!=='undefined'&&S&&S.inventory)?S.inventory:[];
+  inv.forEach(function(c){
+    var label=c.name||[c.year,c.make,c.model].filter(Boolean).join(' ')||'Unknown';
+    var parts=(c.name||'').split(' ');
+    _invVehicles.push({label:label,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:c.vin||'',mileage:c.mileage||'',stock:c.stock||'',color:c.color||'',source:'inventory',customer:''});
+  });
+  // Pull from past deals
+  try{
+    var deals=await sbGet('deals','select=customer_name,vehicle_desc,vin,stock,created_at&order=created_at.desc&limit=200');
+    deals.forEach(function(d){
+      if(!d.vehicle_desc)return;
+      var parts=(d.vehicle_desc||'').split(' ');
+      _invVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',mileage:'',stock:d.stock||'',color:'',source:'deal',customer:d.customer_name||''});
+    });
+  }catch(e){}
+  // Pull from past deposits
+  try{
+    var deps=await sbGet('deposits','select=customer_name,vehicle_desc,vin,stock,created_at&order=created_at.desc&limit=200');
+    deps.forEach(function(d){
+      if(!d.vehicle_desc)return;
+      var parts=(d.vehicle_desc||'').split(' ');
+      // Avoid duplicates by VIN
+      if(d.vin&&_invVehicles.some(function(v){return v.vin&&v.vin===d.vin;}))return;
+      _invVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',mileage:'',stock:d.stock||'',color:'',source:'deposit',customer:d.customer_name||''});
+    });
+  }catch(e){}
+}
+
+function invFilterVehicles(q){
+  var list=document.getElementById('inv-car-list');if(!list)return;
+  if(!q||q.length<2){list.innerHTML='';return;}
+  var matches=_invVehicles.filter(function(v){
+    return fuzzyMatch([v.label,v.vin,v.stock,v.color,v.customer],q);
+  }).slice(0,8);
+  if(!matches.length){list.innerHTML='<div style="text-align:center;color:#444;padding:12px;font-size:13px;">No vehicles found</div>';return;}
+  list.innerHTML=matches.map(function(v,i){
+    var srcBadge=v.source==='inventory'?'<span style="background:#1d4ed8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;">Inventory</span>':
+      v.source==='deal'?'<span style="background:#f59e0b;color:#000;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;">Past Deal</span>':
+      '<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;">Deposit</span>';
+    var sub=[v.stock?'#'+v.stock:'',v.color,v.customer?'Customer: '+v.customer:''].filter(Boolean).join(' · ');
+    return '<div onclick="invSelectVehicle('+i+',\''+q.replace(/'/g,"\\'")+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;cursor:pointer;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">'+
+        '<span style="font-size:14px;font-weight:700;color:#fff;">'+v.label+'</span>'+srcBadge+
+      '</div>'+
+      (sub?'<div style="font-size:11px;color:#555;">'+sub+'</div>':'')+
+      (v.vin?'<div style="font-size:10px;color:#333;margin-top:2px;">VIN: '+v.vin+'</div>':'')+
+    '</div>';
+  }).join('');
+}
+
+function invSelectVehicle(idx,q){
+  var matches=_invVehicles.filter(function(v){return fuzzyMatch([v.label,v.vin,v.stock,v.color,v.customer],q);}).slice(0,8);
+  var v=matches[idx];if(!v)return;
+  // Fill hidden fields
+  var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
+  set('inv-year',v.year);set('inv-make',v.make);set('inv-model',v.model);
+  set('inv-vin',v.vin);set('inv-mileage',v.mileage);
+  // Auto-fill customer from deal if customer fields are empty
+  if(v.customer&&!document.getElementById('inv-fname').value){
+    var cParts=v.customer.split(' ');
+    set('inv-fname',cParts[0]||'');set('inv-lname',cParts.slice(1).join(' ')||'');
+  }
+  // Show selected card, hide search
+  var selEl=document.getElementById('inv-car-selected');
+  var nameEl=document.getElementById('inv-car-sel-name');
+  var detEl=document.getElementById('inv-car-sel-detail');
+  if(nameEl)nameEl.textContent=v.label;
+  if(detEl)detEl.textContent=[v.vin?'VIN: '+v.vin:'',v.stock?'Stock: '+v.stock:'',v.color].filter(Boolean).join(' · ');
+  if(selEl)selEl.style.display='block';
+  document.getElementById('inv-car-search').style.display='none';
+  document.getElementById('inv-car-list').style.display='none';
+  document.getElementById('inv-car-manual-toggle').style.display='none';
+  document.getElementById('inv-car-manual').style.display='none';
+}
+
+function invClearVehicle(){
+  ['inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('inv-car-selected').style.display='none';
+  document.getElementById('inv-car-search').style.display='';
+  document.getElementById('inv-car-search').value='';
+  document.getElementById('inv-car-list').style.display='';
+  document.getElementById('inv-car-list').innerHTML='';
+  document.getElementById('inv-car-manual-toggle').style.display='';
+  document.getElementById('inv-car-manual').style.display='none';
+}
+
+function invShowManualVehicle(){
+  document.getElementById('inv-car-search').style.display='none';
+  document.getElementById('inv-car-list').style.display='none';
+  document.getElementById('inv-car-manual-toggle').style.display='none';
+  document.getElementById('inv-car-manual').style.display='block';
 }
 
 function closeInvoiceForm(){
