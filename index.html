@@ -1094,7 +1094,11 @@ canvas{display:none;}
         </div>
         <div style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
           <div id="pay-stat-total" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">$0</div>
-          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash</div>
+          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash In</div>
+        </div>
+        <div style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
+          <div id="pay-stat-net" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#f59e0b;">$0</div>
+          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash Left</div>
         </div>
       </div>
 
@@ -1102,6 +1106,12 @@ canvas{display:none;}
       <button id="pay-breakdown-btn" onclick="payShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">
         <span>View Full Breakdown</span>
         <span style="color:#555;font-size:16px;">&#9776;</span>
+      </button>
+
+      <!-- Cash Paid Out Button -->
+      <button id="pay-cashout-btn" onclick="cashPayoutsOpen()" style="width:100%;padding:11px 16px;background:linear-gradient(145deg,#1a0000,#3a0000);border:1px solid rgba(239,68,68,.3);border-radius:12px;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:'Barlow Condensed',sans-serif;">
+        <span>Cash Paid Out</span>
+        <span style="font-size:16px;">&#36;</span>
       </button>
 
       <!-- Scan New Payment Button -->
@@ -1113,6 +1123,8 @@ canvas{display:none;}
       <div id="pay-list-items" style="display:flex;flex-direction:column;gap:10px;">
         <div style="text-align:center;color:#555;padding:40px 0;">Loading payments...</div>
       </div>
+      <!-- Inline Cash Payouts -->
+      <div id="pay-payouts-inline" style="margin-top:14px;"></div>
     </div>
 
     <!-- SCAN/EDIT FORM VIEW -->
@@ -9248,6 +9260,17 @@ function openPayScan(){
   }
   // Hide add button for owners (view only)
   if(addBtn) addBtn.style.display=_payIsOwner()?'none':'flex';
+  // Scott: scan-only mode — skip list, go straight to scan form
+  var isScott=me&&me.name.toLowerCase().indexOf('scott')!==-1;
+  if(isScott){
+    document.getElementById('pay-list-view').style.display='none';
+    document.getElementById('pay-detail-view').style.display='none';
+    openPayScanForm();
+    return;
+  }
+  // Cash paid out button — only for Manny/Jesse/owners
+  var cashoutBtn=document.getElementById('pay-cashout-btn');
+  if(cashoutBtn) cashoutBtn.style.display=_cashPayoutIsUser()?'flex':'none';
   document.getElementById('pay-view-title').textContent='PAYMENTS';
   document.getElementById('pay-list-view').style.display='block';
   document.getElementById('pay-scan-view').style.display='none';
@@ -9362,7 +9385,8 @@ function payViewBack(){
   // Always close lightbox if open
   var lb=document.getElementById('pay-photo-lightbox');
   if(lb&&lb.style.display!=='none'){payCloseLightbox();return;}
-  if(_payViewMode==='scan'||_payViewMode==='detail'){
+  var isScott=me&&me.name.toLowerCase().indexOf('scott')!==-1;
+  if((_payViewMode==='scan'||_payViewMode==='detail')&&!isScott){
     _payViewMode='list';
     document.getElementById('pay-view-title').textContent='PAYMENTS';
     document.getElementById('pay-list-view').style.display='block';
@@ -9444,8 +9468,10 @@ async function loadPaymentWeek(){
     console.warn('Payment load error:',e);
     _payWeekData=[];
   }
+  await cashPayoutsLoad();
   _payUpdateStats();
   _payRenderCards();
+  _cashPayoutsRenderInline();
 }
 
 function _payUpdateStats(){
@@ -9463,6 +9489,15 @@ function _payUpdateStats(){
   _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
   document.getElementById('pay-stat-count').textContent=count;
   document.getElementById('pay-stat-total').textContent='$'+cash.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  // Cash left = cash in - cash paid out
+  var paidOut=0;
+  (_cashPayouts||[]).forEach(function(p){paidOut+=parseFloat(p.amount)||0;});
+  var netCash=cash-paidOut;
+  var ne=document.getElementById('pay-stat-net');
+  if(ne){
+    ne.textContent=(netCash<0?'-':'')+'$'+Math.abs(netCash).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+    ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
+  }
 }
 
 function payShowBreakdown(){
@@ -10448,10 +10483,6 @@ function dealsPickLocation(loc) {
     '<div id="deals-week-label" style="flex:1;text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;">'+_payFormatWeekLabel(_dealsCurrentWeekStart)+'</div>' +
     '<button onclick="dealsWeekNav(1)" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:18px;cursor:pointer;padding:8px 14px;line-height:1;">&#9654;</button>' +
   '</div>';
-  var cashStatHtml=_cashPayoutIsUser()?'<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
-      '<div id="deals-stat-cash" style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#f59e0b;">$0</div>' +
-      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Cash Left</div>' +
-    '</div>':'';
   var statsHtml = '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
     '<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
       '<div id="deals-stat-count" style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#60a5fa;">0</div>' +
@@ -10461,14 +10492,12 @@ function dealsPickLocation(loc) {
       '<div id="deals-stat-total" style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">$0</div>' +
       '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Collected</div>' +
     '</div>' +
-    cashStatHtml +
   '</div>';
   var isEmp=me&&me.role==='employee';
   var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
   var searchHtml='<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
-  var cashPayoutBtn=_cashPayoutIsUser()?'<button onclick="cashPayoutsOpen()" style="width:100%;padding:11px 16px;background:linear-gradient(145deg,#1a0000,#3a0000);border:1px solid rgba(239,68,68,.3);border-radius:12px;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>Cash Paid Out</span><span style="font-size:16px;">&#36;</span></button>':'';
   var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
-  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + cashPayoutBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div><div id="deals-payouts-inline" style="margin-top:14px;"></div></div>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
@@ -10528,10 +10557,8 @@ async function loadDeals() {
       return dw.getTime() === ws.getTime();
     });
     _dealsFiltered = _dealsData;
-    await cashPayoutsLoad();
     _dealsUpdateStats();
     renderDeals();
-    _cashPayoutsRenderInline();
   } catch(e) {
     list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error: ' + (e.message||e) + '</div>';
   }
@@ -10544,28 +10571,10 @@ function _dealsUpdateStats(){
     var v=parseFloat(d.total_collected)||0;
     total+=v;
   });
-  // Calculate cash collected from deals
-  var cashCollected=0;
-  _dealsData.forEach(function(d){
-    var pays=[];
-    try{pays=JSON.parse(d.payments||'[]');}catch(e){}
-    pays.forEach(function(p){
-      if((p.method||'').toLowerCase()==='cash') cashCollected+=parseFloat(p.amount)||0;
-    });
-  });
-  // Calculate total paid out
-  var paidOut=0;
-  (_cashPayouts||[]).forEach(function(p){paidOut+=parseFloat(p.amount)||0;});
-  var netCash=cashCollected-paidOut;
   var ce=document.getElementById('deals-stat-count');
   var te=document.getElementById('deals-stat-total');
-  var ne=document.getElementById('deals-stat-cash');
   if(ce) ce.textContent=count;
   if(te) te.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
-  if(ne){
-    ne.textContent=(netCash<0?'-':'')+'$'+Math.abs(netCash).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
-    ne.style.color=netCash>0?'#f59e0b':'#ef4444';
-  }
 }
 
 function dealsFilter(q) {
@@ -10769,10 +10778,10 @@ function cashPayoutsClose(){
 }
 
 async function cashPayoutsLoad(){
-  if(!_dealsCurrentWeekStart)return;
-  var wk=_payWeekKey(_dealsCurrentWeekStart);
+  if(!_payCurrentWeekStart)return;
+  var wk=_payWeekKey(_payCurrentWeekStart);
   try{
-    _cashPayouts=await sbGet('cash_payouts','week_start=eq.'+wk+'&location=eq.'+_dealsLocation+'&order=created_at.desc');
+    _cashPayouts=await sbGet('cash_payouts','week_start=eq.'+wk+'&location=eq.'+_payLocation+'&order=created_at.desc');
   }catch(e){
     console.warn('Cash payouts load error:',e);
     _cashPayouts=[];
@@ -10784,20 +10793,20 @@ async function cashPayoutAdd(){
   var amount=parseFloat(document.getElementById('cp-amount').value)||0;
   if(!paidTo){alert('Enter who was paid.');return;}
   if(amount<=0){alert('Enter amount.');return;}
-  var wk=_payWeekKey(_dealsCurrentWeekStart);
+  var wk=_payWeekKey(_payCurrentWeekStart);
   try{
     await sbPost('cash_payouts',{
       paid_to:paidTo,
       amount:amount,
       week_start:wk,
-      location:_dealsLocation,
+      location:_payLocation,
       logged_by:me?me.name:''
     });
     document.getElementById('cp-paid-to').value='';
     document.getElementById('cp-amount').value='';
     await cashPayoutsLoad();
     cashPayoutsRender();
-    _dealsUpdateStats();
+    _payUpdateStats();
     _cashPayoutsRenderInline();
   }catch(e){
     alert('Error saving payout: '+(e.message||e));
@@ -10810,7 +10819,7 @@ async function cashPayoutDelete(id){
     await sbDelete('cash_payouts',id);
     await cashPayoutsLoad();
     cashPayoutsRender();
-    _dealsUpdateStats();
+    _payUpdateStats();
     _cashPayoutsRenderInline();
   }catch(e){
     alert('Error: '+(e.message||e));
@@ -10853,7 +10862,7 @@ function cashPayoutsRender(){
 }
 
 function _cashPayoutsRenderInline(){
-  var el=document.getElementById('deals-payouts-inline');
+  var el=document.getElementById('pay-payouts-inline');
   if(!el)return;
   if(!_cashPayouts.length){
     el.innerHTML='';
