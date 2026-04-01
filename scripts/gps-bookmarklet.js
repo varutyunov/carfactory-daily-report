@@ -82,7 +82,7 @@
   // ── ASP.NET fetch helpers ───────────────────────────────────────────────────
   // Fetch a page and parse it into a DOM document
   async function fetchPage(url) {
-    var r = await fetch(url, { credentials: 'same-origin' });
+    var r = await fetch(url, { credentials: 'include', redirect: 'follow' });
     if (!r.ok) throw new Error('HTTP ' + r.status + ' fetching ' + url);
     var html = await r.text();
     var parser = new DOMParser();
@@ -106,7 +106,8 @@
     }).join('&');
     var r = await fetch(url, {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'include',
+      redirect: 'follow',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body
     });
@@ -150,6 +151,8 @@
     dashPage = await fetchPage(BASE + 'CustomerRpt.aspx');
   } catch(e) {
     log('\u274C Cannot reach OASIS: ' + e.message, '#ef4444');
+    log('Current page: ' + location.href, '#888');
+    log('Trying: ' + BASE + 'CustomerRpt.aspx', '#888');
     log('Make sure you are logged in.', '#f59e0b');
     return;
   }
