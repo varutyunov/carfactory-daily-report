@@ -19,7 +19,9 @@
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
-  var BASE = 'https://secure.passtimeusa.com/OCMSv2/CodeSite/';
+  // Detect the correct base path from current URL (Dashboard or CodeSite)
+  var pathMatch = location.pathname.match(/\/OCMSv2\/([^\/]+)\//);
+  var BASE = 'https://secure.passtimeusa.com/OCMSv2/' + (pathMatch ? pathMatch[1] : 'Dashboard') + '/';
 
   // ── Status Panel ────────────────────────────────────────────────────────────
   if (document.getElementById('gps-sync-panel')) {
