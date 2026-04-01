@@ -8312,45 +8312,45 @@ function _txInit() {
   body.printing-deposit #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
   body.printing-deposit #dep-print-form > div { page-break-inside: avoid; }
 
-  /* Invoice print — works with class OR when inv-overlay is visible */
+  /* Invoice print — uses .print-active class added on open */
   body.printing-invoice #inv-overlay,
-  #inv-overlay[style*="flex"] { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
+  #inv-overlay.print-active { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
   body.printing-invoice #inv-overlay > div:first-child,
-  #inv-overlay[style*="flex"] > div:first-child { display: none !important; }
+  #inv-overlay.print-active > div:first-child { display: none !important; }
   body.printing-invoice #inv-body,
-  #inv-overlay[style*="flex"] #inv-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
+  #inv-overlay.print-active #inv-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
   body.printing-invoice #inv-step1, body.printing-invoice #inv-step2,
-  #inv-overlay[style*="flex"] #inv-step1, #inv-overlay[style*="flex"] #inv-step2 { display: none !important; }
+  #inv-overlay.print-active #inv-step1, #inv-overlay.print-active #inv-step2 { display: none !important; }
   body.printing-invoice #inv-step3,
-  #inv-overlay[style*="flex"] #inv-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  #inv-overlay.print-active #inv-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
   body.printing-invoice #inv-step3 > div:first-child,
-  #inv-overlay[style*="flex"] #inv-step3 > div:first-child { display: none !important; }
+  #inv-overlay.print-active #inv-step3 > div:first-child { display: none !important; }
   body.printing-invoice #inv-step3 > div:last-child,
-  #inv-overlay[style*="flex"] #inv-step3 > div:last-child { display: none !important; }
+  #inv-overlay.print-active #inv-step3 > div:last-child { display: none !important; }
   body.printing-invoice #inv-print-form,
-  #inv-overlay[style*="flex"] #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
+  #inv-overlay.print-active #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
   body.printing-invoice #inv-print-form > div,
-  #inv-overlay[style*="flex"] #inv-print-form > div { page-break-inside: avoid; }
+  #inv-overlay.print-active #inv-print-form > div { page-break-inside: avoid; }
 
   /* Void/Release print */
   body.printing-vr #vr-overlay,
-  #vr-overlay[style*="flex"] { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
+  #vr-overlay.print-active { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
   body.printing-vr #vr-overlay > div:first-child,
-  #vr-overlay[style*="flex"] > div:first-child { display: none !important; }
+  #vr-overlay.print-active > div:first-child { display: none !important; }
   body.printing-vr #vr-body,
-  #vr-overlay[style*="flex"] #vr-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
+  #vr-overlay.print-active #vr-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
   body.printing-vr #vr-step1,
-  #vr-overlay[style*="flex"] #vr-step1 { display: none !important; }
+  #vr-overlay.print-active #vr-step1 { display: none !important; }
   body.printing-vr #vr-step2,
-  #vr-overlay[style*="flex"] #vr-step2 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  #vr-overlay.print-active #vr-step2 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
   body.printing-vr #vr-step2 > div:first-child,
-  #vr-overlay[style*="flex"] #vr-step2 > div:first-child { display: none !important; }
+  #vr-overlay.print-active #vr-step2 > div:first-child { display: none !important; }
   body.printing-vr #vr-step2 > div:last-child,
-  #vr-overlay[style*="flex"] #vr-step2 > div:last-child { display: none !important; }
+  #vr-overlay.print-active #vr-step2 > div:last-child { display: none !important; }
   body.printing-vr #vr-void-form,
-  #vr-overlay[style*="flex"] #vr-void-form,
+  #vr-overlay.print-active #vr-void-form,
   body.printing-vr #vr-release-form,
-  #vr-overlay[style*="flex"] #vr-release-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; page-break-after: always; }
+  #vr-overlay.print-active #vr-release-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; page-break-after: always; }
 }
 </style>
 
@@ -9138,6 +9138,7 @@ var _invVehicles=[];
 function openInvoiceForm(){
   _invData={};_invLines=[];_invPayMethod='cash';
   document.getElementById('inv-overlay').style.display='flex';
+  document.getElementById('inv-overlay').classList.add('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   invShowStep(1);
   ['inv-fname','inv-lname','inv-phone','inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){
@@ -9260,6 +9261,7 @@ function closeInvoiceForm(){
     if(!confirm('Invoice not saved. Exit anyway?'))return;
   }
   document.getElementById('inv-overlay').style.display='none';
+  document.getElementById('inv-overlay').classList.remove('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
@@ -9411,6 +9413,7 @@ function loadVoidRelease(){
 function openVoidRelease(){
   _vrData={};_vrFormType='both';
   document.getElementById('vr-overlay').style.display='flex';
+  document.getElementById('vr-overlay').classList.add('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   vrShowStep(1);
   vrSetFormType('both');
@@ -9423,6 +9426,7 @@ function openVoidRelease(){
 
 function vrClose(){
   document.getElementById('vr-overlay').style.display='none';
+  document.getElementById('vr-overlay').classList.remove('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
