@@ -8165,16 +8165,25 @@ function _txInit() {
   body.printing-deposit #dep-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
   body.printing-deposit #dep-print-form > div { page-break-inside: avoid; }
 
-  /* Invoice print */
-  body.printing-invoice #inv-overlay { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
-  body.printing-invoice #inv-overlay > div:first-child { display: none !important; }
-  body.printing-invoice #inv-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
-  body.printing-invoice #inv-step1, body.printing-invoice #inv-step2 { display: none !important; }
-  body.printing-invoice #inv-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
-  body.printing-invoice #inv-step3 > div:first-child { display: none !important; }
-  body.printing-invoice #inv-step3 > div:last-child { display: none !important; }
-  body.printing-invoice #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
-  body.printing-invoice #inv-print-form > div { page-break-inside: avoid; }
+  /* Invoice print — works with class OR when inv-overlay is visible */
+  body.printing-invoice #inv-overlay,
+  #inv-overlay[style*="flex"] { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
+  body.printing-invoice #inv-overlay > div:first-child,
+  #inv-overlay[style*="flex"] > div:first-child { display: none !important; }
+  body.printing-invoice #inv-body,
+  #inv-overlay[style*="flex"] #inv-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
+  body.printing-invoice #inv-step1, body.printing-invoice #inv-step2,
+  #inv-overlay[style*="flex"] #inv-step1, #inv-overlay[style*="flex"] #inv-step2 { display: none !important; }
+  body.printing-invoice #inv-step3,
+  #inv-overlay[style*="flex"] #inv-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  body.printing-invoice #inv-step3 > div:first-child,
+  #inv-overlay[style*="flex"] #inv-step3 > div:first-child { display: none !important; }
+  body.printing-invoice #inv-step3 > div:last-child,
+  #inv-overlay[style*="flex"] #inv-step3 > div:last-child { display: none !important; }
+  body.printing-invoice #inv-print-form,
+  #inv-overlay[style*="flex"] #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
+  body.printing-invoice #inv-print-form > div,
+  #inv-overlay[style*="flex"] #inv-print-form > div { page-break-inside: avoid; }
 }
 </style>
 
@@ -8781,8 +8790,10 @@ function depositPrint() {
   var actionBtns = step4.querySelector('div[style*="flex-direction:column"]');
   if(actionBtns) actionBtns.classList.add('dep-print-actions');
   document.body.classList.add('printing-deposit');
+  var cleanup=function(){document.body.classList.remove('printing-deposit');window.onafterprint=null;};
+  window.onafterprint=cleanup;
   window.print();
-  document.body.classList.remove('printing-deposit');
+  setTimeout(cleanup,3000);
 }
 
 function depositEmail() {
@@ -9175,7 +9186,13 @@ function invGoPreview(){
   invShowStep(3);
 }
 
-function invPrint(){document.body.classList.add('printing-invoice');window.print();document.body.classList.remove('printing-invoice');}
+function invPrint(){
+  document.body.classList.add('printing-invoice');
+  var cleanup=function(){document.body.classList.remove('printing-invoice');window.onafterprint=null;};
+  window.onafterprint=cleanup;
+  window.print();
+  setTimeout(cleanup,3000);
+}
 
 async function invSave(){
   var btn=document.getElementById('inv-save-btn');
