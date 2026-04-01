@@ -5166,9 +5166,13 @@ function goMgrHome(){
   // Brain center visibility — Vlad/Tommy only
   var ob=document.getElementById('orbit-brain-btn');
   if(ob){var isOwner=me&&['vlad','tommy'].includes(me.name.toLowerCase());ob.style.display=isOwner?'':'none';}
-  // Swipe page 2 visibility — Vlad only
+  // CarPay page — Vlad only
+  var isVlad=me&&me.name.toLowerCase()==='vlad';
+  var cpPage=document.getElementById('swipe-page-1');
+  if(cpPage) cpPage.style.display=isVlad?'':'none';
+  _swipePages=isVlad?[0,1,2]:[0,2];
   var dots=document.getElementById('swipe-dots');
-  if(dots){var isVlad=me&&me.name.toLowerCase()==='vlad';dots.style.display=isVlad?'flex':'none';}
+  if(dots) dots.style.display=isVlad?'flex':'none';
 }
 
 // Track which badge counts have been seen so they only show once when new
@@ -6459,7 +6463,7 @@ async function executeAITool(toolName, input){
     closeAIChat();
     setTimeout(function(){
       if(s==='home'){ goMgrHome(); }
-      else if(s==='carpay'){ setSwipePage(1); }
+      else if(s==='carpay'){ if(me&&me.name.toLowerCase()==='vlad') setSwipePage(1); }
       else if(s==='forms'){ openFormsView(); }
       else if(s==='deals'){
         var tabBtn=document.getElementById('tab-deals');
