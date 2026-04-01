@@ -8322,6 +8322,20 @@ function _txInit() {
           <input id="dep-date" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
         </div>
       </div>
+      <!-- Payment Method -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="dep-pm-cash"        onclick="depSetPayMethod('cash')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#1d4ed8;color:#fff;border:none;">Cash</button>
+          <button id="dep-pm-card"        onclick="depSetPayMethod('card')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Card</button>
+          <button id="dep-pm-zelle"       onclick="depSetPayMethod('zelle')"       style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Zelle</button>
+          <button id="dep-pm-money_order" onclick="depSetPayMethod('money_order')" style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Money Order</button>
+          <button id="dep-pm-other"       onclick="depSetPayMethod('other')"       style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Other</button>
+        </div>
+        <div id="dep-pm-notes-wrap" style="display:none;margin-top:8px;">
+          <input id="dep-pm-notes" placeholder="Describe payment method..." oninput="_depPayNotes=this.value" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+        </div>
+      </div>
       <div style="margin-bottom:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deal Type</div>
         <div style="display:flex;gap:10px;margin-bottom:10px;">
@@ -8330,17 +8344,6 @@ function _txInit() {
         </div>
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;" id="dep-balance-label">Remaining Balance</div>
         <input id="dep-balance" type="text" inputmode="decimal" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="$0" oninput="moneyInput(this)"/>
-      </div>
-      <!-- Payment Method -->
-      <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="dep-pm-cash"         onclick="depSetPayMethod('cash')"         style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#1d4ed8;color:#fff;border:none;">Cash</button>
-          <button id="dep-pm-card"         onclick="depSetPayMethod('card')"         style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Card</button>
-          <button id="dep-pm-zelle"        onclick="depSetPayMethod('zelle')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Zelle</button>
-          <button id="dep-pm-money_order"  onclick="depSetPayMethod('money_order')"  style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Money Order</button>
-          <button id="dep-pm-other"        onclick="depSetPayMethod('other')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Other</button>
-        </div>
       </div>
 
       <!-- Add to week's cash (cash payment method only) -->
@@ -9093,11 +9096,13 @@ async function depDeleteFinal(id) {
 var _depData = {};  // stores customer + car + photo data
 var _depAddToWeek = false;
 var _depPayMethod = 'cash';
+var _depPayNotes = '';
 
 function openDepositForm() {
   _depData = { dealType: 'cash' };
   _depAddToWeek = false;
   _depPayMethod = 'cash';
+  _depPayNotes = '';
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
@@ -9105,6 +9110,8 @@ function openDepositForm() {
   // Reset deal type + payment method buttons to defaults
   depSetDealType('cash');
   depSetPayMethod('cash');
+  var notesInput = document.getElementById('dep-pm-notes');
+  if(notesInput) notesInput.value = '';
   // Reset step 1 UI
   var choose = document.getElementById('dep-choose');
   var previewWrap = document.getElementById('dep-id-preview-wrap');
@@ -9278,7 +9285,7 @@ async function depositSave() {
           location: depLoc,
           logged_by: record.created_by,
           week_start: weekKey,
-          raw_ocr_text: 'Deposit — ' + (d.vehicleStr || ''),
+          raw_ocr_text: (_depPayNotes ? _depPayNotes + ' — ' : '') + 'Deposit — ' + (d.vehicleStr || ''),
           created_at: new Date().toISOString()
         });
       } catch(payErr) {
@@ -9405,6 +9412,12 @@ function depSetPayMethod(method) {
       btn.style.background = '#0d0d0d'; btn.style.color = '#888'; btn.style.border = '1px solid #1e1e1e';
     }
   });
+  // Notes field — only for Other
+  var notesWrap = document.getElementById('dep-pm-notes-wrap');
+  var notesInput = document.getElementById('dep-pm-notes');
+  if(notesWrap) notesWrap.style.display = method === 'other' ? 'block' : 'none';
+  if(method !== 'other') { _depPayNotes = ''; if(notesInput) notesInput.value = ''; }
+  // Add-to-week toggle — only for Cash
   var weekWrap = document.getElementById('dep-add-week-wrap');
   if(method === 'cash') {
     if(weekWrap) weekWrap.style.display = 'flex';
