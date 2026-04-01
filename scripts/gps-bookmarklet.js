@@ -306,10 +306,22 @@
         var addPage = await fetchPage(BASE + 'Add.aspx');
         var addDoc = addPage.doc;
 
-        // Visit Add.aspx to establish session, then GET AddElite.aspx
-        var addElitePage = await fetchPage(BASE + 'AddElite.aspx');
+        // Inspect Encore element and POST through Add.aspx properly
+        var encoreEl = addDoc.querySelector('#MainContent_imgEncore');
+        if (encoreEl) {
+          var parentEl = encoreEl.parentElement;
+          log('  Encore: <' + encoreEl.tagName + '> src=' + (encoreEl.src||'') + ' href=' + (encoreEl.href||''), '#888');
+          log('  Parent: <' + parentEl.tagName + '> href=' + (parentEl.href||''), '#888');
+        }
+
+        // Try __doPostBack approach for ASP.NET navigation
+        var addFields = getAspFields(addDoc);
+        addFields['__EVENTTARGET'] = 'ctl00$MainContent$imgEncore';
+        addFields['__EVENTARGUMENT'] = '';
+        var addElitePage = await postForm(BASE + 'Add.aspx', addFields);
         var addEliteDoc = addElitePage.doc;
         var addEliteFields = getAspFields(addEliteDoc);
+        log('  Result page: ' + (addElitePage.url || ''), '#888');
 
         // Debug: show what page we landed on
         var addEliteTitle = addEliteDoc.title || 'no title';
