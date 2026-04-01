@@ -1131,6 +1131,14 @@ canvas{display:none;}
     <!-- SCAN/EDIT FORM VIEW -->
     <div id="pay-scan-view" style="display:none;padding:16px 12px 100px;">
 
+      <!-- Scott location toggle (scan-only mode) -->
+      <div id="pay-scan-loc-toggle" style="display:none;margin-bottom:14px;">
+        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
+          <button onclick="paySetLocation('DeBary')" id="pay-scan-loc-debary" style="flex:1;padding:8px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>
+          <button onclick="paySetLocation('DeLand')" id="pay-scan-loc-deland" style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>
+        </div>
+      </div>
+
       <!-- Camera / Upload -->
       <div id="pay-scan-capture" style="margin-bottom:16px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:10px;text-transform:uppercase;">Scan Payment</div>
@@ -9649,11 +9657,14 @@ function openPayScan(){
   }
   // Hide add button for owners (view only)
   if(addBtn) addBtn.style.display=_payIsOwner()?'none':'flex';
-  // Scott: scan-only mode — skip list, go straight to scan form
+  // Scott: scan-only mode — skip list, go straight to scan form with loc toggle
   var isScott=me&&me.name.toLowerCase().indexOf('scott')!==-1;
   if(isScott){
     document.getElementById('pay-list-view').style.display='none';
     document.getElementById('pay-detail-view').style.display='none';
+    var scanToggle=document.getElementById('pay-scan-loc-toggle');
+    if(scanToggle) scanToggle.style.display='block';
+    paySetLocation(_payLocation);
     openPayScanForm();
     return;
   }
@@ -9670,14 +9681,19 @@ function openPayScan(){
 
 function paySetLocation(loc){
   _payLocation=loc;
+  // Update list-view toggle
   var db=document.getElementById('pay-loc-debary');
   var dl=document.getElementById('pay-loc-deland');
-  if(loc==='DeBary'){
-    db.style.background='#fff';db.style.color='#000';
-    dl.style.background='none';dl.style.color='#555';
-  } else {
-    dl.style.background='#fff';dl.style.color='#000';
-    db.style.background='none';db.style.color='#555';
+  if(db&&dl){
+    if(loc==='DeBary'){db.style.background='#fff';db.style.color='#000';dl.style.background='none';dl.style.color='#555';}
+    else{dl.style.background='#fff';dl.style.color='#000';db.style.background='none';db.style.color='#555';}
+  }
+  // Update scan-view toggle (Scott)
+  var sdb=document.getElementById('pay-scan-loc-debary');
+  var sdl=document.getElementById('pay-scan-loc-deland');
+  if(sdb&&sdl){
+    if(loc==='DeBary'){sdb.style.background='#fff';sdb.style.color='#000';sdl.style.background='none';sdl.style.color='#555';}
+    else{sdl.style.background='#fff';sdl.style.color='#000';sdb.style.background='none';sdb.style.color='#555';}
   }
   loadPaymentWeek();
 }
