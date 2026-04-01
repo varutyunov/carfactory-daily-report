@@ -2270,7 +2270,7 @@ async function syncFromSupabase(showUI){
       // CarPay data
       _cpData.customers=(Array.isArray(cpCusts)?cpCusts:[]).map(function(c){
         var veh=[c.year||c.vehicle_year,c.make||c.vehicle_make,c.model||c.vehicle_model].filter(Boolean).join(' ')||c.vehicle||c.vehicle_desc||c.vehicle_info||'';
-        return{name:c.name,account:c.account,daysLate:String(c.days_late||0),nextPayment:c.next_payment||'',autoPay:!!c.auto_pay,location:c.location||'debary',vehicle:veh,vin:c.vin||'',color:c.color||c.vehicle_color||'',paymentAmount:c.payment_amount||c.monthly_payment||''};
+        return{name:c.name,account:c.account,daysLate:String(c.days_late||0),nextPayment:c.next_payment||'',autoPay:!!c.auto_pay,location:c.location||'debary',vehicle:veh,vin:c.vin||'',color:c.color||c.vehicle_color||'',paymentAmount:c.payment_amount||c.monthly_payment||'',phone:c.phone||'',email:c.email||'',currentAmountDue:c.current_amount_due||null,scheduledAmount:c.scheduled_amount||'',paymentFrequency:c.payment_frequency||'',carpayId:c.carpay_id||'',repoFlagged:!!c.repo_flagged};
       });
       _cpData.payments=(Array.isArray(cpPays)?cpPays:[]).map(function(p){return{name:p.name,account:p.account,amountSent:p.amount_sent||'$0.00',date:p.date||'',time:p.time||'',method:p.method||'',reference:p.reference||'',location:p.location||'debary'};});
       _cpData.synced=true;
@@ -6776,7 +6776,8 @@ function cpRenderLate(){
   var list=document.getElementById('cp-late-list');
   if(!late.length){list.innerHTML='<div class="cp-empty">No late accounts</div>';return;}
   list.innerHTML=late.map(function(c){
-    return '<div class="cp-card" onclick="cpOpenAccount(\''+c.account+'\')" style="border-color:rgba(255,69,58,.2);cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+c.name+'</div><span class="cp-late" style="font-weight:800;font-size:16px;">'+c.daysLate+' days late</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div></div></div>';
+    var repoBadge=c.repoFlagged?'<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:rgba(255,69,58,.2);color:#ff453a;border:1px solid rgba(255,69,58,.4);margin-left:6px;">🚩 REPO</span>':'';
+    return '<div class="cp-card" onclick="cpOpenAccount(\''+c.account+'\')" style="border-color:'+(c.repoFlagged?'rgba(255,69,58,.4)':'rgba(255,69,58,.2)')+';cursor:pointer;-webkit-tap-highlight-color:transparent;"><div class="cp-card-row"><div class="cp-card-name">'+c.name+repoBadge+'</div><span class="cp-late" style="font-weight:800;font-size:16px;">'+c.daysLate+' days late</span></div><div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+' · Next: '+c.nextPayment+'</div></div></div>';
   }).join('');
 }
 function cpRenderHistory(){
@@ -6811,17 +6812,50 @@ function cpOpenAccount(account){
     var daysNum=parseInt(cust.daysLate)||0;
     var statusColor=daysNum>0?'#ff453a':'#30d158';
     var statusText=daysNum>0?daysNum+' DAYS LATE':'CURRENT';
-    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
-    html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">';
+    var isRepoFlagged=!!cust.repoFlagged;
+    html+='<div style="background:#0d0d0d;border:1px solid '+(isRepoFlagged?'rgba(255,69,58,.4)':'#1a1a1a')+';border-radius:14px;padding:16px;margin-bottom:12px;">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
     html+='<div><div style="font-size:18px;font-weight:700;color:#fff;">'+cust.name+'</div>';
-    html+='<div style="font-size:12px;color:#555;margin-top:3px;">Account #'+cust.account+'</div></div>';
+    html+='<div style="font-size:12px;color:#555;margin-top:3px;">Account #'+cust.account+' · '+cust.location.toUpperCase()+'</div></div>';
     html+='<span style="font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px;background:'+statusColor+'22;color:'+statusColor+';border:1px solid '+statusColor+'44;">'+statusText+'</span>';
     html+='</div>';
-    html+='<div style="display:flex;gap:16px;flex-wrap:wrap;">';
-    html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Next Payment</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:3px;">'+(cust.nextPayment||'—')+'</div></div>';
-    if(cust.paymentAmount) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount Due</div><div style="font-size:14px;color:#4ade80;font-weight:600;margin-top:3px;">'+cust.paymentAmount+'</div></div>';
-    html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Auto-Pay</div><div style="font-size:14px;color:'+(cust.autoPay?'#30d158':'#888')+';font-weight:600;margin-top:3px;">'+(cust.autoPay?'Yes':'No')+'</div></div>';
-    html+='</div></div>';
+    // Financial details
+    var curDue=cust.currentAmountDue?'$'+parseFloat(cust.currentAmountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">';
+    if(curDue) html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Current Due</div><div style="font-size:16px;color:'+(daysNum>0?'#ff453a':'#4ade80')+';font-weight:700;margin-top:2px;">'+curDue+'</div></div>';
+    if(cust.scheduledAmount) html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Scheduled</div><div style="font-size:16px;color:#fff;font-weight:700;margin-top:2px;">'+cust.scheduledAmount+'</div></div>';
+    html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Next Payment</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+(cust.nextPayment||'—')+'</div></div>';
+    html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Frequency</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+(cust.paymentFrequency||'—')+'</div></div>';
+    html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Auto-Pay</div><div style="font-size:14px;color:'+(cust.autoPay?'#30d158':'#888')+';font-weight:600;margin-top:2px;">'+(cust.autoPay?'✓ Yes':'No')+'</div></div>';
+    html+='</div>';
+    // Contact info
+    if(cust.phone||cust.email){
+      html+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      if(cust.phone){
+        var ph=cust.phone.replace(/\D/g,'');
+        var phFmt=ph.length===10?'('+ph.slice(0,3)+') '+ph.slice(3,6)+'-'+ph.slice(6):cust.phone;
+        html+='<a href="tel:'+ph+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
+        html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">📞 Phone</div>';
+        html+='<div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+phFmt+'</div></a>';
+      }
+      if(cust.email){
+        html+='<a href="mailto:'+cust.email+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
+        html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">✉ Email</div>';
+        html+='<div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;word-break:break-all;">'+cust.email+'</div></a>';
+      }
+      html+='</div>';
+    }
+    // Repo flag (owners only)
+    if(_cashPayoutIsUser()){
+      html+='<div style="margin-top:12px;">';
+      if(isRepoFlagged){
+        html+='<button onclick="cpRepoFlag(\''+account+'\',false)" style="width:100%;padding:10px;background:rgba(255,69,58,.15);border:1px solid rgba(255,69,58,.4);border-radius:10px;color:#ff453a;font-size:14px;font-weight:700;cursor:pointer;">🚩 REPO FLAGGED — Tap to Clear</button>';
+      } else {
+        html+='<button onclick="cpRepoFlag(\''+account+'\',true)" style="width:100%;padding:10px;background:#161616;border:1px solid #2a2a2a;border-radius:10px;color:#888;font-size:14px;font-weight:700;cursor:pointer;">Flag for Repo</button>';
+      }
+      html+='</div>';
+    }
+    html+='</div>';
   }
   // ── Vehicle Info ──
   var vehicleStr=cust&&cust.vehicle?cust.vehicle:'';
@@ -6874,6 +6908,24 @@ function cpCloseAccount(){
   var overlay=document.getElementById('cp-account-overlay');
   if(overlay)overlay.style.display='none';
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
+}
+
+async function cpRepoFlag(account, flagged){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust)return;
+  cust.repoFlagged=flagged;
+  // Persist to Supabase
+  try{
+    await fetch(SB_URL+'/rest/v1/carpay_customers?account=eq.'+encodeURIComponent(account),{
+      method:'PATCH',
+      headers:SB_HEADERS,
+      body:JSON.stringify({repo_flagged:flagged})
+    });
+  }catch(e){}
+  // Re-open to reflect change
+  cpOpenAccount(account);
+  // Re-render late list to show/hide flag indicator
+  cpRenderLate();
 }
 
 function cpRenderAll(){cpRenderToday();cpRenderCustomers();cpRenderLate();cpRenderHistory();}
