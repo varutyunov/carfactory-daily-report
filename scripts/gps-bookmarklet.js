@@ -323,8 +323,20 @@
         var addEliteDoc = addElitePage.doc;
         var addEliteFields = getAspFields(addEliteDoc);
 
+        // Debug: show what page we landed on
+        var addEliteTitle = addEliteDoc.title || 'no title';
+        var addEliteUrl = addElitePage.url || 'no url';
+        log('  Page: ' + addEliteTitle, '#888');
+        log('  URL: ' + addEliteUrl, '#888');
+
         var dropdown = addEliteDoc.querySelector('#MainContent_DropDownList1');
         if (!dropdown) {
+          // Try alternate selectors
+          var allSelects = addEliteDoc.querySelectorAll('select');
+          log('  Found ' + allSelects.length + ' select elements', '#888');
+          for (var s = 0; s < allSelects.length; s++) {
+            log('    select: id=' + allSelects[s].id + ' name=' + allSelects[s].name + ' opts=' + allSelects[s].options.length, '#888');
+          }
           log('\u274C Serial dropdown not found', '#ef4444');
           skipCount++;
           continue;
