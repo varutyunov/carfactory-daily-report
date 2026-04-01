@@ -1,49 +1,107 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>GPS Sync — Bookmarklet Setup</title>
+<title>Car Factory — Bookmarklet Setup</title>
 <style>
-  body { background:#000; color:#fff; font-family:system-ui,sans-serif; padding:40px; max-width:600px; margin:0 auto; }
-  h1 { color:#30d158; font-size:28px; }
-  .step { background:#111; border-radius:14px; padding:20px; margin:16px 0; }
-  .step-num { color:#30d158; font-weight:800; font-size:18px; }
-  a.bookmarklet { display:inline-block; background:#30d158; color:#000; font-weight:800; font-size:18px; padding:14px 32px; border-radius:14px; text-decoration:none; margin:10px 0; cursor:grab; }
-  a.bookmarklet:hover { background:#2bb84d; }
+  body { background:#000; color:#fff; font-family:system-ui,sans-serif; padding:40px; max-width:640px; margin:0 auto; }
+  h1 { font-size:26px; margin-bottom:4px; }
+  h2 { font-size:20px; margin:40px 0 8px; }
+  .subtitle { color:#555; font-size:14px; margin-bottom:28px; }
+  .section { border-top:1px solid #1a1a1a; padding-top:28px; margin-top:8px; }
+  .step { background:#111; border-radius:14px; padding:20px; margin:12px 0; }
+  .step-num { font-weight:800; font-size:13px; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  a.bookmarklet { display:inline-block; font-weight:800; font-size:17px; padding:14px 28px; border-radius:14px; text-decoration:none; margin:10px 0; cursor:grab; transition:opacity .15s; }
+  a.bookmarklet:hover { opacity:.85; }
+  a.bm-gps  { background:#30d158; color:#000; }
+  a.bm-cp   { background:#60a5fa; color:#000; }
   code { background:#1a1a1a; padding:2px 6px; border-radius:4px; font-size:13px; }
+  ul, ol { color:#888; line-height:2.1; padding-left:20px; }
+  a { color:#60a5fa; }
 </style>
 </head>
 <body>
-<h1>🛰️ GPS Sync Setup</h1>
-<p style="color:#888;">One-time setup to add the GPS sync bookmarklet to your browser.</p>
 
-<div class="step">
-  <div class="step-num">Step 1</div>
-  <p>Drag this button to your <strong>bookmarks bar</strong>:</p>
-  <p>
-    <a class="bookmarklet" href="javascript:void(function(){var s=document.createElement('script');s.src='https://carfactory.work/scripts/gps-bookmarklet.js?v='+Date.now();document.body.appendChild(s);}());">⚡ GPS Sync</a>
-  </p>
-  <p style="color:#666;font-size:12px;">If you don't see your bookmarks bar, press <code>Ctrl+Shift+B</code></p>
+<h1>🔧 Car Factory — Bookmarklet Setup</h1>
+<p class="subtitle">Drag either button below to your bookmarks bar for a one-click install.</p>
+
+<!-- ═══════════════════════════════════════════════════════ GPS SYNC -->
+<div class="section">
+  <h2 style="color:#30d158;">🛰️ GPS Sync</h2>
+  <p style="color:#888;margin-top:0;">Registers new finance deals in Passtime automatically.</p>
+
+  <div class="step">
+    <div class="step-num" style="color:#30d158;">Step 1 — Install</div>
+    <p>Drag this button to your <strong>bookmarks bar</strong>:</p>
+    <a class="bookmarklet bm-gps" href="javascript:void(function(){var s=document.createElement('script');s.src='https://carfactory.work/scripts/gps-bookmarklet.js?v='+Date.now();document.body.appendChild(s);}());">⚡ GPS Sync</a>
+    <p style="color:#555;font-size:12px;margin-top:8px;">Bookmarks bar not visible? Press <code>Ctrl+Shift+B</code></p>
+  </div>
+
+  <div class="step">
+    <div class="step-num" style="color:#30d158;">Step 2 — Each Morning</div>
+    <ol>
+      <li>Go to <a href="https://secure.passtimeusa.com" target="_blank">secure.passtimeusa.com</a> and log in</li>
+      <li>Complete 2FA on your phone</li>
+      <li>Once on the dashboard, click <strong>⚡ GPS Sync</strong> in your bookmarks</li>
+      <li>It runs automatically — registers each deal and marks it done</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <div class="step-num" style="color:#555;">What it does</div>
+    <ul>
+      <li>Finds all finance deals with <code>gps_uploaded = false</code></li>
+      <li>Searches each GPS serial in Passtime</li>
+      <li>Found → updates the record with customer info</li>
+      <li>Not found → creates a new Encore record</li>
+      <li>Marks each deal as done in the app</li>
+    </ul>
+  </div>
 </div>
 
-<div class="step">
-  <div class="step-num">Step 2 — Every Morning</div>
-  <ol style="color:#ccc;line-height:2;">
-    <li>Go to <a href="https://secure.passtimeusa.com" target="_blank" style="color:#60a5fa;">secure.passtimeusa.com</a> and log in</li>
-    <li>Complete 2FA on your phone</li>
-    <li>Once you're on the dashboard, click <strong>⚡ GPS Sync</strong> in your bookmarks</li>
-    <li>Watch it work — it'll register each GPS and mark them done</li>
-  </ol>
+<!-- ═══════════════════════════════════════════════════════ CARPAY SYNC -->
+<div class="section">
+  <h2 style="color:#60a5fa;">💳 CarPay Sync</h2>
+  <p style="color:#888;margin-top:0;">Syncs all customer data and payment history from CarPay into the app.</p>
+
+  <div class="step">
+    <div class="step-num" style="color:#60a5fa;">Step 1 — Install</div>
+    <p>Drag this button to your <strong>bookmarks bar</strong>:</p>
+    <a class="bookmarklet bm-cp" href="javascript:void(function(){var s=document.createElement('script');s.src='https://carfactory.work/scripts/carpay-bookmarklet.js?v='+Date.now();document.body.appendChild(s);}());">💳 CarPay Sync</a>
+    <p style="color:#555;font-size:12px;margin-top:8px;">Only needs to be installed once.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-num" style="color:#60a5fa;">Step 2 — Run the Sync</div>
+    <ol>
+      <li>Go to <a href="https://dealers.carpay.com" target="_blank">dealers.carpay.com</a> and log in</li>
+      <li>Wait for the customer table to fully load</li>
+      <li>Click <strong>💳 CarPay Sync</strong> in your bookmarks</li>
+      <li>A panel appears — select <strong>DeBary</strong> or <strong>DeLand</strong></li>
+      <li>Hit <strong>Sync</strong> and wait for it to finish (~1–2 min)</li>
+      <li>Repeat for the other location</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <div class="step-num" style="color:#555;">What it syncs</div>
+    <ul>
+      <li>All active customers — name, account #, days late, next payment</li>
+      <li>Contact info — phone number and email</li>
+      <li>Vehicle details and current balance owed</li>
+      <li>Scheduled payment amount and frequency</li>
+      <li>Full payment history — every payment date, amount, and method</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <div class="step-num" style="color:#555;">When to run it</div>
+    <ul>
+      <li>Before opening the Repo Brain — so it has fresh data</li>
+      <li>After a week of payments to update balances</li>
+      <li>Anytime you want the Late tab current</li>
+    </ul>
+  </div>
 </div>
 
-<div class="step">
-  <div class="step-num">What it does</div>
-  <ul style="color:#888;line-height:2;">
-    <li>Pulls all finance deals with <code>gps_uploaded = false</code></li>
-    <li>Searches each GPS serial in Passtime</li>
-    <li>If found → edits the record with customer info</li>
-    <li>If not found → adds a new record via Encore</li>
-    <li>Marks each as done in the app</li>
-  </ul>
-</div>
 </body>
 </html>
