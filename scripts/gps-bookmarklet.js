@@ -1,8 +1,9 @@
 /**
  * GPS Sync Bookmarklet — runs in-browser on the Passtime OASIS site
  *
- * Uses a hidden iframe (same page, same session) to navigate through pages
- * while a status panel shows live progress.
+ * Uses fetch() on the same origin to search/edit/add GPS records
+ * without opening any popups, iframes, or navigating away.
+ * The status panel stays on screen the entire time.
  *
  * Must be run from secure.passtimeusa.com while logged in.
  */
@@ -23,9 +24,6 @@
   // ── Status Panel ────────────────────────────────────────────────────────────
   if (document.getElementById('gps-sync-panel')) {
     document.getElementById('gps-sync-panel').remove();
-  }
-  if (document.getElementById('gps-sync-frame')) {
-    document.getElementById('gps-sync-frame').remove();
   }
   var panel = document.createElement('div');
   panel.id = 'gps-sync-panel';
@@ -81,6 +79,43 @@
     };
   }
 
+  // ── ASP.NET fetch helpers ───────────────────────────────────────────────────
+  // Fetch a page and parse it into a DOM document
+  async function fetchPage(url) {
+    var r = await fetch(url, { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' fetching ' + url);
+    var html = await r.text();
+    var parser = new DOMParser();
+    return { doc: parser.parseFromString(html, 'text/html'), url: r.url };
+  }
+
+  // Extract ASP.NET hidden fields (__VIEWSTATE etc) from a parsed doc
+  function getAspFields(doc) {
+    var fields = {};
+    var hiddens = doc.querySelectorAll('input[type="hidden"]');
+    for (var i = 0; i < hiddens.length; i++) {
+      if (hiddens[i].name) fields[hiddens[i].name] = hiddens[i].value || '';
+    }
+    return fields;
+  }
+
+  // POST a form (ASP.NET postback) and return parsed response
+  async function postForm(url, fields) {
+    var body = Object.keys(fields).map(function(k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(fields[k] || '');
+    }).join('&');
+    var r = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' posting ' + url);
+    var html = await r.text();
+    var parser = new DOMParser();
+    return { doc: parser.parseFromString(html, 'text/html'), url: r.url };
+  }
+
   // ── Check we're on Passtime ─────────────────────────────────────────────────
   if (!location.hostname.includes('passtimeusa.com')) {
     log('\u274C Not on Passtime \u2014 go to secure.passtimeusa.com first', '#ef4444');
@@ -108,75 +143,38 @@
     return;
   }
 
-  // ── Create hidden iframe worker ─────────────────────────────────────────────
-  log('\u{1F680} Starting worker...');
-  var iframe = document.createElement('iframe');
-  iframe.id = 'gps-sync-frame';
-  iframe.style.cssText = 'position:fixed;bottom:10px;left:10px;width:400px;height:300px;z-index:99998;border:2px solid #333;border-radius:8px;background:#fff;opacity:0.3;';
-  iframe.src = BASE + 'CustomerRpt.aspx';
-  document.body.appendChild(iframe);
-
-  // Helper: wait for iframe to load
-  function waitForFrame(urlContains, maxWait) {
-    maxWait = maxWait || 30000;
-    return new Promise(function(resolve) {
-      var start = Date.now();
-      var interval = setInterval(function() {
-        try {
-          var doc = iframe.contentDocument || iframe.contentWindow.document;
-          var url = iframe.contentWindow.location.href;
-          var ready = doc.readyState === 'complete';
-          var urlOk = !urlContains || url.includes(urlContains);
-          if (ready && urlOk) {
-            clearInterval(interval);
-            setTimeout(function() { resolve(true); }, 800);
-            return;
-          }
-        } catch(e) { /* still loading */ }
-        if (Date.now() - start > maxWait) {
-          clearInterval(interval);
-          try { log('  \u23F1 Timed out. URL: ' + iframe.contentWindow.location.href, '#888'); } catch(e2) {}
-          resolve(false);
-        }
-      }, 400);
-    });
-  }
-
-  function frameDoc() {
-    try { return iframe.contentDocument || iframe.contentWindow.document; }
-    catch(e) { return null; }
-  }
-
-  function frameUrl() {
-    try { return iframe.contentWindow.location.href; }
-    catch(e) { return ''; }
-  }
-
-  function frameNav(url) {
-    iframe.contentWindow.location.href = url;
-  }
-
-  // Wait for initial load
-  var loaded = await waitForFrame('passtimeusa.com', 30000);
-  if (!loaded) {
-    log('\u274C Worker failed to load', '#ef4444');
-    log('Make sure you are logged into Passtime.', '#f59e0b');
-    iframe.remove();
+  // ── Verify we can access OASIS ──────────────────────────────────────────────
+  log('\u{1F680} Connecting to OASIS...');
+  var dashPage;
+  try {
+    dashPage = await fetchPage(BASE + 'CustomerRpt.aspx');
+  } catch(e) {
+    log('\u274C Cannot reach OASIS: ' + e.message, '#ef4444');
+    log('Make sure you are logged in.', '#f59e0b');
     return;
   }
-  await sleep(1000);
 
-  // Check if we hit the EliteRenewalCheck page
-  if (frameUrl().includes('EliteRenewalCheck')) {
+  // Check if we got a login page instead
+  var dashText = dashPage.doc.body ? dashPage.doc.body.innerText : '';
+  if (dashPage.url.includes('Login') || dashText.includes('Sign In') || dashText.includes('Password')) {
+    log('\u274C Session expired \u2014 please log in and try again', '#ef4444');
+    return;
+  }
+
+  // Check for EliteRenewalCheck
+  if (dashPage.url.includes('EliteRenewalCheck')) {
     log('Skipping renewal check...');
-    var doc = frameDoc();
-    if (doc) {
-      var skipBtn = doc.querySelector('input[value*="Skip"]');
-      if (skipBtn) skipBtn.click();
-      await waitForFrame('CustomerRpt');
-      await sleep(1000);
+    var skipFields = getAspFields(dashPage.doc);
+    var skipBtn = dashPage.doc.querySelector('input[value*="Skip"]');
+    if (skipBtn && skipBtn.name) {
+      skipFields[skipBtn.name] = skipBtn.value;
+      try {
+        dashPage = await postForm(dashPage.url, skipFields);
+      } catch(e) {}
     }
   }
+
+  log('\u2705 Connected!', '#30d158');
 
   var successCount = 0;
   var skipCount = 0;
@@ -195,103 +193,48 @@
     }
 
     try {
-      // Step 1: Navigate to dashboard and search
+      // Step 1: Load search page
       log('\u{1F50D} Searching...');
-      frameNav(BASE + 'CustomerRpt.aspx');
-      await waitForFrame('passtimeusa.com');
-      await sleep(1000);
+      var searchPage = await fetchPage(BASE + 'CustomerRpt.aspx');
+      var searchFields = getAspFields(searchPage.doc);
 
-      var doc = frameDoc();
-      if (!doc) {
-        log('\u274C Cannot access worker frame', '#ef4444');
-        skipCount++;
-        continue;
-      }
+      // Set search dropdown to SerialNumber and fill search text
+      searchFields['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'SerialNumber';
+      searchFields['ctl00$searchCustomerCTL$searchTxt'] = deal.serial;
+      searchFields['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
 
-      var dd = doc.getElementById('searchCustomerCTL_searchCustomerDDL');
-      var txt = doc.getElementById('searchCustomerCTL_searchTxt');
-      var btn = doc.getElementById('searchCustomerCTL_searchBtn');
-      if (!dd || !txt || !btn) {
-        log('\u274C Search controls not found \u2014 are you logged in?', '#ef4444');
-        skipCount++;
-        continue;
-      }
+      var resultPage = await postForm(BASE + 'CustomerRpt.aspx', searchFields);
+      var resultUrl = resultPage.url;
+      var resultDoc = resultPage.doc;
 
-      dd.value = 'SerialNumber';
-      txt.value = deal.serial;
-      btn.click();
-
-      // Wait for search result page
-      await sleep(2000);
-      await waitForFrame('passtimeusa.com');
-      await sleep(1000);
-
-      doc = frameDoc();
-      var currentUrl = frameUrl();
-
-      if (currentUrl.includes('ViewDetail.aspx')) {
-        // ── Path A: Record found — edit it ──────────────────────────────────
+      if (resultUrl.includes('ViewDetail.aspx')) {
+        // ── Path A: Record found directly — edit it ────────────────────────
         log('\u{1F4DD} Found \u2014 editing...');
 
-        // Click Edit Consumer Details link
-        var editLink = doc.querySelector('#MainContent_ViewDetailMenu1_BtnEditCustomer3');
-        if (!editLink) {
-          var allLinks = doc.querySelectorAll('a');
-          for (var li = 0; li < allLinks.length; li++) {
-            if (allLinks[li].textContent.trim() === 'Edit Consumer Details') {
-              editLink = allLinks[li];
-              break;
-            }
-          }
-        }
+        // Navigate to edit mode
+        var editPage = await fetchPage(BASE + 'ViewDetail.aspx?M=ED');
+        var editDoc = editPage.doc;
+        var editFields = getAspFields(editDoc);
 
-        if (editLink) {
-          editLink.click();
-        } else {
-          try {
-            iframe.contentWindow.WebForm_DoPostBackWithOptions(
-              new iframe.contentWindow.WebForm_PostBackOptions(
-                "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
-              )
-            );
-          } catch(e) {
-            frameNav(currentUrl.split('?')[0] + '?M=ED');
-          }
-        }
-
-        await waitForFrame('M=ED', 10000);
-        if (!frameUrl().includes('M=ED')) {
-          frameNav(BASE + 'ViewDetail.aspx?M=ED');
-          await waitForFrame('M=ED', 10000);
-        }
-        await sleep(1000);
-
-        doc = frameDoc();
-        if (!doc || !doc.getElementById('MainContent_btnEditSubmit')) {
+        if (!editDoc.querySelector('[name="ctl00$MainContent$btnEditSubmit"]') &&
+            !editFields['ctl00$MainContent$btnEditSubmit']) {
           log('\u274C Could not open edit form', '#ef4444');
           skipCount++;
           continue;
         }
 
-        // Fill the form
-        var el;
-        el = doc.getElementById('MainContent_eAccountNumber'); if (el) el.value = deal.account;
-        el = doc.getElementById('MainContent_efirstname'); if (el) el.value = deal.firstName;
-        el = doc.getElementById('MainContent_elastname'); if (el) el.value = deal.lastName;
-        el = doc.getElementById('MainContent_eVIN'); if (el) el.value = deal.vin;
-        el = doc.getElementById('MainContent_eColor'); if (el) el.value = deal.color;
-        el = doc.getElementById('MainContent_eInventoryStockNumber'); if (el) el.value = deal.account;
+        // Fill fields
+        editFields['ctl00$MainContent$eAccountNumber'] = deal.account;
+        editFields['ctl00$MainContent$efirstname'] = deal.firstName;
+        editFields['ctl00$MainContent$elastname'] = deal.lastName;
+        editFields['ctl00$MainContent$eVIN'] = deal.vin;
+        editFields['ctl00$MainContent$eColor'] = deal.color;
+        editFields['ctl00$MainContent$eInventoryStockNumber'] = deal.account;
+        editFields['ctl00$MainContent$btnEditSubmit'] = 'Submit';
 
-        // Submit
-        var submitBtn = doc.getElementById('MainContent_btnEditSubmit');
-        submitBtn.click();
+        var saveResult = await postForm(BASE + 'ViewDetail.aspx?M=ED', editFields);
 
-        await sleep(2000);
-        await waitForFrame('passtimeusa.com');
-        await sleep(1000);
-
-        currentUrl = frameUrl();
-        if (currentUrl.includes('ViewDetail.aspx') && !currentUrl.includes('M=ED')) {
+        if (saveResult.url.includes('ViewDetail.aspx') && !saveResult.url.includes('M=ED')) {
           log('\u2705 Updated!', '#30d158');
           await sbPatch('deals', deal.id, { gps_uploaded: true });
           log('\u{1F4E4} Marked done in Supabase', '#30d158');
@@ -302,72 +245,47 @@
         }
 
       } else {
-        // Check listing page or dashboard results
-        var bodyText = doc ? doc.body.innerText : '';
+        // Check listing page
         var hasResults = false;
+        var bodyText = resultDoc.body ? resultDoc.body.innerText : '';
 
-        if (currentUrl.includes('CustomerSearchListing')) {
+        if (resultUrl.includes('CustomerSearchListing')) {
           if (!bodyText.includes('No records found') && !bodyText.includes('0 records')) {
-            var firstLink = doc.querySelector('#MainContent_gvCustomers a');
+            var firstLink = resultDoc.querySelector('#MainContent_gvCustomers a');
             if (firstLink) {
               hasResults = true;
-              firstLink.click();
-              await waitForFrame('ViewDetail');
-              await sleep(1000);
-              currentUrl = frameUrl();
+              // Follow the link to ViewDetail
+              var href = firstLink.getAttribute('href') || '';
+              if (href) {
+                var detailPage = await fetchPage(BASE + href);
+                resultUrl = detailPage.url;
+                resultDoc = detailPage.doc;
+              }
             }
           }
         }
 
-        if (hasResults && currentUrl.includes('ViewDetail.aspx')) {
-          // Got to ViewDetail from listing — now edit
+        if (hasResults && resultUrl.includes('ViewDetail.aspx')) {
           log('\u{1F4DD} Found via listing \u2014 editing...');
-          doc = frameDoc();
-          var editLink2 = null;
-          var allLinks2 = doc.querySelectorAll('a');
-          for (var li2 = 0; li2 < allLinks2.length; li2++) {
-            if (allLinks2[li2].textContent.trim() === 'Edit Consumer Details') {
-              editLink2 = allLinks2[li2];
-              break;
-            }
-          }
-          if (editLink2) {
-            editLink2.click();
-          } else {
-            try {
-              iframe.contentWindow.WebForm_DoPostBackWithOptions(
-                new iframe.contentWindow.WebForm_PostBackOptions(
-                  "ctl00$MainContent$ViewDetailMenu1$BtnEditCustomer3", "", false, "", "ViewDetail.aspx?M=ED", false, true
-                )
-              );
-            } catch(e) {}
-          }
+          var editPage2 = await fetchPage(BASE + 'ViewDetail.aspx?M=ED');
+          var editFields2 = getAspFields(editPage2.doc);
 
-          await waitForFrame('M=ED', 10000);
-          await sleep(1000);
-          doc = frameDoc();
+          editFields2['ctl00$MainContent$eAccountNumber'] = deal.account;
+          editFields2['ctl00$MainContent$efirstname'] = deal.firstName;
+          editFields2['ctl00$MainContent$elastname'] = deal.lastName;
+          editFields2['ctl00$MainContent$eVIN'] = deal.vin;
+          editFields2['ctl00$MainContent$eColor'] = deal.color;
+          editFields2['ctl00$MainContent$eInventoryStockNumber'] = deal.account;
+          editFields2['ctl00$MainContent$btnEditSubmit'] = 'Submit';
 
-          if (doc && doc.getElementById('MainContent_btnEditSubmit')) {
-            el = doc.getElementById('MainContent_eAccountNumber'); if (el) el.value = deal.account;
-            el = doc.getElementById('MainContent_efirstname'); if (el) el.value = deal.firstName;
-            el = doc.getElementById('MainContent_elastname'); if (el) el.value = deal.lastName;
-            el = doc.getElementById('MainContent_eVIN'); if (el) el.value = deal.vin;
-            el = doc.getElementById('MainContent_eColor'); if (el) el.value = deal.color;
-            el = doc.getElementById('MainContent_eInventoryStockNumber'); if (el) el.value = deal.account;
+          var saveResult2 = await postForm(BASE + 'ViewDetail.aspx?M=ED', editFields2);
 
-            doc.getElementById('MainContent_btnEditSubmit').click();
-            await sleep(2000);
-            await waitForFrame('passtimeusa.com');
-            await sleep(1000);
-
-            currentUrl = frameUrl();
-            if (currentUrl.includes('ViewDetail.aspx') && !currentUrl.includes('M=ED')) {
-              log('\u2705 Updated!', '#30d158');
-              await sbPatch('deals', deal.id, { gps_uploaded: true });
-              log('\u{1F4E4} Marked done in Supabase', '#30d158');
-              successCount++;
-              continue;
-            }
+          if (saveResult2.url.includes('ViewDetail.aspx') && !saveResult2.url.includes('M=ED')) {
+            log('\u2705 Updated!', '#30d158');
+            await sbPatch('deals', deal.id, { gps_uploaded: true });
+            log('\u{1F4E4} Marked done in Supabase', '#30d158');
+            successCount++;
+            continue;
           }
           log('\u274C Edit via listing failed', '#ef4444');
           skipCount++;
@@ -376,78 +294,68 @@
 
         // ── Path B: Not found — add new ─────────────────────────────────────
         log('\u2795 Not found \u2014 adding new...');
-        frameNav(BASE + 'Add.aspx');
-        await waitForFrame('Add.aspx');
-        await sleep(1000);
+        var addPage = await fetchPage(BASE + 'Add.aspx');
+        var addDoc = addPage.doc;
 
-        doc = frameDoc();
-        var imgEncore = doc ? doc.getElementById('MainContent_imgEncore') : null;
-        if (!imgEncore) {
-          log('\u274C Encore image not found on Add page', '#ef4444');
+        // Check for Encore link/image
+        var encoreLink = addDoc.querySelector('#MainContent_imgEncore');
+        if (!encoreLink) {
+          log('\u274C Encore option not found on Add page', '#ef4444');
           skipCount++;
           continue;
         }
 
-        imgEncore.click();
-        await waitForFrame('addelite', 15000);
-        await sleep(1000);
+        // Navigate to AddElite page
+        var addElitePage = await fetchPage(BASE + 'AddElite.aspx');
+        var addEliteDoc = addElitePage.doc;
+        var addEliteFields = getAspFields(addEliteDoc);
 
-        currentUrl = frameUrl().toLowerCase();
-        if (!currentUrl.includes('addelite.aspx')) {
-          log('\u274C Did not reach add form', '#ef4444');
-          skipCount++;
-          continue;
-        }
-
-        doc = frameDoc();
-        var dropdown = doc.getElementById('MainContent_DropDownList1');
+        var dropdown = addEliteDoc.querySelector('#MainContent_DropDownList1');
         if (!dropdown) {
           log('\u274C Serial dropdown not found', '#ef4444');
           skipCount++;
           continue;
         }
 
+        // Check if serial is in dropdown
         var found = false;
-        for (var j = 0; j < dropdown.options.length; j++) {
-          if (dropdown.options[j].value === deal.serial || dropdown.options[j].text === deal.serial) {
+        var opts = dropdown.querySelectorAll('option');
+        for (var j = 0; j < opts.length; j++) {
+          if (opts[j].value === deal.serial || opts[j].textContent.trim() === deal.serial) {
             found = true; break;
           }
         }
         if (!found) {
-          log('\u23ED\uFE0F  Serial ' + deal.serial + ' not in inventory', '#f59e0b');
+          log('\u23ED\uFE0F  Serial ' + deal.serial + ' not in Passtime inventory', '#f59e0b');
           skipCount++;
           continue;
         }
 
-        doc.getElementById('MainContent_txtInstallerFName').value = 'Vladimir';
-        doc.getElementById('MainContent_txtInstallerLName').value = 'Arutyunov';
-        dropdown.value = deal.serial;
-        doc.getElementById('MainContent_AccountNumber').value = deal.account;
-        doc.getElementById('MainContent_firstname').value = deal.firstName;
-        doc.getElementById('MainContent_lastname').value = deal.lastName;
-        doc.getElementById('MainContent_VIN').value = deal.vin;
-        doc.getElementById('MainContent_Color').value = deal.color;
+        // Fill the add form
+        addEliteFields['ctl00$MainContent$txtInstallerFName'] = 'Vladimir';
+        addEliteFields['ctl00$MainContent$txtInstallerLName'] = 'Arutyunov';
+        addEliteFields['ctl00$MainContent$DropDownList1'] = deal.serial;
+        addEliteFields['ctl00$MainContent$AccountNumber'] = deal.account;
+        addEliteFields['ctl00$MainContent$firstname'] = deal.firstName;
+        addEliteFields['ctl00$MainContent$lastname'] = deal.lastName;
+        addEliteFields['ctl00$MainContent$VIN'] = deal.vin;
+        addEliteFields['ctl00$MainContent$Color'] = deal.color;
+        addEliteFields['ctl00$MainContent$btnAddCust'] = 'Add';
 
-        var addBtn = doc.getElementById('MainContent_btnAddCust');
-        if (addBtn) addBtn.click();
+        var addResult = await postForm(BASE + 'AddElite.aspx', addEliteFields);
+        var addResultUrl = addResult.url.toLowerCase();
+        var addResultText = addResult.doc.body ? addResult.doc.body.innerText : '';
 
-        await sleep(2000);
-        await waitForFrame('passtimeusa.com');
-        await sleep(1000);
-
-        currentUrl = frameUrl().toLowerCase();
-        if (currentUrl.includes('viewdetail.aspx')) {
+        if (addResultUrl.includes('viewdetail.aspx')) {
           log('\u2705 Added!', '#30d158');
           await sbPatch('deals', deal.id, { gps_uploaded: true });
           log('\u{1F4E4} Marked done in Supabase', '#30d158');
           successCount++;
+        } else if (addResultText.includes('OASIS Error')) {
+          log('\u274C OASIS Error \u2014 try again', '#ef4444');
+          skipCount++;
         } else {
-          doc = frameDoc();
-          if (doc && doc.body.innerText.includes('OASIS Error')) {
-            log('\u274C OASIS Error \u2014 try again', '#ef4444');
-          } else {
-            log('\u274C Add may have failed', '#ef4444');
-          }
+          log('\u274C Add may have failed', '#ef4444');
           skipCount++;
         }
       }
@@ -456,11 +364,10 @@
       skipCount++;
     }
 
-    await sleep(1500);
+    await sleep(500);
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
-  iframe.remove();
   log('');
   log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
   log('\u{1F4CA} DONE \u2014 \u2705 ' + successCount + ' registered, \u23ED\uFE0F ' + skipCount + ' skipped', successCount > 0 ? '#30d158' : '#f59e0b');
