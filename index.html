@@ -8186,10 +8186,9 @@ function _txInit() {
           <button onclick="vrClearVehicle()" style="background:none;border:none;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;">Change</button>
         </div>
       </div>
-      <div id="vr-car-manual-toggle" style="margin-bottom:10px;">
-        <button onclick="document.getElementById('vr-car-manual').style.display='block';this.style.display='none';" style="background:none;border:none;color:#ef4444;font-size:13px;font-weight:600;cursor:pointer;padding:0;">+ Enter vehicle manually</button>
-      </div>
-      <div id="vr-car-manual" style="display:none;">
+      <div id="vr-car-manual-toggle" style="display:none;"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><div style="flex:1;height:1px;background:#1e1e1e;"></div><span style="font-size:11px;color:#555;font-weight:600;letter-spacing:1px;">OR ENTER MANUALLY</span><div style="flex:1;height:1px;background:#1e1e1e;"></div></div>
+      <div id="vr-car-manual">
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <div style="width:70px;"><input id="vr-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Year"/></div>
           <div style="flex:1;"><input id="vr-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Make"/></div>
@@ -9418,8 +9417,7 @@ function openVoidRelease(){
   ['vr-fname','vr-lname','vr-cocustomer','vr-year','vr-make','vr-model','vr-vin','vr-acct','vr-car-search'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('vr-car-selected').style.display='none';
   document.getElementById('vr-car-list').innerHTML='';
-  document.getElementById('vr-car-manual').style.display='none';
-  document.getElementById('vr-car-manual-toggle').style.display='';
+  document.getElementById('vr-car-manual').style.display='block';
   vrLoadVehicles();
 }
 
@@ -9488,7 +9486,6 @@ function vrSelectVehicle(idx,q){
   document.getElementById('vr-car-list').innerHTML='';
   document.getElementById('vr-car-search').value='';
   document.getElementById('vr-car-manual').style.display='none';
-  document.getElementById('vr-car-manual-toggle').style.display='none';
   // Pre-fill manual fields too
   var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   set('vr-year',v.year);set('vr-make',v.make);set('vr-model',v.model);set('vr-vin',v.vin);
@@ -9501,7 +9498,7 @@ function vrSelectVehicle(idx,q){
 
 function vrClearVehicle(){
   document.getElementById('vr-car-selected').style.display='none';
-  document.getElementById('vr-car-manual-toggle').style.display='';
+  document.getElementById('vr-car-manual').style.display='block';
   _vrData.year='';_vrData.make='';_vrData.model='';_vrData.vin='';
   ['vr-year','vr-make','vr-model','vr-vin','vr-acct'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
 }
