@@ -301,82 +301,121 @@
           continue;
         }
 
-        // ── Path B: Not found — add new ─────────────────────────────────────
+        // ── Path B: Not found — add new via iframe ────────────────────────
         log('\u2795 Not found \u2014 adding new...');
-        var addPage = await fetchPage(BASE + 'Add.aspx');
-        var addDoc = addPage.doc;
 
-        // ImageButton posts with .x/.y to its PostBackUrl (AddElite.aspx)
-        var addFields = getAspFields(addDoc);
-        var encoreEl = addDoc.querySelector('#MainContent_imgEncore');
-        var encoreName = encoreEl ? (encoreEl.name || 'ctl00$MainContent$imgEncore') : 'ctl00$MainContent$imgEncore';
-        addFields[encoreName + '.x'] = '1';
-        addFields[encoreName + '.y'] = '1';
-        // ASP.NET ImageButton with PostBackUrl posts to the target page
-        var addElitePage = await postForm(BASE + 'AddElite.aspx', addFields);
-        var addEliteDoc = addElitePage.doc;
-        var addEliteFields = getAspFields(addEliteDoc);
+        // Helper: load a URL in a hidden iframe and wait for it
+        function iframeNav(url) {
+          return new Promise(function(resolve, reject) {
+            var ifr = document.getElementById('gps-sync-iframe');
+            if (!ifr) {
+              ifr = document.createElement('iframe');
+              ifr.id = 'gps-sync-iframe';
+              ifr.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
+              document.body.appendChild(ifr);
+            }
+            var timer = setTimeout(function() { reject(new Error('iframe timeout')); }, 15000);
+            ifr.onload = function() { clearTimeout(timer); resolve(ifr); };
+            ifr.onerror = function() { clearTimeout(timer); reject(new Error('iframe error')); };
+            ifr.src = url;
+          });
+        }
 
-        // Debug: show what page we landed on
-        var addEliteTitle = addEliteDoc.title || 'no title';
-        var addEliteUrl = addElitePage.url || 'no url';
-        log('  Page: ' + addEliteTitle, '#888');
-        log('  URL: ' + addEliteUrl, '#888');
+        function iframeWait(ifr, checkFn, timeout) {
+          return new Promise(function(resolve, reject) {
+            var start = Date.now();
+            var interval = setInterval(function() {
+              try {
+                var result = checkFn(ifr);
+                if (result) { clearInterval(interval); resolve(result); }
+              } catch(e) {}
+              if (Date.now() - start > (timeout || 10000)) {
+                clearInterval(interval);
+                reject(new Error('iframe wait timeout'));
+              }
+            }, 500);
+          });
+        }
 
-        var dropdown = addEliteDoc.querySelector('#MainContent_DropDownList1');
-        if (!dropdown) {
-          // Try alternate selectors
-          var allSelects = addEliteDoc.querySelectorAll('select');
-          log('  Found ' + allSelects.length + ' select elements', '#888');
-          for (var s = 0; s < allSelects.length; s++) {
-            log('    select: id=' + allSelects[s].id + ' name=' + allSelects[s].name + ' opts=' + allSelects[s].options.length, '#888');
+        try {
+          // Step 1: Load Add.aspx in iframe
+          var ifr = await iframeNav(BASE + 'Add.aspx');
+          var ifrDoc = ifr.contentDocument || ifr.contentWindow.document;
+
+          // Step 2: Click Encore image
+          var encoreImg = ifrDoc.querySelector('#MainContent_imgEncore');
+          if (!encoreImg) {
+            log('\u274C Encore not found on Add page', '#ef4444');
+            skipCount++;
+            continue;
           }
-          log('\u274C Serial dropdown not found', '#ef4444');
-          skipCount++;
-          continue;
-        }
+          encoreImg.click();
 
-        // Check if serial is in dropdown
-        var found = false;
-        var opts = dropdown.querySelectorAll('option');
-        for (var j = 0; j < opts.length; j++) {
-          if (opts[j].value === deal.serial || opts[j].textContent.trim() === deal.serial) {
-            found = true; break;
+          // Step 3: Wait for AddElite page to load
+          await new Promise(function(r) { ifr.onload = r; setTimeout(r, 5000); });
+          await sleep(1000);
+          ifrDoc = ifr.contentDocument || ifr.contentWindow.document;
+
+          var dropdown = ifrDoc.querySelector('#MainContent_DropDownList1');
+          if (!dropdown) {
+            log('\u274C Serial dropdown not found on AddElite', '#ef4444');
+            log('  iframe URL: ' + ifr.contentWindow.location.href, '#888');
+            skipCount++;
+            continue;
           }
-        }
-        if (!found) {
-          log('\u23ED\uFE0F  Serial ' + deal.serial + ' not in Passtime inventory', '#f59e0b');
-          skipCount++;
-          continue;
-        }
 
-        // Fill the add form
-        addEliteFields['ctl00$MainContent$txtInstallerFName'] = 'Vladimir';
-        addEliteFields['ctl00$MainContent$txtInstallerLName'] = 'Arutyunov';
-        addEliteFields['ctl00$MainContent$DropDownList1'] = deal.serial;
-        addEliteFields['ctl00$MainContent$AccountNumber'] = deal.account;
-        addEliteFields['ctl00$MainContent$firstname'] = deal.firstName;
-        addEliteFields['ctl00$MainContent$lastname'] = deal.lastName;
-        addEliteFields['ctl00$MainContent$VIN'] = deal.vin;
-        addEliteFields['ctl00$MainContent$Color'] = deal.color;
-        addEliteFields['ctl00$MainContent$btnAddCust'] = 'Add';
+          // Step 4: Check if serial is in dropdown
+          var found = false;
+          var opts = dropdown.querySelectorAll('option');
+          for (var j = 0; j < opts.length; j++) {
+            if (opts[j].value === deal.serial || opts[j].textContent.trim() === deal.serial) {
+              found = true; break;
+            }
+          }
+          if (!found) {
+            log('\u23ED\uFE0F  Serial ' + deal.serial + ' not in Passtime inventory', '#f59e0b');
+            skipCount++;
+            continue;
+          }
 
-        var addResult = await postForm(BASE + 'AddElite.aspx', addEliteFields);
-        var addResultUrl = addResult.url.toLowerCase();
-        var addResultText = addResult.doc.body ? addResult.doc.body.innerText : '';
+          // Step 5: Fill and submit the form
+          ifrDoc.getElementById('MainContent_txtInstallerFName').value = 'Vladimir';
+          ifrDoc.getElementById('MainContent_txtInstallerLName').value = 'Arutyunov';
+          dropdown.value = deal.serial;
+          ifrDoc.getElementById('MainContent_AccountNumber').value = deal.account;
+          ifrDoc.getElementById('MainContent_firstname').value = deal.firstName;
+          ifrDoc.getElementById('MainContent_lastname').value = deal.lastName;
+          ifrDoc.getElementById('MainContent_VIN').value = deal.vin;
+          ifrDoc.getElementById('MainContent_Color').value = deal.color;
+          ifrDoc.getElementById('MainContent_btnAddCust').click();
 
-        if (addResultUrl.includes('viewdetail.aspx')) {
-          log('\u2705 Added!', '#30d158');
-          await sbPatch('deals', deal.id, { gps_uploaded: true });
-          log('\u{1F4E4} Marked done in Supabase', '#30d158');
-          successCount++;
-        } else if (addResultText.includes('OASIS Error')) {
-          log('\u274C OASIS Error \u2014 try again', '#ef4444');
-          skipCount++;
-        } else {
-          log('\u274C Add may have failed', '#ef4444');
+          // Step 6: Wait for result
+          await new Promise(function(r) { ifr.onload = r; setTimeout(r, 5000); });
+          await sleep(1000);
+          var resultUrl = ifr.contentWindow.location.href.toLowerCase();
+
+          if (resultUrl.includes('viewdetail.aspx')) {
+            log('\u2705 Added!', '#30d158');
+            await sbPatch('deals', deal.id, { gps_uploaded: true });
+            log('\u{1F4E4} Marked done in Supabase', '#30d158');
+            successCount++;
+          } else {
+            var resultText = (ifr.contentDocument || ifr.contentWindow.document).body.innerText || '';
+            if (resultText.includes('OASIS Error')) {
+              log('\u274C OASIS Error', '#ef4444');
+            } else {
+              log('\u274C Add may have failed', '#ef4444');
+              log('  URL: ' + ifr.contentWindow.location.href, '#888');
+            }
+            skipCount++;
+          }
+        } catch(addErr) {
+          log('\u274C Add error: ' + addErr.message, '#ef4444');
           skipCount++;
         }
+        // Clean up iframe
+        var oldIfr = document.getElementById('gps-sync-iframe');
+        if (oldIfr) oldIfr.remove();
       }
     } catch(err) {
       log('\u274C Error: ' + err.message, '#ef4444');
