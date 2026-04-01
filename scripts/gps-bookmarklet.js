@@ -19,9 +19,12 @@
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
-  // Detect the correct base path from current URL (Dashboard or CodeSite)
+  var ORIGIN = 'https://secure.passtimeusa.com';
+  // Search page works under Dashboard or CodeSite
   var pathMatch = location.pathname.match(/\/OCMSv2\/([^\/]+)\//);
-  var BASE = 'https://secure.passtimeusa.com/OCMSv2/' + (pathMatch ? pathMatch[1] : 'Dashboard') + '/';
+  var SEARCH_BASE = ORIGIN + '/OCMSv2/' + (pathMatch ? pathMatch[1] : 'Dashboard') + '/';
+  // Edit/Add pages are always under CodeSite
+  var BASE = ORIGIN + '/OCMSv2/CodeSite/';
 
   // ── Status Panel ────────────────────────────────────────────────────────────
   if (document.getElementById('gps-sync-panel')) {
@@ -129,7 +132,7 @@
   log('\u{1F4E1} Fetching deals from Supabase...');
   var deals;
   try {
-    deals = await sbGet('deals', 'deal_type=eq.finance&gps_uploaded=eq.false&order=created_at.asc');
+    deals = await sbGet('deals', 'gps_uploaded=eq.false&order=created_at.asc');
   } catch(e) {
     log('\u274C ' + e.message, '#ef4444');
     return;
@@ -150,7 +153,7 @@
   log('\u{1F680} Connecting to OASIS...');
   var dashPage;
   try {
-    dashPage = await fetchPage(BASE + 'CustomerRpt.aspx');
+    dashPage = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
   } catch(e) {
     log('\u274C Cannot reach OASIS: ' + e.message, '#ef4444');
     log('Current page: ' + location.href, '#888');
@@ -200,7 +203,7 @@
     try {
       // Step 1: Load search page
       log('\u{1F50D} Searching...');
-      var searchPage = await fetchPage(BASE + 'CustomerRpt.aspx');
+      var searchPage = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
       var searchFields = getAspFields(searchPage.doc);
 
       // Set search dropdown to SerialNumber and fill search text
@@ -208,7 +211,7 @@
       searchFields['ctl00$searchCustomerCTL$searchTxt'] = deal.serial;
       searchFields['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
 
-      var resultPage = await postForm(BASE + 'CustomerRpt.aspx', searchFields);
+      var resultPage = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', searchFields);
       var resultUrl = resultPage.url;
       var resultDoc = resultPage.doc;
 
