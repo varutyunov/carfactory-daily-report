@@ -960,7 +960,8 @@ canvas{display:none;}
     </div>
     <div id="forms-inner-tabs" style="display:flex;gap:0;padding:0 16px 10px;">
       <button onclick="formsInnerTab('deposits')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>
-      <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
+      <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
+      <button onclick="formsInnerTab('void')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>
     </div>
   </div>
   <div id="forms-body" style="padding-top:100px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
@@ -8147,6 +8148,153 @@ function _txInit() {
   </div>
 </div><!-- /inv-overlay -->
 
+<!-- VOID / RELEASE OVERLAY -->
+<div id="vr-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="vrBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">VOID / RELEASE</span>
+  </div>
+  <div id="vr-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+
+    <!-- STEP 1: CUSTOMER & VEHICLE -->
+    <div id="vr-step1" style="padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 2 — Customer & Vehicle</div>
+      <div style="font-size:14px;color:#666;margin-bottom:16px;">Enter customer and vehicle information</div>
+
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Customer</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;">
+          <input id="vr-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="First Name"/>
+        </div>
+        <div style="flex:1;">
+          <input id="vr-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Last Name"/>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <input id="vr-cocustomer" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Co-Customer (optional)"/>
+      </div>
+
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>
+      <input id="vr-car-search" placeholder="Search inventory or past deals..." oninput="vrFilterVehicles(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;margin-bottom:10px;"/>
+      <div id="vr-car-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;max-height:220px;overflow-y:auto;"></div>
+      <div id="vr-car-selected" style="display:none;background:#111;border:1px solid #ef444444;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div id="vr-car-sel-name" style="font-size:15px;font-weight:700;color:#fff;"></div>
+            <div id="vr-car-sel-detail" style="font-size:12px;color:#666;margin-top:2px;"></div>
+          </div>
+          <button onclick="vrClearVehicle()" style="background:none;border:none;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;">Change</button>
+        </div>
+      </div>
+      <div id="vr-car-manual-toggle" style="margin-bottom:10px;">
+        <button onclick="document.getElementById('vr-car-manual').style.display='block';this.style.display='none';" style="background:none;border:none;color:#ef4444;font-size:13px;font-weight:600;cursor:pointer;padding:0;">+ Enter vehicle manually</button>
+      </div>
+      <div id="vr-car-manual" style="display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div style="width:70px;"><input id="vr-year" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Year"/></div>
+          <div style="flex:1;"><input id="vr-make" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Make"/></div>
+          <div style="flex:1;"><input id="vr-model" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Model"/></div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <input id="vr-vin" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="VIN"/>
+        </div>
+        <div style="margin-bottom:10px;">
+          <input id="vr-acct" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Account # (optional)"/>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:16px;">Forms to Generate</div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;">
+        <button id="vr-sel-both" onclick="vrSetFormType('both')" style="flex:1;padding:12px 8px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #ef4444;background:#ef4444;color:#fff;">Both</button>
+        <button id="vr-sel-void" onclick="vrSetFormType('void')" style="flex:1;padding:12px 8px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Void Only</button>
+        <button id="vr-sel-release" onclick="vrSetFormType('release')" style="flex:1;padding:12px 8px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Release Only</button>
+      </div>
+
+      <button onclick="vrGoPreview()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Preview Forms</button>
+    </div>
+
+    <!-- STEP 2: PREVIEW & PRINT -->
+    <div id="vr-step2" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 2 of 2 — Preview & Print</div>
+
+      <!-- DEAL VOID FORM -->
+      <div id="vr-void-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
+        <div style="padding:0.3in 0.5in;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div id="vr-void-entity" style="font-size:14px;font-weight:700;">Premier Auto Group dba</div>
+            <div id="vr-void-dealer" style="font-size:14px;font-weight:700;">Car Factory</div>
+            <div id="vr-void-address" style="font-size:14px;"></div>
+          </div>
+          <div style="margin-bottom:20px;">
+            <span id="vr-void-dba-full" style="font-weight:700;"></span> will be referred to as &ldquo;dealer&rdquo;
+          </div>
+          <div style="margin-bottom:20px;">
+            <span style="border-bottom:1px solid #000;padding:0 30px;" id="vr-void-vehicle-desc"></span> (Vin# <span id="vr-void-vin" style="border-bottom:1px solid #000;padding:0 20px;"></span>) will be referred to as &ldquo;vehicle&rdquo;
+          </div>
+          <div style="margin-bottom:14px;text-indent:2em;">
+            I<span style="border-bottom:1px solid #000;padding:0 40px;" id="vr-void-customer"></span> relinquish all rights to the &ldquo;vehicle&rdquo;, and am voluntarily surrendering it back to the &ldquo;dealer&rdquo;. All paperwork received from the &ldquo;dealer&rdquo; that is associated with the &ldquo;vehicle&rdquo; is now void. Further, I give permission to the &ldquo;dealer&rdquo; to void any ownership of the &ldquo;vehicle&rdquo; with the Florida Department of Motor Vehicles.
+          </div>
+          <div style="margin-top:60px;display:flex;justify-content:space-between;align-items:flex-end;">
+            <div><div style="border-bottom:1px solid #000;width:200px;height:20px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Sign</div></div>
+            <div><div style="border-bottom:1px solid #000;width:120px;height:20px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Date</div></div>
+          </div>
+          <div style="margin-top:30px;">
+            <div style="border-bottom:1px solid #000;width:200px;height:20px;"></div>
+            <div style="font-size:13px;font-weight:600;margin-top:4px;">Print</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RELEASE / SURRENDER FORM -->
+      <div id="vr-release-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:13px;line-height:1.35;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
+        <div style="padding:0.25in 0.42in;">
+          <div style="text-align:center;margin-bottom:14px;padding:12px;background:#ddd;">
+            <div style="font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;">Surrender of Vehicle</div>
+            <div style="font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;">In Full Satisfaction of Debt</div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:8px;border:1px solid #000;">
+            <tr>
+              <td style="border:1px solid #000;padding:6px 8px;width:33%;"><span style="font-variant:small-caps;font-weight:600;">Year</span><br><span id="vr-rel-year"></span></td>
+              <td style="border:1px solid #000;padding:6px 8px;width:34%;"><span style="font-variant:small-caps;font-weight:600;">Make/Model</span><br><span id="vr-rel-makemodel"></span></td>
+              <td style="border:1px solid #000;padding:6px 8px;width:33%;"><span style="font-variant:small-caps;font-weight:600;">Identification Number</span><br><span id="vr-rel-vin"></span></td>
+            </tr>
+            <tr>
+              <td style="border:1px solid #000;padding:6px 8px;"><span style="font-variant:small-caps;font-weight:600;">Account No.</span><br><span id="vr-rel-acct"></span></td>
+              <td colspan="2" style="border:1px solid #000;padding:6px 8px;"><span style="font-variant:small-caps;font-weight:600;">Dealer Name</span><br><div style="text-align:center;font-weight:700;font-size:14px;margin-top:2px;">CAR FACTORY</div></td>
+            </tr>
+          </table>
+          <div style="margin:18px 0 14px;">
+            TO: <span style="border-bottom:1px solid #000;padding:0 30px;">Car Factory</span> <span style="float:right;">(Secured Party)</span>
+          </div>
+          <div style="margin-bottom:18px;text-align:justify;">
+            I/WE, <span style="border-bottom:1px solid #000;padding:0 30px;" id="vr-rel-customer"></span>, being in default in the payment of my/our obligations to the above named secured party, hereby consent(s) to the secured party&rsquo;s acceptance of the vehicle in full satisfaction of my/our obligation to the secured party. I/We specifically acknowledge that this consent is given after the secured party obtained possession of my/our vehicle either through repossession or my/our voluntary surrender of the vehicle to the secured party. I/We furthermore acknowledge that the secured party shall have no obligation to account to me/us for any surplus, if any, obtained upon disposition of the collateral. To the extent permissible under applicable law, I/we hereby expressly waive any rights which I/we may have accruing to me/us under the Uniform Commercial Code, as adopted by the state, including, but not limited to, a specific waiver of any mandatory disposition of the vehicle. I/We furthermore expressly represent that by execution of this instrument, I/we have removed and retained all of my/our personal items from said vehicle and I/we release secured party from any liability for any property in the vehicle after the execution of this notice. To the extent any portion of this agreement shall be prohibited by, invalid or or unenforceable under applicable law, such portion shall be severed and ineffective, and the remainder of this Agreement shall not be affected and shall continue to be in full force and effect.
+          </div>
+          <div style="margin-bottom:24px;">
+            Dated this<span style="border-bottom:1px solid #000;padding:0 12px;" id="vr-rel-day"></span> day of <span style="border-bottom:1px solid #000;padding:0 30px;" id="vr-rel-month"></span>, 20<span style="border-bottom:1px solid #000;padding:0 10px;" id="vr-rel-yr2"></span> at <span style="border-bottom:1px solid #000;padding:0 40px;"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
+            <div style="width:45%;">Witness <span style="border-bottom:1px solid #000;display:inline-block;width:180px;"></span></div>
+            <div style="width:45%;"><span style="border-bottom:1px solid #000;display:inline-block;width:200px;"></span><br>Customer</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
+            <div style="width:45%;">Witness <span style="border-bottom:1px solid #000;display:inline-block;width:180px;"></span></div>
+            <div style="width:45%;"><span style="border-bottom:1px solid #000;display:inline-block;width:200px;"></span><br>Co-Customer</div>
+          </div>
+          <div style="text-align:center;margin-top:16px;">
+            <span style="border-bottom:1px solid #000;display:inline-block;width:240px;"></span><br>Secured Party Representative
+          </div>
+        </div>
+      </div>
+
+      <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
+        <button onclick="vrPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Forms</button>
+        <button onclick="vrClose()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /vr-overlay -->
+
 <style>
 @media print {
   body, html { background: white !important; height: auto !important; }
@@ -8184,6 +8332,26 @@ function _txInit() {
   #inv-overlay[style*="flex"] #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
   body.printing-invoice #inv-print-form > div,
   #inv-overlay[style*="flex"] #inv-print-form > div { page-break-inside: avoid; }
+
+  /* Void/Release print */
+  body.printing-vr #vr-overlay,
+  #vr-overlay[style*="flex"] { display: block !important; position: static !important; background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
+  body.printing-vr #vr-overlay > div:first-child,
+  #vr-overlay[style*="flex"] > div:first-child { display: none !important; }
+  body.printing-vr #vr-body,
+  #vr-overlay[style*="flex"] #vr-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
+  body.printing-vr #vr-step1,
+  #vr-overlay[style*="flex"] #vr-step1 { display: none !important; }
+  body.printing-vr #vr-step2,
+  #vr-overlay[style*="flex"] #vr-step2 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  body.printing-vr #vr-step2 > div:first-child,
+  #vr-overlay[style*="flex"] #vr-step2 > div:first-child { display: none !important; }
+  body.printing-vr #vr-step2 > div:last-child,
+  #vr-overlay[style*="flex"] #vr-step2 > div:last-child { display: none !important; }
+  body.printing-vr #vr-void-form,
+  #vr-overlay[style*="flex"] #vr-void-form,
+  body.printing-vr #vr-release-form,
+  #vr-overlay[style*="flex"] #vr-release-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; page-break-after: always; }
 }
 </style>
 
@@ -8895,7 +9063,7 @@ var _invFiltered = [];
 
 function formsInnerTab(tab){
   _formsActiveTab = tab;
-  ['deposits','invoices'].forEach(function(t){
+  ['deposits','invoices','void'].forEach(function(t){
     var btn=document.getElementById('forms-tab-'+t);
     if(btn){btn.style.background=t===tab?'#fff':'#111';btn.style.color=t===tab?'#000':'#666';}
   });
@@ -8903,12 +9071,17 @@ function formsInnerTab(tab){
     document.getElementById('forms-search').placeholder='Search by name, vehicle, stock...';
     document.getElementById('forms-search').oninput=function(){formsFilter(this.value);};
     document.getElementById('forms-search').value='';
+    document.getElementById('forms-search').style.display='';
     loadForms();
-  } else {
+  } else if(tab==='invoices'){
     document.getElementById('forms-search').placeholder='Search invoices...';
     document.getElementById('forms-search').oninput=function(){invFilterList(this.value);};
     document.getElementById('forms-search').value='';
+    document.getElementById('forms-search').style.display='';
     loadInvoices();
+  } else if(tab==='void'){
+    document.getElementById('forms-search').style.display='none';
+    loadVoidRelease();
   }
 }
 
@@ -9221,6 +9394,176 @@ async function invSave(){
     if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
     if(btn){btn.textContent='Save Invoice';btn.disabled=false;}
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// VOID / RELEASE FORM LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _vrFormType = 'both'; // 'both','void','release'
+var _vrData = {};
+var _vrVehicles = [];
+
+function loadVoidRelease(){
+  var list=document.getElementById('forms-list');
+  list.innerHTML='<button onclick="openVoidRelease()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Void / Release</button><div style="text-align:center;color:#555;padding:30px 0;font-size:13px;">Generate Deal Void and Vehicle Surrender forms</div>';
+}
+
+function openVoidRelease(){
+  _vrData={};_vrFormType='both';
+  document.getElementById('vr-overlay').style.display='flex';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
+  vrShowStep(1);
+  vrSetFormType('both');
+  ['vr-fname','vr-lname','vr-cocustomer','vr-year','vr-make','vr-model','vr-vin','vr-acct','vr-car-search'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('vr-car-selected').style.display='none';
+  document.getElementById('vr-car-list').innerHTML='';
+  document.getElementById('vr-car-manual').style.display='none';
+  document.getElementById('vr-car-manual-toggle').style.display='';
+  vrLoadVehicles();
+}
+
+function vrClose(){
+  document.getElementById('vr-overlay').style.display='none';
+  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
+}
+
+function vrBack(){
+  var s2=document.getElementById('vr-step2');
+  if(s2&&s2.style.display!=='none'){vrShowStep(1);return;}
+  vrClose();
+}
+
+function vrShowStep(n){
+  [1,2].forEach(function(s){var el=document.getElementById('vr-step'+s);if(el)el.style.display=s===n?'block':'none';});
+}
+
+function vrSetFormType(t){
+  _vrFormType=t;
+  ['both','void','release'].forEach(function(b){
+    var btn=document.getElementById('vr-sel-'+b);
+    if(btn){btn.style.background=b===t?'#ef4444':'transparent';btn.style.color=b===t?'#fff':'#888';btn.style.borderColor=b===t?'#ef4444':'#333';}
+  });
+}
+
+async function vrLoadVehicles(){
+  _vrVehicles=[];
+  try{
+    var cars=_inventoryData||[];
+    cars.forEach(function(c){
+      _vrVehicles.push({label:c.name||'',year:(c.name||'').split(' ')[0]||'',make:(c.name||'').split(' ')[1]||'',model:(c.name||'').split(' ').slice(2).join(' ')||'',vin:c.vin||'',stock:c.stock_number||'',color:c.color||'',source:'inventory'});
+    });
+  }catch(e){}
+  try{
+    var deps=await sbGet('deposits','select=customer_name,vehicle_desc,vin,stock&order=created_at.desc&limit=50');
+    deps.forEach(function(d){
+      if(!d.vehicle_desc)return;
+      if(d.vin&&_vrVehicles.some(function(v){return v.vin&&v.vin===d.vin;}))return;
+      var parts=(d.vehicle_desc||'').split(' ');
+      _vrVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',stock:d.stock||'',color:'',source:'deposit',customer:d.customer_name||''});
+    });
+  }catch(e){}
+}
+
+function vrFilterVehicles(q){
+  var list=document.getElementById('vr-car-list');if(!list)return;
+  if(!q||q.length<2){list.innerHTML='';return;}
+  var matches=_vrVehicles.filter(function(v){return fuzzyMatch([v.label,v.vin,v.stock,v.color,v.customer||''],q);});
+  if(!matches.length){list.innerHTML='<div style="color:#555;font-size:13px;padding:8px;">No matches</div>';return;}
+  list.innerHTML=matches.slice(0,6).map(function(v,i){
+    return '<div onclick="vrSelectVehicle('+i+',\''+q.replace(/'/g,"\\'")+'\')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;cursor:pointer;"><div style="font-size:14px;font-weight:600;color:#fff;">'+v.label+'</div><div style="font-size:11px;color:#666;margin-top:2px;">VIN: '+(v.vin||'N/A')+' · Stock: '+(v.stock||'N/A')+(v.customer?' · '+v.customer:'')+'</div></div>';
+  }).join('');
+  // Store filtered for selection
+  list._vrFiltered=matches.slice(0,6);
+}
+
+function vrSelectVehicle(idx,q){
+  var list=document.getElementById('vr-car-list');
+  var matches=list._vrFiltered||[];
+  var v=matches[idx];if(!v)return;
+  _vrData.year=v.year;_vrData.make=v.make;_vrData.model=v.model;_vrData.vin=v.vin;_vrData.stock=v.stock;
+  document.getElementById('vr-car-sel-name').textContent=v.label;
+  document.getElementById('vr-car-sel-detail').textContent='VIN: '+(v.vin||'N/A')+' · Stock: '+(v.stock||'N/A');
+  document.getElementById('vr-car-selected').style.display='block';
+  document.getElementById('vr-car-list').innerHTML='';
+  document.getElementById('vr-car-search').value='';
+  document.getElementById('vr-car-manual').style.display='none';
+  document.getElementById('vr-car-manual-toggle').style.display='none';
+  // Pre-fill manual fields too
+  var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
+  set('vr-year',v.year);set('vr-make',v.make);set('vr-model',v.model);set('vr-vin',v.vin);
+  // If vehicle came from deposit, pre-fill customer
+  if(v.customer){
+    var cp=v.customer.split(' ');
+    if(!document.getElementById('vr-fname').value){set('vr-fname',cp[0]||'');set('vr-lname',cp.slice(1).join(' ')||'');}
+  }
+}
+
+function vrClearVehicle(){
+  document.getElementById('vr-car-selected').style.display='none';
+  document.getElementById('vr-car-manual-toggle').style.display='';
+  _vrData.year='';_vrData.make='';_vrData.model='';_vrData.vin='';
+  ['vr-year','vr-make','vr-model','vr-vin','vr-acct'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+}
+
+function vrGoPreview(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+  if(!g('vr-fname')&&!g('vr-lname')){alert('Please enter customer name.');return;}
+  var yr=_vrData.year||g('vr-year');
+  var mk=_vrData.make||g('vr-make');
+  var md=_vrData.model||g('vr-model');
+  var vin=_vrData.vin||g('vr-vin');
+  if(!yr||!mk){alert('Please select or enter a vehicle.');return;}
+  if(!vin){alert('Please enter VIN.');return;}
+
+  var fullName=[g('vr-fname'),g('vr-lname')].filter(Boolean).join(' ');
+  var coCustomer=g('vr-cocustomer');
+  var acct=g('vr-acct');
+  var vehicleDesc=[yr,mk,md].filter(Boolean).join(' ');
+  var makeModel=[mk,md].filter(Boolean).join(' ');
+  var now=new Date();
+  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  var isDeLand=me&&me.location==='DeLand';
+
+  // Populate VOID form
+  var showVoid=_vrFormType==='both'||_vrFormType==='void';
+  var showRelease=_vrFormType==='both'||_vrFormType==='release';
+  document.getElementById('vr-void-form').style.display=showVoid?'block':'none';
+  document.getElementById('vr-release-form').style.display=showRelease?'block':'none';
+
+  if(showVoid){
+    var dealerName=isDeLand?'Car Factory Deland':'Car Factory';
+    var dbaFull=isDeLand?'Premier Auto Group LLC dba Car Factory Deland':'Premier Auto Group LLC dba Car Factory';
+    var addr=isDeLand?'1117 N Woodland Blvd\nDeland FL 32720':'100 S Charles Richard Beall Blvd\nDeBary, FL 32713';
+    document.getElementById('vr-void-dealer').textContent=dealerName;
+    document.getElementById('vr-void-address').innerHTML=addr.replace(/\n/g,'<br>');
+    document.getElementById('vr-void-dba-full').textContent=dbaFull;
+    document.getElementById('vr-void-vehicle-desc').textContent=vehicleDesc;
+    document.getElementById('vr-void-vin').textContent=vin;
+    document.getElementById('vr-void-customer').textContent=fullName;
+  }
+
+  if(showRelease){
+    document.getElementById('vr-rel-year').textContent=yr;
+    document.getElementById('vr-rel-makemodel').textContent=makeModel;
+    document.getElementById('vr-rel-vin').textContent=vin;
+    document.getElementById('vr-rel-acct').textContent=acct||'';
+    document.getElementById('vr-rel-customer').textContent=fullName;
+    document.getElementById('vr-rel-day').textContent=now.getDate();
+    document.getElementById('vr-rel-month').textContent=months[now.getMonth()];
+    document.getElementById('vr-rel-yr2').textContent=String(now.getFullYear()).slice(2);
+  }
+
+  vrShowStep(2);
+}
+
+function vrPrint(){
+  document.body.classList.add('printing-vr');
+  var cleanup=function(){document.body.classList.remove('printing-vr');window.onafterprint=null;};
+  window.onafterprint=cleanup;
+  window.print();
+  setTimeout(cleanup,3000);
 }
 
 // ══════════════════════════════════════════════════════════════
