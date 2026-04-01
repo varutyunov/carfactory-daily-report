@@ -34,8 +34,8 @@
   panel.id = 'gps-sync-panel';
   panel.style.cssText = 'position:fixed;top:10px;right:10px;width:420px;max-height:90vh;overflow-y:auto;background:#111;color:#fff;border:2px solid #30d158;border-radius:16px;padding:20px;z-index:99999;font-family:system-ui,sans-serif;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);';
   panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-size:20px;font-weight:800;color:#30d158;">\u{1F6F0}\uFE0F GPS Sync</div><div id="gps-sync-close" style="cursor:pointer;font-size:22px;color:#666;padding:0 4px;line-height:1;" title="Close">\u2715</div></div><div id="gps-sync-log" style="white-space:pre-wrap;line-height:1.6;"></div>';
-  document.getElementById('gps-sync-close').onclick = function() { panel.remove(); };
   document.body.appendChild(panel);
+  document.getElementById('gps-sync-close').onclick = function() { panel.remove(); };
 
   var logEl = document.getElementById('gps-sync-log');
   function log(msg, color) {
