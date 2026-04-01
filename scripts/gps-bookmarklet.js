@@ -306,22 +306,16 @@
         var addPage = await fetchPage(BASE + 'Add.aspx');
         var addDoc = addPage.doc;
 
-        // Inspect Encore element and POST through Add.aspx properly
-        var encoreEl = addDoc.querySelector('#MainContent_imgEncore');
-        if (encoreEl) {
-          var parentEl = encoreEl.parentElement;
-          log('  Encore: <' + encoreEl.tagName + '> src=' + (encoreEl.src||'') + ' href=' + (encoreEl.href||''), '#888');
-          log('  Parent: <' + parentEl.tagName + '> href=' + (parentEl.href||''), '#888');
-        }
-
-        // Try __doPostBack approach for ASP.NET navigation
+        // ImageButton posts with .x/.y to its PostBackUrl (AddElite.aspx)
         var addFields = getAspFields(addDoc);
-        addFields['__EVENTTARGET'] = 'ctl00$MainContent$imgEncore';
-        addFields['__EVENTARGUMENT'] = '';
-        var addElitePage = await postForm(BASE + 'Add.aspx', addFields);
+        var encoreEl = addDoc.querySelector('#MainContent_imgEncore');
+        var encoreName = encoreEl ? (encoreEl.name || 'ctl00$MainContent$imgEncore') : 'ctl00$MainContent$imgEncore';
+        addFields[encoreName + '.x'] = '1';
+        addFields[encoreName + '.y'] = '1';
+        // ASP.NET ImageButton with PostBackUrl posts to the target page
+        var addElitePage = await postForm(BASE + 'AddElite.aspx', addFields);
         var addEliteDoc = addElitePage.doc;
         var addEliteFields = getAspFields(addEliteDoc);
-        log('  Result page: ' + (addElitePage.url || ''), '#888');
 
         // Debug: show what page we landed on
         var addEliteTitle = addEliteDoc.title || 'no title';
