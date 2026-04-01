@@ -305,21 +305,8 @@
         var addPage = await fetchPage(BASE + 'Add.aspx');
         var addDoc = addPage.doc;
 
-        // Check for Encore link/image
-        var encoreLink = addDoc.querySelector('#MainContent_imgEncore');
-        if (!encoreLink) {
-          log('\u274C Encore option not found on Add page', '#ef4444');
-          skipCount++;
-          continue;
-        }
-
-        // POST through Add.aspx to navigate to AddElite (ASP.NET requires postback)
-        var addFields = getAspFields(addDoc);
-        // The Encore image is an ImageButton — ASP.NET expects .x and .y coords
-        var encoreName = 'ctl00$MainContent$imgEncore';
-        addFields[encoreName + '.x'] = '1';
-        addFields[encoreName + '.y'] = '1';
-        var addElitePage = await postForm(BASE + 'Add.aspx', addFields);
+        // Visit Add.aspx to establish session, then GET AddElite.aspx
+        var addElitePage = await fetchPage(BASE + 'AddElite.aspx');
         var addEliteDoc = addElitePage.doc;
         var addEliteFields = getAspFields(addEliteDoc);
 
