@@ -313,8 +313,13 @@
           continue;
         }
 
-        // Navigate to AddElite page
-        var addElitePage = await fetchPage(BASE + 'AddElite.aspx');
+        // POST through Add.aspx to navigate to AddElite (ASP.NET requires postback)
+        var addFields = getAspFields(addDoc);
+        // The Encore image is an ImageButton — ASP.NET expects .x and .y coords
+        var encoreName = 'ctl00$MainContent$imgEncore';
+        addFields[encoreName + '.x'] = '1';
+        addFields[encoreName + '.y'] = '1';
+        var addElitePage = await postForm(BASE + 'Add.aspx', addFields);
         var addEliteDoc = addElitePage.doc;
         var addEliteFields = getAspFields(addEliteDoc);
 
