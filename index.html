@@ -1087,6 +1087,14 @@ canvas{display:none;}
         <button onclick="payWeekNav(1)" style="background:none;border:1px solid #1e1e1e;border-radius:10px;color:#888;font-size:18px;padding:8px 14px;cursor:pointer;">&#9654;</button>
       </div>
 
+      <!-- Deal Cash Toggle (owners only) -->
+      <div id="pay-deal-toggle-wrap" style="display:none;margin-bottom:12px;">
+        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
+          <button id="pay-deal-off" onclick="paySetDealCash(false)" style="flex:1;padding:8px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">Payments Only</button>
+          <button id="pay-deal-on"  onclick="paySetDealCash(true)"  style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">+ Deal Cash</button>
+        </div>
+      </div>
+
       <!-- Week Stats Row 1: Payments + Cash In -->
       <div style="display:flex;gap:10px;margin-bottom:10px;">
         <div style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
@@ -1096,6 +1104,7 @@ canvas{display:none;}
         <div style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
           <div id="pay-stat-total" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">$0</div>
           <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash In</div>
+          <div id="pay-deal-cash-label" style="display:none;font-size:10px;color:#4ade80;opacity:.6;margin-top:3px;"></div>
         </div>
       </div>
 
@@ -10020,6 +10029,8 @@ var _payLocation = 'DeBary';
 var _payCurrentWeekStart = null;
 var _payWeekData = [];
 var _payBreakdown = {cash:0, card:0, check:0, other:0, total:0};
+var _payIncludeDeals = false;
+var _payDealCashRows = []; // deals from current week with pickup_payment
 var _payReceiptDataUrl = null;
 var _payMethod = 'cash';
 var _payCardFeeAdded = false;
@@ -10098,6 +10109,17 @@ function openPayScan(){
     openPayScanForm();
     return;
   }
+  // Deal Cash toggle — owners only, reset to off each open
+  _payIncludeDeals=false;
+  _payDealCashRows=[];
+  var dealToggle=document.getElementById('pay-deal-toggle-wrap');
+  if(dealToggle) dealToggle.style.display=_payIsOwner()?'block':'none';
+  if(_payIsOwner()){
+    var btnOff=document.getElementById('pay-deal-off');
+    var btnOn=document.getElementById('pay-deal-on');
+    if(btnOff){btnOff.style.background='#fff';btnOff.style.color='#000';}
+    if(btnOn){btnOn.style.background='none';btnOn.style.color='#555';}
+  }
   // Cash paid out button — only for Manny/Jesse/owners
   var cashoutBtn=document.getElementById('pay-cashout-btn');
   if(cashoutBtn) cashoutBtn.style.display=_cashPayoutIsUser()?'block':'none';
@@ -10125,7 +10147,40 @@ function paySetLocation(loc){
     if(loc==='DeBary'){sdb.style.background='#fff';sdb.style.color='#000';sdl.style.background='none';sdl.style.color='#555';}
     else{sdl.style.background='#fff';sdl.style.color='#000';sdb.style.background='none';sdb.style.color='#555';}
   }
+  _payDealCashRows=[];
   loadPaymentWeek();
+  if(_payIncludeDeals) _payLoadDealCash().then(function(){ _payUpdateStats(); });
+}
+
+async function paySetDealCash(on){
+  _payIncludeDeals=on;
+  // Update toggle UI
+  var btnOff=document.getElementById('pay-deal-off');
+  var btnOn=document.getElementById('pay-deal-on');
+  if(btnOff&&btnOn){
+    if(on){
+      btnOn.style.background='#4ade80';btnOn.style.color='#000';
+      btnOff.style.background='none';btnOff.style.color='#555';
+    } else {
+      btnOff.style.background='#fff';btnOff.style.color='#000';
+      btnOn.style.background='none';btnOn.style.color='#555';
+    }
+  }
+  if(on) await _payLoadDealCash();
+  _payUpdateStats();
+}
+
+async function _payLoadDealCash(){
+  // Get deals for the current week + location that have a pickup_payment
+  var weekStart=_payCurrentWeekStart;
+  var weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
+  var ws=weekStart.toISOString().slice(0,10);
+  var we=weekEnd.toISOString().slice(0,10);
+  var loc=_payLocation; // 'DeBary' or 'DeLand'
+  try{
+    var rows=await sbGet('deals','pickup_payment=gt.0&location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,pickup_payment,created_at,location');
+    _payDealCashRows=Array.isArray(rows)?rows:[];
+  }catch(e){ _payDealCashRows=[]; }
 }
 
 function payWeekNav(dir){
@@ -10138,8 +10193,10 @@ function payWeekNav(dir){
     if(ws>currentWeekStart) return;
   }
   _payCurrentWeekStart=ws;
+  _payDealCashRows=[];
   _payUpdateWeekLabel();
   loadPaymentWeek();
+  if(_payIncludeDeals) _payLoadDealCash().then(function(){ _payUpdateStats(); });
 }
 
 function _payUpdateWeekLabel(){
@@ -10327,16 +10384,28 @@ function _payUpdateStats(){
   });
   _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
   var fmt=function(v){return '$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
+  // Add deal cash if toggle is on
+  var dealCash=0;
+  if(_payIncludeDeals){
+    (_payDealCashRows||[]).forEach(function(d){dealCash+=parseFloat(d.pickup_payment)||0;});
+  }
+  var cashIn=cash+dealCash;
   document.getElementById('pay-stat-count').textContent=count;
-  document.getElementById('pay-stat-total').textContent=fmt(cash);
+  // Show deal cash indicator in label if active
+  var cashInEl=document.getElementById('pay-stat-total');
+  var cashInLabel=document.querySelector('#pay-stat-total+div');
+  if(cashInEl) cashInEl.textContent=fmt(cashIn);
+  var dealLabel=document.getElementById('pay-deal-cash-label');
+  if(dealLabel) dealLabel.style.display=(_payIncludeDeals&&dealCash>0)?'block':'none';
+  if(dealLabel&&dealCash>0) dealLabel.textContent='Pmts '+fmt(cash)+' + Deals '+fmt(dealCash);
   // Cash out = sum of payouts
   var paidOut=0;
   (_cashPayouts||[]).forEach(function(p){paidOut+=parseFloat(p.amount)||0;});
   // Update Cash Out tile
   var coEl=document.getElementById('pay-stat-cashout');
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
-  // Net Cash = cash in - cash out
-  var netCash=cash-paidOut;
+  // Net Cash = cash in + deal cash - cash out
+  var netCash=cashIn-paidOut;
   var ne=document.getElementById('pay-stat-net');
   if(ne){
     ne.textContent=(netCash<0?'-':'')+fmt(netCash);
