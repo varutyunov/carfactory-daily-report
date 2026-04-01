@@ -121,13 +121,15 @@
 
   // Wait for popup to load
   function waitForPopup(urlContains, maxWait) {
-    maxWait = maxWait || 20000;
+    maxWait = maxWait || 30000;
     return new Promise(function(resolve) {
       var start = Date.now();
+      var lastErr = '';
       var interval = setInterval(function() {
         try {
           if (popup.closed) {
             clearInterval(interval);
+            log('  ⚠ Popup was closed', '#f59e0b');
             resolve(false);
             return;
           }
@@ -138,12 +140,19 @@
             setTimeout(function() { resolve(true); }, 1000);
             return;
           }
-        } catch(e) { /* cross-origin or loading */ }
+        } catch(e) {
+          if (e.message !== lastErr) {
+            lastErr = e.message;
+            log('  ⏳ Waiting... (' + e.message.substring(0,60) + ')', '#555');
+          }
+        }
         if (Date.now() - start > maxWait) {
           clearInterval(interval);
+          log('  ⏱ Timed out after ' + (maxWait/1000) + 's', '#ef4444');
+          try { log('  URL: ' + popup.location.href, '#888'); } catch(e2) { log('  URL: cross-origin blocked', '#888'); }
           resolve(false);
         }
-      }, 300);
+      }, 500);
     });
   }
 
@@ -158,9 +167,20 @@
   }
 
   // Wait for initial dashboard load
-  var loaded = await waitForPopup('passtimeusa.com');
+  var loaded = await waitForPopup('passtimeusa.com', 30000);
   if (!loaded) {
+    // Try once more with no URL check — maybe it loaded but URL doesn't match
+    log('  Retrying with relaxed check...', '#f59e0b');
+    loaded = await waitForPopup(null, 10000);
+  }
+  if (!loaded) {
+    log('', '#ef4444');
     log('\u274C Worker window failed to load', '#ef4444');
+    log('', '#f59e0b');
+    log('Make sure you are running this bookmarklet', '#f59e0b');
+    log('from the Passtime OASIS site (passtimeusa.com)', '#f59e0b');
+    log('and that you are logged in.', '#f59e0b');
+    try { popup.close(); } catch(e) {}
     return;
   }
   await sleep(1000);
