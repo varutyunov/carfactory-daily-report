@@ -11074,7 +11074,12 @@ async function aiParsePaymentText(text){ return {name:'',date:'',car:'',amount:'
 // Legacy regex parser kept for compatibility
 function parsePaymentText(text){ return {name:'',date:'',car:'',amount:''}; }
 
+var _paySaving = false;
 async function payScanSave(){
+  if(_paySaving) return;
+  _paySaving = true;
+  var saveBtn = document.querySelector('button[onclick="payScanSave()"]');
+  if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   // Validate all required fields
   var name=document.getElementById('pay-scan-name').value.trim();
   var date=document.getElementById('pay-scan-date').value;
@@ -11098,12 +11103,13 @@ async function payScanSave(){
   if(!color) missing.push('Vehicle Color');
   if(missing.length){
     alert('Please fill in all required fields:\n\n• '+missing.join('\n• '));
+    _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
     return;
   }
 
   // Highlight color field if empty (extra emphasis)
   var colorEl=document.getElementById('pay-scan-color');
-  if(!color){colorEl.style.borderColor='#ff453a';colorEl.focus();return;}
+  if(!color){colorEl.style.borderColor='#ff453a';colorEl.focus();_paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}return;}
 
   // Upload receipt photo if available
   var photoUrl='';
@@ -11152,9 +11158,12 @@ async function payScanSave(){
   }catch(e){
     console.error('Payment save error:',e);
     alert('Error saving payment: '+(e.message||e));
+    _paySaving=false;
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
     return;
   }
 
+  _paySaving=false;
   // Go back to list
   _payViewMode='list';
   document.getElementById('pay-view-title').textContent='PAYMENTS';
