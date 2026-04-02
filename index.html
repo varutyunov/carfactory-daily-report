@@ -1408,8 +1408,9 @@ canvas{display:none;}
           <button onclick="payrollOpen('ricky')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a2e,#2d1050);border:1px solid rgba(167,139,250,.3);border-radius:12px;color:#a78bfa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Ricky Payroll</button>
           <button onclick="payrollOpen('scott')" style="flex:1;padding:12px;background:linear-gradient(145deg,#0a1628,#122a5c);border:1px solid rgba(96,165,250,.3);border-radius:12px;color:#60a5fa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Scott Payroll</button>
         </div>
-        <div style="margin-bottom:14px;">
-          <button onclick="payrollOpen('manny')" style="width:100%;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
+          <button onclick="payrollOpen('jesse')" style="flex:1;padding:12px;background:linear-gradient(145deg,#001a10,#003d22);border:1px solid rgba(52,211,153,.3);border-radius:12px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Jesse Payroll</button>
         </div>
       </div>
       <!-- Payroll calculator view (hidden by default) -->
@@ -12096,11 +12097,12 @@ function payrollRender(who){
   var content=document.getElementById('cp-payroll-content');
   var isRicky=who==='ricky';
   var isManny=who==='manny';
-  var name=isRicky?'Ricky':isManny?'Manny':'Scott';
-  var dayRate=isRicky?170:isManny?100:125;
-  var color=isRicky?'#a78bfa':isManny?'#fb923c':'#60a5fa';
-  var bg=isRicky?'rgba(167,139,250,.1)':isManny?'rgba(251,146,60,.1)':'rgba(96,165,250,.1)';
-  var border=isRicky?'rgba(167,139,250,.2)':isManny?'rgba(251,146,60,.2)':'rgba(96,165,250,.2)';
+  var isJesse=who==='jesse';
+  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':'Scott';
+  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
+  var color=isRicky?'#a78bfa':isManny?'#fb923c':isJesse?'#34d399':'#60a5fa';
+  var bg=isRicky?'rgba(167,139,250,.1)':isManny?'rgba(251,146,60,.1)':isJesse?'rgba(52,211,153,.1)':'rgba(96,165,250,.1)';
+  var border=isRicky?'rgba(167,139,250,.2)':isManny?'rgba(251,146,60,.2)':isJesse?'rgba(52,211,153,.2)':'rgba(96,165,250,.2)';
 
   var html='<div style="margin-bottom:14px;">';
   // Back button + title
@@ -12120,7 +12122,7 @@ function payrollRender(who){
 
   html+='</div></div>';
 
-  // Cars sold (Scott + Manny)
+  // Cars sold (Scott + Manny + Jesse)
   if(!isRicky){
     html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
     html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Cars Sold</div>';
@@ -12130,14 +12132,16 @@ function payrollRender(who){
     html+='<button onclick="payrollAdjustCars(\''+who+'\',1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
     if(isManny){
       html+='<div style="flex:1;text-align:right;"><span style="font-size:11px;color:#888;">1–5: $125 · 6+: $350</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
+    } else if(isJesse){
+      html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $300/car</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
     } else {
       html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $100/car</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
     }
     html+='</div></div>';
   }
 
-  // Full Sales bonus (Manny only — $50 per sale)
-  if(isManny){
+  // Full Sales bonus (Manny + Jesse)
+  if(isManny||isJesse){
     html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
     html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Full Sales <span style="color:#444;text-transform:none;font-size:10px;">(+$50/sale)</span></div>';
     html+='<div style="display:flex;align-items:center;gap:12px;">';
@@ -12244,7 +12248,8 @@ function payrollRenderExtras(who){
 function payrollRecalc(who){
   var isRicky=who==='ricky';
   var isManny=who==='manny';
-  var dayRate=isRicky?170:isManny?100:125;
+  var isJesse=who==='jesse';
+  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
   var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
   var daysTotal=days*dayRate;
   var dt=document.getElementById('pr-days-total');
@@ -12253,7 +12258,7 @@ function payrollRecalc(who){
   var carsTotal=0;
   if(!isRicky){
     var cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
-    carsTotal=isManny?mannyCarPay(cars):cars*100;
+    carsTotal=isManny?mannyCarPay(cars):isJesse?cars*300:cars*100;
     var ct=document.getElementById('pr-cars-total');
     if(ct) ct.textContent='$'+carsTotal.toLocaleString();
   }
@@ -12277,15 +12282,16 @@ function payrollRecalc(who){
 async function payrollSubmit(who){
   var isRicky=who==='ricky';
   var isManny=who==='manny';
-  var name=isRicky?'Ricky':isManny?'Manny':'Scott';
-  var dayRate=isRicky?170:isManny?100:125;
+  var isJesse=who==='jesse';
+  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':'Scott';
+  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
   var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
   var cars=0;
   if(!isRicky) cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
   var fullSales=0;
   if(isManny) fullSales=parseInt((document.getElementById('pr-fullsales')||{}).textContent)||0;
   var daysTotal=days*dayRate;
-  var carsTotal=isManny?mannyCarPay(cars):cars*100;
+  var carsTotal=isManny?mannyCarPay(cars):isJesse?cars*300:cars*100;
   var fullSalesTotal=fullSales*50;
   var extrasTotal=0;
   _payrollExtras.forEach(function(e){extrasTotal+=e.amount;});
@@ -12295,7 +12301,7 @@ async function payrollSubmit(who){
   // Build description
   var desc=days+' day'+(days===1?'':'s')+' ($'+daysTotal+')';
   if(!isRicky&&cars>0) desc+=', '+cars+' car'+(cars===1?'':'s')+' ($'+carsTotal+')';
-  if(isManny&&fullSales>0) desc+=', '+fullSales+' full sale'+(fullSales===1?'':'s')+' ($'+fullSalesTotal+')';
+  if((isManny||isJesse)&&fullSales>0) desc+=', '+fullSales+' full sale'+(fullSales===1?'':'s')+' ($'+fullSalesTotal+')';
   if(_payrollExtras.length){
     _payrollExtras.forEach(function(e){desc+=', '+e.reason+' ($'+e.amount+')';});
   }
