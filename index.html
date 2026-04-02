@@ -12474,8 +12474,16 @@ function openDealDetail(id) {
   if(d.location) html += 'Location: '+d.location;
   html += '</div>';
 
+  // Move week (owner only)
+  if(me && ['vlad','tommy'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;})){
+    html += '<div style="display:flex;gap:8px;margin-top:28px;">';
+    html += '<button onclick="dealMoveWeek('+d.id+',-1)" style="flex:1;padding:13px;background:none;border:1px solid #1e3a5f;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;">← Prev Week</button>';
+    html += '<button onclick="dealMoveWeek('+d.id+',1)" style="flex:1;padding:13px;background:none;border:1px solid #1e3a5f;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;">Next Week →</button>';
+    html += '</div>';
+  }
+
   // Delete
-  html += '<button id="deal-delete-btn" onclick="dealDeleteConfirm('+d.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Deal</button>';
+  html += '<button id="deal-delete-btn" onclick="dealDeleteConfirm('+d.id+')" style="width:100%;margin-top:10px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Deal</button>';
 
   html += '</div>';
   document.getElementById('deals-view-body').innerHTML = html;
@@ -12517,6 +12525,25 @@ async function dealDeleteFinal(id) {
   } catch(e) {
     btn.textContent = 'Error: '+(e.message||e);
     btn.style.background = '#1a0505'; btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
+async function dealMoveWeek(id, dir) {
+  var d = _dealsAllData.find(function(x){ return x.id === id; }) || _dealsData.find(function(x){ return x.id === id; });
+  if(!d) return;
+  var label = dir > 0 ? 'Next Week →' : '← Prev Week';
+  if(!confirm('Move this deal ' + (dir > 0 ? 'forward' : 'back') + ' one week?')) return;
+  var dt = new Date(d.created_at);
+  dt.setDate(dt.getDate() + (dir * 7));
+  try {
+    showLoading('Moving deal...');
+    await sbPatch('deals', id, { created_at: dt.toISOString() });
+    hideLoading();
+    dealsViewBack();
+    await loadDeals();
+  } catch(e) {
+    hideLoading();
+    alert('Error: ' + (e.message || e));
   }
 }
 
