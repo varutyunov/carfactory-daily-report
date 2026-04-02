@@ -1290,6 +1290,11 @@ canvas{display:none;}
           <pre id="pay-scan-raw" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;padding:12px;color:#666;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;margin-top:6px;"></pre>
         </details>
 
+        <div style="margin-bottom:16px;">
+          <label style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Note <span style="color:#444;text-transform:none;font-size:10px;font-weight:400;">(optional)</span></label>
+          <input id="pay-scan-note" placeholder="Any notes about this payment..." style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;"/>
+        </div>
+
         <button onclick="payScanSave()" style="width:100%;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Save Payment</button>
         <button onclick="payFormSkipPhoto()" id="pay-skip-photo-btn" style="display:none;width:100%;margin-top:8px;padding:14px;background:transparent;border:1px solid #333;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Skip Photo &amp; Fill Manually</button>
       </div>
@@ -10789,6 +10794,12 @@ function payViewDetail(id){
     html+='Original: '+p.original_amount+' + 4% fee = '+p.amount;
     html+='</div>';
   }
+  if(p.notes){
+    html+='<div style="margin-top:10px;padding:10px 12px;background:#111;border:1px solid #1e1e1e;border-radius:10px;">';
+    html+='<div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Note</div>';
+    html+='<div style="font-size:14px;color:#ccc;">'+_esc(p.notes)+'</div>';
+    html+='</div>';
+  }
   html+='</div>';
 
   // Move location (owners only)
@@ -11093,6 +11104,8 @@ async function payScanSave(){
   var model=document.getElementById('pay-scan-model').value.trim();
   var vin=document.getElementById('pay-scan-vin').value.trim();
   var color=document.getElementById('pay-scan-color').value.trim();
+  var note=(document.getElementById('pay-scan-note')||{}).value||'';
+  note=note.trim();
 
   // Mandatory field checks
   var missing=[];
@@ -11152,6 +11165,7 @@ async function payScanSave(){
     location:_payLocation,
     logged_by:me?me.name:'',
     week_start:weekStart,
+    notes:note||null,
     raw_ocr_text:document.getElementById('pay-scan-raw').textContent||null,
     created_at:new Date().toISOString()
   };
