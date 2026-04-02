@@ -1625,14 +1625,13 @@ canvas{display:none;}
           <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
           <div style="margin-bottom:12px;">
             <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
-            <input type="file" id="sync-csv-input" accept=".csv" multiple style="display:none;" onchange="syncCSVChosen(this)"/>
             <div class="sync-btns">
-              <button class="sync-btn" onclick="syncTrigger()">⟳ Sync Inventory</button>
+              <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
               <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
               <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
-              <button onclick="(function(){var t=document.getElementById('sync-gh-token');if(t)t.value=localStorage.getItem('cf_gh_token')||'';openM('m-sync');})()" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure ›</button>
+              <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
             </div>
             <button onclick="clearAllQueues()" style="margin-top:10px;width:100%;padding:10px;background:none;border:1px solid #2a1010;border-radius:10px;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.5px;">✕ Clear All Queues</button>
           </div>
@@ -1834,12 +1833,9 @@ canvas{display:none;}
     <div class="mt2">Configure Sync</div>
     <label class="fl2">GitHub Raw CSV URL</label>
     <input class="mfi" id="sync-url" placeholder="https://raw.githubusercontent.com/..." />
-    <label class="fl2" style="margin-top:10px;">GitHub Token <span style="font-size:10px;color:#555;font-weight:400;">(for CSV upload)</span></label>
-    <input class="mfi" id="sync-gh-token" type="password" placeholder="ghp_..." />
-    <div style="font-size:10px;color:#444;margin-top:4px;">Needs repo → contents write access. Stored locally only.</div>
     <div class="b2">
       <button class="mbtn gh" onclick="closeM('m-sync')">Cancel</button>
-      <button class="mbtn" onclick="saveSyncConfig()">Save</button>
+      <button class="mbtn" onclick="saveSyncUrl()">Save</button>
     </div>
   </div>
 </div>
@@ -4592,20 +4588,6 @@ async function syncNow(){
   var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
   var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
-  // Upload any selected CSV files to GitHub first
-  if(_syncDebaryFile||_syncDelandFile){
-    var token=localStorage.getItem('cf_gh_token')||'';
-    if(!token){ stEl.textContent='⚠️ GitHub token not set. Tap Configure URL to add it.'; return; }
-    try{
-      if(_syncDebaryFile){ stEl.textContent='Uploading DeBary CSV...'; await githubUploadCSV('InventoryMaster.csv',_syncDebaryFile,token); }
-      if(_syncDelandFile){ stEl.textContent='Uploading DeLand CSV...'; await githubUploadCSV('InventoryMasterDeland.csv',_syncDelandFile,token); }
-      // Reset file state
-      _syncDebaryFile=null; _syncDelandFile=null;
-      // Brief pause so GitHub CDN can propagate
-      stEl.textContent='Upload done, syncing...';
-      await new Promise(function(r){setTimeout(r,3000);});
-    }catch(e){ stEl.textContent='Upload failed: '+e.message; return; }
-  }
   stEl.textContent='Syncing inventory...';
   try{
     // Fetch both CSVs
@@ -4724,55 +4706,6 @@ function parseCSV(csv,forceLocation){
   return cars;
 }
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
-function saveSyncConfig(){
-  S.syncUrl=document.getElementById('sync-url').value.trim();sv();
-  var tok=document.getElementById('sync-gh-token').value.trim();
-  if(tok) localStorage.setItem('cf_gh_token',tok);
-  closeM('m-sync');renderInv();
-}
-
-// ── CSV UPLOAD (GitHub API) ─────────────────────────────────────
-var _syncDebaryFile=null;
-var _syncDelandFile=null;
-
-function syncTrigger(){
-  var token=localStorage.getItem('cf_gh_token')||'';
-  if(token){
-    // Has token — show file picker; files trigger upload+sync, cancel falls through to sync-only
-    var input=document.getElementById('sync-csv-input');
-    if(input){ input.value=''; input.click(); }
-  } else {
-    syncNow();
-  }
-}
-
-function syncCSVChosen(input){
-  _syncDebaryFile=null; _syncDelandFile=null;
-  for(var i=0;i<input.files.length;i++){
-    var f=input.files[i];
-    if(/deland/i.test(f.name)) _syncDelandFile=f;
-    else _syncDebaryFile=f;
-  }
-  syncNow();
-}
-
-async function githubUploadCSV(path,file,token){
-  var content=await new Promise(function(resolve){
-    var reader=new FileReader();
-    reader.onload=function(e){ resolve(btoa(e.target.result)); };
-    reader.readAsBinaryString(file);
-  });
-  var headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
-  var sha=null;
-  try{
-    var r=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/contents/'+path,{headers:headers});
-    if(r.ok){var d=await r.json();sha=d.sha;}
-  }catch(e){}
-  var body={message:path+' update via Car Factory app',content:content,branch:'main'};
-  if(sha) body.sha=sha;
-  var resp=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/contents/'+path,{method:'PUT',headers:headers,body:JSON.stringify(body)});
-  if(!resp.ok) throw new Error('GitHub upload failed: '+(await resp.text()));
-}
 
 // ── MODALS ─────────────────────────────────────────────────────────────────────
 function openM(id){document.getElementById(id).classList.add('on');}
