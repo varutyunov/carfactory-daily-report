@@ -1625,19 +1625,9 @@ canvas{display:none;}
           <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
           <div style="margin-bottom:12px;">
             <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
-            <!-- CSV upload pickers (optional — upload before sync) -->
-            <div style="display:flex;gap:6px;margin-bottom:6px;">
-              <label id="sync-debary-label" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 6px;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;cursor:pointer;font-size:11px;font-weight:600;color:#555;text-align:center;gap:4px;">
-                📄 DeBary CSV
-                <input type="file" accept=".csv" onchange="syncFileSelected(this,'debary')" style="display:none;"/>
-              </label>
-              <label id="sync-deland-label" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 6px;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;cursor:pointer;font-size:11px;font-weight:600;color:#555;text-align:center;gap:4px;">
-                📄 DeLand CSV
-                <input type="file" accept=".csv" onchange="syncFileSelected(this,'deland')" style="display:none;"/>
-              </label>
-            </div>
+            <input type="file" id="sync-csv-input" accept=".csv" multiple style="display:none;" onchange="syncCSVChosen(this)"/>
             <div class="sync-btns">
-              <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
+              <button class="sync-btn" onclick="syncTrigger()">⟳ Sync Inventory</button>
               <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
@@ -4609,11 +4599,8 @@ async function syncNow(){
     try{
       if(_syncDebaryFile){ stEl.textContent='Uploading DeBary CSV...'; await githubUploadCSV('InventoryMaster.csv',_syncDebaryFile,token); }
       if(_syncDelandFile){ stEl.textContent='Uploading DeLand CSV...'; await githubUploadCSV('InventoryMasterDeland.csv',_syncDelandFile,token); }
-      // Reset pickers
+      // Reset file state
       _syncDebaryFile=null; _syncDelandFile=null;
-      var dl=document.getElementById('sync-debary-label'); var ll=document.getElementById('sync-deland-label');
-      if(dl){dl.style.borderColor='#2a2a2a';dl.style.color='#555';dl.childNodes[0].textContent='📄 DeBary CSV ';}
-      if(ll){ll.style.borderColor='#2a2a2a';ll.style.color='#555';ll.childNodes[0].textContent='📄 DeLand CSV ';}
       // Brief pause so GitHub CDN can propagate
       stEl.textContent='Upload done, syncing...';
       await new Promise(function(r){setTimeout(r,3000);});
@@ -4748,12 +4735,25 @@ function saveSyncConfig(){
 var _syncDebaryFile=null;
 var _syncDelandFile=null;
 
-function syncFileSelected(input,loc){
-  var file=input.files[0]; if(!file) return;
-  if(loc==='debary') _syncDebaryFile=file;
-  else _syncDelandFile=file;
-  var label=document.getElementById('sync-'+(loc==='debary'?'debary':'deland')+'-label');
-  if(label){ label.style.borderColor='#4ade80'; label.style.color='#4ade80'; label.childNodes[0].textContent='✓ '+file.name+' '; }
+function syncTrigger(){
+  var token=localStorage.getItem('cf_gh_token')||'';
+  if(token){
+    // Has token — show file picker; files trigger upload+sync, cancel falls through to sync-only
+    var input=document.getElementById('sync-csv-input');
+    if(input){ input.value=''; input.click(); }
+  } else {
+    syncNow();
+  }
+}
+
+function syncCSVChosen(input){
+  _syncDebaryFile=null; _syncDelandFile=null;
+  for(var i=0;i<input.files.length;i++){
+    var f=input.files[i];
+    if(/deland/i.test(f.name)) _syncDelandFile=f;
+    else _syncDebaryFile=f;
+  }
+  syncNow();
 }
 
 async function githubUploadCSV(path,file,token){
