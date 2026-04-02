@@ -12078,9 +12078,11 @@ function _cashPayoutsRenderInline(){
 
 // === PAYROLL CALCULATOR ===
 var _payrollExtras=[];
+var _payrollExtraSign=1;
 
 function payrollOpen(who){
   _payrollExtras=[];
+  _payrollExtraSign=1;
   document.getElementById('cp-main-view').style.display='none';
   document.getElementById('cash-payouts-list').style.display='none';
   document.getElementById('cp-payroll-view').style.display='block';
@@ -12155,14 +12157,19 @@ function payrollRender(who){
   // Extras list
   html+='<div id="pr-extras-list"></div>';
 
-  // Add extra
+  // Add/Subtract extra
   html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
-  html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Add Extra</div>';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+  html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Adjustment</div>';
+  html+='<div style="display:flex;gap:6px;">';
+  html+='<button id="pr-sign-add" onclick="payrollSetSign(1)" style="padding:5px 14px;border-radius:8px;font-size:13px;font-weight:700;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;cursor:pointer;border:1px solid #4ade80;background:rgba(74,222,128,.15);color:#4ade80;-webkit-tap-highlight-color:transparent;">+ Add</button>';
+  html+='<button id="pr-sign-sub" onclick="payrollSetSign(-1)" style="padding:5px 14px;border-radius:8px;font-size:13px;font-weight:700;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;cursor:pointer;border:1px solid #1e1e1e;background:#0a0a0a;color:#555;-webkit-tap-highlight-color:transparent;">− Subtract</button>';
+  html+='</div></div>';
   html+='<div style="display:flex;gap:8px;margin-bottom:8px;">';
   html+='<input id="pr-extra-reason" placeholder="Reason" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;"/>';
   html+='<input id="pr-extra-amount" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;text-align:right;"/>';
   html+='</div>';
-  html+='<button onclick="payrollAddExtra(\''+who+'\')" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#888;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>';
+  html+='<button onclick="payrollAddExtra(\''+who+'\')" style="width:100%;padding:10px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#888;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Add Line</button>';
   html+='</div>';
 
   // Total
@@ -12211,12 +12218,20 @@ function mannyCarPay(cars){
   return first+rest;
 }
 
+function payrollSetSign(sign){
+  _payrollExtraSign=sign;
+  var addBtn=document.getElementById('pr-sign-add');
+  var subBtn=document.getElementById('pr-sign-sub');
+  if(addBtn) { addBtn.style.background=sign===1?'rgba(74,222,128,.15)':'#0a0a0a'; addBtn.style.border=sign===1?'1px solid #4ade80':'1px solid #1e1e1e'; addBtn.style.color=sign===1?'#4ade80':'#555'; }
+  if(subBtn) { subBtn.style.background=sign===-1?'rgba(239,68,68,.15)':'#0a0a0a'; subBtn.style.border=sign===-1?'1px solid #ef4444':'1px solid #1e1e1e'; subBtn.style.color=sign===-1?'#ef4444':'#555'; }
+}
+
 function payrollAddExtra(who){
   var reason=(document.getElementById('pr-extra-reason').value||'').trim();
   var amount=moneyVal(document.getElementById('pr-extra-amount'));
   if(!reason){alert('Enter a reason.');return;}
   if(amount<=0){alert('Enter an amount.');return;}
-  _payrollExtras.push({reason:reason,amount:amount});
+  _payrollExtras.push({reason:reason,amount:amount,sign:_payrollExtraSign});
   document.getElementById('pr-extra-reason').value='';
   document.getElementById('pr-extra-amount').value='';
   payrollRenderExtras(who);
@@ -12235,10 +12250,13 @@ function payrollRenderExtras(who){
   if(!_payrollExtras.length){el.innerHTML='';return;}
   var html='';
   _payrollExtras.forEach(function(e,i){
+    var isAdd=(e.sign||1)>0;
+    var amtColor=isAdd?'#4ade80':'#ef4444';
+    var amtPrefix=isAdd?'+':'-';
     html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
     html+='<span style="font-size:13px;color:#fff;">'+e.reason+'</span>';
     html+='<div style="display:flex;align-items:center;gap:8px;">';
-    html+='<span style="font-size:14px;font-weight:700;color:#4ade80;">+$'+e.amount.toFixed(2)+'</span>';
+    html+='<span style="font-size:14px;font-weight:700;color:'+amtColor+';">'+amtPrefix+'$'+e.amount.toFixed(2)+'</span>';
     html+='<button onclick="payrollRemoveExtra(\''+who+'\','+i+')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:12px;cursor:pointer;border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">✕</button>';
     html+='</div></div>';
   });
@@ -12272,7 +12290,7 @@ function payrollRecalc(who){
   }
 
   var extrasTotal=0;
-  _payrollExtras.forEach(function(e){extrasTotal+=e.amount;});
+  _payrollExtras.forEach(function(e){extrasTotal+=e.amount*(e.sign||1);});
 
   var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal;
   var ge=document.getElementById('pr-grand-total');
@@ -12294,7 +12312,7 @@ async function payrollSubmit(who){
   var carsTotal=isManny?mannyCarPay(cars):isJesse?cars*300:cars*100;
   var fullSalesTotal=fullSales*50;
   var extrasTotal=0;
-  _payrollExtras.forEach(function(e){extrasTotal+=e.amount;});
+  _payrollExtras.forEach(function(e){extrasTotal+=e.amount*(e.sign||1);});
   var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal;
   if(grand<=0){alert('Nothing to pay.');return;}
 
@@ -12303,7 +12321,7 @@ async function payrollSubmit(who){
   if(!isRicky&&cars>0) desc+=', '+cars+' car'+(cars===1?'':'s')+' ($'+carsTotal+')';
   if((isManny||isJesse)&&fullSales>0) desc+=', '+fullSales+' full sale'+(fullSales===1?'':'s')+' ($'+fullSalesTotal+')';
   if(_payrollExtras.length){
-    _payrollExtras.forEach(function(e){desc+=', '+e.reason+' ($'+e.amount+')';});
+    _payrollExtras.forEach(function(e){var sign=(e.sign||1);desc+=', '+e.reason+' ('+(sign>0?'+':'-')+'$'+e.amount+')';});
   }
 
   var wk=_payWeekKey(_payCurrentWeekStart);
