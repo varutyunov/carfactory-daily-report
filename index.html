@@ -994,10 +994,9 @@ canvas{display:none;}
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;">Step 2 — Deal Info</div>
       <div id="deal-car-summary" style="background:#111;border-radius:14px;padding:14px;margin-bottom:14px;font-size:14px;color:#fff;font-weight:600;"></div>
 
-      <!-- Payment Method toggle -->
-      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Payment Method</div>
+      <!-- Deal type toggle -->
       <div style="display:flex;gap:8px;margin-bottom:14px;">
-        <button id="deal-type-cash" onclick="dealSetType('cash')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;">Cash</button>
+        <button id="deal-type-cash" onclick="dealSetType('cash')" style="flex:1;padding:12px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;">Purchased in Full</button>
         <button id="deal-type-finance" onclick="dealSetType('finance')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Finance</button>
       </div>
 
@@ -9020,7 +9019,7 @@ function openFormDetail(id) {
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
   html += isFinance
     ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">FINANCE</span>'
-    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">CASH</span>';
+    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">PURCHASED IN FULL</span>';
   html += '<span style="font-size:13px;color:#666;">' + (dep.deposit_date||'') + '</span>';
   html += '</div>';
 
@@ -11819,7 +11818,7 @@ function renderDeals() {
       var isFinance = d.deal_type === 'finance';
       var badge = isFinance
         ? '<span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Finance</span>'
-        : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Cash</span>';
+        : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Purchased in Full</span>';
       var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : '';
       var gpsTag = '';
       if(isFinance && d.gps_serial) {
@@ -12390,7 +12389,7 @@ function openDealDetail(id) {
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
   html += isFinance
     ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">FINANCE</span>'
-    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">CASH</span>';
+    : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">PURCHASED IN FULL</span>';
   html += '<span style="font-size:13px;color:#666;">'+(d.created_at?new Date(d.created_at).toLocaleDateString():'')+'</span>';
   html += '</div>';
 
