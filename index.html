@@ -1408,9 +1408,8 @@ canvas{display:none;}
           <button onclick="payrollOpen('ricky')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a2e,#2d1050);border:1px solid rgba(167,139,250,.3);border-radius:12px;color:#a78bfa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Ricky Payroll</button>
           <button onclick="payrollOpen('scott')" style="flex:1;padding:12px;background:linear-gradient(145deg,#0a1628,#122a5c);border:1px solid rgba(96,165,250,.3);border-radius:12px;color:#60a5fa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Scott Payroll</button>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <div id="payroll-row-manny" style="display:flex;gap:8px;margin-bottom:14px;">
           <button id="payroll-btn-manny" onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
-          <button id="payroll-btn-jesse" onclick="payrollOpen('jesse')" style="flex:1;padding:12px;background:linear-gradient(145deg,#001a10,#003d22);border:1px solid rgba(52,211,153,.3);border-radius:12px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Jesse Payroll</button>
         </div>
       </div>
       <!-- Payroll calculator view (hidden by default) -->
@@ -11964,13 +11963,20 @@ function cashPayoutsOpen(){
   document.getElementById('cp-paid-to').value='';
   document.getElementById('cp-amount').value='';
   var userName=(me&&me.name?me.name:'').toLowerCase();
-  var isMannySelf=userName.indexOf('manny')!==-1;
   var isJesseSelf=userName.indexOf('jesse')!==-1;
-  var mannyBtn=document.getElementById('payroll-btn-manny');
-  var jesseBtn=document.getElementById('payroll-btn-jesse');
-  // Manny sees only Manny; Jesse sees only Jesse; managers see Manny but NOT Jesse
-  if(mannyBtn) mannyBtn.style.display=(isJesseSelf?'none':'flex');
-  if(jesseBtn) jesseBtn.style.display=(isJesseSelf?'flex':'none');
+  var isMannySelf=userName.indexOf('manny')!==-1;
+  // Manny row: hide from Jesse (Jesse gets his own button injected below)
+  var mannyRow=document.getElementById('payroll-row-manny');
+  if(mannyRow) mannyRow.style.display=isJesseSelf?'none':'flex';
+  // Jesse button: inject once for Jesse only, then replace with his own row
+  var jesseRow=document.getElementById('payroll-row-jesse');
+  if(isJesseSelf && !jesseRow){
+    var row=document.createElement('div');
+    row.id='payroll-row-jesse';
+    row.style.cssText='display:flex;gap:8px;margin-bottom:14px;';
+    row.innerHTML='<button onclick="payrollOpen(\'jesse\')" style="flex:1;padding:12px;background:linear-gradient(145deg,#001a10,#003d22);border:1px solid rgba(52,211,153,.3);border-radius:12px;color:#34d399;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Jesse Payroll</button>';
+    mannyRow.parentNode.insertBefore(row, mannyRow.nextSibling);
+  }
   cashPayoutsRender();
 }
 function cashPayoutsClose(){
