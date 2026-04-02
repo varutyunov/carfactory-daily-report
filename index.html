@@ -12147,9 +12147,9 @@ function payrollRender(who){
     html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
     html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Full Sales <span style="color:#444;text-transform:none;font-size:10px;">(+$50/sale)</span></div>';
     html+='<div style="display:flex;align-items:center;gap:12px;">';
-    html+='<button onclick="payrollAdjustFullSales(-1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">−</button>';
+    html+='<button onclick="payrollAdjustFullSales(\''+who+'\',-1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">−</button>';
     html+='<div id="pr-fullsales" style="font-family:\'Barlow Condensed\',sans-serif;font-size:36px;font-weight:900;color:#fff;min-width:50px;text-align:center;">0</div>';
-    html+='<button onclick="payrollAdjustFullSales(1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
+    html+='<button onclick="payrollAdjustFullSales(\''+who+'\',1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
     html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $50/sale</span><br/><span id="pr-fullsales-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
     html+='</div></div>';
   }
@@ -12202,13 +12202,13 @@ function payrollAdjustCars(who,dir){
   payrollRecalc(who);
 }
 
-function payrollAdjustFullSales(dir){
+function payrollAdjustFullSales(who,dir){
   var el=document.getElementById('pr-fullsales');
   if(!el)return;
   var v=parseInt(el.textContent)||0;
   v=Math.max(0,v+dir);
   el.textContent=v;
-  payrollRecalc('manny');
+  payrollRecalc(who);
 }
 
 function mannyCarPay(cars){
@@ -12282,7 +12282,7 @@ function payrollRecalc(who){
   }
 
   var fullSalesTotal=0;
-  if(isManny){
+  if(isManny||isJesse){
     var fs=parseInt((document.getElementById('pr-fullsales')||{}).textContent)||0;
     fullSalesTotal=fs*50;
     var fst=document.getElementById('pr-fullsales-total');
@@ -12307,7 +12307,7 @@ async function payrollSubmit(who){
   var cars=0;
   if(!isRicky) cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
   var fullSales=0;
-  if(isManny) fullSales=parseInt((document.getElementById('pr-fullsales')||{}).textContent)||0;
+  if(isManny||isJesse) fullSales=parseInt((document.getElementById('pr-fullsales')||{}).textContent)||0;
   var daysTotal=days*dayRate;
   var carsTotal=isManny?mannyCarPay(cars):isJesse?cars*300:cars*100;
   var fullSalesTotal=fullSales*50;
