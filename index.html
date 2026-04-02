@@ -2562,7 +2562,13 @@ function renderEmpHome(){
   var isDealUser=me&&['manny','scott','jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isLangUser=me&&['manny','ricky'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   var isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
-  // Show lang toggle in top bar for lang users
+  // Non-lang users: force English so a shared device doesn't carry over Spanish
+  if(!isLangUser && window._lang==='es'){
+    window._lang='en';
+    try{localStorage.setItem('cf-lang','en');}catch(e){}
+    if(typeof applySpanish==='function') applySpanish();
+  }
+  // Show lang toggle in top bar for lang users only
   var langBtn=document.getElementById('lang-toggle-btn');
   if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
