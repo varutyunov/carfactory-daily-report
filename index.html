@@ -8350,13 +8350,19 @@ function _txInit() {
       </div>
 
       <!-- Add to week's cash (cash payment method only) -->
-      <div id="dep-add-week-wrap" style="background:#111;border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#4ade80;">Add to this week's cash</div>
-          <div style="font-size:12px;color:#555;margin-top:2px;">Posts deposit into the weekly cash total</div>
+      <div id="dep-add-week-wrap" style="background:#111;border-radius:14px;padding:14px;margin-bottom:10px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#4ade80;">Add to this week's cash</div>
+            <div style="font-size:12px;color:#555;margin-top:2px;">Posts amount into the weekly cash total</div>
+          </div>
+          <div onclick="depSetAddToWeek(!_depAddToWeek)" id="dep-week-toggle" style="width:48px;height:28px;border-radius:14px;background:#333;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;">
+            <div id="dep-week-knob" style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#888;transition:left .2s;"></div>
+          </div>
         </div>
-        <div onclick="depSetAddToWeek(!_depAddToWeek)" id="dep-week-toggle" style="width:48px;height:28px;border-radius:14px;background:#333;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;">
-          <div id="dep-week-knob" style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#888;transition:left .2s;"></div>
+        <div id="dep-week-amount-wrap" style="display:none;margin-top:12px;">
+          <div style="font-size:11px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Amount to add</div>
+          <input id="dep-week-amount" type="text" inputmode="decimal" placeholder="$0.00" oninput="moneyInput(this)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #4ade80;border-radius:10px;color:#fff;padding:12px;font-size:16px;font-weight:700;outline:none;"/>
         </div>
       </div>
 
@@ -9115,6 +9121,8 @@ function openDepositForm() {
   depSetPayMethod('cash');
   var notesInput = document.getElementById('dep-pm-notes');
   if(notesInput) notesInput.value = '';
+  var weekAmtInput = document.getElementById('dep-week-amount');
+  if(weekAmtInput) weekAmtInput.value = '';
   // Reset step 1 UI
   var choose = document.getElementById('dep-choose');
   var previewWrap = document.getElementById('dep-id-preview-wrap');
@@ -9267,7 +9275,9 @@ async function depositSave() {
       var today = new Date();
       var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
       var weekKey = _payWeekKey(today);
-      var depAmt = parseFloat(d.amount) || 0;
+      var weekAmtInput = document.getElementById('dep-week-amount');
+      var weekAmtRaw = weekAmtInput ? weekAmtInput.value.replace(/[^0-9.]/g,'') : '';
+      var depAmt = parseFloat(weekAmtRaw) || parseFloat(d.amount) || 0;
       var amtStr = '$' + depAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
       var depLoc = record.location;
       try {
@@ -9423,7 +9433,7 @@ function depSetPayMethod(method) {
   // Add-to-week toggle — only for Cash
   var weekWrap = document.getElementById('dep-add-week-wrap');
   if(method === 'cash') {
-    if(weekWrap) weekWrap.style.display = 'flex';
+    if(weekWrap) weekWrap.style.display = 'block';
   } else {
     if(weekWrap) weekWrap.style.display = 'none';
     _depAddToWeek = false;
@@ -9439,6 +9449,17 @@ function depSetAddToWeek(on) {
   toggle.style.background = on ? '#166534' : '#333';
   knob.style.background = on ? '#4ade80' : '#888';
   knob.style.left = on ? '24px' : '4px';
+  var amtWrap = document.getElementById('dep-week-amount-wrap');
+  var amtInput = document.getElementById('dep-week-amount');
+  if(amtWrap) amtWrap.style.display = on ? 'block' : 'none';
+  if(on && amtInput) {
+    // Pre-fill with the deposit amount
+    var depAmt = document.getElementById('dep-amount');
+    var val = depAmt ? depAmt.value.trim() : '';
+    amtInput.value = val || '';
+    amtInput.focus();
+    amtInput.select();
+  }
 }
 
 // ── STEP 3 → STEP 4: PREVIEW ─────────────────────────────────
