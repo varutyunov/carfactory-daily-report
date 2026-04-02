@@ -1625,13 +1625,24 @@ canvas{display:none;}
           <input class="inv-search" placeholder="Search vehicles..." oninput="filterInv(this.value)" />
           <div style="margin-bottom:12px;">
             <div class="sync-st" id="sync-st" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
+            <!-- CSV upload pickers (optional — upload before sync) -->
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+              <label id="sync-debary-label" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 6px;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;cursor:pointer;font-size:11px;font-weight:600;color:#555;text-align:center;gap:4px;">
+                📄 DeBary CSV
+                <input type="file" accept=".csv" onchange="syncFileSelected(this,'debary')" style="display:none;"/>
+              </label>
+              <label id="sync-deland-label" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 6px;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;cursor:pointer;font-size:11px;font-weight:600;color:#555;text-align:center;gap:4px;">
+                📄 DeLand CSV
+                <input type="file" accept=".csv" onchange="syncFileSelected(this,'deland')" style="display:none;"/>
+              </label>
+            </div>
             <div class="sync-btns">
               <button class="sync-btn" onclick="syncNow()">⟳ Sync Inventory</button>
               <button class="sync-btn" id="recent-btn" onclick="toggleRecentFilter()">🕐 Recently Purchased</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
               <div class="sync-tm" id="sync-tm" style="font-size:11px;color:#333;"></div>
-              <button onclick="openM('m-sync')" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure URL ›</button>
+              <button onclick="(function(){var t=document.getElementById('sync-gh-token');if(t)t.value=localStorage.getItem('cf_gh_token')||'';openM('m-sync');})()" style="font-size:11px;color:#333;background:none;border:none;cursor:pointer;padding:0;">Configure ›</button>
             </div>
             <button onclick="clearAllQueues()" style="margin-top:10px;width:100%;padding:10px;background:none;border:1px solid #2a1010;border-radius:10px;color:#ff453a;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.5px;">✕ Clear All Queues</button>
           </div>
@@ -1833,9 +1844,12 @@ canvas{display:none;}
     <div class="mt2">Configure Sync</div>
     <label class="fl2">GitHub Raw CSV URL</label>
     <input class="mfi" id="sync-url" placeholder="https://raw.githubusercontent.com/..." />
+    <label class="fl2" style="margin-top:10px;">GitHub Token <span style="font-size:10px;color:#555;font-weight:400;">(for CSV upload)</span></label>
+    <input class="mfi" id="sync-gh-token" type="password" placeholder="ghp_..." />
+    <div style="font-size:10px;color:#444;margin-top:4px;">Needs repo → contents write access. Stored locally only.</div>
     <div class="b2">
       <button class="mbtn gh" onclick="closeM('m-sync')">Cancel</button>
-      <button class="mbtn" onclick="saveSyncUrl()">Save</button>
+      <button class="mbtn" onclick="saveSyncConfig()">Save</button>
     </div>
   </div>
 </div>
@@ -4588,6 +4602,23 @@ async function syncNow(){
   var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
   var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
   var stEl=document.getElementById('sync-st');var tmEl=document.getElementById('sync-tm');
+  // Upload any selected CSV files to GitHub first
+  if(_syncDebaryFile||_syncDelandFile){
+    var token=localStorage.getItem('cf_gh_token')||'';
+    if(!token){ stEl.textContent='⚠️ GitHub token not set. Tap Configure URL to add it.'; return; }
+    try{
+      if(_syncDebaryFile){ stEl.textContent='Uploading DeBary CSV...'; await githubUploadCSV('InventoryMaster.csv',_syncDebaryFile,token); }
+      if(_syncDelandFile){ stEl.textContent='Uploading DeLand CSV...'; await githubUploadCSV('InventoryMasterDeland.csv',_syncDelandFile,token); }
+      // Reset pickers
+      _syncDebaryFile=null; _syncDelandFile=null;
+      var dl=document.getElementById('sync-debary-label'); var ll=document.getElementById('sync-deland-label');
+      if(dl){dl.style.borderColor='#2a2a2a';dl.style.color='#555';dl.childNodes[0].textContent='📄 DeBary CSV ';}
+      if(ll){ll.style.borderColor='#2a2a2a';ll.style.color='#555';ll.childNodes[0].textContent='📄 DeLand CSV ';}
+      // Brief pause so GitHub CDN can propagate
+      stEl.textContent='Upload done, syncing...';
+      await new Promise(function(r){setTimeout(r,3000);});
+    }catch(e){ stEl.textContent='Upload failed: '+e.message; return; }
+  }
   stEl.textContent='Syncing inventory...';
   try{
     // Fetch both CSVs
@@ -4620,7 +4651,7 @@ async function syncNow(){
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',location:c.location,photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',miles:c.miles||null,location:c.location,photo:null});
         added++;
       }
     });
@@ -4629,7 +4660,10 @@ async function syncNow(){
       for(var i=0;i<toInsertSB.length;i+=50){
         try{
           var inserted=await sbPost('inventory',toInsertSB.slice(i,i+50));
-          if(Array.isArray(inserted)) inserted.forEach(function(row){S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});});
+          if(Array.isArray(inserted)) inserted.forEach(function(row){
+            if(row.miles) saveCarMilesLocal(row.id, row.miles);
+            S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
+          });
         }catch(e){console.error('Insert error:',e);}
       }
     }
@@ -4703,6 +4737,42 @@ function parseCSV(csv,forceLocation){
   return cars;
 }
 function saveSyncUrl(){S.syncUrl=document.getElementById('sync-url').value.trim();sv();closeM('m-sync');renderInv();}
+function saveSyncConfig(){
+  S.syncUrl=document.getElementById('sync-url').value.trim();sv();
+  var tok=document.getElementById('sync-gh-token').value.trim();
+  if(tok) localStorage.setItem('cf_gh_token',tok);
+  closeM('m-sync');renderInv();
+}
+
+// ── CSV UPLOAD (GitHub API) ─────────────────────────────────────
+var _syncDebaryFile=null;
+var _syncDelandFile=null;
+
+function syncFileSelected(input,loc){
+  var file=input.files[0]; if(!file) return;
+  if(loc==='debary') _syncDebaryFile=file;
+  else _syncDelandFile=file;
+  var label=document.getElementById('sync-'+(loc==='debary'?'debary':'deland')+'-label');
+  if(label){ label.style.borderColor='#4ade80'; label.style.color='#4ade80'; label.childNodes[0].textContent='✓ '+file.name+' '; }
+}
+
+async function githubUploadCSV(path,file,token){
+  var content=await new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){ resolve(btoa(e.target.result)); };
+    reader.readAsBinaryString(file);
+  });
+  var headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
+  var sha=null;
+  try{
+    var r=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/contents/'+path,{headers:headers});
+    if(r.ok){var d=await r.json();sha=d.sha;}
+  }catch(e){}
+  var body={message:path+' update via Car Factory app',content:content,branch:'main'};
+  if(sha) body.sha=sha;
+  var resp=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/contents/'+path,{method:'PUT',headers:headers,body:JSON.stringify(body)});
+  if(!resp.ok) throw new Error('GitHub upload failed: '+(await resp.text()));
+}
 
 // ── MODALS ─────────────────────────────────────────────────────────────────────
 function openM(id){document.getElementById(id).classList.add('on');}
