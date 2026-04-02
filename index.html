@@ -10343,7 +10343,16 @@ async function _payLoadDealCash(){
   var loc=_payLocation; // 'DeBary' or 'DeLand'
   try{
     var rows=await sbGet('deals','pickup_payment=gt.0&location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,pickup_payment,created_at,location');
-    _payDealCashRows=Array.isArray(rows)?rows:[];
+    if(!Array.isArray(rows)){ _payDealCashRows=[]; return; }
+    // Exclude deals that already have a payment row posted via the deal upload toggle
+    // (those rows are tagged raw_ocr_text starting with "Deal — ")
+    var alreadyPosted=new Set((_payWeekData||[])
+      .filter(function(p){ return p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0; })
+      .map(function(p){ return (p.customer_name||'').toLowerCase(); })
+    );
+    _payDealCashRows=rows.filter(function(d){
+      return !alreadyPosted.has((d.customer_name||'').toLowerCase());
+    });
   }catch(e){ _payDealCashRows=[]; }
 }
 
