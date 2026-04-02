@@ -1031,15 +1031,9 @@ canvas{display:none;}
         <span id="deal-total" style="font-size:20px;font-weight:700;color:#4ade80;">$0.00</span>
       </div>
 
-      <!-- Add to week's cash (cash deals only) -->
-      <div id="deal-add-week-wrap" style="background:#111;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#4ade80;">Add to this week's cash</div>
-          <div style="font-size:12px;color:#555;margin-top:2px;">Posts payments into the weekly cash total</div>
-        </div>
-        <div onclick="dealSetAddToWeek(!_dealAddToWeek)" id="deal-week-toggle" style="width:48px;height:28px;border-radius:14px;background:#333;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;">
-          <div id="deal-week-knob" style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#888;transition:left .2s;"></div>
-        </div>
+      <!-- Cash auto-posts notice (shown when any cash payment exists) -->
+      <div id="deal-add-week-wrap" style="display:none;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:13px;color:#4ade80;font-weight:600;">💵 Cash will be automatically added to this week's net cash</div>
       </div>
 
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
@@ -1407,6 +1401,10 @@ canvas{display:none;}
           </div>
           <button onclick="cashPayoutAdd()" style="width:100%;padding:12px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:10px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payout</button>
         </div>
+        <!-- Cash Out Deal (owner only) -->
+        <div id="cp-cash-out-deal-wrap" style="display:none;margin-bottom:10px;">
+          <button onclick="cashOutDealOpen()" style="width:100%;padding:12px;background:linear-gradient(145deg,#1a1200,#3d2c00);border:1px solid rgba(245,158,11,.3);border-radius:12px;color:#f59e0b;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">💵 Cash Out a Deal</button>
+        </div>
         <!-- Payroll buttons -->
         <div style="display:flex;gap:8px;margin-bottom:6px;">
           <button onclick="payrollOpen('ricky')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a2e,#2d1050);border:1px solid rgba(167,139,250,.3);border-radius:12px;color:#a78bfa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Ricky Payroll</button>
@@ -1422,6 +1420,29 @@ canvas{display:none;}
       </div>
     </div>
     <div id="cash-payouts-list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 44px;flex:1;display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+</div>
+
+<!-- CASH OUT DEAL SHEET -->
+<div id="cash-out-deal-sheet" onclick="cashOutDealClose()" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.7);">
+  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:85vh;display:flex;flex-direction:column;">
+    <div style="padding:12px 16px 0;flex-shrink:0;">
+      <div style="text-align:center;margin-bottom:10px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
+      <div style="display:flex;align-items:center;margin-bottom:14px;">
+        <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;">Cash Out a Deal</div>
+        <button onclick="cashOutDealClose()" style="background:rgba(255,255,255,.06);border:1px solid #1e1e1e;color:#666;font-size:16px;cursor:pointer;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">✕</button>
+      </div>
+      <!-- Owner selector -->
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Pay to Owner</div>
+        <div style="display:flex;gap:8px;">
+          <button id="cod-owner-vlad" onclick="codSetOwner('Vlad')" style="flex:1;padding:10px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #f59e0b;background:#f59e0b;color:#000;-webkit-tap-highlight-color:transparent;">Vlad</button>
+          <button id="cod-owner-tommy" onclick="codSetOwner('Tommy')" style="flex:1;padding:10px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;-webkit-tap-highlight-color:transparent;">Tommy</button>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;padding:0 16px 8px;">Select Deal</div>
+    <div id="cod-deals-list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 16px;flex:1;display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
@@ -11323,7 +11344,6 @@ function dealSelectCar(carId) {
   _dealAddToWeek = false;
   dealAddPayment();
   dealSetType('cash');
-  dealSetAddToWeek(false);
   dealShowStep(2);
 }
 
@@ -11349,19 +11369,14 @@ function dealSetType(type) {
 
 function dealUpdateWeekToggleVisibility() {
   var hasCash = _dealPayments.some(function(p){ return p.method === 'cash'; });
+  _dealAddToWeek = hasCash;
   var weekWrap = document.getElementById('deal-add-week-wrap');
-  if(weekWrap) weekWrap.style.display = hasCash ? 'flex' : 'none';
-  if(!hasCash) { _dealAddToWeek = false; dealSetAddToWeek(false); }
+  if(weekWrap) weekWrap.style.display = hasCash ? 'block' : 'none';
 }
 
 function dealSetAddToWeek(on) {
+  // Legacy no-op — auto handled by dealUpdateWeekToggleVisibility
   _dealAddToWeek = on;
-  var toggle = document.getElementById('deal-week-toggle');
-  var knob = document.getElementById('deal-week-knob');
-  if(!toggle || !knob) return;
-  toggle.style.background = on ? '#166534' : '#333';
-  knob.style.background = on ? '#4ade80' : '#888';
-  knob.style.left = on ? '24px' : '4px';
 }
 
 function dealPickupChanged() {
@@ -11978,6 +11993,10 @@ function cashPayoutsOpen(){
   var userName=(me&&me.name?me.name:'').toLowerCase();
   var isJesseSelf=userName.indexOf('jesse')!==-1;
   var isMannySelf=userName.indexOf('manny')!==-1;
+  var isOwner=['vlad','tommy'].some(function(n){return userName.indexOf(n)!==-1;});
+  // Cash Out Deal button — owners only
+  var codWrap=document.getElementById('cp-cash-out-deal-wrap');
+  if(codWrap) codWrap.style.display=isOwner?'block':'none';
   // Manny row: hide from Jesse (Jesse gets his own button injected below)
   var mannyRow=document.getElementById('payroll-row-manny');
   if(mannyRow) mannyRow.style.display=isJesseSelf?'none':'flex';
@@ -12030,6 +12049,84 @@ async function cashPayoutAdd(){
     _cashPayoutsRenderInline();
   }catch(e){
     alert('Error saving payout: '+(e.message||e));
+  }
+}
+
+var _codOwner='Vlad';
+
+function cashOutDealOpen(){
+  _codOwner='Vlad';
+  codSetOwner('Vlad');
+  // Load current week's deals for this location
+  var wkStart=_payCurrentWeekStart;
+  var wkEnd=_payGetWeekEnd(wkStart);
+  wkEnd.setHours(23,59,59,999);
+  var locDeals=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).filter(function(d){
+    var dt=d.created_at?new Date(d.created_at):null;
+    if(!dt)return false;
+    return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary')===_payLocation;
+  });
+  // Also pull from _dealsData if _dealsAllData not populated
+  if(!locDeals.length&&typeof _dealsData!=='undefined') locDeals=_dealsData.slice();
+  var list=document.getElementById('cod-deals-list');
+  if(!locDeals.length){
+    list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals this week.</div>';
+  } else {
+    list.innerHTML=locDeals.map(function(d){
+      var cashTotal=0;
+      try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
+      var cashStr=cashTotal>0?'$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2}):'No cash';
+      return '<div onclick="codSelectDeal('+d.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">'
+        +'<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+(d.customer_name||'Unknown')+'</div>'
+        +'<div style="font-size:13px;color:#888;">'+(d.vehicle_desc||'')+'</div>'
+        +'<div style="font-size:15px;font-weight:700;color:#f59e0b;margin-top:6px;">'+cashStr+'</div>'
+        +'</div>';
+    }).join('');
+  }
+  document.getElementById('cash-out-deal-sheet').style.display='block';
+}
+
+function cashOutDealClose(){
+  document.getElementById('cash-out-deal-sheet').style.display='none';
+}
+
+function codSetOwner(owner){
+  _codOwner=owner;
+  var vBtn=document.getElementById('cod-owner-vlad');
+  var tBtn=document.getElementById('cod-owner-tommy');
+  if(vBtn){vBtn.style.background=owner==='Vlad'?'#f59e0b':'transparent';vBtn.style.color=owner==='Vlad'?'#000':'#888';vBtn.style.borderColor=owner==='Vlad'?'#f59e0b':'#333';}
+  if(tBtn){tBtn.style.background=owner==='Tommy'?'#f59e0b':'transparent';tBtn.style.color=owner==='Tommy'?'#000':'#888';tBtn.style.borderColor=owner==='Tommy'?'#f59e0b':'#333';}
+}
+
+async function codSelectDeal(id){
+  var d=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).find(function(x){return x.id===id;})
+    ||(typeof _dealsData!=='undefined'?_dealsData:[]).find(function(x){return x.id===id;});
+  if(!d)return;
+  var cashTotal=0;
+  try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
+  if(cashTotal<=0){alert('No cash payments on this deal.');return;}
+  var cashStr='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2});
+  if(!confirm('Cash out '+cashStr+' from '+d.customer_name+' deal to '+_codOwner+'?'))return;
+  var wk=_payWeekKey(_payCurrentWeekStart);
+  try{
+    showLoading('Posting cash out...');
+    await sbPost('cash_payouts',{
+      paid_to:_codOwner+' — Deal Cash Out',
+      amount:cashTotal,
+      week_start:wk,
+      location:_payLocation,
+      logged_by:me?me.name:'',
+      notes:'Deal: '+d.customer_name+' / '+(d.vehicle_desc||'')
+    });
+    hideLoading();
+    cashOutDealClose();
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+  }catch(e){
+    hideLoading();
+    alert('Error: '+(e.message||e));
   }
 }
 
