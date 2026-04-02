@@ -9548,17 +9548,29 @@ function depositGoPreview() {
 // ── STEP 4: PRINT & EMAIL ─────────────────────────────────────
 
 function depositPrint() {
-  var step4 = document.getElementById('dep-step4');
-  var actionBtns = step4.querySelector('div[style*="flex-direction:column"]');
-  if(actionBtns) actionBtns.classList.add('dep-print-actions');
-  document.body.classList.add('printing-deposit');
-  var cleanup=function(){document.body.classList.remove('printing-deposit');if(actionBtns)actionBtns.classList.remove('dep-print-actions');window.onafterprint=null;};
-  window.onafterprint=cleanup;
-  // Delay so browser repaints with print styles before snapshot is taken
-  setTimeout(function(){
-    window.print();
-    setTimeout(cleanup,3000);
-  },150);
+  var printForm = document.getElementById('dep-print-form');
+  if(!printForm) return;
+
+  // Fix image path to absolute so it loads in the print window
+  var html = printForm.outerHTML.replace(/src="icon-512\.png"/g, 'src="'+window.location.origin+'/icon-512.png"');
+
+  var content = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<style>'
+    + 'body{margin:0;padding:0.3in;font-family:"Times New Roman",Times,Georgia,serif;font-size:14px;line-height:1.28;color:#000;background:#fff;}'
+    + '@page{margin:0.3in;size:letter portrait;}'
+    + 'img{max-width:100%;}'
+    + '</style></head><body>'
+    + html
+    + '<script>window.onload=function(){setTimeout(function(){window.print();},250);};window.onafterprint=function(){window.close();};<\/script>'
+    + '</body></html>';
+
+  var w = window.open('', '_blank', 'width=800,height=600');
+  if(w){
+    w.document.write(content);
+    w.document.close();
+  } else {
+    alert('Please allow pop-ups for this site to print.');
+  }
 }
 
 function depositEmail() {
