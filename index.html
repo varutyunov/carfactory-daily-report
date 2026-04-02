@@ -11304,15 +11304,20 @@ function dealSetType(type) {
     finBtn.style.background = '#7c3aed'; finBtn.style.color = '#fff'; finBtn.style.borderColor = '#7c3aed';
     cashBtn.style.background = 'transparent'; cashBtn.style.color = '#888'; cashBtn.style.borderColor = '#333';
     gpsWrap.style.display = 'block';
-    if(weekWrap) weekWrap.style.display = 'none';
-    _dealAddToWeek = false;
-    dealSetAddToWeek(false);
   } else {
     cashBtn.style.background = '#1d4ed8'; cashBtn.style.color = '#fff'; cashBtn.style.borderColor = '#1d4ed8';
     finBtn.style.background = 'transparent'; finBtn.style.color = '#888'; finBtn.style.borderColor = '#333';
     gpsWrap.style.display = 'none';
-    if(weekWrap) weekWrap.style.display = 'flex';
   }
+  // Always show week toggle — hide only if no cash payments
+  dealUpdateWeekToggleVisibility();
+}
+
+function dealUpdateWeekToggleVisibility() {
+  var hasCash = _dealPayments.some(function(p){ return p.method === 'cash'; });
+  var weekWrap = document.getElementById('deal-add-week-wrap');
+  if(weekWrap) weekWrap.style.display = hasCash ? 'flex' : 'none';
+  if(!hasCash) { _dealAddToWeek = false; dealSetAddToWeek(false); }
 }
 
 function dealSetAddToWeek(on) {
@@ -11334,6 +11339,7 @@ function dealPickupChanged() {
 function dealAddPayment() {
   _dealPayments.push({ amount: '', method: 'cash' });
   dealRenderPayments();
+  dealUpdateWeekToggleVisibility();
 }
 
 function dealRemovePayment(idx) {
@@ -11345,6 +11351,7 @@ function dealRemovePayment(idx) {
 function dealUpdatePayment(idx, field, val) {
   if(_dealPayments[idx]) _dealPayments[idx][field] = val;
   dealUpdateTotal();
+  dealUpdateWeekToggleVisibility();
 }
 
 function dealRenderPayments() {
@@ -11490,7 +11497,7 @@ async function dealSubmit() {
     await sbPost('deals', record);
 
     // If cash deal + "Add to this week's cash" toggled on, post each payment to the payments table
-    if(_dealAddToWeek && _dealData.type === 'cash') {
+    if(_dealAddToWeek) {
       var today = new Date();
       var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
       var weekKey = _payWeekKey(today);
