@@ -1409,8 +1409,8 @@ canvas{display:none;}
           <button onclick="payrollOpen('scott')" style="flex:1;padding:12px;background:linear-gradient(145deg,#0a1628,#122a5c);border:1px solid rgba(96,165,250,.3);border-radius:12px;color:#60a5fa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Scott Payroll</button>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:14px;">
-          <button onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
-          <button onclick="payrollOpen('jesse')" style="flex:1;padding:12px;background:linear-gradient(145deg,#001a10,#003d22);border:1px solid rgba(52,211,153,.3);border-radius:12px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Jesse Payroll</button>
+          <button id="payroll-btn-manny" onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
+          <button id="payroll-btn-jesse" onclick="payrollOpen('jesse')" style="flex:1;padding:12px;background:linear-gradient(145deg,#001a10,#003d22);border:1px solid rgba(52,211,153,.3);border-radius:12px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Jesse Payroll</button>
         </div>
       </div>
       <!-- Payroll calculator view (hidden by default) -->
@@ -11963,6 +11963,15 @@ function cashPayoutsOpen(){
   if(sheet)sheet.style.display='block';
   document.getElementById('cp-paid-to').value='';
   document.getElementById('cp-amount').value='';
+  // Hide each payroll button if the logged-in user IS that person (they can only see their own)
+  var userName=(me&&me.name?me.name:'').toLowerCase();
+  var isMannySelf=userName.indexOf('manny')!==-1;
+  var isJesseSelf=userName.indexOf('jesse')!==-1;
+  var mannyBtn=document.getElementById('payroll-btn-manny');
+  var jesseBtn=document.getElementById('payroll-btn-jesse');
+  // Manny sees only Manny; Jesse sees only Jesse; managers see both
+  if(mannyBtn) mannyBtn.style.display=(isJesseSelf?'none':'flex');
+  if(jesseBtn) jesseBtn.style.display=(isMannySelf?'none':'flex');
   cashPayoutsRender();
 }
 function cashPayoutsClose(){
