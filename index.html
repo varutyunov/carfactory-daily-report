@@ -9552,10 +9552,13 @@ function depositPrint() {
   var actionBtns = step4.querySelector('div[style*="flex-direction:column"]');
   if(actionBtns) actionBtns.classList.add('dep-print-actions');
   document.body.classList.add('printing-deposit');
-  var cleanup=function(){document.body.classList.remove('printing-deposit');window.onafterprint=null;};
+  var cleanup=function(){document.body.classList.remove('printing-deposit');if(actionBtns)actionBtns.classList.remove('dep-print-actions');window.onafterprint=null;};
   window.onafterprint=cleanup;
-  window.print();
-  setTimeout(cleanup,3000);
+  // Delay so browser repaints with print styles before snapshot is taken
+  setTimeout(function(){
+    window.print();
+    setTimeout(cleanup,3000);
+  },150);
 }
 
 function depositEmail() {
