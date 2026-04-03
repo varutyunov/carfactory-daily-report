@@ -4748,7 +4748,7 @@ async function syncNow(){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
-        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
+        // Never overwrite location on existing cars — Supabase is source of truth for location
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
