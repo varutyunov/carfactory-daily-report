@@ -1371,6 +1371,62 @@ canvas{display:none;}
   <img id="pay-photo-lightbox-img" src="" style="max-width:95%;max-height:90vh;object-fit:contain;border-radius:8px;"/>
 </div>
 
+<!-- MANUAL POST MODAL -->
+<div id="manual-post-modal" style="display:none;position:fixed;inset:0;z-index:9500;background:#000;flex-direction:column;overflow-y:auto;">
+  <div style="position:sticky;top:0;z-index:10;background:#000;border-bottom:1px solid #1a1a1a;padding:0 16px;height:54px;display:flex;align-items:center;gap:14px;">
+    <button onclick="closeManualPost()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">MANUAL POST</span>
+  </div>
+  <div style="padding:16px 16px 60px;">
+    <!-- Location -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Location</div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button id="mp-loc-debary" onclick="mpSetLoc('DeBary')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid #a87000;background:linear-gradient(145deg,#1a1000,#4a3000);color:#f59e0b;">DeBary</button>
+      <button id="mp-loc-deland" onclick="mpSetLoc('DeLand')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid #1e1e1e;background:#0d0d0d;color:#555;">DeLand</button>
+    </div>
+
+    <!-- Customer -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Customer Name</div>
+    <input id="mp-customer" placeholder="First Last" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;margin-bottom:14px;outline:none;"/>
+
+    <!-- Vehicle -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Vehicle</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input id="mp-year" placeholder="Year" style="width:80px;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
+      <input id="mp-make" placeholder="Make" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
+      <input id="mp-model" placeholder="Model" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <input id="mp-color" placeholder="Color" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
+      <input id="mp-stock" placeholder="Stock #" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
+      <input id="mp-vin" placeholder="VIN (opt)" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:13px;outline:none;"/>
+    </div>
+
+    <!-- Seller -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Sold By</div>
+    <input id="mp-seller" placeholder="Salesperson name" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;margin-bottom:14px;outline:none;"/>
+
+    <!-- Deal Type -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Deal Type</div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button id="mp-type-cash" onclick="mpSetType('cash')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;">Cash</button>
+      <button id="mp-type-finance" onclick="mpSetType('finance')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #1e1e1e;background:#0d0d0d;color:#555;">Finance</button>
+    </div>
+
+    <!-- Amount -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Amount Collected</div>
+    <input id="mp-amount" type="number" placeholder="0.00" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:18px;margin-bottom:6px;outline:none;"/>
+    <div style="font-size:11px;color:#555;margin-bottom:20px;">Leave 0 for finance deals with no cash collected</div>
+
+    <!-- Note -->
+    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Note (optional)</div>
+    <textarea id="mp-note" placeholder="e.g. Sold in DeBary, seller is DeLand" rows="2" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:14px;margin-bottom:20px;outline:none;resize:none;"></textarea>
+
+    <button id="mp-submit-btn" onclick="submitManualPost()" style="width:100%;padding:16px;background:linear-gradient(145deg,#14532d,#166534);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;">Post Deal</button>
+    <div id="mp-error" style="display:none;margin-top:12px;background:#3b0000;border:1px solid #7f1d1d;border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:13px;"></div>
+  </div>
+</div>
+
 <!-- OWNER DEALS VIEW OVERLAY -->
 <div id="deals-view-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
@@ -11838,6 +11894,101 @@ async function dealSubmit() {
 // ══════════════════════════════════════════════════════════════
 
 var _dealsData = [];
+
+// ── MANUAL POST ──────────────────────────────────────────────────────────────
+var _mpLoc = 'DeBary';
+var _mpType = 'cash';
+
+function openManualPost(loc) {
+  _mpLoc = loc || _dealsLocation || 'DeBary';
+  _mpType = 'cash';
+  // Reset fields
+  ['mp-customer','mp-year','mp-make','mp-model','mp-color','mp-stock','mp-vin','mp-seller','mp-amount','mp-note'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('mp-error').style.display='none';
+  mpSetLoc(_mpLoc);
+  mpSetType(_mpType);
+  var modal = document.getElementById('manual-post-modal');
+  modal.style.display = 'flex';
+  var tb=document.querySelector('.tb'); if(tb) tb.style.display='none';
+}
+
+function closeManualPost() {
+  document.getElementById('manual-post-modal').style.display='none';
+  var tb=document.querySelector('.tb'); if(tb) tb.style.display='flex';
+}
+
+function mpSetLoc(loc) {
+  _mpLoc = loc;
+  var db=document.getElementById('mp-loc-debary');
+  var dl=document.getElementById('mp-loc-deland');
+  if(db) { db.style.border='1px solid '+(loc==='DeBary'?'#a87000':'#1e1e1e'); db.style.background=loc==='DeBary'?'linear-gradient(145deg,#1a1000,#4a3000)':'#0d0d0d'; db.style.color=loc==='DeBary'?'#f59e0b':'#555'; }
+  if(dl) { dl.style.border='1px solid '+(loc==='DeLand'?'#3b82f6':'#1e1e1e'); dl.style.background=loc==='DeLand'?'linear-gradient(145deg,#001233,#003080)':'#0d0d0d'; dl.style.color=loc==='DeLand'?'#60a5fa':'#555'; }
+}
+
+function mpSetType(type) {
+  _mpType = type;
+  var cash=document.getElementById('mp-type-cash');
+  var fin=document.getElementById('mp-type-finance');
+  if(cash) { cash.style.background=type==='cash'?'#1d4ed8':'transparent'; cash.style.border='1px solid '+(type==='cash'?'#1d4ed8':'#1e1e1e'); cash.style.color=type==='cash'?'#fff':'#555'; }
+  if(fin)  { fin.style.background=type==='finance'?'#166534':'transparent'; fin.style.border='1px solid '+(type==='finance'?'#166534':'#1e1e1e'); fin.style.color=type==='finance'?'#4ade80':'#555'; }
+}
+
+async function submitManualPost() {
+  var btn = document.getElementById('mp-submit-btn');
+  var errEl = document.getElementById('mp-error');
+  errEl.style.display='none';
+
+  var customer = (document.getElementById('mp-customer').value||'').trim();
+  var year  = (document.getElementById('mp-year').value||'').trim();
+  var make  = (document.getElementById('mp-make').value||'').trim();
+  var model = (document.getElementById('mp-model').value||'').trim();
+  var color = (document.getElementById('mp-color').value||'').trim();
+  var stock = (document.getElementById('mp-stock').value||'').trim();
+  var vin   = (document.getElementById('mp-vin').value||'').trim();
+  var seller= (document.getElementById('mp-seller').value||'').trim();
+  var amount= parseFloat(document.getElementById('mp-amount').value)||0;
+  var note  = (document.getElementById('mp-note').value||'').trim();
+
+  if(!customer){ errEl.textContent='Customer name is required.'; errEl.style.display='block'; return; }
+  if(!year||!make||!model){ errEl.textContent='Year, Make, and Model are required.'; errEl.style.display='block'; return; }
+
+  btn.textContent='Posting...'; btn.disabled=true;
+
+  var vehicleDesc = [year,make,model].filter(Boolean).join(' ');
+  var payments = amount>0 ? JSON.stringify([{amount:amount,method:'cash'}]) : JSON.stringify([]);
+  var noteField = note ? ('Manual post' + (seller?' — sold by '+seller:'') + '. ' + note) : ('Manual post' + (seller?' — sold by '+seller:'') + '.');
+
+  try {
+    await sbPost('deals', {
+      customer_name: customer,
+      vehicle_desc: vehicleDesc,
+      vin: vin,
+      stock: stock,
+      color: color,
+      deal_type: _mpType,
+      total_collected: amount,
+      payments: payments,
+      gps_serial: '',
+      photo_urls: '[]',
+      created_by: (me ? me.name : '') + ' [manual]',
+      location: _mpLoc,
+      created_at: new Date().toISOString(),
+      notes: noteField
+    });
+    btn.textContent = '✓ Posted';
+    btn.style.background = 'linear-gradient(145deg,#14532d,#166534)';
+    _dealsData = []; // force reload on next view
+    setTimeout(function(){ closeManualPost(); }, 1200);
+  } catch(e) {
+    errEl.textContent = 'Failed to post: ' + (e.message||e);
+    errEl.style.display = 'block';
+    btn.textContent = 'Post Deal';
+    btn.disabled = false;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 var _dealsFiltered = [];
 var _dealsViewingDetail = false;
 var _dealsLocation = '';  // 'DeBary' or 'DeLand'
@@ -11907,8 +12058,10 @@ function dealsPickLocation(loc) {
   var isEmp=me&&me.role==='employee';
   var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
   var searchHtml='<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
-  var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
-  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+  var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
+  var isOwnerForPost=me&&(['vlad','tommy'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;})||me.role==='owner');
+  var manualBtn=isOwnerForPost?'<button onclick="openManualPost(\''+_dealsLocation+'\')" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:12px;color:#666;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">✏️ Manual Post</button>':'';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + manualBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
