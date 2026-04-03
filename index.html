@@ -1036,6 +1036,12 @@ canvas{display:none;}
         <div style="font-size:13px;color:#4ade80;font-weight:600;">💵 Cash will be automatically added to this week's net cash</div>
       </div>
 
+      <!-- Notes -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Notes <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
+        <textarea id="deal-notes" placeholder="e.g. Seller is DeLand, car sold in DeBary system" rows="2" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;resize:none;"></textarea>
+      </div>
+
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
     </div>
 
@@ -11506,7 +11512,7 @@ function showDealMethodPicker(loc) {
 function dealMethodSearch() {
   var picker = document.getElementById('deal-method-picker');
   if(picker) picker.remove();
-  ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
+  ['deal-inv-search','deal-customer','deal-gps','deal-notes'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
   document.getElementById('deal-car-summary').textContent = '';
@@ -11776,6 +11782,7 @@ function dealGoStep3() {
     }
   }
   _dealData.customer = customer;
+  _dealData.notes = (document.getElementById('deal-notes').value || '').trim();
   _dealPhotos = [];
   document.getElementById('deal-photo-grid').innerHTML = '';
   dealShowStep(3);
@@ -11865,7 +11872,8 @@ async function dealSubmit() {
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      notes: _dealData.notes || ''
     };
     // Save pickup payment as its own columns
     if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
