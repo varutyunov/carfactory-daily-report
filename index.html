@@ -11483,8 +11483,29 @@ function openDealForm(forceLoc) {
   document.getElementById('deal-overlay').style.display = 'flex';
   document.getElementById('deal-bar-title').textContent = 'DEAL UPLOAD — ' + dealLoc.toUpperCase();
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
-  dealShowStep(1);
-  // Clear all inputs
+  showDealMethodPicker(dealLoc);
+}
+
+function showDealMethodPicker(loc) {
+  [1,2,3,4].forEach(function(n){ var s=document.getElementById('deal-step'+n); if(s) s.style.display='none'; });
+  var body = document.getElementById('deal-body');
+  var old = document.getElementById('deal-method-picker');
+  if(old) old.remove();
+  var picker = document.createElement('div');
+  picker.id = 'deal-method-picker';
+  picker.style.cssText = 'padding:32px 20px;display:flex;flex-direction:column;gap:14px;';
+  picker.innerHTML =
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">How do you want to add this deal?</div>' +
+    '<button onclick="dealMethodSearch()" style="width:100%;padding:20px 16px;background:#111;border:1px solid #2a2a2a;border-radius:16px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;gap:14px;">'+
+      '<span style="font-size:26px;">🔍</span><div style="text-align:left;"><div>Search for Car</div><div style="font-size:12px;font-weight:400;color:#666;margin-top:2px;letter-spacing:0;">Find from inventory</div></div></button>' +
+    '<button onclick="dealMethodManual(\''+loc+'\')" style="width:100%;padding:20px 16px;background:#111;border:1px solid #2a2a2a;border-radius:16px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;gap:14px;">'+
+      '<span style="font-size:26px;">✏️</span><div style="text-align:left;"><div>Input Manually</div><div style="font-size:12px;font-weight:400;color:#666;margin-top:2px;letter-spacing:0;">Car not in inventory</div></div></button>';
+  body.appendChild(picker);
+}
+
+function dealMethodSearch() {
+  var picker = document.getElementById('deal-method-picker');
+  if(picker) picker.remove();
   ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
@@ -11492,7 +11513,13 @@ function openDealForm(forceLoc) {
   document.getElementById('deal-photo-grid').innerHTML = '';
   dealSetType('cash');
   dealRenderInv();
-  dealAddPayment(); // start with one payment row
+  dealAddPayment();
+  dealShowStep(1);
+}
+
+function dealMethodManual(loc) {
+  closeDealForm();
+  openManualPost(loc);
 }
 
 function showDealLocationPicker() {
@@ -12059,9 +12086,7 @@ function dealsPickLocation(loc) {
   var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
   var searchHtml='<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
   var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
-  var isOwnerForPost=me&&(['vlad','tommy'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;})||me.role==='owner');
-  var manualBtn=isOwnerForPost?'<button onclick="openManualPost(\''+_dealsLocation+'\')" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:12px;color:#666;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">✏️ Manual Post</button>':'';
-  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + manualBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
