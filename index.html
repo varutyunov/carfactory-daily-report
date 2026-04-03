@@ -11518,8 +11518,61 @@ function dealMethodSearch() {
 }
 
 function dealMethodManual(loc) {
-  closeDealForm();
-  openManualPost(loc);
+  var picker = document.getElementById('deal-method-picker');
+  if(picker) picker.remove();
+  showDealManualCarEntry();
+}
+
+function showDealManualCarEntry() {
+  [1,2,3,4].forEach(function(n){ var s=document.getElementById('deal-step'+n); if(s) s.style.display='none'; });
+  var body = document.getElementById('deal-body');
+  var old = document.getElementById('deal-manual-car-entry');
+  if(old) old.remove();
+  var el = document.createElement('div');
+  el.id = 'deal-manual-car-entry';
+  el.style.cssText = 'padding:16px 16px 40px;display:flex;flex-direction:column;gap:12px;';
+  el.innerHTML =
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Vehicle Details</div>' +
+    '<div style="display:flex;gap:8px;">' +
+      '<input id="dmc-year" type="number" placeholder="Year" style="width:85px;flex-shrink:0;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 10px;font-size:15px;outline:none;" />' +
+      '<input id="dmc-make" type="text" placeholder="Make" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
+    '</div>' +
+    '<input id="dmc-model" type="text" placeholder="Model" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
+    '<input id="dmc-color" type="text" placeholder="Color" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
+    '<div style="display:flex;gap:8px;">' +
+      '<input id="dmc-stock" type="text" placeholder="Stock #" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
+      '<input id="dmc-vin" type="text" placeholder="VIN" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
+    '</div>' +
+    '<div id="dmc-error" style="display:none;background:#3b0000;border:1px solid #7f1d1d;border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:13px;"></div>' +
+    '<button onclick="dealManualCarContinue()" style="width:100%;padding:16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:14px;color:#f59e0b;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:\'Barlow Condensed\',sans-serif;-webkit-tap-highlight-color:transparent;">Continue →</button>';
+  body.appendChild(el);
+}
+
+function dealManualCarContinue() {
+  var year  = (document.getElementById('dmc-year').value||'').trim();
+  var make  = (document.getElementById('dmc-make').value||'').trim();
+  var model = (document.getElementById('dmc-model').value||'').trim();
+  var color = (document.getElementById('dmc-color').value||'').trim();
+  var stock = (document.getElementById('dmc-stock').value||'').trim();
+  var vin   = (document.getElementById('dmc-vin').value||'').trim();
+  var errEl = document.getElementById('dmc-error');
+  errEl.style.display = 'none';
+  if(!year || !make || !model) { errEl.textContent = 'Year, Make, and Model are required.'; errEl.style.display = 'block'; return; }
+  var vehicleName = [year, make, model].join(' ');
+  _dealData.car = { name: vehicleName, vin: vin, stock: stock, color: color, _manual: true };
+  document.getElementById('deal-car-summary').textContent = vehicleName + (stock ? ' · #'+stock : '');
+  var entry = document.getElementById('deal-manual-car-entry');
+  if(entry) entry.remove();
+  document.getElementById('deal-customer').value = '';
+  document.getElementById('deal-gps').value = '';
+  document.getElementById('deal-pickup-payment').value = '';
+  document.getElementById('deal-pickup-due').value = '';
+  document.getElementById('deal-pickup-due-wrap').style.display = 'none';
+  _dealPayments = [];
+  _dealAddToWeek = false;
+  dealAddPayment();
+  dealSetType('cash');
+  dealShowStep(2);
 }
 
 function showDealLocationPicker() {
@@ -11555,7 +11608,10 @@ function closeDealForm() {
 }
 
 function dealBack() {
-  if(_dealStep > 1) {
+  if(document.getElementById('deal-manual-car-entry')) {
+    document.getElementById('deal-manual-car-entry').remove();
+    showDealMethodPicker(_dealData.dealLocation || _dealsLocation || 'DeBary');
+  } else if(_dealStep > 1) {
     _dealStep--;
     dealShowStep(_dealStep);
   } else {
