@@ -2227,6 +2227,27 @@ async function sbPost(table, body) {
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
+async function sbRpc(fn, params) {
+  const r = await fetch(SB_URL+'/rest/v1/rpc/'+fn, {method:'POST',headers:SB_HEADERS,body:JSON.stringify(params)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+var _loginAttempts = {};
+function loginLocked(u) {
+  var a = _loginAttempts[u] || {};
+  if(a.until && a.until > Date.now()) return Math.ceil((a.until - Date.now())/1000);
+  return 0;
+}
+function loginFail(u) {
+  var a = _loginAttempts[u] || {n:0};
+  a.n = (a.n||0) + 1;
+  if(a.n >= 5) { a.until = Date.now() + 5*60*1000; a.n = 0; }
+  _loginAttempts[u] = a;
+}
+function loginOk(u) { delete _loginAttempts[u]; }
 async function sbPatch(table, id, body) {
   const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'PATCH',headers:SB_HEADERS,body:JSON.stringify(body)});
   if(!r.ok) throw new Error(await r.text());
@@ -2409,13 +2430,13 @@ async function syncFromSupabase(showUI){
       _cpData.synced=true;
       if(!emps || !inv) throw new Error('Empty response from Supabase');
       // Completely replace — never merge with stale localStorage
-      S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
+      S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,role:e.role,location:e.location}));
       const _rawCM=JSON.parse(localStorage.getItem('cf_colormap')||'{}');const colorMap={};Object.keys(_rawCM).forEach(function(k){colorMap[k]=fixColor(_rawCM[k]);});
       const pxSaved=localStorage.getItem('px_cache');
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -2460,19 +2481,26 @@ async function loginWithFaceId(){
 async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value.trim();
-  // First try local cache, then sync
+  const locked=loginLocked(u);
+  if(locked){document.getElementById('lerr').textContent='Too many attempts. Try again in '+locked+'s';return;}
   showLoading('Signing in...');
+  let authResult;
   try {
-    const emps = await sbGet('employees','select=*');
-    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-  } catch(e){}
+    authResult = await sbRpc('authenticate_employee', {p_username: u, p_pin: p});
+  } catch(ex) {
+    hideLoading();
+    loginFail(u);
+    document.getElementById('lerr').textContent='Invalid username or PIN';
+    return;
+  }
   hideLoading();
-  const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
-  if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
+  if(!authResult || !authResult.id){loginFail(u);document.getElementById('lerr').textContent='Invalid username or PIN';return;}
+  loginOk(u);
+  const e=authResult;
   me=e;
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
-  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());localStorage.setItem('cf_saved_pin',document.getElementById('lp').value.trim());}
+  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());}
   // Store credential in iOS keychain so Face ID triggers on next open
   if(navigator.credentials&&window.PasswordCredential){try{await navigator.credentials.store(new PasswordCredential({id:u,password:p,name:e.name}));}catch(ex){}}
   initOneSignalUser(e.name);
@@ -2502,7 +2530,6 @@ function doSync(){
   // Save session so user stays logged in after reload
   if(me) localStorage.setItem('cf_session', JSON.stringify(me));
   if(_savedUser) localStorage.setItem('cf_saved_user', _savedUser);
-  if(_savedPin) localStorage.setItem('cf_saved_pin', _savedPin);
   // Tell SW to skip waiting so new app code activates on next load
   if('serviceWorker' in navigator && navigator.serviceWorker.controller){
     navigator.serviceWorker.controller.postMessage('SYNC');
@@ -4864,7 +4891,6 @@ async function addCarManually(){
 // Restore session if coming back from a sync reload
 const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
-const _savedPin = localStorage.getItem('cf_saved_pin');
 
 // ── AI key cookie helpers (cookies outlive iOS localStorage wipes) ──────────
 function _getAiKeyCookie(){var m=document.cookie.match(/(?:^|;\s*)cf_ai_key=([^;]*)/);return m?decodeURIComponent(m[1]):null;}
@@ -4880,7 +4906,6 @@ var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges')
 try{S.calendarEvents=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');}catch(e){}if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
-if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
@@ -4889,7 +4914,6 @@ if(_savedSession){
       // Re-save immediately so session survives even if sync fails
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
-      localStorage.setItem('cf_saved_pin', _savedPin||'');
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
