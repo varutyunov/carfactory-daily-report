@@ -1031,9 +1031,14 @@ canvas{display:none;}
         <span id="deal-total" style="font-size:20px;font-weight:700;color:#4ade80;">$0.00</span>
       </div>
 
-      <!-- Cash auto-posts notice (shown when any cash payment exists) -->
+      <!-- Cash collected now (shown when any cash payment exists) -->
       <div id="deal-add-week-wrap" style="display:none;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:12px 14px;margin-bottom:14px;">
-        <div style="font-size:13px;color:#4ade80;font-weight:600;">💵 Cash will be automatically added to this week's net cash</div>
+        <div style="font-size:13px;color:#4ade80;font-weight:600;margin-bottom:8px;">💵 Cash to post to this week</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input id="deal-cash-now" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:12px 14px;font-size:18px;font-weight:700;outline:none;text-align:right;"/>
+          <button onclick="dealCashNowFull()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;">Full</button>
+        </div>
+        <div style="font-size:11px;color:rgba(74,222,128,.5);margin-top:6px;">Enter partial amount if only a deposit was collected</div>
       </div>
 
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
@@ -11778,10 +11783,25 @@ function dealSetType(type) {
 }
 
 function dealUpdateWeekToggleVisibility() {
-  var hasCash = _dealPayments.some(function(p){ return p.method === 'cash'; });
+  var cashTotal=0;
+  _dealPayments.forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});
+  var hasCash=cashTotal>0;
   _dealAddToWeek = hasCash;
   var weekWrap = document.getElementById('deal-add-week-wrap');
   if(weekWrap) weekWrap.style.display = hasCash ? 'block' : 'none';
+  // Auto-fill cash-now field with full cash amount
+  var cashNowEl=document.getElementById('deal-cash-now');
+  if(cashNowEl&&hasCash){
+    var cur=parseFloat((cashNowEl.value||'').replace(/[^0-9.]/g,''))||0;
+    if(cur<=0||cur>cashTotal) cashNowEl.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+}
+
+function dealCashNowFull(){
+  var cashTotal=0;
+  _dealPayments.forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});
+  var el=document.getElementById('deal-cash-now');
+  if(el) el.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
 function dealSetAddToWeek(on) {
@@ -11954,20 +11974,20 @@ async function dealSubmit() {
 
     await sbPost('deals', record);
 
-    // If cash deal + "Add to this week's cash" toggled on, post each payment to the payments table
+    // Post cash collected now to this week's payments
     if(_dealAddToWeek) {
-      var today = new Date();
-      var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
-      var weekKey = _payWeekKey(today);
-      var nameParts = (car.name||'').split(' ');
-      var carYear = nameParts[0]||'';
-      var carMake = nameParts[1]||'';
-      var carModel = nameParts.slice(2).join(' ')||'';
-      var dealLoc = _dealData.dealLocation || (me ? me.location : 'DeBary');
-      var cashPayments = payments.filter(function(p){ return p.method === 'cash'; });
-      for(var pi = 0; pi < cashPayments.length; pi++) {
-        var cp = cashPayments[pi];
-        var amtStr = '$' + cp.amount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      var cashNowEl=document.getElementById('deal-cash-now');
+      var cashNow=parseFloat((cashNowEl?cashNowEl.value:'').replace(/[^0-9.]/g,''))||0;
+      if(cashNow>0){
+        var today = new Date();
+        var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+        var weekKey = _payWeekKey(today);
+        var nameParts = (car.name||'').split(' ');
+        var carYear = nameParts[0]||'';
+        var carMake = nameParts[1]||'';
+        var carModel = nameParts.slice(2).join(' ')||'';
+        var dealLoc = _dealData.dealLocation || (me ? me.location : 'DeBary');
+        var amtStr = '$' + cashNow.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
         try {
           await sbPost('payments', {
             customer_name: _dealData.customer,
@@ -11986,7 +12006,7 @@ async function dealSubmit() {
             location: dealLoc,
             logged_by: me ? me.name : '',
             week_start: weekKey,
-            raw_ocr_text: 'Deal — ' + (car.name||''),
+            raw_ocr_text: 'Deal \u2014 ' + (car.name||''),
             created_at: new Date().toISOString()
           });
         } catch(payErr) {
