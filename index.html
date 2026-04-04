@@ -13430,14 +13430,31 @@ async function dealEditSave(id){
     } else if(!existingPay&&cashAmt>0){
       // No existing payment row but user wants cash posted — create one
       var wk=weekEl?weekEl.dataset.week:_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
+      // Parse vehicle info from vehicle_desc (e.g. "2017 Tesla Model S")
+      var vDesc=d.vehicle_desc||'';
+      var vParts=vDesc.split(' ');
+      var vYear=vParts[0]||'';
+      var vMake=vParts[1]||'';
+      var vModel=vParts.slice(2).join(' ')||'';
       await sbPost('payments',{
         customer_name:patch.customer_name||d.customer_name,
+        payment_date:new Date().toISOString().slice(0,10),
+        payment_time:null,
         amount:'$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
         payment_method:'cash',
-        raw_ocr_text:tagPrefix+(d.vehicle_desc||''),
-        week_start:wk,
+        card_fee_added:false,
+        original_amount:null,
+        vehicle_year:vYear,
+        vehicle_make:vMake,
+        vehicle_model:vModel,
+        vehicle_vin:d.vin||'',
+        vehicle_color:d.color||'',
+        receipt_photo_url:null,
         location:d.location||'',
-        payment_date:new Date().toISOString().slice(0,10)
+        logged_by:me?me.name:'',
+        week_start:wk,
+        raw_ocr_text:tagPrefix+vDesc,
+        created_at:new Date().toISOString()
       });
     }
 
