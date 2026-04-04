@@ -11044,8 +11044,29 @@ var _payDealTagCash=0;
 var _payNetAdjusted=false;
 var _payNetAdjustAmt=null;
 var _payDealRows=[];
+var _payDealFullCashMap={};
 var _netLpTimer=null;
 var _netLpFired=false;
+
+// Cross-reference deals table to get full cash per deal
+function _buildDealFullCashMap(){
+  _payDealFullCashMap={};
+  if(!_dealsData||!_dealsData.length)return;
+  _dealsData.forEach(function(d){
+    var cashTotal=0;
+    try{
+      var pmts=JSON.parse(d.payments||'[]');
+      pmts.forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});
+    }catch(e){}
+    var key=(d.customer_name||'').toLowerCase();
+    _payDealFullCashMap[key]=cashTotal;
+  });
+}
+
+function _getDealFullCash(customerName,paymentRowAmt){
+  var key=(customerName||'').toLowerCase();
+  return _payDealFullCashMap[key]||paymentRowAmt;
+}
 
 function _netLpStart(e){
   _netLpFired=false;
@@ -11083,12 +11104,13 @@ function payToggleNetDeals(){
 function netDealEdit(){
   // Re-open sheet to edit saved settings
   if(!_payDealRows.length){
-    // Rebuild if empty
+    _buildDealFullCashMap();
     (_payWeekData||[]).forEach(function(p){
       if(p.delete_requested)return;
       if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
-        var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
-        if(v>0) _payDealRows.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
+        var posted=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+        var full=_getDealFullCash(p.customer_name,posted);
+        if(full>0) _payDealRows.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:full,posted:posted,include:true,custom:posted});
       }
     });
   }
@@ -11270,12 +11292,14 @@ async function _netDealSave(){
 
 function _netDealApplySaved(saved){
   if(!Array.isArray(saved)||!saved.length)return;
+  _buildDealFullCashMap();
   var current=[];
   (_payWeekData||[]).forEach(function(p){
     if(p.delete_requested)return;
     if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
-      var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
-      if(v>0) current.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
+      var posted=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+      var full=_getDealFullCash(p.customer_name,posted);
+      if(full>0) current.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:full,posted:posted,include:true,custom:posted});
     }
   });
   if(!current.length)return;
@@ -13548,13 +13572,23 @@ async function dealEditSave(id){
       }
     }
     // Also update the corresponding payment row in payments table
-    var hasCashChange=newPayments.some(function(p){return p.method==='cash';});
-    // Find existing deal payment row
     var tagPrefix='Deal \u2014 ';
+    var dealTag=tagPrefix+(d.vehicle_desc||'');
     var existingPay=null;
     try{
-      var payRows=await sbGet('payments','raw_ocr_text=like.'+encodeURIComponent(tagPrefix+'%')+'&customer_name=eq.'+encodeURIComponent(d.customer_name)+'&limit=1');
-      if(Array.isArray(payRows)&&payRows.length) existingPay=payRows[0];
+      // Search by exact raw_ocr_text tag (vehicle-specific) — most reliable match
+      var payRows=await sbGet('payments','raw_ocr_text=eq.'+encodeURIComponent(dealTag)+'&limit=5');
+      if(Array.isArray(payRows)&&payRows.length){
+        // If multiple, prefer same week
+        var wkTarget=weekEl?weekEl.dataset.week:_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
+        existingPay=payRows.find(function(r){return r.week_start===wkTarget;})||payRows[0];
+        // Clean up any duplicates
+        for(var di=0;di<payRows.length;di++){
+          if(payRows[di].id!==existingPay.id){
+            try{await sbDelete('payments',payRows[di].id);}catch(e){}
+          }
+        }
+      }
     }catch(e){}
 
     // Read custom cash-post-to-week amount
@@ -13620,6 +13654,25 @@ async function dealEditSave(id){
       await sbPatch('deals',id,patch);
       // Update local data
       Object.keys(patch).forEach(function(k){d[k]=patch[k];});
+    }
+    // Sync net deal adjustment to match the posted cash amount
+    if(_payDealRows.length){
+      var custKey=(d.customer_name||'').toLowerCase();
+      var changed=false;
+      _payDealRows.forEach(function(dr){
+        if((dr.name||'').toLowerCase()===custKey){
+          dr.custom=cashAmt;
+          dr.posted=cashAmt;
+          dr.include=cashAmt>0;
+          changed=true;
+        }
+      });
+      if(changed){
+        var total=0;
+        _payDealRows.forEach(function(dr){total+=dr.custom||0;});
+        _payNetAdjustAmt=total;
+        _netDealSave();
+      }
     }
     if(btn){btn.textContent='Saved!';btn.style.background='#065f46';btn.style.borderColor='#10b981';}
     setTimeout(function(){
