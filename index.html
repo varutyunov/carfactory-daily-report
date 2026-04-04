@@ -11117,8 +11117,12 @@ function netDealSetAmt(i,val){
 function netDealRender(){
   var list=document.getElementById('net-deal-list');
   var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
-  list.innerHTML=_payDealRows.map(function(d,i){
+  var totalDealCash=0, includedCash=0, excludedCash=0;
+  var cards=_payDealRows.map(function(d,i){
     var checked=d.include;
+    totalDealCash+=d.amount;
+    includedCash+=(d.custom||0);
+    var remainder=d.amount-(d.custom||0);
     return '<div style="background:#111;border:1px solid '+(checked?'rgba(245,158,11,.3)':'#1e1e1e')+';border-radius:14px;padding:14px 16px;">'
       +'<div style="display:flex;align-items:center;gap:12px;">'
         +'<div onclick="netDealToggle('+i+')" style="width:28px;height:28px;border-radius:8px;border:2px solid '+(checked?'#f59e0b':'#333')+';background:'+(checked?'#f59e0b':'transparent')+';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">'+(checked?'<span style="color:#000;font-size:16px;font-weight:700;">✓</span>':'')+'</div>'
@@ -11132,9 +11136,31 @@ function netDealRender(){
         +'<input type="text" inputmode="decimal" value="'+fmt(d.custom)+'" onchange="netDealSetAmt('+i+',this.value);moneyInput(this)" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(245,158,11,.3);border-radius:10px;color:#f59e0b;padding:10px 12px;font-size:16px;font-weight:700;outline:none;text-align:right;min-width:0;"/>'
         +'<button onclick="netDealSetAmt('+i+',\'0\');netDealRender()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">None</button>'
         +'<button onclick="netDealSetAmt('+i+',\''+d.amount+'\');netDealRender()" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">Full</button>'
-      +'</div>':'')
+      +'</div>'
+      +(remainder>0?'<div style="margin-top:6px;font-size:11px;color:#ef4444;font-weight:600;">'+fmt(remainder)+' not counted this week</div>':'')
+      :'')
     +'</div>';
-  }).join('');
+  });
+  excludedCash=totalDealCash-includedCash;
+
+  // Summary breakdown
+  var summary='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-top:4px;">'
+    +'<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Summary</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+      +'<span style="font-size:13px;color:#888;">Total Deal Cash</span>'
+      +'<span style="font-size:16px;font-weight:700;color:#fff;">'+fmt(totalDealCash)+'</span>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+      +'<span style="font-size:13px;color:#4ade80;">Counted This Week</span>'
+      +'<span style="font-size:16px;font-weight:700;color:#4ade80;">'+fmt(includedCash)+'</span>'
+    +'</div>'
+    +(excludedCash>0?'<div style="display:flex;justify-content:space-between;align-items:center;">'
+      +'<span style="font-size:13px;color:#ef4444;">Not In This Week</span>'
+      +'<span style="font-size:16px;font-weight:700;color:#ef4444;">'+fmt(excludedCash)+'</span>'
+    +'</div>':'')
+  +'</div>';
+
+  list.innerHTML=cards.join('')+summary;
 }
 
 function netDealApply(){
