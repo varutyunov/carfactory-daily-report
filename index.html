@@ -11114,15 +11114,69 @@ function netDealSetAmt(i,val){
   _payDealRows[i].include=v>0;
 }
 
+function netDealSetHeld(i,name){
+  _payDealRows[i].heldBy=name;
+}
+
+function netDealSplitAdd(i){
+  if(!_payDealRows[i].splits) _payDealRows[i].splits=[];
+  var remainder=_payDealRows[i].amount-(_payDealRows[i].custom||0);
+  var used=0;_payDealRows[i].splits.forEach(function(sp){used+=sp.amt||0;});
+  var left=Math.max(0,remainder-used);
+  _payDealRows[i].splits.push({who:'',amt:left});
+}
+
+function netDealSplitRemove(i,si){
+  _payDealRows[i].splits.splice(si,1);
+}
+
+function netDealSplitWho(i,si,val){
+  _payDealRows[i].splits[si].who=val;
+}
+
+function netDealSplitAmt(i,si,val){
+  var v=parseFloat(val.replace(/[^0-9.]/g,''))||0;
+  _payDealRows[i].splits[si].amt=v;
+}
+
 function netDealRender(){
   var list=document.getElementById('net-deal-list');
   var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var totalDealCash=0, includedCash=0, excludedCash=0;
+  var heldBy={};
   var cards=_payDealRows.map(function(d,i){
     var checked=d.include;
+    if(!d.splits) d.splits=[];
     totalDealCash+=d.amount;
     includedCash+=(d.custom||0);
     var remainder=d.amount-(d.custom||0);
+    // Tally splits for summary
+    d.splits.forEach(function(sp){
+      if(sp.who&&sp.amt>0) heldBy[sp.who]=(heldBy[sp.who]||0)+sp.amt;
+    });
+    var splitHtml='';
+    if(remainder>0){
+      var splitTotal=0;
+      d.splits.forEach(function(sp){splitTotal+=sp.amt||0;});
+      var leftover=Math.max(0,remainder-splitTotal);
+      splitHtml='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1a1a1a;">'
+        +'<div style="font-size:11px;color:#ef4444;font-weight:600;margin-bottom:6px;">'+fmt(remainder)+' not in this week'+(leftover>0&&d.splits.length?' · <span style="color:#666;">'+fmt(leftover)+' unassigned</span>':'')+'</div>';
+      d.splits.forEach(function(sp,si){
+        splitHtml+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+          +'<select onchange="netDealSplitWho('+i+','+si+',this.value);netDealRender()" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#60a5fa;padding:6px 8px;font-size:12px;outline:none;appearance:auto;">'
+          +'<option value=""'+(sp.who===''?' selected':'')+'>Who?</option>'
+          +'<option value="Vlad"'+(sp.who==='Vlad'?' selected':'')+'>Vlad</option>'
+          +'<option value="Tommy"'+(sp.who==='Tommy'?' selected':'')+'>Tommy</option>'
+          +'<option value="Manny"'+(sp.who==='Manny'?' selected':'')+'>Manny</option>'
+          +'<option value="Deposit"'+(sp.who==='Deposit'?' selected':'')+'>Deposit (prev week)</option>'
+          +'</select>'
+          +'<input type="text" inputmode="decimal" value="'+fmt(sp.amt)+'" onchange="netDealSplitAmt('+i+','+si+',this.value);moneyInput(this);netDealRender()" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:6px 8px;font-size:13px;font-weight:700;outline:none;text-align:right;min-width:0;"/>'
+          +'<button onclick="netDealSplitRemove('+i+','+si+');netDealRender()" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;padding:4px 8px;font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">✕</button>'
+        +'</div>';
+      });
+      splitHtml+='<button onclick="netDealSplitAdd('+i+');netDealRender()" style="width:100%;padding:8px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:8px;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;-webkit-tap-highlight-color:transparent;">+ Assign Cash</button>';
+      splitHtml+='</div>';
+    }
     return '<div style="background:#111;border:1px solid '+(checked?'rgba(245,158,11,.3)':'#1e1e1e')+';border-radius:14px;padding:14px 16px;">'
       +'<div style="display:flex;align-items:center;gap:12px;">'
         +'<div onclick="netDealToggle('+i+')" style="width:28px;height:28px;border-radius:8px;border:2px solid '+(checked?'#f59e0b':'#333')+';background:'+(checked?'#f59e0b':'transparent')+';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">'+(checked?'<span style="color:#000;font-size:16px;font-weight:700;">✓</span>':'')+'</div>'
@@ -11136,9 +11190,8 @@ function netDealRender(){
         +'<input type="text" inputmode="decimal" value="'+fmt(d.custom)+'" onchange="netDealSetAmt('+i+',this.value);moneyInput(this)" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(245,158,11,.3);border-radius:10px;color:#f59e0b;padding:10px 12px;font-size:16px;font-weight:700;outline:none;text-align:right;min-width:0;"/>'
         +'<button onclick="netDealSetAmt('+i+',\'0\');netDealRender()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">None</button>'
         +'<button onclick="netDealSetAmt('+i+',\''+d.amount+'\');netDealRender()" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">Full</button>'
-      +'</div>'
-      +(remainder>0?'<div style="margin-top:6px;font-size:11px;color:#ef4444;font-weight:600;">'+fmt(remainder)+' not counted this week</div>':'')
-      :'')
+      +'</div>'+splitHtml
+      :splitHtml)
     +'</div>';
   });
   excludedCash=totalDealCash-includedCash;
@@ -11154,11 +11207,31 @@ function netDealRender(){
       +'<span style="font-size:13px;color:#4ade80;">Counted This Week</span>'
       +'<span style="font-size:16px;font-weight:700;color:#4ade80;">'+fmt(includedCash)+'</span>'
     +'</div>'
-    +(excludedCash>0?'<div style="display:flex;justify-content:space-between;align-items:center;">'
+    +(excludedCash>0?'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
       +'<span style="font-size:13px;color:#ef4444;">Not In This Week</span>'
       +'<span style="font-size:16px;font-weight:700;color:#ef4444;">'+fmt(excludedCash)+'</span>'
-    +'</div>':'')
-  +'</div>';
+    +'</div>':'');
+  // Per-person held breakdown
+  var people=['Vlad','Tommy','Manny','Deposit'];
+  people.forEach(function(name){
+    if(heldBy[name]){
+      var color=name==='Deposit'?'#f59e0b':'#60a5fa';
+      var label=name==='Deposit'?'From Prev Week Deposit':name;
+      summary+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;padding-left:12px;">'
+        +'<span style="font-size:12px;color:'+color+';">↳ '+label+'</span>'
+        +'<span style="font-size:14px;font-weight:700;color:'+color+';">'+fmt(heldBy[name])+'</span>'
+      +'</div>';
+    }
+  });
+  var assigned=0;people.forEach(function(n){assigned+=(heldBy[n]||0);});
+  var unassigned=excludedCash-assigned;
+  if(unassigned>0){
+    summary+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;padding-left:12px;">'
+      +'<span style="font-size:12px;color:#666;">↳ Unassigned</span>'
+      +'<span style="font-size:14px;font-weight:700;color:#666;">'+fmt(unassigned)+'</span>'
+    +'</div>';
+  }
+  summary+='</div>';
 
   list.innerHTML=cards.join('')+summary;
 }
@@ -11181,7 +11254,7 @@ function _netDealKey(){
 
 async function _netDealSave(){
   var key=_netDealKey();if(!key)return;
-  var data=_payDealRows.map(function(d){return {name:d.name,vehicle:d.vehicle,amount:d.amount,include:d.include,custom:d.custom};});
+  var data=_payDealRows.map(function(d){return {name:d.name,vehicle:d.vehicle,amount:d.amount,include:d.include,custom:d.custom,heldBy:d.heldBy||'',splits:d.splits||[]};});
   // Save to localStorage as fast cache
   try{localStorage.setItem(key,JSON.stringify(data));}catch(e){}
   // Save to Supabase for permanent persistence
@@ -11210,7 +11283,7 @@ function _netDealApplySaved(saved){
   saved.forEach(function(s){savedMap[(s.name||'').toLowerCase()]=s;});
   current.forEach(function(d){
     var s=savedMap[(d.name||'').toLowerCase()];
-    if(s){d.include=s.include;d.custom=Math.min(s.custom,d.amount);}
+    if(s){d.include=s.include;d.custom=Math.min(s.custom,d.amount);d.heldBy=s.heldBy||'';d.splits=s.splits||[];}
   });
   _payDealRows=current;
   var total=0;
