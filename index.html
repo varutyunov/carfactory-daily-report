@@ -2208,6 +2208,33 @@ async function sbSignPhotoUrl(url){
   if(!path) return url||'';
   return await sbSignUrl(path);
 }
+async function _signStorageUrls(rows, fields){
+  for(var i=0;i<rows.length;i++){
+    for(var f=0;f<fields.length;f++){
+      var key=fields[f];
+      if(!rows[i][key]) continue;
+      // Handle JSON array of URLs (e.g. deal photo_urls)
+      if(typeof rows[i][key]==='string'&&rows[i][key].charAt(0)==='['){
+        try{
+          var urls=JSON.parse(rows[i][key]);
+          var changed=false;
+          for(var u=0;u<urls.length;u++){
+            if(urls[u]&&urls[u].indexOf('/public/')!==-1){
+              var s=await sbSignPhotoUrl(urls[u]);
+              if(s){urls[u]=s;changed=true;}
+            }
+          }
+          if(changed) rows[i][key]=JSON.stringify(urls);
+        }catch(e){}
+        continue;
+      }
+      if(typeof rows[i][key]==='string'&&rows[i][key].indexOf('/public/')!==-1){
+        var signed=await sbSignPhotoUrl(rows[i][key]);
+        if(signed) rows[i][key]=signed;
+      }
+    }
+  }
+}
 async function _signInventoryPhotos(){
   var cars=(S.inventory||[]).filter(function(c){return c.photo&&c.photo.indexOf('/public/')!==-1;});
   if(!cars.length) return;
@@ -9272,6 +9299,7 @@ async function loadForms() {
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
     _formsData = await sbGet('deposits', 'order=created_at.desc');
+    await _signStorageUrls(_formsData, ['id_photo_url','signed_form_url']);
     _formsFiltered = _formsData;
     renderForms();
   } catch(e) {
@@ -10872,6 +10900,7 @@ async function loadPaymentWeek(){
   try{
     var params='week_start=eq.'+wk+'&location=eq.'+_payLocation+'&order=payment_date.desc,created_at.desc';
     var allData=await sbGet('payments',params);
+    await _signStorageUrls(allData, ['receipt_photo_url']);
     // Owners see everything (flagged items highlighted); employees don't see delete_requested
     if(_payIsOwner()){
       _payWeekData=allData;
@@ -12081,6 +12110,7 @@ async function loadDeals() {
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
     var allDeals = await sbGet('deals', 'order=created_at.desc');
+    await _signStorageUrls(allDeals, ['photo_urls']);
     // Filter by location
     var locDeals = allDeals.filter(function(d){ return (d.location||'DeBary') === _dealsLocation; });
     _dealsAllData = locDeals;
