@@ -11261,16 +11261,18 @@ function _payRenderCards(){
     list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No payments this week.<br><span style="font-size:12px;color:#333;">Scan your first payment above.</span></div>';
     return;
   }
-  // Build set of excluded deal customers when adjusted
-  var excludedDeals=new Set();
+  // Build deal adjustment map when adjusted
+  var dealAdjust={};
   if(_payNetAdjusted&&_payDealRows.length){
-    _payDealRows.forEach(function(d){if(!d.include) excludedDeals.add((d.name||'').toLowerCase());});
+    _payDealRows.forEach(function(d){dealAdjust[(d.name||'').toLowerCase()]={include:d.include,custom:d.custom,full:d.amount};});
   }
-  // Group by date, filtering excluded deals
+  // Group by date, filtering/adjusting deals
   var groups={};
   _payWeekData.forEach(function(p){
     if(_payNetAdjusted&&p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
-      if(excludedDeals.has((p.customer_name||'').toLowerCase())) return;
+      var key=(p.customer_name||'').toLowerCase();
+      var adj=dealAdjust[key];
+      if(adj&&!adj.include) return; // excluded
     }
     var d=p.payment_date||'Unknown';
     if(!groups[d])groups[d]=[];
@@ -11287,6 +11289,10 @@ function _payRenderCards(){
     groups[dateStr].forEach(function(p){
       var amt=p.amount||'$0';
       var name=p.customer_name||'Unknown';
+      var isDealRow=_payNetAdjusted&&p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
+      var adjInfo=isDealRow?dealAdjust[(p.customer_name||'').toLowerCase()]:null;
+      var isPartial=adjInfo&&adjInfo.custom<adjInfo.full;
+      if(isPartial) amt='$'+adjInfo.custom.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
       var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
       var color=p.vehicle_color?(' · '+p.vehicle_color):'';
       var time=p.payment_time||'';
@@ -11298,12 +11304,13 @@ function _payRenderCards(){
       else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
       var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
       var delFlag=p.delete_requested?'border-left:3px solid #ef4444;':'';
-      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+'">';
+      var partialBorder=isPartial?'border-left:3px solid #f59e0b;':'';
+      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+partialBorder+'">';
       if(thumb) html+=thumb;
       html+='<div style="flex:1;min-width:0;">';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
       html+='<div style="font-size:15px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>';
-      html+='<span style="font-size:16px;font-weight:700;color:#4ade80;">'+amt+'</span>';
+      html+='<span style="font-size:16px;font-weight:700;color:'+(isPartial?'#f59e0b':'#4ade80')+';">'+amt+'</span>';
       html+='</div>';
       if(veh) html+='<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+color+'</div>';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
