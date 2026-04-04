@@ -10750,6 +10750,11 @@ function paySetLocation(loc){
     else{sdl.style.background='#fff';sdl.style.color='#000';sdb.style.background='none';sdb.style.color='#555';}
   }
   _payDealCashRows=[];
+  // Reset net deal adjustment state for new location
+  _payDealRows=[];
+  _payNetAdjusted=false;
+  _payNetAdjustAmt=null;
+  _payDealFullCashMap={};
   loadPaymentWeek();
   if(_payIncludeDeals) _payLoadDealCash().then(function(){ _payUpdateStats(); });
 }
@@ -10813,6 +10818,11 @@ function payWeekNav(dir){
   }
   _payCurrentWeekStart=ws;
   _payDealCashRows=[];
+  // Reset net deal adjustment state for new week
+  _payDealRows=[];
+  _payNetAdjusted=false;
+  _payNetAdjustAmt=null;
+  _payDealFullCashMap={};
   _payUpdateWeekLabel();
   loadPaymentWeek();
   if(_payIncludeDeals) _payLoadDealCash().then(function(){ _payUpdateStats(); });
