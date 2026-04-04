@@ -10977,25 +10977,22 @@ function _payUpdateStats(){
   var active=_payWeekData.filter(function(p){return !p.delete_requested;});
   var count=active.length;
   var cash=0,card=0,check=0,other=0;
+  var dealTagCash=0;
   active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
     var m=(p.payment_method||'cash').toLowerCase();
-    if(m==='cash') cash+=v;
+    var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
+    if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;}
     else if(m==='card') card+=v;
     else if(m==='check') check+=v;
     else other+=v;
   });
   _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
+  _payDealTagCash=dealTagCash;
   var fmt=function(v){return '$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
-  // Add deal cash if toggle is on
-  var dealCash=0;
-  if(_payIncludeDeals){
-    (_payDealCashRows||[]).forEach(function(d){dealCash+=d.deal_cash||0;});
-  }
-  var cashIn=cash+dealCash;
+  var cashNoDeal=cash-dealTagCash;
   document.getElementById('pay-stat-count').textContent=count;
   var cashInEl=document.getElementById('pay-stat-total');
-  if(cashInEl) cashInEl.textContent=fmt(cashIn);
   var dealLabel=document.getElementById('pay-deal-cash-label');
   if(dealLabel) dealLabel.style.display='none';
   // Cash out = sum of payouts
@@ -11004,54 +11001,32 @@ function _payUpdateStats(){
   // Update Cash Out tile
   var coEl=document.getElementById('pay-stat-cashout');
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
-  // Net Cash = cash in + deal cash - cash out
-  var netCash=cashIn-paidOut;
-  var netNoDeal=cash-paidOut;
+  // Net Cash
+  var netCash=cash-paidOut;
+  var netNoDeal=cashNoDeal-paidOut;
   var ne=document.getElementById('pay-stat-net');
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
-    if(_payNetNoDealView){
+    if(_payNetNoDealView&&dealTagCash>0){
       ne.textContent=(netNoDeal<0?'-':'')+fmt(netNoDeal);
       ne.style.color=netNoDeal>=0?'#f59e0b':'#ef4444';
       if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· No Deals</span>';
-      if(cashInEl) cashInEl.textContent=fmt(cash);
+      if(cashInEl) cashInEl.textContent=fmt(cashNoDeal);
     } else {
       ne.textContent=(netCash<0?'-':'')+fmt(netCash);
       ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
-      if(netLabel) netLabel.textContent=(_payIncludeDeals&&dealCash>0)?'Net Cash · W/ Deals':'Net Cash';
-      if(cashInEl) cashInEl.textContent=fmt(cashIn);
+      if(netLabel) netLabel.textContent='Net Cash';
+      if(cashInEl) cashInEl.textContent=fmt(cash);
     }
   }
 }
 
 var _payNetNoDealView=false;
-async function payToggleNetDeals(){
-  // If deals not loaded yet, load them first
-  if(!_payIncludeDeals&&!_payNetNoDealView){
-    _payIncludeDeals=true;
-    await _payLoadDealCash();
-    var dealLabel=document.getElementById('pay-deal-cash-label');
-    // Check if there are any deals at all
-    var dc=0;
-    (_payDealCashRows||[]).forEach(function(d){dc+=d.deal_cash||0;});
-    if(dc<=0){_payIncludeDeals=false;return;}
-    // Show "No Deals" view (since they had default view, first tap shows no-deals)
-    _payNetNoDealView=true;
-    _payUpdateStats();
-    return;
-  }
-  if(_payNetNoDealView){
-    // Toggle back to full view with deals
-    _payNetNoDealView=false;
-    _payUpdateStats();
-  } else {
-    // Toggle to no-deals view
-    var dealCash=0;
-    (_payDealCashRows||[]).forEach(function(d){dealCash+=d.deal_cash||0;});
-    if(dealCash<=0){return;}
-    _payNetNoDealView=true;
-    _payUpdateStats();
-  }
+var _payDealTagCash=0;
+function payToggleNetDeals(){
+  if(_payDealTagCash<=0)return;
+  _payNetNoDealView=!_payNetNoDealView;
+  _payUpdateStats();
 }
 
 function payShowBreakdown(){
