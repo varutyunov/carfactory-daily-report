@@ -10990,13 +10990,10 @@ function _payUpdateStats(){
   }
   var cashIn=cash+dealCash;
   document.getElementById('pay-stat-count').textContent=count;
-  // Show deal cash indicator in label if active
   var cashInEl=document.getElementById('pay-stat-total');
-  var cashInLabel=document.querySelector('#pay-stat-total+div');
   if(cashInEl) cashInEl.textContent=fmt(cashIn);
   var dealLabel=document.getElementById('pay-deal-cash-label');
-  if(dealLabel) dealLabel.style.display=(_payIncludeDeals&&dealCash>0)?'block':'none';
-  if(dealLabel&&dealCash>0) dealLabel.textContent='Pmts '+fmt(cash)+' + Deals '+fmt(dealCash);
+  if(dealLabel) dealLabel.style.display='none';
   // Cash out = sum of payouts
   var paidOut=0;
   (_cashPayouts||[]).forEach(function(p){paidOut+=parseFloat(p.amount)||0;});
@@ -11009,14 +11006,16 @@ function _payUpdateStats(){
   var ne=document.getElementById('pay-stat-net');
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
-    if(_payNetNoDealView&&_payIncludeDeals&&dealCash>0){
+    if(_payNetNoDealView){
       ne.textContent=(netNoDeal<0?'-':'')+fmt(netNoDeal);
       ne.style.color=netNoDeal>=0?'#f59e0b':'#ef4444';
       if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· No Deals</span>';
+      if(cashInEl) cashInEl.textContent=fmt(cash);
     } else {
       ne.textContent=(netCash<0?'-':'')+fmt(netCash);
       ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
-      if(netLabel) netLabel.textContent='Net Cash';
+      if(netLabel) netLabel.textContent=(_payIncludeDeals&&dealCash>0)?'Net Cash · W/ Deals':'Net Cash';
+      if(cashInEl) cashInEl.textContent=fmt(cashIn);
     }
   }
 }
