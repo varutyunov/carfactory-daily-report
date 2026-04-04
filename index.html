@@ -11025,7 +11025,19 @@ function _payUpdateStats(){
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
     if(_payNetAdjusted&&_payNetAdjustAmt!==null){
-      var adjCash=cash-dealTagCash+_payNetAdjustAmt;
+      // For deals NOT in _payDealRows (not configured), include at full payment amount
+      var configuredNames={};
+      _payDealRows.forEach(function(dr){configuredNames[(dr.name||'').toLowerCase()]=true;});
+      var unconfiguredDealCash=0;
+      active.forEach(function(p){
+        if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
+          var key=(p.customer_name||'').toLowerCase();
+          if(!configuredNames[key]){
+            unconfiguredDealCash+=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+          }
+        }
+      });
+      var adjCash=cash-dealTagCash+_payNetAdjustAmt+unconfiguredDealCash;
       var adjNet=adjCash-paidOut;
       ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
       ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
