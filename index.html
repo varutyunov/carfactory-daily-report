@@ -1118,9 +1118,9 @@ canvas{display:none;}
           <div id="pay-stat-cashout" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#ef4444;">$0</div>
           <div style="font-size:11px;color:#ef4444;opacity:.6;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash Out ›</div>
         </div>
-        <div id="pay-stat-net-wrap" style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;">
+        <div id="pay-stat-net-wrap" onclick="payToggleNetDeals()" style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">
           <div id="pay-stat-net" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#f59e0b;">$0</div>
-          <div style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Net Cash</div>
+          <div id="pay-stat-net-label" style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Net Cash</div>
         </div>
       </div>
 
@@ -11001,10 +11001,49 @@ function _payUpdateStats(){
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
   // Net Cash = cash in + deal cash - cash out
   var netCash=cashIn-paidOut;
+  var netNoDeal=cash-paidOut;
   var ne=document.getElementById('pay-stat-net');
+  var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
-    ne.textContent=(netCash<0?'-':'')+fmt(netCash);
-    ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
+    if(_payNetNoDealView&&_payIncludeDeals&&dealCash>0){
+      ne.textContent=(netNoDeal<0?'-':'')+fmt(netNoDeal);
+      ne.style.color=netNoDeal>=0?'#f59e0b':'#ef4444';
+      if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· No Deals</span>';
+    } else {
+      ne.textContent=(netCash<0?'-':'')+fmt(netCash);
+      ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
+      if(netLabel) netLabel.textContent='Net Cash';
+    }
+  }
+}
+
+var _payNetNoDealView=false;
+async function payToggleNetDeals(){
+  // If deals not loaded yet, load them first
+  if(!_payIncludeDeals&&!_payNetNoDealView){
+    _payIncludeDeals=true;
+    await _payLoadDealCash();
+    var dealLabel=document.getElementById('pay-deal-cash-label');
+    // Check if there are any deals at all
+    var dc=0;
+    (_payDealCashRows||[]).forEach(function(d){dc+=parseFloat(d.pickup_payment)||0;});
+    if(dc<=0){_payIncludeDeals=false;return;}
+    // Show "No Deals" view (since they had default view, first tap shows no-deals)
+    _payNetNoDealView=true;
+    _payUpdateStats();
+    return;
+  }
+  if(_payNetNoDealView){
+    // Toggle back to full view with deals
+    _payNetNoDealView=false;
+    _payUpdateStats();
+  } else {
+    // Toggle to no-deals view
+    var dealCash=0;
+    (_payDealCashRows||[]).forEach(function(d){dealCash+=parseFloat(d.pickup_payment)||0;});
+    if(dealCash<=0){return;}
+    _payNetNoDealView=true;
+    _payUpdateStats();
   }
 }
 
