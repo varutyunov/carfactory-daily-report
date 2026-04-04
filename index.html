@@ -4694,6 +4694,7 @@ async function syncLocation(loc){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     }
     // Only remove cars of THIS location that are no longer in its CSV
+    var allCsvVinsLoc=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
@@ -4701,6 +4702,7 @@ async function syncLocation(loc){
       if((c.location||'DeBary')!==loc) return true; // don't touch other location
       if(csvStocks.has(c.stock)) return true;
       if(activeIds.has(c.id)) return true;
+      if(c.vin&&allCsvVinsLoc.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
       toRemoveDB.push(c.id);
       removed++;
       return false;
@@ -4749,6 +4751,8 @@ async function syncNow(){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
+        // Update stock number if it changed (transfer case: same VIN, new stock number)
+        if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         // Never overwrite location on existing cars — Supabase is source of truth for location
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
@@ -4770,11 +4774,13 @@ async function syncNow(){
       }
     }
     if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
-    // Remove cars no longer in either CSV
+    // Remove cars no longer in either CSV — protect by stock number OR VIN
+    var allCsvVins=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
+      if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer window)
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
