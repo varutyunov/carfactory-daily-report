@@ -945,6 +945,14 @@ canvas{display:none;}
             <div class="orbit-tile-label">Payments</div>
           </div>
 
+          <!-- Customers tile -->
+          <div class="orbit-tile" style="background:linear-gradient(145deg,#0a1a2e,#0e3355,#155e75);box-shadow:0 4px 20px rgba(34,211,238,0.22);width:88px;height:88px;" onclick="openCustomerHistory()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <div class="orbit-tile-label">Customers</div>
+          </div>
+
         </div>
       </div><!-- /swipe-page-2 -->
 
@@ -1378,6 +1386,17 @@ canvas{display:none;}
   </div>
   <div id="deals-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading deals...</div>
+  </div>
+</div>
+
+<!-- CUSTOMER HISTORY OVERLAY -->
+<div id="cust-view-overlay" style="display:none;position:fixed;inset:0;z-index:8800;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:8810;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="custViewBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="cust-view-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">CUSTOMERS</span>
+  </div>
+  <div id="cust-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading customers...</div>
   </div>
 </div>
 
@@ -12772,6 +12791,389 @@ function dealsShowMethodDetail(method){
 function dealsCloseBreakdown(){
   var sheet=document.getElementById('deals-breakdown-sheet');
   if(sheet)sheet.style.display='none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// CUSTOMER HISTORY & ANALYTICS
+// ══════════════════════════════════════════════════════════════
+
+var _custAllDeals = [];
+var _custCustomers = [];
+var _custFiltered = [];
+var _custLocation = '';
+var _custViewingProfile = false;
+var _custProfileName = '';
+
+function openCustomerHistory() {
+  _custViewingProfile = false;
+  document.getElementById('cust-view-overlay').style.display = 'flex';
+  var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
+  var defaultLoc = _custLocation || 'DeBary';
+  if (!_custLocation && me) {
+    var n = me.name.toLowerCase();
+    if (n.indexOf('jesse') !== -1) defaultLoc = 'DeLand';
+  }
+  custPickLocation(defaultLoc);
+}
+
+function custViewBack() {
+  if (_custViewingProfile) {
+    _custViewingProfile = false;
+    document.getElementById('cust-view-title').textContent = 'CUSTOMERS';
+    custPickLocation(_custLocation);
+  } else {
+    document.getElementById('cust-view-overlay').style.display = 'none';
+    var tb = document.querySelector('.tb'); if (tb) tb.style.display = '';
+  }
+}
+
+function _custCanToggleLoc() {
+  if (!me) return false;
+  if (me.role !== 'employee') return true;
+  return ['scott', 'vlad', 'tommy'].some(function(n) { return me.name.toLowerCase().indexOf(n) !== -1; });
+}
+
+function custPickLocation(loc) {
+  _custLocation = loc;
+  document.getElementById('cust-view-title').textContent = 'CUSTOMERS';
+  var body = document.getElementById('cust-view-body');
+  var dbActive = loc === 'DeBary';
+  var dlActive = loc === 'DeLand';
+  var canToggle = _custCanToggleLoc();
+  var toggleHtml = canToggle ? '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+    '<button onclick="custPickLocation(\'DeBary\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid ' + (dbActive ? '#0e7490' : '#1e1e1e') + ';background:' + (dbActive ? 'linear-gradient(145deg,#0a1a2e,#155e75)' : '#0d0d0d') + ';color:' + (dbActive ? '#22d3ee' : '#555') + ';">DeBary</button>' +
+    '<button onclick="custPickLocation(\'DeLand\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid ' + (dlActive ? '#3b82f6' : '#1e1e1e') + ';background:' + (dlActive ? 'linear-gradient(145deg,#001233,#003080)' : '#0d0d0d') + ';color:' + (dlActive ? '#60a5fa' : '#555') + ';">DeLand</button>' +
+  '</div>' : '';
+  var searchHtml = '<input id="cust-search" placeholder="Search by customer name..." oninput="custFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
+  var statsHtml = '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
+    '<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
+      '<div id="cust-stat-count" style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#22d3ee;">0</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Customers</div>' +
+    '</div>' +
+    '<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
+      '<div id="cust-stat-total" style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">$0</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Total Collected</div>' +
+    '</div>' +
+  '</div>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + statsHtml + searchHtml + '<div id="cust-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div></div></div>';
+  custLoadData();
+}
+
+async function custLoadData() {
+  try {
+    var allDeals = await sbGet('deals', 'location=eq.' + encodeURIComponent(_custLocation) + '&order=created_at.desc');
+    _custAllDeals = allDeals || [];
+    // Build customer map
+    var map = {};
+    _custAllDeals.forEach(function(d) {
+      var name = (d.customer_name || '').trim();
+      if (!name) return;
+      var key = name.toLowerCase();
+      if (!map[key]) {
+        map[key] = { name: name, deals: 0, total: 0, vehicles: [], lastDate: null, types: { finance: 0, cash: 0 }, methods: { cash: 0, card: 0, zelle: 0, money_order: 0, other: 0 } };
+      }
+      var c = map[key];
+      c.deals++;
+      var collected = parseFloat(d.total_collected) || 0;
+      c.total += collected;
+      if (d.vehicle_desc) c.vehicles.push(d.vehicle_desc);
+      var dt = d.created_at ? new Date(d.created_at) : null;
+      if (dt && (!c.lastDate || dt > c.lastDate)) c.lastDate = dt;
+      if (d.deal_type === 'finance') c.types.finance++; else c.types.cash++;
+      // Payment method breakdown from deal payments JSON
+      try {
+        var pays = JSON.parse(d.payments || '[]');
+        pays.forEach(function(p) {
+          var v = parseFloat(p.amount) || 0;
+          var m = (p.method || 'other').toLowerCase();
+          if (m === 'cash') c.methods.cash += v;
+          else if (m === 'card') c.methods.card += v;
+          else if (m === 'zelle') c.methods.zelle += v;
+          else if (m === 'money_order') c.methods.money_order += v;
+          else c.methods.other += v;
+        });
+      } catch (e) {}
+    });
+    // Convert to array sorted by most recent
+    _custCustomers = Object.values(map).sort(function(a, b) {
+      if (!a.lastDate) return 1;
+      if (!b.lastDate) return -1;
+      return b.lastDate - a.lastDate;
+    });
+    _custFiltered = _custCustomers;
+    // Update stats
+    var countEl = document.getElementById('cust-stat-count');
+    var totalEl = document.getElementById('cust-stat-total');
+    if (countEl) countEl.textContent = _custCustomers.length;
+    var grandTotal = 0;
+    _custCustomers.forEach(function(c) { grandTotal += c.total; });
+    if (totalEl) totalEl.textContent = '$' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    renderCustomerList();
+  } catch (e) {
+    var list = document.getElementById('cust-list');
+    if (list) list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error loading customers</div>';
+  }
+}
+
+function custFilter(q) {
+  if (!q) { _custFiltered = _custCustomers; }
+  else {
+    _custFiltered = _custCustomers.filter(function(c) {
+      return fuzzyMatch([c.name, c.vehicles.join(' ')], q);
+    });
+  }
+  renderCustomerList();
+}
+
+function renderCustomerList() {
+  var list = document.getElementById('cust-list');
+  if (!list) return;
+  if (!_custFiltered.length) { list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No customers found.</div>'; return; }
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var html = '';
+  _custFiltered.forEach(function(c) {
+    var lastVehicle = c.vehicles.length ? c.vehicles[0] : '';
+    var dateStr = '';
+    if (c.lastDate) {
+      dateStr = months[c.lastDate.getMonth()] + ' ' + c.lastDate.getDate() + ', ' + c.lastDate.getFullYear();
+    }
+    var totalStr = '$' + c.total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    var dealBadge = c.deals === 1 ? '1 deal' : c.deals + ' deals';
+    var typeBadge = '';
+    if (c.types.finance > 0 && c.types.cash > 0) typeBadge = '<span style="background:rgba(167,139,250,.15);color:#a78bfa;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">Mixed</span>';
+    else if (c.types.finance > 0) typeBadge = '<span style="background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">Finance</span>';
+    else typeBadge = '<span style="background:rgba(29,78,216,.15);color:#60a5fa;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">Cash</span>';
+    html += '<div onclick="openCustomerProfile(\'' + c.name.replace(/'/g, "\\'") + '\')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+        '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.name + '</div>' +
+        typeBadge +
+        '<span style="background:rgba(34,211,238,.1);color:#22d3ee;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">' + dealBadge + '</span>' +
+      '</div>' +
+      '<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;">' + lastVehicle + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<span style="font-size:18px;font-weight:800;color:#4ade80;">' + totalStr + '</span>' +
+        '<span style="font-size:12px;color:#555;">' + dateStr + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  list.innerHTML = html;
+}
+
+async function openCustomerProfile(name) {
+  _custViewingProfile = true;
+  _custProfileName = name;
+  document.getElementById('cust-view-title').textContent = name.toUpperCase();
+  var body = document.getElementById('cust-view-body');
+  body.innerHTML = '<div style="padding:40px 12px;text-align:center;color:#555;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading profile...</div>';
+  try {
+    // Fetch deals + payments in parallel
+    var nameEnc = encodeURIComponent(name);
+    var results = await Promise.all([
+      sbGet('deals', 'customer_name=eq.' + nameEnc + '&order=created_at.desc'),
+      sbGet('payments', 'customer_name=eq.' + nameEnc + '&order=created_at.desc')
+    ]);
+    var deals = results[0] || [];
+    var payments = results[1] || [];
+    _custRenderProfile(name, deals, payments);
+  } catch (e) {
+    body.innerHTML = '<div style="padding:40px 12px;text-align:center;color:#ef4444;">Error loading profile</div>';
+  }
+}
+
+function _custRenderProfile(name, deals, payments) {
+  var body = document.getElementById('cust-view-body');
+  var fmt = function(v) { return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var fmtShort = function(v) { return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); };
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Compute stats from deals
+  var totalCollected = 0;
+  var methodTotals = { cash: 0, card: 0, zelle: 0, money_order: 0, other: 0 };
+  var financeCount = 0;
+  var cashCount = 0;
+  deals.forEach(function(d) {
+    totalCollected += parseFloat(d.total_collected) || 0;
+    if (d.deal_type === 'finance') financeCount++; else cashCount++;
+    try {
+      var pays = JSON.parse(d.payments || '[]');
+      pays.forEach(function(p) {
+        var v = parseFloat(p.amount) || 0;
+        var m = (p.method || 'other').toLowerCase();
+        if (m === 'cash') methodTotals.cash += v;
+        else if (m === 'card') methodTotals.card += v;
+        else if (m === 'zelle') methodTotals.zelle += v;
+        else if (m === 'money_order') methodTotals.money_order += v;
+        else methodTotals.other += v;
+      });
+    } catch (e) {}
+  });
+
+  // Outstanding pickup payments
+  var overdueHtml = '';
+  var now = new Date();
+  deals.forEach(function(d) {
+    if (d.deal_type === 'finance' && d.pickup_payment && parseFloat(d.pickup_payment) > 0) {
+      var due = d.pickup_payment_due ? new Date(d.pickup_payment_due) : null;
+      var isOverdue = due && due < now;
+      var color = isOverdue ? '#ef4444' : '#f59e0b';
+      var bg = isOverdue ? 'rgba(239,68,68,.1)' : 'rgba(245,158,11,.1)';
+      var border = isOverdue ? 'rgba(239,68,68,.25)' : 'rgba(245,158,11,.25)';
+      var label = isOverdue ? 'OVERDUE' : 'UPCOMING';
+      var dueStr = due ? months[due.getMonth()] + ' ' + due.getDate() + ', ' + due.getFullYear() : 'No date set';
+      overdueHtml += '<div style="background:' + bg + ';border:1px solid ' + border + ';border-radius:12px;padding:12px 14px;margin-bottom:10px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<span style="font-size:14px;font-weight:800;color:' + color + ';">' + label + '</span>' +
+          '<span style="font-size:13px;color:#888;flex:1;text-align:right;">' + dueStr + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#ccc;">' + (d.vehicle_desc || '') + '</div>' +
+        '<div style="font-size:16px;font-weight:800;color:' + color + ';margin-top:4px;">Pickup: ' + fmt(parseFloat(d.pickup_payment) || 0) + '</div>' +
+      '</div>';
+    }
+  });
+
+  // Stats row
+  var statsHtml = '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+    '<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#4ade80;">' + fmtShort(totalCollected) + '</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Total Collected</div>' +
+    '</div>' +
+    '<div style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#22d3ee;">' + deals.length + '</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;">Deals</div>' +
+    '</div>' +
+  '</div>';
+
+  // Method breakdown bar
+  var methodTotal = methodTotals.cash + methodTotals.card + methodTotals.zelle + methodTotals.money_order + methodTotals.other;
+  var barHtml = '';
+  if (methodTotal > 0) {
+    var segments = [
+      { val: methodTotals.cash, color: '#30d158', label: 'Cash' },
+      { val: methodTotals.card, color: '#60a5fa', label: 'Card' },
+      { val: methodTotals.zelle, color: '#38bdf8', label: 'Zelle' },
+      { val: methodTotals.money_order, color: '#fbbf24', label: 'M.O.' },
+      { val: methodTotals.other, color: '#a78bfa', label: 'Other' }
+    ];
+    barHtml = '<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:12px;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Payment Methods</div>' +
+      '<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;">';
+    segments.forEach(function(s) {
+      if (s.val > 0) {
+        var pct = Math.round(s.val / methodTotal * 100);
+        barHtml += '<div style="width:' + pct + '%;background:' + s.color + ';"></div>';
+      }
+    });
+    barHtml += '</div><div style="display:flex;flex-wrap:wrap;gap:6px 14px;">';
+    segments.forEach(function(s) {
+      if (s.val > 0) {
+        var pct = Math.round(s.val / methodTotal * 100);
+        barHtml += '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + s.color + ';"></div>' +
+          '<span style="font-size:12px;color:#888;">' + s.label + '</span>' +
+          '<span style="font-size:12px;font-weight:700;color:' + s.color + ';">' + fmt(s.val) + '</span>' +
+          '<span style="font-size:11px;color:#555;">(' + pct + '%)</span>' +
+        '</div>';
+      }
+    });
+    barHtml += '</div></div>';
+  }
+
+  // Deals section
+  var dealsHtml = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px;">Deal History</div>';
+  if (!deals.length) {
+    dealsHtml += '<div style="text-align:center;color:#555;padding:20px;">No deals found.</div>';
+  } else {
+    deals.forEach(function(d, idx) {
+      var dt = d.created_at ? new Date(d.created_at) : null;
+      var dateStr = dt ? months[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear() : '';
+      var isFinance = d.deal_type === 'finance';
+      var badge = isFinance
+        ? '<span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Finance</span>'
+        : '<span style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;">Cash</span>';
+      var total = d.total_collected ? fmt(parseFloat(d.total_collected)) : '';
+      var gpsTag = '';
+      if (isFinance && d.gps_serial) {
+        gpsTag = d.gps_uploaded
+          ? '<span style="background:rgba(48,209,88,0.15);color:#30d158;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">✓ GPS</span>'
+          : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">⏳ GPS</span>';
+      }
+      // Payment breakdown for this deal
+      var payRows = '';
+      try {
+        var pays = JSON.parse(d.payments || '[]');
+        pays.forEach(function(p) {
+          var mColor = '#888';
+          var mLabel = (p.method || 'other').toUpperCase();
+          if (p.method === 'cash') mColor = '#30d158';
+          else if (p.method === 'card') mColor = '#60a5fa';
+          else if (p.method === 'zelle') mColor = '#38bdf8';
+          else if (p.method === 'money_order') { mColor = '#fbbf24'; mLabel = 'M.O.'; }
+          payRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">' +
+            '<span style="font-size:12px;font-weight:700;color:' + mColor + ';">' + mLabel + '</span>' +
+            '<span style="font-size:12px;color:#ccc;">' + fmt(parseFloat(p.amount) || 0) + '</span>' +
+          '</div>';
+        });
+      } catch (e) {}
+      dealsHtml += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#f59e0b;">#' + (deals.length - idx) + '</span>' +
+          '<div style="font-size:15px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (d.vehicle_desc || '') + '</div>' +
+          gpsTag + badge +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">' +
+          '<span style="font-size:16px;font-weight:700;color:#4ade80;">' + total + '</span>' +
+          '<span style="font-size:12px;color:#555;">' + dateStr + '</span>' +
+        '</div>' +
+        (payRows ? '<div style="border-top:1px solid #1a1a1a;margin-top:8px;padding-top:8px;">' + payRows + '</div>' : '') +
+      '</div>';
+    });
+  }
+
+  // Weekly payments timeline (from payments table, not deal JSON)
+  var paymentsHtml = '';
+  if (payments.length) {
+    paymentsHtml = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px;">Payment Timeline</div>';
+    // Group payments by month
+    var pmtGroups = {};
+    payments.forEach(function(p) {
+      var dt = p.payment_date ? new Date(p.payment_date) : (p.created_at ? new Date(p.created_at) : null);
+      var key = dt ? dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') : 'Unknown';
+      if (!pmtGroups[key]) pmtGroups[key] = [];
+      pmtGroups[key].push({ row: p, date: dt });
+    });
+    Object.keys(pmtGroups).sort().reverse().forEach(function(monthKey) {
+      var parts = monthKey.split('-');
+      var label = months[parseInt(parts[1]) - 1] + ' ' + parts[0];
+      paymentsHtml += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#444;letter-spacing:1px;margin:10px 0 6px;">' + label + '</div>';
+      pmtGroups[monthKey].forEach(function(item) {
+        var p = item.row;
+        var amt = parseFloat((p.amount || '').toString().replace(/[^0-9.]/g, '')) || 0;
+        var method = (p.payment_method || p.method || 'other').toUpperCase();
+        var mColor = '#888';
+        var mLower = method.toLowerCase();
+        if (mLower === 'cash') mColor = '#30d158';
+        else if (mLower === 'card') mColor = '#60a5fa';
+        else if (mLower === 'zelle') mColor = '#38bdf8';
+        else if (mLower === 'money_order') { mColor = '#fbbf24'; method = 'M.O.'; }
+        var dateStr = item.date ? months[item.date.getMonth()] + ' ' + item.date.getDate() : '';
+        var vehicle = [p.vehicle_year, p.vehicle_make, p.vehicle_model].filter(Boolean).join(' ');
+        var desc = p.raw_ocr_text || vehicle || '';
+        if (desc.length > 40) desc = desc.substring(0, 40) + '...';
+        paymentsHtml += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;padding:10px 14px;margin-bottom:6px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="background:rgba(255,255,255,.06);color:' + mColor + ';font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">' + method + '</span>' +
+              '<span style="font-size:14px;font-weight:700;color:#fff;">' + fmt(amt) + '</span>' +
+            '</div>' +
+            '<span style="font-size:12px;color:#555;">' + dateStr + '</span>' +
+          '</div>' +
+          (desc ? '<div style="font-size:12px;color:#666;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + desc + '</div>' : '') +
+        '</div>';
+      });
+    });
+  }
+
+  body.innerHTML = '<div style="padding:12px;">' + overdueHtml + statsHtml + barHtml + dealsHtml + paymentsHtml + '</div>';
 }
 
 // === CASH PAYOUTS ===
