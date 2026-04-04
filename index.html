@@ -1444,6 +1444,24 @@ canvas{display:none;}
   </div>
 </div>
 
+<!-- NET CASH DEAL SELECTOR -->
+<div id="net-deal-sheet" onclick="netDealClose()" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.7);">
+  <div onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;max-height:85vh;display:flex;flex-direction:column;">
+    <div style="padding:12px 16px 0;flex-shrink:0;">
+      <div style="text-align:center;margin-bottom:10px;"><div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto;"></div></div>
+      <div style="display:flex;align-items:center;margin-bottom:14px;">
+        <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;">Adjust Net Cash</div>
+        <button onclick="netDealClose()" style="background:rgba(255,255,255,.06);border:1px solid #1e1e1e;color:#666;font-size:16px;cursor:pointer;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">✕</button>
+      </div>
+      <div style="font-size:12px;color:#666;margin-bottom:12px;">Uncheck deals to exclude, or edit amounts for partial counts.</div>
+    </div>
+    <div id="net-deal-list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px;flex:1;display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="padding:12px 16px 16px;flex-shrink:0;">
+      <button onclick="netDealApply()" style="width:100%;padding:14px;background:linear-gradient(145deg,#1a1200,#3d2c00);border:1px solid rgba(245,158,11,.4);border-radius:14px;color:#f59e0b;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Apply</button>
+    </div>
+  </div>
+</div>
+
 <!-- CAR ACTION SHEET -->
 <div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
   <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
@@ -11001,15 +11019,16 @@ function _payUpdateStats(){
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
   // Net Cash
   var netCash=cash-paidOut;
-  var netNoDeal=cashNoDeal-paidOut;
   var ne=document.getElementById('pay-stat-net');
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
-    if(_payNetNoDealView&&dealTagCash>0){
-      ne.textContent=(netNoDeal<0?'-':'')+fmt(netNoDeal);
-      ne.style.color=netNoDeal>=0?'#f59e0b':'#ef4444';
-      if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· No Deals</span>';
-      if(cashInEl) cashInEl.textContent=fmt(cashNoDeal);
+    if(_payNetAdjusted&&_payNetAdjustAmt!==null){
+      var adjCash=cash-dealTagCash+_payNetAdjustAmt;
+      var adjNet=adjCash-paidOut;
+      ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
+      ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
+      if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· Adjusted</span>';
+      if(cashInEl) cashInEl.textContent=fmt(adjCash);
     } else {
       ne.textContent=(netCash<0?'-':'')+fmt(netCash);
       ne.style.color=netCash>=0?'#f59e0b':'#ef4444';
@@ -11019,11 +11038,78 @@ function _payUpdateStats(){
   }
 }
 
-var _payNetNoDealView=false;
 var _payDealTagCash=0;
+var _payNetAdjusted=false;
+var _payNetAdjustAmt=null;
+var _payDealRows=[];
+
 function payToggleNetDeals(){
-  if(_payDealTagCash<=0)return;
-  _payNetNoDealView=!_payNetNoDealView;
+  // If adjusted, tap clears back to full
+  if(_payNetAdjusted){
+    _payNetAdjusted=false;
+    _payNetAdjustAmt=null;
+    _payUpdateStats();
+    return;
+  }
+  // Collect deal-tagged payment rows
+  _payDealRows=[];
+  (_payWeekData||[]).forEach(function(p){
+    if(p.delete_requested)return;
+    if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
+      var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+      if(v>0) _payDealRows.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
+    }
+  });
+  if(!_payDealRows.length)return;
+  netDealRender();
+  document.getElementById('net-deal-sheet').style.display='block';
+}
+
+function netDealClose(){
+  document.getElementById('net-deal-sheet').style.display='none';
+}
+
+function netDealToggle(i){
+  _payDealRows[i].include=!_payDealRows[i].include;
+  if(_payDealRows[i].include) _payDealRows[i].custom=_payDealRows[i].amount;
+  else _payDealRows[i].custom=0;
+  netDealRender();
+}
+
+function netDealSetAmt(i,val){
+  var v=parseFloat(val.replace(/[^0-9.]/g,''))||0;
+  _payDealRows[i].custom=Math.min(v,_payDealRows[i].amount);
+  _payDealRows[i].include=v>0;
+}
+
+function netDealRender(){
+  var list=document.getElementById('net-deal-list');
+  var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  list.innerHTML=_payDealRows.map(function(d,i){
+    var checked=d.include;
+    return '<div style="background:#111;border:1px solid '+(checked?'rgba(245,158,11,.3)':'#1e1e1e')+';border-radius:14px;padding:14px 16px;">'
+      +'<div style="display:flex;align-items:center;gap:12px;">'
+        +'<div onclick="netDealToggle('+i+')" style="width:28px;height:28px;border-radius:8px;border:2px solid '+(checked?'#f59e0b':'#333')+';background:'+(checked?'#f59e0b':'transparent')+';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">'+(checked?'<span style="color:#000;font-size:16px;font-weight:700;">✓</span>':'')+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+d.name+'</div>'
+          +'<div style="font-size:12px;color:#888;margin-top:2px;">'+d.vehicle+' · '+fmt(d.amount)+'</div>'
+        +'</div>'
+      +'</div>'
+      +(checked?'<div style="margin-top:10px;display:flex;align-items:center;gap:8px;">'
+        +'<span style="font-size:12px;color:#888;">Count:</span>'
+        +'<input type="text" inputmode="decimal" value="'+fmt(d.custom)+'" onchange="netDealSetAmt('+i+',this.value);moneyInput(this)" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(245,158,11,.3);border-radius:10px;color:#f59e0b;padding:10px 12px;font-size:16px;font-weight:700;outline:none;text-align:right;"/>'
+        +'<button onclick="netDealSetAmt('+i+',\''+d.amount+'\');netDealRender()" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;">Full</button>'
+      +'</div>':'')
+    +'</div>';
+  }).join('');
+}
+
+function netDealApply(){
+  var total=0;
+  _payDealRows.forEach(function(d){total+=d.custom||0;});
+  _payNetAdjustAmt=total;
+  _payNetAdjusted=true;
+  netDealClose();
   _payUpdateStats();
 }
 
