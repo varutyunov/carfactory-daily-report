@@ -13174,9 +13174,74 @@ function openDealDetail(id) {
   if(d.location) html += 'Location: '+d.location;
   html += '</div>';
 
-  // Move week (owner only)
+  // Edit Deal (owner only)
   if(me && ['vlad','tommy'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;})){
-    html += '<div style="display:flex;gap:8px;margin-top:28px;">';
+    html += '<div style="margin-top:24px;border-top:1px solid #1a1a1a;padding-top:20px;">';
+    html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#60a5fa;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">Edit Deal</div>';
+
+    // Customer name
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Customer Name</div>';
+    html += '<input id="de-customer-'+d.id+'" value="'+(d.customer_name||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '</div>';
+
+    // Deal type
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Deal Type</div>';
+    html += '<select id="de-type-'+d.id+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;appearance:auto;">';
+    html += '<option value="cash"'+(d.deal_type==='cash'?' selected':'')+'>Purchased in Full</option>';
+    html += '<option value="finance"'+(d.deal_type==='finance'?' selected':'')+'>Finance</option>';
+    html += '</select></div>';
+
+    // Payments
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Payments</div>';
+    html += '<div id="de-payments-'+d.id+'" style="display:flex;flex-direction:column;gap:6px;">';
+    payments.forEach(function(p,i){
+      html += '<div style="display:flex;gap:6px;align-items:center;">';
+      html += '<input type="text" inputmode="decimal" value="$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'" oninput="moneyInput(this)" data-idx="'+i+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>';
+      html += '<select data-idx="'+i+'" class="de-pmt-method" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">';
+      html += '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>';
+      html += '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>';
+      html += '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>';
+      html += '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>';
+      html += '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>';
+      html += '</select></div>';
+    });
+    html += '</div></div>';
+
+    // Cash flows into week
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Flows Into Week Of</div>';
+    var dealDt=new Date(d.created_at);
+    var dealWk=_payGetWeekStart(dealDt);
+    var wkStr=dealWk.toISOString().slice(0,10);
+    html += '<div style="display:flex;gap:6px;align-items:center;">';
+    html += '<button onclick="dealEditWeekNav('+d.id+',-1)" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#60a5fa;padding:10px 14px;font-size:16px;cursor:pointer;">←</button>';
+    html += '<div id="de-week-'+d.id+'" data-week="'+wkStr+'" style="flex:1;text-align:center;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;padding:12px;font-size:14px;font-weight:700;color:#f59e0b;">'+_dealEditWeekLabel(dealWk)+'</div>';
+    html += '<button onclick="dealEditWeekNav('+d.id+',1)" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#60a5fa;padding:10px 14px;font-size:16px;cursor:pointer;">→</button>';
+    html += '</div></div>';
+
+    // GPS Serial (if finance)
+    if(isFinance){
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Serial</div>';
+      html += '<input id="de-gps-'+d.id+'" value="'+(d.gps_serial||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+      html += '</div>';
+    }
+
+    // Notes
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Notes</div>';
+    html += '<textarea id="de-notes-'+d.id+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:14px;outline:none;min-height:60px;resize:vertical;box-sizing:border-box;">'+(d.notes||'')+'</textarea>';
+    html += '</div>';
+
+    // Save button
+    html += '<button onclick="dealEditSave('+d.id+')" id="de-save-'+d.id+'" style="width:100%;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save Changes</button>';
+    html += '</div>';
+
+    // Move week buttons (legacy)
+    html += '<div style="display:flex;gap:8px;margin-top:14px;">';
     html += '<button onclick="dealMoveWeek('+d.id+',-1)" style="flex:1;padding:13px;background:none;border:1px solid #1e3a5f;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;">← Prev Week</button>';
     html += '<button onclick="dealMoveWeek('+d.id+',1)" style="flex:1;padding:13px;background:none;border:1px solid #1e3a5f;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;">Next Week →</button>';
     html += '</div>';
@@ -13225,6 +13290,120 @@ async function dealDeleteFinal(id) {
   } catch(e) {
     btn.textContent = 'Error: '+(e.message||e);
     btn.style.background = '#1a0505'; btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
+function _dealEditWeekLabel(dt){
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var end=new Date(dt);end.setDate(end.getDate()+6);
+  return m[dt.getMonth()]+' '+dt.getDate()+' – '+m[end.getMonth()]+' '+end.getDate();
+}
+
+function dealEditWeekNav(id,dir){
+  var el=document.getElementById('de-week-'+id);if(!el)return;
+  var cur=new Date(el.dataset.week+'T12:00:00');
+  cur.setDate(cur.getDate()+(dir*7));
+  el.dataset.week=cur.toISOString().slice(0,10);
+  el.textContent=_dealEditWeekLabel(cur);
+}
+
+async function dealEditSave(id){
+  var d=_dealsData.find(function(x){return x.id===id;});
+  if(!d)return;
+  var btn=document.getElementById('de-save-'+id);
+  if(btn){btn.textContent='Saving...';btn.disabled=true;btn.style.opacity='.5';}
+  try{
+    var patch={};
+    // Customer
+    var custEl=document.getElementById('de-customer-'+id);
+    if(custEl&&custEl.value.trim()!==d.customer_name) patch.customer_name=custEl.value.trim();
+    // Deal type
+    var typeEl=document.getElementById('de-type-'+id);
+    if(typeEl&&typeEl.value!==d.deal_type) patch.deal_type=typeEl.value;
+    // GPS
+    var gpsEl=document.getElementById('de-gps-'+id);
+    if(gpsEl&&gpsEl.value.trim()!==(d.gps_serial||'')) patch.gps_serial=gpsEl.value.trim();
+    // Notes
+    var notesEl=document.getElementById('de-notes-'+id);
+    if(notesEl&&notesEl.value!==(d.notes||'')) patch.notes=notesEl.value;
+    // Payments
+    var amtEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-amt');
+    var methodEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-method');
+    var newPayments=[];var newTotal=0;
+    for(var i=0;i<amtEls.length;i++){
+      var a=parseFloat((amtEls[i].value||'').replace(/[^0-9.]/g,''))||0;
+      var m=methodEls[i]?methodEls[i].value:'cash';
+      if(a>0){newPayments.push({amount:a,method:m});newTotal+=a;}
+    }
+    patch.payments=JSON.stringify(newPayments);
+    patch.total_collected=newTotal;
+    // Week — adjust created_at to target week
+    var weekEl=document.getElementById('de-week-'+id);
+    if(weekEl){
+      var targetWk=weekEl.dataset.week;
+      var origWk=_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
+      if(targetWk!==origWk){
+        // Move created_at to same time-of-day but in target week
+        var orig=new Date(d.created_at);
+        var origWkDt=_payGetWeekStart(orig);
+        var dayOffset=Math.round((orig-origWkDt)/(1000*60*60*24));
+        var newDt=new Date(targetWk+'T'+orig.toISOString().split('T')[1]);
+        newDt.setDate(newDt.getDate()+dayOffset);
+        patch.created_at=newDt.toISOString();
+      }
+    }
+    // Also update the corresponding payment row in payments table
+    var hasCashChange=newPayments.some(function(p){return p.method==='cash';});
+    // Find existing deal payment row
+    var tagPrefix='Deal \u2014 ';
+    var existingPay=null;
+    try{
+      var payRows=await sbGet('payments','raw_ocr_text=like.'+encodeURIComponent(tagPrefix+'%')+'&customer_name=eq.'+encodeURIComponent(d.customer_name)+'&limit=1');
+      if(Array.isArray(payRows)&&payRows.length) existingPay=payRows[0];
+    }catch(e){}
+
+    if(existingPay){
+      var payPatch={};
+      // Update customer name if changed
+      if(patch.customer_name) payPatch.customer_name=patch.customer_name;
+      // Update amount to total cash from new payments
+      var cashAmt=0;
+      newPayments.forEach(function(p){if(p.method==='cash')cashAmt+=p.amount;});
+      if(cashAmt>0){
+        payPatch.amount='$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      }
+      // Update week
+      if(weekEl){
+        var tWk=weekEl.dataset.week;
+        if(tWk!==existingPay.week_start) payPatch.week_start=tWk;
+      }
+      // Update tag if vehicle changed
+      if(patch.customer_name||patch.deal_type){
+        payPatch.raw_ocr_text=tagPrefix+(d.vehicle_desc||'');
+      }
+      if(Object.keys(payPatch).length){
+        await sbPatch('payments',existingPay.id,payPatch);
+      }
+      // If no more cash, delete the payment row
+      if(cashAmt<=0){
+        await sbDelete('payments',existingPay.id);
+      }
+    }
+
+    // Save deal
+    if(Object.keys(patch).length){
+      await sbPatch('deals',id,patch);
+      // Update local data
+      Object.keys(patch).forEach(function(k){d[k]=patch[k];});
+    }
+    if(btn){btn.textContent='Saved!';btn.style.background='#065f46';btn.style.borderColor='#10b981';}
+    setTimeout(function(){
+      openDealDetail(id);
+    },800);
+    // Reload deals list
+    await loadDeals();
+  }catch(e){
+    if(btn){btn.textContent='Error: '+(e.message||e);btn.disabled=false;btn.style.opacity='1';btn.style.background='#3b0000';btn.style.borderColor='#ef4444';}
   }
 }
 
