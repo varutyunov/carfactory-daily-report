@@ -13216,6 +13216,26 @@ function openDealDetail(id) {
     });
     html += '</div></div>';
 
+    // Cash posted to week (None/Full/Custom)
+    var dealCashTotal=0;
+    payments.forEach(function(p){if(p.method==='cash')dealCashTotal+=parseFloat(p.amount)||0;});
+    // Find existing posted amount from payment row
+    var postedAmt=dealCashTotal;
+    var tagPfx='Deal \u2014 ';
+    if(_payWeekData&&_payWeekData.length){
+      var matchRow=_payWeekData.find(function(r){return r.raw_ocr_text&&r.raw_ocr_text.indexOf(tagPfx)===0&&r.customer_name===d.customer_name;});
+      if(matchRow) postedAmt=parseFloat((matchRow.amount||'').replace(/[^0-9.]/g,''))||0;
+    }
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Posted to Week</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<input id="de-cashpost-'+d.id+'" type="text" inputmode="decimal" value="$'+postedAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;min-width:0;" data-deal-cash="'+dealCashTotal+'"/>';
+    html += '<button onclick="dealEditCashNone('+d.id+')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">None</button>';
+    html += '<button onclick="dealEditCashFull('+d.id+')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Full</button>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:#555;margin-top:4px;">Total deal cash: $'+dealCashTotal.toLocaleString('en-US',{minimumFractionDigits:2})+' — adjust how much counts towards net cash</div>';
+    html += '</div>';
+
     // Cash flows into week
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Flows Into Week Of</div>';
@@ -13299,6 +13319,18 @@ async function dealDeleteFinal(id) {
   }
 }
 
+function dealEditCashNone(id){
+  var el=document.getElementById('de-cashpost-'+id);
+  if(el) el.value='$0.00';
+}
+function dealEditCashFull(id){
+  var el=document.getElementById('de-cashpost-'+id);
+  if(el){
+    var total=parseFloat(el.dataset.dealCash)||0;
+    el.value='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+}
+
 function _dealEditWeekLabel(dt){
   var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var end=new Date(dt);end.setDate(end.getDate()+6);
@@ -13368,16 +13400,17 @@ async function dealEditSave(id){
       if(Array.isArray(payRows)&&payRows.length) existingPay=payRows[0];
     }catch(e){}
 
+    // Read custom cash-post-to-week amount
+    var cashPostEl=document.getElementById('de-cashpost-'+id);
+    var cashAmt=0;
+    if(cashPostEl) cashAmt=parseFloat((cashPostEl.value||'').replace(/[^0-9.]/g,''))||0;
+
     if(existingPay){
       var payPatch={};
       // Update customer name if changed
       if(patch.customer_name) payPatch.customer_name=patch.customer_name;
-      // Update amount to total cash from new payments
-      var cashAmt=0;
-      newPayments.forEach(function(p){if(p.method==='cash')cashAmt+=p.amount;});
-      if(cashAmt>0){
-        payPatch.amount='$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      }
+      // Update amount to custom cash-post value
+      payPatch.amount='$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
       // Update week
       if(weekEl){
         var tWk=weekEl.dataset.week;
@@ -13394,6 +13427,18 @@ async function dealEditSave(id){
       if(cashAmt<=0){
         await sbDelete('payments',existingPay.id);
       }
+    } else if(!existingPay&&cashAmt>0){
+      // No existing payment row but user wants cash posted — create one
+      var wk=weekEl?weekEl.dataset.week:_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
+      await sbPost('payments',{
+        customer_name:patch.customer_name||d.customer_name,
+        amount:'$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
+        payment_method:'cash',
+        raw_ocr_text:tagPrefix+(d.vehicle_desc||''),
+        week_start:wk,
+        location:d.location||'',
+        payment_date:new Date().toISOString().slice(0,10)
+      });
     }
 
     // Save deal
