@@ -12891,7 +12891,7 @@ function payrollRender(who){
     html+='<div id="pr-cars" style="font-family:\'Barlow Condensed\',sans-serif;font-size:36px;font-weight:900;color:#fff;min-width:50px;text-align:center;">0</div>';
     html+='<button onclick="payrollAdjustCars(\''+who+'\',1)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;font-size:20px;width:44px;height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+</button>';
     if(isManny){
-      html+='<div style="flex:1;text-align:right;"><span style="font-size:11px;color:#888;">1–5: $125 · 6+: $350</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
+      html+='<div style="flex:1;text-align:right;"><span style="font-size:11px;color:#888;">1–5: $125 · 6+: $300</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
     } else if(isJesse){
       html+='<div style="flex:1;text-align:right;"><span style="font-size:12px;color:#888;">× $300/car</span><br/><span id="pr-cars-total" style="font-size:18px;font-weight:700;color:'+color+';">$0</span></div>';
     } else {
@@ -12972,7 +12972,7 @@ function payrollAdjustFullSales(who,dir){
 function mannyCarPay(cars){
   if(cars<=0) return 0;
   var first=Math.min(cars,5)*125;
-  var rest=Math.max(0,cars-5)*350;
+  var rest=Math.max(0,cars-5)*300;
   return first+rest;
 }
 
