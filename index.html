@@ -10756,17 +10756,21 @@ async function paySetDealCash(on){
 }
 
 async function _payLoadDealCash(){
-  // Get deals for the current week + location that have a pickup_payment
+  // Get deals for the current week + location — sum cash from payments JSON
   var weekStart=_payCurrentWeekStart;
   var weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
   var ws=weekStart.toISOString().slice(0,10);
   var we=weekEnd.toISOString().slice(0,10);
   var loc=_payLocation; // 'DeBary' or 'DeLand'
   try{
-    var rows=await sbGet('deals','pickup_payment=gt.0&location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,pickup_payment,created_at,location');
+    var rows=await sbGet('deals','location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,total_collected,created_at,location');
     if(!Array.isArray(rows)){ _payDealCashRows=[]; return; }
+    // deal_cash = total_collected (full deal amount)
+    rows.forEach(function(d){
+      d.deal_cash=parseFloat(d.total_collected)||0;
+    });
+    rows=rows.filter(function(d){return d.deal_cash>0;});
     // Exclude deals that already have a payment row posted via the deal upload toggle
-    // (those rows are tagged raw_ocr_text starting with "Deal — ")
     var alreadyPosted=new Set((_payWeekData||[])
       .filter(function(p){ return p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0; })
       .map(function(p){ return (p.customer_name||'').toLowerCase(); })
@@ -10982,7 +10986,7 @@ function _payUpdateStats(){
   // Add deal cash if toggle is on
   var dealCash=0;
   if(_payIncludeDeals){
-    (_payDealCashRows||[]).forEach(function(d){dealCash+=parseFloat(d.pickup_payment)||0;});
+    (_payDealCashRows||[]).forEach(function(d){dealCash+=d.deal_cash||0;});
   }
   var cashIn=cash+dealCash;
   document.getElementById('pay-stat-count').textContent=count;
@@ -11026,7 +11030,7 @@ async function payToggleNetDeals(){
     var dealLabel=document.getElementById('pay-deal-cash-label');
     // Check if there are any deals at all
     var dc=0;
-    (_payDealCashRows||[]).forEach(function(d){dc+=parseFloat(d.pickup_payment)||0;});
+    (_payDealCashRows||[]).forEach(function(d){dc+=d.deal_cash||0;});
     if(dc<=0){_payIncludeDeals=false;return;}
     // Show "No Deals" view (since they had default view, first tap shows no-deals)
     _payNetNoDealView=true;
@@ -11040,7 +11044,7 @@ async function payToggleNetDeals(){
   } else {
     // Toggle to no-deals view
     var dealCash=0;
-    (_payDealCashRows||[]).forEach(function(d){dealCash+=parseFloat(d.pickup_payment)||0;});
+    (_payDealCashRows||[]).forEach(function(d){dealCash+=d.deal_cash||0;});
     if(dealCash<=0){return;}
     _payNetNoDealView=true;
     _payUpdateStats();
@@ -11077,7 +11081,7 @@ function payShowBreakdown(){
   // Deal Cash section
   var dealCash=0;
   if(_payIncludeDeals&&(_payDealCashRows||[]).length){
-    (_payDealCashRows).forEach(function(d){dealCash+=parseFloat(d.pickup_payment)||0;});
+    (_payDealCashRows).forEach(function(d){dealCash+=d.deal_cash||0;});
     html+='<div style="height:1px;background:#222;margin:4px 0;"></div>';
     // Collapsible header row
     html+='<div style="border-radius:12px;overflow:hidden;border:1px solid rgba(251,191,36,.25);">';
@@ -11088,7 +11092,7 @@ function payShowBreakdown(){
     html+='</div>';
     // Individual deal rows
     _payDealCashRows.forEach(function(d){
-      var amt=parseFloat(d.pickup_payment)||0;
+      var amt=d.deal_cash||0;
       var dt=d.created_at?new Date(d.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
       html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(251,191,36,.03);border-top:1px solid rgba(251,191,36,.1);">';
       html+='<div><div style="font-size:13px;color:#fff;font-weight:600;">'+d.customer_name+'</div>';
