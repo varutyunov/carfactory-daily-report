@@ -4748,7 +4748,7 @@ async function syncLocation(loc){
       if(exist){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
-        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
+        if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         // Update location to match this CSV
@@ -4758,7 +4758,7 @@ async function syncLocation(loc){
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',location:loc,photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:c.color||'',miles:c.miles||null,location:loc,photo:null});
         added++;
       }
     });
@@ -4837,7 +4837,7 @@ async function syncNow(){
       if(exist){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
-        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
+        if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case: same VIN, new stock number)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         // Update location to match merged CSV (DeLand wins in merge, so this is authoritative)
@@ -4847,7 +4847,7 @@ async function syncNow(){
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',location:c.location,photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',miles:c.miles||null,location:c.location,photo:null});
         added++;
       }
     });
