@@ -13212,9 +13212,13 @@ function openDealDetail(id) {
       html += '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>';
       html += '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>';
       html += '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>';
-      html += '</select></div>';
+      html += '</select>';
+      html += '<button onclick="this.parentElement.remove();dealEditRecalcCash('+d.id+')" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 10px;font-size:14px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
+      html += '</div>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    html += '<button onclick="dealEditAddPayment('+d.id+')" style="margin-top:6px;width:100%;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">+ Add Payment</button>';
+    html += '</div>';
 
     // Cash posted to week (None/Full/Custom)
     var dealCashTotal=0;
@@ -13316,6 +13320,36 @@ async function dealDeleteFinal(id) {
   } catch(e) {
     btn.textContent = 'Error: '+(e.message||e);
     btn.style.background = '#1a0505'; btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
+function dealEditAddPayment(id){
+  var wrap=document.getElementById('de-payments-'+id);
+  if(!wrap)return;
+  var idx=wrap.children.length;
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:6px;align-items:center;';
+  row.innerHTML='<input type="text" inputmode="decimal" value="" oninput="moneyInput(this)" placeholder="$0.00" data-idx="'+idx+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>'
+    +'<select data-idx="'+idx+'" class="de-pmt-method" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">'
+    +'<option value="cash">Cash</option><option value="card">Card</option><option value="zelle">Zelle</option><option value="money_order">Money Order</option><option value="other">Other</option></select>'
+    +'<button onclick="this.parentElement.remove();dealEditRecalcCash('+id+')" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 10px;font-size:14px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
+  wrap.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function dealEditRecalcCash(id){
+  var amtEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-amt');
+  var methodEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-method');
+  var cashTotal=0;
+  for(var i=0;i<amtEls.length;i++){
+    var a=parseFloat((amtEls[i].value||'').replace(/[^0-9.]/g,''))||0;
+    var m=methodEls[i]?methodEls[i].value:'cash';
+    if(m==='cash')cashTotal+=a;
+  }
+  var el=document.getElementById('de-cashpost-'+id);
+  if(el){
+    el.dataset.dealCash=cashTotal;
+    el.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 }
 
