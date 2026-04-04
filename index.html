@@ -2484,6 +2484,8 @@ async function syncFromSupabase(showUI){
       try{cpRenderAll();}catch(e){}
       // Sign car.photo URLs in background (bucket is private)
       _signInventoryPhotos();
+      // Sync pickup payments to calendar in background
+      calSyncPickupPayments().catch(function(){});
       return; // success — resolve promise only after data is loaded
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
@@ -6172,6 +6174,76 @@ async function calScheduleNotification(ev){
       body:JSON.stringify(payload)
     });
   }catch(e){console.warn('Notification error',e);}
+}
+
+// ── Auto-sync pickup payments to calendar ──
+async function calSyncPickupPayments(){
+  try{
+    var deals=await sbGet('deals','deal_type=eq.finance&pickup_payment=gt.0&order=pickup_payment_due.asc');
+    if(!Array.isArray(deals)||!deals.length) return;
+    if(!S.calendarEvents) S.calendarEvents=[];
+    var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var changed=false;
+    for(var i=0;i<deals.length;i++){
+      var d=deals[i];
+      if(!d.pickup_payment_due) continue;
+      var dueDate=d.pickup_payment_due.slice(0,10);
+      var amt=parseFloat(d.pickup_payment)||0;
+      var fmtAmt='$'+amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      var title='Pickup: '+(d.customer_name||'Unknown')+' — '+fmtAmt;
+      var notes=(d.vehicle_desc||'')+(d.location?' ('+d.location+')':'');
+      // Check if event already exists for this deal
+      var tag='pickup_deal_'+d.id;
+      var existing=S.calendarEvents.find(function(ev){return ev._pickup_tag===tag;});
+      if(existing){
+        // Update if date or amount changed
+        if(existing.event_date!==dueDate||existing.title!==title||existing.notes!==notes){
+          existing.event_date=dueDate;
+          existing.title=title;
+          existing.notes=notes;
+          changed=true;
+          if(!String(existing.id).startsWith('local_')){
+            try{await sbPatch('calendar_events',existing.id,{event_date:dueDate,title:title,notes:notes});}catch(e){}
+          }
+        }
+        continue;
+      }
+      // Create new calendar event
+      var evObj={title:title,event_date:dueDate,event_time:null,notes:notes,notify:true,created_by:'System',_pickup_tag:tag};
+      try{
+        var res=await sbPost('calendar_events',evObj);
+        var saved=Array.isArray(res)?res[0]:res;
+        if(!saved||!saved.id){evObj.id='local_'+Date.now()+'_'+i;saved=evObj;}
+        saved._pickup_tag=tag;
+        S.calendarEvents.push(saved);
+        changed=true;
+        // Schedule notification for the due date
+        if(saved.notify) calScheduleNotification(saved);
+      }catch(e){
+        evObj.id='local_'+Date.now()+'_'+i;
+        S.calendarEvents.push(evObj);
+        changed=true;
+      }
+    }
+    // Remove calendar events for deals that no longer have pickup payments
+    var activeTags={};
+    deals.forEach(function(d){if(d.pickup_payment_due) activeTags['pickup_deal_'+d.id]=true;});
+    S.calendarEvents=S.calendarEvents.filter(function(ev){
+      if(!ev._pickup_tag) return true;
+      if(activeTags[ev._pickup_tag]) return true;
+      // Delete orphaned pickup event
+      if(!String(ev.id).startsWith('local_')){
+        try{sbDelete('calendar_events',ev.id);}catch(e){}
+      }
+      changed=true;
+      return false;
+    });
+    if(changed){
+      S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
+      try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e){}
+      if(document.getElementById('mgr-calendar-content')) renderCalendar();
+    }
+  }catch(e){console.error('Pickup calendar sync error:',e);}
 }
 
 function getProgressCars(){
@@ -12358,6 +12430,11 @@ async function dealSubmit() {
     }
 
     await sbPost('deals', record);
+
+    // Sync pickup payment to calendar if applicable
+    if(record.pickup_payment && record.pickup_payment_due){
+      try{ await calSyncPickupPayments(); }catch(e){}
+    }
 
     // Post cash collected now to this week's payments
     if(_dealAddToWeek) {
