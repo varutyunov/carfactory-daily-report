@@ -1036,12 +1036,6 @@ canvas{display:none;}
         <div style="font-size:13px;color:#4ade80;font-weight:600;">💵 Cash will be automatically added to this week's net cash</div>
       </div>
 
-      <!-- Notes -->
-      <div style="margin-bottom:14px;">
-        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Notes <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
-        <textarea id="deal-notes" placeholder="e.g. Seller is DeLand, car sold in DeBary system" rows="2" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;resize:none;"></textarea>
-      </div>
-
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
     </div>
 
@@ -1377,62 +1371,6 @@ canvas{display:none;}
   <img id="pay-photo-lightbox-img" src="" style="max-width:95%;max-height:90vh;object-fit:contain;border-radius:8px;"/>
 </div>
 
-<!-- MANUAL POST MODAL -->
-<div id="manual-post-modal" style="display:none;position:fixed;inset:0;z-index:9500;background:#000;flex-direction:column;overflow-y:auto;">
-  <div style="position:sticky;top:0;z-index:10;background:#000;border-bottom:1px solid #1a1a1a;padding:0 16px;height:54px;display:flex;align-items:center;gap:14px;">
-    <button onclick="closeManualPost()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">MANUAL POST</span>
-  </div>
-  <div style="padding:16px 16px 60px;">
-    <!-- Location -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Location</div>
-    <div style="display:flex;gap:6px;margin-bottom:16px;">
-      <button id="mp-loc-debary" onclick="mpSetLoc('DeBary')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid #a87000;background:linear-gradient(145deg,#1a1000,#4a3000);color:#f59e0b;">DeBary</button>
-      <button id="mp-loc-deland" onclick="mpSetLoc('DeLand')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid #1e1e1e;background:#0d0d0d;color:#555;">DeLand</button>
-    </div>
-
-    <!-- Customer -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Customer Name</div>
-    <input id="mp-customer" placeholder="First Last" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;margin-bottom:14px;outline:none;"/>
-
-    <!-- Vehicle -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Vehicle</div>
-    <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <input id="mp-year" placeholder="Year" style="width:80px;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
-      <input id="mp-make" placeholder="Make" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
-      <input id="mp-model" placeholder="Model" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;">
-      <input id="mp-color" placeholder="Color" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
-      <input id="mp-stock" placeholder="Stock #" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:15px;outline:none;"/>
-      <input id="mp-vin" placeholder="VIN (opt)" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 12px;font-size:13px;outline:none;"/>
-    </div>
-
-    <!-- Seller -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Sold By</div>
-    <input id="mp-seller" placeholder="Salesperson name" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;margin-bottom:14px;outline:none;"/>
-
-    <!-- Deal Type -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Deal Type</div>
-    <div style="display:flex;gap:6px;margin-bottom:16px;">
-      <button id="mp-type-cash" onclick="mpSetType('cash')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;">Purchased in Full</button>
-      <button id="mp-type-finance" onclick="mpSetType('finance')" style="flex:1;padding:10px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #1e1e1e;background:#0d0d0d;color:#555;">Finance</button>
-    </div>
-
-    <!-- Amount -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Amount Collected</div>
-    <input id="mp-amount" type="number" placeholder="0.00" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:18px;margin-bottom:6px;outline:none;"/>
-    <div style="font-size:11px;color:#555;margin-bottom:20px;">Leave 0 for finance deals with no cash collected</div>
-
-    <!-- Note -->
-    <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Note (optional)</div>
-    <textarea id="mp-note" placeholder="e.g. Sold in DeBary, seller is DeLand" rows="2" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:14px;margin-bottom:20px;outline:none;resize:none;"></textarea>
-
-    <button id="mp-submit-btn" onclick="submitManualPost()" style="width:100%;padding:16px;background:linear-gradient(145deg,#14532d,#166534);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;">Post Deal</button>
-    <div id="mp-error" style="display:none;margin-top:12px;background:#3b0000;border:1px solid #7f1d1d;border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:13px;"></div>
-  </div>
-</div>
-
 <!-- OWNER DEALS VIEW OVERLAY -->
 <div id="deals-view-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
@@ -1442,15 +1380,6 @@ canvas{display:none;}
   <div id="deals-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading deals...</div>
   </div>
-</div>
-
-<!-- PAST DEALS OVERLAY -->
-<div id="past-deals-overlay" style="display:none;position:fixed;inset:0;z-index:9050;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9060;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="pastDealsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span id="past-deals-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAST DEALS</span>
-  </div>
-  <div id="past-deals-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;"></div>
 </div>
 
 <!-- CASH PAYOUTS SHEET -->
@@ -1865,6 +1794,9 @@ canvas{display:none;}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span style="font-size:13px;font-weight:600;color:#fff;">Add</span>
         </label>
+        <button id="pg-select-btn" onclick="pgToggleSelect()" style="display:none;flex:1;align-items:center;justify-content:center;gap:7px;padding:12px 0;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;font-family:inherit;" ontouchstart="this.style.background='#252525'" ontouchend="this.style.background='#1a1a1a'">
+          <span style="font-size:13px;font-weight:600;color:#fff;"># Select</span>
+        </button>
         <button id="pg-download-all" onclick="pgDownloadAll()" style="display:none;flex:1;align-items:center;justify-content:center;gap:7px;padding:12px 0;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;font-family:inherit;" ontouchstart="this.style.background='#252525'" ontouchend="this.style.background='#1a1a1a'">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span style="font-size:13px;font-weight:600;color:#fff;">Save All</span>
@@ -2236,27 +2168,6 @@ async function sbPost(table, body) {
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function sbRpc(fn, params) {
-  const r = await fetch(SB_URL+'/rest/v1/rpc/'+fn, {method:'POST',headers:SB_HEADERS,body:JSON.stringify(params)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-var _loginAttempts = {};
-function loginLocked(u) {
-  var a = _loginAttempts[u] || {};
-  if(a.until && a.until > Date.now()) return Math.ceil((a.until - Date.now())/1000);
-  return 0;
-}
-function loginFail(u) {
-  var a = _loginAttempts[u] || {n:0};
-  a.n = (a.n||0) + 1;
-  if(a.n >= 5) { a.until = Date.now() + 5*60*1000; a.n = 0; }
-  _loginAttempts[u] = a;
-}
-function loginOk(u) { delete _loginAttempts[u]; }
 async function sbPatch(table, id, body) {
   const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'PATCH',headers:SB_HEADERS,body:JSON.stringify(body)});
   if(!r.ok) throw new Error(await r.text());
@@ -2268,6 +2179,46 @@ async function sbDelete(table, id) {
 }
 
 // ── SUPABASE STORAGE ────────────────────────────────────────────────────────
+// Signed URL cache — avoids re-signing the same path within a session
+var _signedUrlCache={};
+function _extractStoragePath(url){
+  if(!url) return null;
+  var m=url.match(/\/car-photos\/(.+)$/);
+  return m?m[1]:null;
+}
+async function sbSignUrl(storagePath){
+  if(!storagePath) return '';
+  var cached=_signedUrlCache[storagePath];
+  if(cached&&cached.exp>Date.now()) return cached.url;
+  try{
+    var r=await fetch(SB_URL+'/storage/v1/object/sign/car-photos/'+storagePath,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({expiresIn:604800})
+    });
+    if(!r.ok) return '';
+    var data=await r.json();
+    var fullUrl=SB_URL+data.signedURL;
+    _signedUrlCache[storagePath]={url:fullUrl,exp:Date.now()+600000};
+    return fullUrl;
+  }catch(e){return '';}
+}
+async function sbSignPhotoUrl(url){
+  var path=_extractStoragePath(url);
+  if(!path) return url||'';
+  return await sbSignUrl(path);
+}
+async function _signInventoryPhotos(){
+  var cars=(S.inventory||[]).filter(function(c){return c.photo&&c.photo.indexOf('/public/')!==-1;});
+  if(!cars.length) return;
+  for(var i=0;i<cars.length;i++){
+    var signed=await sbSignPhotoUrl(cars[i].photo);
+    if(signed) cars[i].photo=signed;
+  }
+  // Re-render to show signed photos
+  try{if(typeof renderInv==='function') renderInv();}catch(e){}
+  try{if(typeof empRenderInv==='function') empRenderInv();}catch(e){}
+}
 async function sbUpload(path, file){
   const r=await fetch(SB_URL+'/storage/v1/object/car-photos/'+path,{
     method:'POST',
@@ -2275,7 +2226,8 @@ async function sbUpload(path, file){
     body:file
   });
   if(!r.ok) throw new Error(await r.text());
-  return SB_URL+'/storage/v1/object/public/car-photos/'+path;
+  // Return signed URL (bucket is private)
+  return await sbSignUrl(path);
 }
 async function sbDeleteFile(path){
   await fetch(SB_URL+'/storage/v1/object/car-photos/'+path,{
@@ -2286,6 +2238,10 @@ async function sbDeleteFile(path){
 async function loadCarPhotos(carId, category){
   try{
     const rows=await sbGet('car_photos','car_id=eq.'+carId+'&category=eq.'+category+'&order=created_at.desc');
+    // Sign all photo URLs (bucket is private)
+    for(var i=0;i<rows.length;i++){
+      rows[i].url=await sbSignPhotoUrl(rows[i].url);
+    }
     return rows;
   }catch(e){console.error('loadCarPhotos:',e);return[];}
 }
@@ -2294,7 +2250,11 @@ async function uploadCarPhoto(carId, category, file){
   const ext=file.name.split('.').pop()||'jpg';
   const path=carId+'/'+category+'/'+ts+'.'+ext;
   const url=await sbUpload(path, file);
-  const rows=await sbPost('car_photos',{car_id:carId,category:category,url:url,uploaded_by:me?me.name:''});
+  // Store the original public-style URL in DB for path extraction later
+  const dbUrl=SB_URL+'/storage/v1/object/public/car-photos/'+path;
+  const rows=await sbPost('car_photos',{car_id:carId,category:category,url:dbUrl,uploaded_by:me?me.name:''});
+  rows[0]._dbUrl=dbUrl; // Original DB URL for storage in inventory.photo
+  rows[0].url=url; // Return signed URL for immediate display
   return rows[0];
 }
 async function deleteCarPhoto(photoRow){
@@ -2439,13 +2399,13 @@ async function syncFromSupabase(showUI){
       _cpData.synced=true;
       if(!emps || !inv) throw new Error('Empty response from Supabase');
       // Completely replace — never merge with stale localStorage
-      S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,role:e.role,location:e.location}));
+      S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
       const _rawCM=JSON.parse(localStorage.getItem('cf_colormap')||'{}');const colorMap={};Object.keys(_rawCM).forEach(function(k){colorMap[k]=fixColor(_rawCM[k]);});
       const pxSaved=localStorage.getItem('px_cache');
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -2454,6 +2414,8 @@ async function syncFromSupabase(showUI){
       _lastSyncDone=Date.now();
       hideLoading();
       try{cpRenderAll();}catch(e){}
+      // Sign car.photo URLs in background (bucket is private)
+      _signInventoryPhotos();
       return; // success — resolve promise only after data is loaded
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
@@ -2490,26 +2452,19 @@ async function loginWithFaceId(){
 async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value.trim();
-  const locked=loginLocked(u);
-  if(locked){document.getElementById('lerr').textContent='Too many attempts. Try again in '+locked+'s';return;}
+  // First try local cache, then sync
   showLoading('Signing in...');
-  let authResult;
   try {
-    authResult = await sbRpc('authenticate_employee', {p_username: u, p_pin: p});
-  } catch(ex) {
-    hideLoading();
-    loginFail(u);
-    document.getElementById('lerr').textContent='Invalid username or PIN';
-    return;
-  }
+    const emps = await sbGet('employees','select=*');
+    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
+  } catch(e){}
   hideLoading();
-  if(!authResult || !authResult.success || !authResult.user){loginFail(u);document.getElementById('lerr').textContent='Invalid username or PIN';return;}
-  loginOk(u);
-  const e=authResult.user;
+  const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
+  if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
   me=e;
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
-  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());}
+  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());localStorage.setItem('cf_saved_pin',document.getElementById('lp').value.trim());}
   // Store credential in iOS keychain so Face ID triggers on next open
   if(navigator.credentials&&window.PasswordCredential){try{await navigator.credentials.store(new PasswordCredential({id:u,password:p,name:e.name}));}catch(ex){}}
   initOneSignalUser(e.name);
@@ -2539,6 +2494,7 @@ function doSync(){
   // Save session so user stays logged in after reload
   if(me) localStorage.setItem('cf_session', JSON.stringify(me));
   if(_savedUser) localStorage.setItem('cf_saved_user', _savedUser);
+  if(_savedPin) localStorage.setItem('cf_saved_pin', _savedPin);
   // Tell SW to skip waiting so new app code activates on next load
   if('serviceWorker' in navigator && navigator.serviceWorker.controller){
     navigator.serviceWorker.controller.postMessage('SYNC');
@@ -2800,8 +2756,8 @@ function renderEmpCatCars(section){
     var badge=isConfirmed?'<span class="tile-badge tbd">✓</span>':isPending?'<span class="tile-badge tbr">Review</span>':isDone?'<span class="tile-badge tbd">Done</span>':'';
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
-    var vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
-    var sub=vinLast6+(car.color?' · '+car.color:'');
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    var sub=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
     return '<div class="car-tile st-'+status+'" onclick="empOpenCar('+car.id+')">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div></div>';
   }
   container.innerHTML='<div class="car-grid" style="padding:0 14px 80px;">'+allCarsData.map(makeTile).join('')+'</div>';
@@ -2874,7 +2830,8 @@ function renderDetailQueue(){
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
     o+='</div>';
     if(done) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
     o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
@@ -2900,10 +2857,11 @@ function renderPersonalTab(){
     const tags=assigned.map(k=>`<span style="color:#64d2ff;font-size:10px;font-weight:600;">${catIcon(k)} ${k}</span>`).join(' ');
     const pxUrl=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="tile-photo" src="${car.photo}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:pxUrl?`<img class="tile-photo" src="${pxUrl}"/><div class="tile-vig"></div><div class="tile-grad"></div>`:`<div class="tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');
+    const vinShort=car.vin?car.vin.slice(-8):'';
+    const sub=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
     return`<div class="car-tile" style="border-color:#1a2a3a;">
       <div class="tile-photo-wrap">${photoHTML}</div>
-      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${vinLast6}${car.color?' · '+car.color:''}</div><div style="margin-top:4px;">${tags}</div></div>
+      <div class="tile-body"><div class="tile-name">${car.name}</div><div class="tile-stock">${sub}</div><div style="margin-top:4px;">${tags}</div></div>
     </div>`;
   }).join('');
   applyPexels(cars);
@@ -2982,7 +2940,7 @@ function openTaskView(aid){
       fetchPexels(car).then(url=>{if(url){img.src=url;img.style.display='block';ph.style.display='none';}});}
   }
   document.getElementById('th-name').textContent=car.name;
-  const _vinLast6=car.stock||(car.vin?car.vin.slice(-6):'');const _detailSub=[_vinLast6,car.color].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
+  var _vinShort=car.vin?car.vin.slice(-8):'';var _detailSub=[(car.stock||''),_vinShort,car.color||''].filter(Boolean).join(' · ');document.getElementById('th-stock').textContent=_detailSub;
   updateProg(a);renderTaskItems(a);
   document.getElementById('photo-grid').innerHTML='';
   updateSubBtn(a);showView('emp-tasks');
@@ -3147,7 +3105,9 @@ function renderInvPaintTab(){
     var notes=(ws.categories.paint||{}).notes||'';
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPaintQueue('+car.id+');renderInvPaintTab();">↩ Remove</button></div></div>';
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    var rcMeta=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+rcMeta+'</div>'+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPaintQueue('+car.id+');renderInvPaintTab();">↩ Remove</button></div></div>';
   }).join('');
   applyPexels(cars);
 }
@@ -3161,7 +3121,9 @@ function renderInvPhotosTab(){
     var notes=(ws.categories.photos||{}).notes||'';
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPhotosQueue('+car.id+');renderInvPhotosTab();">↩ Remove</button></div></div>';
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    var rcMeta=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+rcMeta+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+(notes?'<div style="font-size:12px;color:#888;font-style:italic;margin-top:3px;">"'+notes+'"</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromPhotosQueue('+car.id+');renderInvPhotosTab();">↩ Remove</button></div></div>';
   }).join('');
   applyPexels(cars);
 }
@@ -3174,7 +3136,9 @@ function renderInvDetailTab(){
     var done=ws.categories&&ws.categories.detail&&ws.categories.detail.done;
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var ph=car.photo?'<img class="rc-img" src="'+car.photo+'"/>':pxUrl?'<img class="rc-img" src="'+pxUrl+'"/>':`<div class="rc-img-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+(car.stock||(car.vin?car.vin.slice(-6):''))+(car.color?' · '+car.color:'')+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromDetailQueue('+car.id+');renderInvDetailTab();">↩ Unassign</button></div></div>';
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    var rcMeta=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
+    return'<div class="rev-card"><div class="rc-head">'+ph+'<div class="rc-info"><div class="rc-name">'+car.name+'</div><div class="rc-meta">'+rcMeta+'</div>'+(done?'<div style="color:#30d158;font-size:12px;font-weight:600;margin-top:3px;">✓ Done</div>':'')+'</div></div><div class="rc-actions"><button class="rc-btn rc-back" onclick="removeFromDetailQueue('+car.id+');renderInvDetailTab();">↩ Unassign</button></div></div>';
   }).join('');
   applyPexels(cars);
 }
@@ -3241,10 +3205,12 @@ function renderInv(){
   document.getElementById('inv-list').innerHTML='<div class="inv-grid">'+items.map(car=>{
     const pxI=!car.photo&&pxCache[String(car.id)];
     const photoHTML=car.photo?`<img class="inv-tile-photo" src="${car.photo}"/>`:pxI?`<img class="inv-tile-photo" src="${pxI}"/>`:`<div class="inv-tile-ph" data-px="${car.id}">${carImage(car.name)}</div>`;
-    const meta=car.stock||(car.vin?car.vin.slice(-6):'');
+    const meta=car.stock||'';
+    const vinShort=car.vin?car.vin.slice(-8):'';
     const dispColor=car.color;
     const colorMiles=[dispColor,car.miles?(Number(car.miles)||0).toLocaleString()+' mi':''].filter(Boolean).join(' \xB7 ');
-    return`<div class="inv-tile" onclick="openCarActions(${car.id})"><div class="inv-tile-wrap">${photoHTML}</div><div class="inv-tile-body"><div class="inv-tile-name">${car.name}</div><div class="inv-tile-sub">${meta}${colorMiles?' \xB7 '+colorMiles:''}</div></div></div>`;
+    const subParts=[meta,vinShort,colorMiles].filter(Boolean).join(' \xB7 ');
+    return`<div class="inv-tile" onclick="openCarActions(${car.id})"><div class="inv-tile-wrap">${photoHTML}</div><div class="inv-tile-body"><div class="inv-tile-name">${car.name}</div><div class="inv-tile-sub">${subParts}</div></div></div>`;
   }).join('')+'</div>';
   applyPexels(items);
 }
@@ -3315,10 +3281,10 @@ function addCustomTask(){const n=prompt('Task name:');if(n&&n.trim())customTasks
 function handleCarPhoto(e){const f=e.target.files[0];if(!f)return;enhancePhoto(f,url=>{pendingCarPhoto=url;const lbl=document.getElementById('car-photo-lbl');lbl.innerHTML=`<img class="cpu-preview" src="${url}"/><span class="cpu-txt" style="margin-top:8px;">Tap to retake</span>`;});}
 
 // ── PHOTO GALLERY SYSTEM ────────────────────────────────────────────────────
-var _pgCarId=null, _pgCategory=null, _pgPhotos=[], _pgViewPhoto=null;
+var _pgCarId=null, _pgCategory=null, _pgPhotos=[], _pgViewPhoto=null, _pgSelectMode=false, _pgSelected=[];
 
 async function openPhotoGallery(carId, category, title){
-  _pgCarId=carId; _pgCategory=category; _pgPhotos=[];
+  _pgCarId=carId; _pgCategory=category; _pgPhotos=[]; _pgSelectMode=false; _pgSelected=[];
   document.getElementById('pg-title').textContent=title||('Photos — '+category);
   document.getElementById('pg-grid').innerHTML='<div style="text-align:center;padding:20px;color:#555;font-size:13px;">Loading...</div>';
   document.getElementById('pg-uploading').style.display='none';
@@ -3328,6 +3294,9 @@ async function openPhotoGallery(carId, category, title){
   var rm=document.getElementById('pg-remove-btn');if(rm)rm.style.display='none';
   // Show upload button (employee/inventory flow)
   var ul=document.getElementById('pg-upload-label');if(ul)ul.style.display='flex';
+  // Show select button for photos category
+  var sb=document.getElementById('pg-select-btn');if(sb)sb.style.display=(category==='photos'||category==='inventory')?'flex':'none';
+  _pgUpdateSelectBtn();
   openM('m-photo-gallery');
   _pgPhotos=await loadCarPhotos(carId,category);
   pgRenderGrid();
@@ -3336,15 +3305,58 @@ function _pgUpdateCount(){
   var ct=document.getElementById('pg-count');
   if(ct) ct.textContent=_pgPhotos.length?_pgPhotos.length+' photo'+(_pgPhotos.length!==1?'s':''):'';
 }
+function pgToggleSelect(){
+  _pgSelectMode=!_pgSelectMode;
+  if(!_pgSelectMode) _pgSelected=[];
+  _pgUpdateSelectBtn();
+  pgRenderGrid();
+}
+function _pgUpdateSelectBtn(){
+  var sb=document.getElementById('pg-select-btn');
+  if(!sb) return;
+  if(_pgSelectMode){
+    sb.style.background='rgba(59,130,246,.15)';
+    sb.style.borderColor='rgba(59,130,246,.4)';
+    sb.querySelector('span').textContent=_pgSelected.length?_pgSelected.length+' selected — Done':'Tap photos...';
+    sb.querySelector('span').style.color='#60a5fa';
+  } else {
+    sb.style.background='#1a1a1a';
+    sb.style.borderColor='#2a2a2a';
+    sb.querySelector('span').textContent='# Select';
+    sb.querySelector('span').style.color='#fff';
+  }
+}
+function pgSelectPhoto(idx){
+  var pos=_pgSelected.indexOf(idx);
+  if(pos!==-1){
+    _pgSelected.splice(pos,1);
+  } else {
+    _pgSelected.push(idx);
+  }
+  _pgUpdateSelectBtn();
+  pgRenderGrid();
+}
+function pgGetSelectedPhotos(){
+  return _pgSelected.map(function(idx){return _pgPhotos[idx];});
+}
 function pgRenderGrid(){
   const grid=document.getElementById('pg-grid');
   _pgUpdateCount();
   if(!_pgPhotos.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 10px;color:#333;font-size:13px;font-weight:500;">No photos yet</div>';return;}
-  grid.innerHTML=_pgPhotos.map((p,i)=>`<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0a0a0a;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .1s;" onclick="pgViewPhoto(${i})" ontouchstart="this.style.transform='scale(.94)'" ontouchend="this.style.transform=''">
+  grid.innerHTML=_pgPhotos.map((p,i)=>{
+    var selNum=_pgSelectMode?_pgSelected.indexOf(i):-1;
+    var isSelected=selNum!==-1;
+    var clickFn=_pgSelectMode?`pgSelectPhoto(${i})`:`pgViewPhoto(${i})`;
+    var border=isSelected?'border:2px solid #3b82f6;':'';
+    var badge=isSelected?`<div style="position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,.5);">${selNum+1}</div>`:'';
+    var unselBadge=_pgSelectMode&&!isSelected?`<div style="position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.3);z-index:2;"></div>`:'';
+    return `<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0a0a0a;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .1s;${border}" onclick="${clickFn}" ontouchstart="this.style.transform='scale(.94)'" ontouchend="this.style.transform=''">
+    ${badge}${unselBadge}
     <img src="${p.url}" style="width:100%;height:100%;object-fit:cover;filter:contrast(1.05) saturate(1.1);"/>
     <div style="position:absolute;inset:0;background:linear-gradient(transparent 60%,rgba(0,0,0,.5) 100%);pointer-events:none;"></div>
     ${p.uploaded_by?`<div style="position:absolute;bottom:0;left:0;right:0;padding:5px 8px;font-size:10px;color:rgba(255,255,255,.6);font-weight:500;pointer-events:none;letter-spacing:.2px;">${p.uploaded_by}</div>`:''}
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 async function pgHandleFiles(e){
   const files=Array.from(e.target.files);
@@ -3361,7 +3373,9 @@ async function pgHandleFiles(e){
       if(_pgCategory==='inventory'){
         const car=S.inventory.find(c=>c.id===_pgCarId);
         if(car&&!car.photo){
-          await sbPatch('inventory',_pgCarId,{photo:row.url});
+          // Store public-style URL in DB (path extraction works), signed URL for display
+          var _dbUrl=row._dbUrl||row.url;
+          await sbPatch('inventory',_pgCarId,{photo:_dbUrl});
           car.photo=row.url;
           renderInv();
         }
@@ -3604,7 +3618,8 @@ function mgrCatTile(car, cat, onclick){
   var badge=needsReview?'<span class="tile-badge tbr">Review</span>':isConfirmed?'<span class="tile-badge tbd">✓</span>':isDone?'<span class="tile-badge tbd">Done</span>':'';
   var pxUrl=!car.photo&&pxCache[String(car.id)];
   var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
-  var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+  var vinShort=car.vin?car.vin.slice(-8):'';
+  var sub=[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ');
   return '<div class="car-tile st-'+status+'" onclick="'+onclick+'">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div></div>';
 }
 function renderMgrDetail(){
@@ -3686,7 +3701,8 @@ function renderPhotosQueue(){
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;pointer-events:none;">';
     o+='<div style="font-size:15px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+[(car.stock||''),vinShort,car.color||''].filter(Boolean).join(' · ')+(empNames.length?' · '+empNames.join(', '):'')+'</div>';
     o+='<div id="qpu-status-'+car.id+'" style="font-size:12px;margin-top:4px;height:16px;font-weight:600;"></div>';
     o+='</div>';
     o+='<span style="font-size:22px;flex-shrink:0;pointer-events:none;">'+(done?'✅':'📷')+'</span>';
@@ -3861,7 +3877,8 @@ function renderPartsQueue(){
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:14px;color:'+(item.itemDone?'#666':'#fff')+';font-weight:600;'+(item.itemDone?'text-decoration:line-through;':'')+'">'+item.text+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+'</div>';
+    var vinShort=c.vin?c.vin.slice(-8):'';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+' · '+[(c.stock||''),vinShort,c.color||''].filter(Boolean).join(' · ')+'</div>';
     o+='</div>';
     if(item.carDone) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">✓ Done</span>';
     else if(item.bought) o+='<span style="font-size:11px;color:#fbbf24;font-weight:700;flex-shrink:0;">Bought</span>';
@@ -3951,7 +3968,8 @@ function renderMgrTasks(){
     o+=thumbHTML;
     o+='<div style="flex:1;min-width:0;">';
     o+='<div style="font-size:14px;color:#fff;font-weight:600;">'+item.text+(item.urgent?' ⚠':'')+'</div>';
-    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+(c.stock?' · '+c.stock:'')+(item.emp?' · '+item.emp.name:'')+'</div>';
+    var vinShort=c.vin?c.vin.slice(-8):'';
+    o+='<div style="font-size:11px;color:#555;margin-top:2px;">'+c.name+' · '+[(c.stock||''),vinShort,c.color||''].filter(Boolean).join(' · ')+(item.emp?' · '+item.emp.name:'')+'</div>';
     o+='</div>';
     if(item.submitted) o+='<span style="font-size:11px;color:#30d158;font-weight:700;flex-shrink:0;">Review</span>';
     o+='<div style="font-size:16px;color:#444;flex-shrink:0;">›</div>';
@@ -4667,7 +4685,7 @@ async function syncLocation(loc){
       if(exist){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
-        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
+        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
@@ -4694,7 +4712,6 @@ async function syncLocation(loc){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     }
     // Only remove cars of THIS location that are no longer in its CSV
-    var allCsvVinsLoc=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
@@ -4702,7 +4719,6 @@ async function syncLocation(loc){
       if((c.location||'DeBary')!==loc) return true; // don't touch other location
       if(csvStocks.has(c.stock)) return true;
       if(activeIds.has(c.id)) return true;
-      if(c.vin&&allCsvVinsLoc.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
       toRemoveDB.push(c.id);
       removed++;
       return false;
@@ -4733,10 +4749,9 @@ async function syncNow(){
       var rDL=await fetch(DELAND_URL+'?t='+Date.now());
       if(rDL.ok) deland=parseCSV(await rDL.text(),'DeLand');
     }catch(e){console.log('DeLand CSV skipped:',e);}
-    // Merge — DeLand wins on same stock number OR same VIN (handles transfers)
+    // Merge — DeLand wins on same stock number
     var delandStocks=new Set(deland.map(function(c){return c.stock;}));
-    var delandVins=new Set(deland.map(function(c){return c.vin;}).filter(Boolean));
-    var imp=deland.concat(debary.filter(function(c){return !delandStocks.has(c.stock)&&!(c.vin&&delandVins.has(c.vin));}));
+    var imp=deland.concat(debary.filter(function(c){return !delandStocks.has(c.stock);}));
     if(!imp.length) throw new Error('No INSTOCK vehicles found');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
@@ -4750,14 +4765,12 @@ async function syncNow(){
       if(exist){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
-        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);patch.miles=c.miles;}
-        // Update stock number if it changed (transfer case: same VIN, new stock number)
-        if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
-        // Never overwrite location on existing cars — Supabase is source of truth for location
+        if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
+        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
-        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',miles:c.miles||null,location:c.location,photo:null});
+        toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',location:c.location,photo:null});
         added++;
       }
     });
@@ -4774,13 +4787,11 @@ async function syncNow(){
       }
     }
     if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
-    // Remove cars no longer in either CSV — protect by stock number OR VIN
-    var allCsvVins=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
+    // Remove cars no longer in either CSV
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
-      if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer window)
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
@@ -4907,6 +4918,7 @@ async function addCarManually(){
 // Restore session if coming back from a sync reload
 const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
+const _savedPin = localStorage.getItem('cf_saved_pin');
 
 // ── AI key cookie helpers (cookies outlive iOS localStorage wipes) ──────────
 function _getAiKeyCookie(){var m=document.cookie.match(/(?:^|;\s*)cf_ai_key=([^;]*)/);return m?decodeURIComponent(m[1]):null;}
@@ -4922,6 +4934,7 @@ var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges')
 try{S.calendarEvents=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');}catch(e){}if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
+if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
@@ -4930,6 +4943,7 @@ if(_savedSession){
       // Re-save immediately so session survives even if sync fails
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
+      localStorage.setItem('cf_saved_pin', _savedPin||'');
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
@@ -7990,7 +8004,8 @@ function empRenderInv(){
     var pxI=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?'<img class="inv-tile-photo" src="'+car.photo+'"/>':pxI?'<img class="inv-tile-photo" src="'+pxI+'"/>':'<div class="inv-tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
     var dispColor=car.color;
-    var meta=(car.stock||'')+(dispColor?' \xB7 '+dispColor:'')+(car.miles?' \xB7 '+(Number(car.miles)||0).toLocaleString()+' mi':'');
+    var vinShort=car.vin?car.vin.slice(-8):'';
+    var meta=[(car.stock||''),vinShort,dispColor||'',car.miles?(Number(car.miles)||0).toLocaleString()+' mi':''].filter(Boolean).join(' \xB7 ');
     return '<div class="inv-tile" onclick="empOpenCar('+car.id+')"><div class="inv-tile-wrap">'+photoHTML+'</div><div class="inv-tile-body"><div class="inv-tile-name">'+car.name+'</div><div class="inv-tile-sub">'+meta+'</div></div></div>';
   }).join('')+'</div>';
   if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
@@ -11529,96 +11544,16 @@ function openDealForm(forceLoc) {
   document.getElementById('deal-overlay').style.display = 'flex';
   document.getElementById('deal-bar-title').textContent = 'DEAL UPLOAD — ' + dealLoc.toUpperCase();
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
-  showDealMethodPicker(dealLoc);
-}
-
-function showDealMethodPicker(loc) {
-  [1,2,3,4].forEach(function(n){ var s=document.getElementById('deal-step'+n); if(s) s.style.display='none'; });
-  var body = document.getElementById('deal-body');
-  var old = document.getElementById('deal-method-picker');
-  if(old) old.remove();
-  var picker = document.createElement('div');
-  picker.id = 'deal-method-picker';
-  picker.style.cssText = 'padding:32px 20px;display:flex;flex-direction:column;gap:14px;';
-  picker.innerHTML =
-    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">How do you want to add this deal?</div>' +
-    '<button onclick="dealMethodSearch()" style="width:100%;padding:20px 16px;background:#111;border:1px solid #2a2a2a;border-radius:16px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;gap:14px;">'+
-      '<span style="font-size:26px;">🔍</span><div style="text-align:left;"><div>Search for Car</div><div style="font-size:12px;font-weight:400;color:#666;margin-top:2px;letter-spacing:0;">Find from inventory</div></div></button>' +
-    '<button onclick="dealMethodManual(\''+loc+'\')" style="width:100%;padding:20px 16px;background:#111;border:1px solid #2a2a2a;border-radius:16px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;gap:14px;">'+
-      '<span style="font-size:26px;">✏️</span><div style="text-align:left;"><div>Input Manually</div><div style="font-size:12px;font-weight:400;color:#666;margin-top:2px;letter-spacing:0;">Car not in inventory</div></div></button>';
-  body.appendChild(picker);
-}
-
-function dealMethodSearch() {
-  var picker = document.getElementById('deal-method-picker');
-  if(picker) picker.remove();
-  ['deal-inv-search','deal-customer','deal-gps','deal-notes'].forEach(function(id) {
+  dealShowStep(1);
+  // Clear all inputs
+  ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
   document.getElementById('deal-car-summary').textContent = '';
   document.getElementById('deal-photo-grid').innerHTML = '';
   dealSetType('cash');
   dealRenderInv();
-  dealAddPayment();
-  dealShowStep(1);
-}
-
-function dealMethodManual(loc) {
-  var picker = document.getElementById('deal-method-picker');
-  if(picker) picker.remove();
-  showDealManualCarEntry();
-}
-
-function showDealManualCarEntry() {
-  [1,2,3,4].forEach(function(n){ var s=document.getElementById('deal-step'+n); if(s) s.style.display='none'; });
-  var body = document.getElementById('deal-body');
-  var old = document.getElementById('deal-manual-car-entry');
-  if(old) old.remove();
-  var el = document.createElement('div');
-  el.id = 'deal-manual-car-entry';
-  el.style.cssText = 'padding:16px 16px 40px;display:flex;flex-direction:column;gap:12px;';
-  el.innerHTML =
-    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Vehicle Details</div>' +
-    '<div style="display:flex;gap:8px;">' +
-      '<input id="dmc-year" type="number" placeholder="Year" style="width:85px;flex-shrink:0;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 10px;font-size:15px;outline:none;" />' +
-      '<input id="dmc-make" type="text" placeholder="Make" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
-    '</div>' +
-    '<input id="dmc-model" type="text" placeholder="Model" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
-    '<input id="dmc-color" type="text" placeholder="Color" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
-    '<div style="display:flex;gap:8px;">' +
-      '<input id="dmc-stock" type="text" placeholder="Stock #" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
-      '<input id="dmc-vin" type="text" placeholder="VIN" style="flex:1;background:#111;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:13px 14px;font-size:15px;outline:none;" />' +
-    '</div>' +
-    '<div id="dmc-error" style="display:none;background:#3b0000;border:1px solid #7f1d1d;border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:13px;"></div>' +
-    '<button onclick="dealManualCarContinue()" style="width:100%;padding:16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:14px;color:#f59e0b;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:\'Barlow Condensed\',sans-serif;-webkit-tap-highlight-color:transparent;">Continue →</button>';
-  body.appendChild(el);
-}
-
-function dealManualCarContinue() {
-  var year  = (document.getElementById('dmc-year').value||'').trim();
-  var make  = (document.getElementById('dmc-make').value||'').trim();
-  var model = (document.getElementById('dmc-model').value||'').trim();
-  var color = (document.getElementById('dmc-color').value||'').trim();
-  var stock = (document.getElementById('dmc-stock').value||'').trim();
-  var vin   = (document.getElementById('dmc-vin').value||'').trim();
-  var errEl = document.getElementById('dmc-error');
-  errEl.style.display = 'none';
-  if(!year || !make || !model) { errEl.textContent = 'Year, Make, and Model are required.'; errEl.style.display = 'block'; return; }
-  var vehicleName = [year, make, model].join(' ');
-  _dealData.car = { name: vehicleName, vin: vin, stock: stock, color: color, _manual: true };
-  document.getElementById('deal-car-summary').textContent = vehicleName + (stock ? ' · #'+stock : '');
-  var entry = document.getElementById('deal-manual-car-entry');
-  if(entry) entry.remove();
-  document.getElementById('deal-customer').value = '';
-  document.getElementById('deal-gps').value = '';
-  document.getElementById('deal-pickup-payment').value = '';
-  document.getElementById('deal-pickup-due').value = '';
-  document.getElementById('deal-pickup-due-wrap').style.display = 'none';
-  _dealPayments = [];
-  _dealAddToWeek = false;
-  dealAddPayment();
-  dealSetType('cash');
-  dealShowStep(2);
+  dealAddPayment(); // start with one payment row
 }
 
 function showDealLocationPicker() {
@@ -11654,10 +11589,7 @@ function closeDealForm() {
 }
 
 function dealBack() {
-  if(document.getElementById('deal-manual-car-entry')) {
-    document.getElementById('deal-manual-car-entry').remove();
-    showDealMethodPicker(_dealData.dealLocation || _dealsLocation || 'DeBary');
-  } else if(_dealStep > 1) {
+  if(_dealStep > 1) {
     _dealStep--;
     dealShowStep(_dealStep);
   } else {
@@ -11822,7 +11754,6 @@ function dealGoStep3() {
     }
   }
   _dealData.customer = customer;
-  _dealData.notes = (document.getElementById('deal-notes').value || '').trim();
   _dealPhotos = [];
   document.getElementById('deal-photo-grid').innerHTML = '';
   dealShowStep(3);
@@ -11912,8 +11843,7 @@ async function dealSubmit() {
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
-      created_at: new Date().toISOString(),
-      notes: _dealData.notes || ''
+      created_at: new Date().toISOString()
     };
     // Save pickup payment as its own columns
     if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
@@ -12025,101 +11955,6 @@ async function dealSubmit() {
 // ══════════════════════════════════════════════════════════════
 
 var _dealsData = [];
-
-// ── MANUAL POST ──────────────────────────────────────────────────────────────
-var _mpLoc = 'DeBary';
-var _mpType = 'cash';
-
-function openManualPost(loc) {
-  _mpLoc = loc || _dealsLocation || 'DeBary';
-  _mpType = 'cash';
-  // Reset fields
-  ['mp-customer','mp-year','mp-make','mp-model','mp-color','mp-stock','mp-vin','mp-seller','mp-amount','mp-note'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('mp-error').style.display='none';
-  mpSetLoc(_mpLoc);
-  mpSetType(_mpType);
-  var modal = document.getElementById('manual-post-modal');
-  modal.style.display = 'flex';
-  var tb=document.querySelector('.tb'); if(tb) tb.style.display='none';
-}
-
-function closeManualPost() {
-  document.getElementById('manual-post-modal').style.display='none';
-  var tb=document.querySelector('.tb'); if(tb) tb.style.display='flex';
-}
-
-function mpSetLoc(loc) {
-  _mpLoc = loc;
-  var db=document.getElementById('mp-loc-debary');
-  var dl=document.getElementById('mp-loc-deland');
-  if(db) { db.style.border='1px solid '+(loc==='DeBary'?'#a87000':'#1e1e1e'); db.style.background=loc==='DeBary'?'linear-gradient(145deg,#1a1000,#4a3000)':'#0d0d0d'; db.style.color=loc==='DeBary'?'#f59e0b':'#555'; }
-  if(dl) { dl.style.border='1px solid '+(loc==='DeLand'?'#3b82f6':'#1e1e1e'); dl.style.background=loc==='DeLand'?'linear-gradient(145deg,#001233,#003080)':'#0d0d0d'; dl.style.color=loc==='DeLand'?'#60a5fa':'#555'; }
-}
-
-function mpSetType(type) {
-  _mpType = type;
-  var cash=document.getElementById('mp-type-cash');
-  var fin=document.getElementById('mp-type-finance');
-  if(cash) { cash.style.background=type==='cash'?'#1d4ed8':'transparent'; cash.style.border='1px solid '+(type==='cash'?'#1d4ed8':'#1e1e1e'); cash.style.color=type==='cash'?'#fff':'#555'; }
-  if(fin)  { fin.style.background=type==='finance'?'#166534':'transparent'; fin.style.border='1px solid '+(type==='finance'?'#166534':'#1e1e1e'); fin.style.color=type==='finance'?'#4ade80':'#555'; }
-}
-
-async function submitManualPost() {
-  var btn = document.getElementById('mp-submit-btn');
-  var errEl = document.getElementById('mp-error');
-  errEl.style.display='none';
-
-  var customer = (document.getElementById('mp-customer').value||'').trim();
-  var year  = (document.getElementById('mp-year').value||'').trim();
-  var make  = (document.getElementById('mp-make').value||'').trim();
-  var model = (document.getElementById('mp-model').value||'').trim();
-  var color = (document.getElementById('mp-color').value||'').trim();
-  var stock = (document.getElementById('mp-stock').value||'').trim();
-  var vin   = (document.getElementById('mp-vin').value||'').trim();
-  var seller= (document.getElementById('mp-seller').value||'').trim();
-  var amount= parseFloat(document.getElementById('mp-amount').value)||0;
-  var note  = (document.getElementById('mp-note').value||'').trim();
-
-  if(!customer){ errEl.textContent='Customer name is required.'; errEl.style.display='block'; return; }
-  if(!year||!make||!model){ errEl.textContent='Year, Make, and Model are required.'; errEl.style.display='block'; return; }
-
-  btn.textContent='Posting...'; btn.disabled=true;
-
-  var vehicleDesc = [year,make,model].filter(Boolean).join(' ');
-  var payments = amount>0 ? JSON.stringify([{amount:amount,method:'cash'}]) : JSON.stringify([]);
-  var noteField = note ? ('Manual post' + (seller?' — sold by '+seller:'') + '. ' + note) : ('Manual post' + (seller?' — sold by '+seller:'') + '.');
-
-  try {
-    await sbPost('deals', {
-      customer_name: customer,
-      vehicle_desc: vehicleDesc,
-      vin: vin,
-      stock: stock,
-      color: color,
-      deal_type: _mpType,
-      total_collected: amount,
-      payments: payments,
-      gps_serial: '',
-      photo_urls: '[]',
-      created_by: (me ? me.name : '') + ' [manual]',
-      location: _mpLoc,
-      created_at: new Date().toISOString(),
-      notes: noteField
-    });
-    btn.textContent = '✓ Posted';
-    btn.style.background = 'linear-gradient(145deg,#14532d,#166534)';
-    _dealsData = []; // force reload on next view
-    setTimeout(function(){ closeManualPost(); }, 1200);
-  } catch(e) {
-    errEl.textContent = 'Failed to post: ' + (e.message||e);
-    errEl.style.display = 'block';
-    btn.textContent = 'Post Deal';
-    btn.disabled = false;
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────────
 var _dealsFiltered = [];
 var _dealsViewingDetail = false;
 var _dealsLocation = '';  // 'DeBary' or 'DeLand'
@@ -12187,11 +12022,10 @@ function dealsPickLocation(loc) {
     '</div>' +
   '</div>';
   var isEmp=me&&me.role==='employee';
-  var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
-  var pastDealsBtn=_pastDealsCanAccess()?'<button onclick="openPastDeals()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>📋 Search Past Deals</span><span style="color:#555;font-size:16px;">&#8594;</span></button>':'';
+  var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
   var searchHtml='<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
-  var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
-  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + pastDealsBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+  var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
@@ -12450,212 +12284,6 @@ function dealsShowMethodDetail(method){
 function dealsCloseBreakdown(){
   var sheet=document.getElementById('deals-breakdown-sheet');
   if(sheet)sheet.style.display='none';
-}
-
-// === PAST DEALS ===
-var _pastDealsData = [];
-var _pastDealsFiltered = [];
-var _pastDealsViewDetail = false;
-var _pastDealsLoc = '';
-
-function _pastDealsCanAccess() {
-  if (!me) return false;
-  if (me.role !== 'employee') return true;
-  var n = me.name.toLowerCase();
-  return n.indexOf('manny') !== -1 || n.indexOf('jesse') !== -1;
-}
-
-function _pastDealsDefaultLoc() {
-  if (!me) return 'DeBary';
-  var n = me.name.toLowerCase();
-  if (n.indexOf('jesse') !== -1) return 'DeLand';
-  return _pastDealsLoc || _dealsLocation || 'DeBary';
-}
-
-function openPastDeals() {
-  if (!_pastDealsCanAccess()) return;
-  _pastDealsViewDetail = false;
-  _pastDealsLoc = _pastDealsDefaultLoc();
-  document.getElementById('past-deals-overlay').style.display = 'flex';
-  _renderPastDealsView();
-}
-
-function pastDealsBack() {
-  if (_pastDealsViewDetail) {
-    _pastDealsViewDetail = false;
-    _renderPastDealsView();
-  } else {
-    document.getElementById('past-deals-overlay').style.display = 'none';
-  }
-}
-
-function pastDealsSetLoc(loc) {
-  _pastDealsLoc = loc;
-  _pastDealsViewDetail = false;
-  _renderPastDealsView();
-}
-
-function _renderPastDealsView() {
-  var body = document.getElementById('past-deals-body');
-  document.getElementById('past-deals-title').textContent = 'PAST DEALS';
-  var isOwner = me && me.role !== 'employee';
-  var loc = _pastDealsLoc;
-  var dbActive = loc === 'DeBary';
-  var dlActive = loc === 'DeLand';
-  var toggleHtml = isOwner ?
-    '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
-    '<button onclick="pastDealsSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid '+(dbActive?'#a87000':'#1e1e1e')+';background:'+(dbActive?'linear-gradient(145deg,#1a1000,#4a3000)':'#0d0d0d')+';color:'+(dbActive?'#f59e0b':'#555')+';">DeBary</button>' +
-    '<button onclick="pastDealsSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:10px;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid '+(dlActive?'#3b82f6':'#1e1e1e')+';background:'+(dlActive?'linear-gradient(145deg,#001233,#003080)':'#0d0d0d')+';color:'+(dlActive?'#60a5fa':'#555')+';">DeLand</button>' +
-    '</div>' : '';
-  body.innerHTML = '<div style="padding:12px;">' +
-    toggleHtml +
-    '<input id="past-deals-search" placeholder="Search customer, vehicle, stock, VIN..." oninput="pastDealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>' +
-    '<div id="past-deals-list"><div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div></div>' +
-    '</div>';
-  _loadPastDeals();
-}
-
-async function _loadPastDeals() {
-  var list = document.getElementById('past-deals-list');
-  if (!list) return;
-  try {
-    var allDeals = await sbGet('deals', 'order=created_at.desc');
-    _pastDealsData = allDeals.filter(function(d) { return (d.location || 'DeBary') === _pastDealsLoc; });
-    _pastDealsFiltered = _pastDealsData;
-    _renderPastDealsList();
-  } catch(e) {
-    if (list) list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error: ' + (e.message||e) + '</div>';
-  }
-}
-
-function pastDealsFilter(q) {
-  q = (q || '').toLowerCase().trim();
-  _pastDealsFiltered = q ? _pastDealsData.filter(function(d) {
-    return fuzzyMatch([d.customer_name||'', d.vehicle_desc||'', d.stock||'', d.vin||'', d.created_by||'', d.notes||''], q);
-  }) : _pastDealsData;
-  _renderPastDealsList();
-}
-
-function _renderPastDealsList() {
-  var list = document.getElementById('past-deals-list');
-  if (!list) return;
-  if (!_pastDealsFiltered.length) {
-    list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No deals found.</div>';
-    return;
-  }
-  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var groups = {}, groupOrder = [];
-  _pastDealsFiltered.forEach(function(d) {
-    var dt = d.created_at ? new Date(d.created_at) : null;
-    var key = dt ? (dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0')) : 'Unknown';
-    var label = dt ? months[dt.getMonth()] + ' ' + dt.getFullYear() : 'Unknown';
-    if (!groups[key]) { groups[key] = {label:label, deals:[]}; groupOrder.push(key); }
-    groups[key].deals.push(d);
-  });
-  var html = '<div style="font-size:12px;color:#555;margin-bottom:12px;text-align:center;">' + _pastDealsFiltered.length + ' deal' + (_pastDealsFiltered.length===1?'':'s') + ' — all time</div>';
-  groupOrder.forEach(function(key) {
-    var g = groups[key];
-    html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin:14px 0 6px;">' + g.label + '</div>';
-    g.deals.forEach(function(d) {
-      var isFinance = d.deal_type === 'finance';
-      var typeBadge = isFinance
-        ? '<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">FIN</span>'
-        : '<span style="background:#1d4ed8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">CASH</span>';
-      var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}) : '';
-      var dt = d.created_at ? new Date(d.created_at) : null;
-      var dateStr = dt ? dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
-      var gpsBadge = (isFinance && d.gps_serial) ? '<span style="font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;background:'+(d.gps_uploaded?'rgba(48,209,88,.15)':'rgba(245,158,11,.15)')+';color:'+(d.gps_uploaded?'#30d158':'#f59e0b')+'">'+(d.gps_uploaded?'✓ GPS':'⏳ GPS')+'</span>' : '';
-      html += '<div onclick="openPastDealDetail('+d.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent;margin-bottom:8px;">';
-      html += '<div style="flex:1;min-width:0;">';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
-      html += '<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;">'+(d.customer_name||'Unknown')+'</div>';
-      html += '<div style="font-size:16px;font-weight:700;color:#4ade80;">'+total+'</div>';
-      html += '</div>';
-      if (d.vehicle_desc) html += '<div style="font-size:12px;color:#888;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+d.vehicle_desc+(d.stock?' · #'+d.stock:'')+'</div>';
-      html += '<div style="display:flex;align-items:center;gap:6px;">'+typeBadge+gpsBadge+'<span style="font-size:11px;color:#444;">'+dateStr+(d.created_by?' · '+d.created_by:'')+'</span></div>';
-      html += '</div><span style="color:#333;font-size:20px;">›</span></div>';
-    });
-  });
-  list.innerHTML = html;
-}
-
-function openPastDealDetail(id) {
-  _pastDealsViewDetail = true;
-  var d = _pastDealsData.find(function(x){ return x.id === id; });
-  if (!d) return;
-  document.getElementById('past-deals-title').textContent = d.customer_name || 'Deal';
-  var isFinance = d.deal_type === 'finance';
-  var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : 'N/A';
-  var payments = []; try { payments = JSON.parse(d.payments||'[]'); } catch(e) {}
-  var photos = []; try { photos = JSON.parse(d.photo_urls||'[]'); } catch(e) {}
-  var html = '<div style="padding:16px 12px 40px;">';
-  // Type + date
-  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
-  html += isFinance ? '<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">FINANCE</span>' : '<span style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">PURCHASED IN FULL</span>';
-  html += '<span style="font-size:13px;color:#666;">'+(d.created_at?new Date(d.created_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'')+'</span></div>';
-  // Vehicle
-  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
-  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
-  html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
-  if (d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
-  if (d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
-  if (d.color) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Color: '+fixColor(d.color)+'</div>';
-  html += '</div>';
-  // GPS
-  if (isFinance && d.gps_serial) {
-    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GPS Serial</div>';
-    html += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">'+d.gps_serial.trim()+'</div>';
-    var gpsChecked = !!d.gps_uploaded;
-    html += '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #1a1a1a;">';
-    html += '<div style="width:44px;height:26px;border-radius:13px;background:'+(gpsChecked?'#30d158':'#333')+';position:relative;flex-shrink:0;"><div style="width:22px;height:22px;border-radius:11px;background:#fff;position:absolute;top:2px;'+(gpsChecked?'right:2px;':'left:2px;')+'box-shadow:0 1px 3px rgba(0,0,0,.3);"></div></div>';
-    html += '<span style="font-size:13px;color:'+(gpsChecked?'#30d158':'#666')+';font-weight:600;">'+(gpsChecked?'GPS Registered':'GPS Not Registered')+'</span></div></div>';
-  }
-  // Pick Up Payment
-  if (isFinance && d.pickup_payment) {
-    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Pick Up Payment</div>';
-    html += '<div style="font-size:22px;font-weight:700;color:#f59e0b;">$'+parseFloat(d.pickup_payment).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
-    if (d.pickup_payment_due) {
-      var dueDate = new Date(d.pickup_payment_due+'T00:00:00');
-      var today = new Date(); today.setHours(0,0,0,0);
-      var isPast = dueDate < today, isToday = dueDate.getTime()===today.getTime();
-      var dueColor = isPast?'#ef4444':(isToday?'#f59e0b':'#888');
-      html += '<div style="font-size:13px;color:'+dueColor+';margin-top:6px;font-weight:'+(isPast||isToday?'700':'400')+'">'+(isPast?'OVERDUE — ':(isToday?'DUE TODAY — ':'Due: '))+dueDate.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</div>';
-    }
-    html += '</div>';
-  }
-  // Total
-  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Collected</div><div style="font-size:22px;font-weight:700;color:#4ade80;">'+total+'</div></div>';
-  // Payments
-  if (payments.length) {
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Payment Breakdown</div><div style="display:flex;flex-direction:column;gap:6px;">';
-    payments.forEach(function(p) {
-      var ml = {cash:'Cash',card:'Card',zelle:'Zelle',money_order:'Money Order',other:'Other'}[p.method]||p.method;
-      html += '<div style="background:#111;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:14px;color:#888;">'+ml+'</span><span style="font-size:16px;font-weight:700;color:#fff;">$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'</span></div>';
-    });
-    html += '</div>';
-  }
-  // Notes
-  if (d.notes) {
-    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-top:10px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Notes</div><div style="font-size:14px;color:#ccc;line-height:1.5;">'+esc(d.notes)+'</div></div>';
-  }
-  // Photos
-  if (photos.length) {
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
-    photos.forEach(function(url) {
-      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\''+url+'\',\'_blank\')"><img src="'+url+'" style="width:100%;height:140px;object-fit:cover;"/></div>';
-    });
-    html += '</div>';
-  }
-  // Meta
-  html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
-  if (d.created_by) html += 'Uploaded by: '+d.created_by+'<br>';
-  if (d.location) html += 'Location: '+d.location;
-  html += '</div></div>';
-  var body = document.getElementById('past-deals-body');
-  body.innerHTML = html;
-  body.scrollTop = 0;
 }
 
 // === CASH PAYOUTS ===
