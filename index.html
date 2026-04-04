@@ -1117,7 +1117,7 @@ canvas{display:none;}
           <div id="pay-stat-cashout" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#ef4444;">$0</div>
           <div style="font-size:11px;color:#ef4444;opacity:.6;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Cash Out ›</div>
         </div>
-        <div id="pay-stat-net-wrap" onclick="payToggleNetDeals()" style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+        <div id="pay-stat-net-wrap" onclick="payToggleNetDeals()" ontouchstart="_netLpStart(event)" ontouchend="_netLpEnd()" ontouchcancel="_netLpEnd()" onmousedown="_netLpStart(event)" onmouseup="_netLpEnd()" onmouseleave="_netLpEnd()" style="flex:1;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;">
           <div id="pay-stat-net" style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#f59e0b;">$0</div>
           <div id="pay-stat-net-label" style="font-size:11px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Net Cash</div>
         </div>
@@ -11029,11 +11029,7 @@ function _payUpdateStats(){
       var adjNet=adjCash-paidOut;
       ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
       ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
-      var _isOwnerNet=me&&['vlad','tommy'].some(function(n){return (me.name||'').toLowerCase().indexOf(n)!==-1;});
-      if(netLabel){
-        if(_isOwnerNet) netLabel.innerHTML='Net Cash <span onclick="event.stopPropagation();netDealEdit()" style="color:#f59e0b;font-weight:700;text-decoration:underline;text-decoration-style:dotted;cursor:pointer;">· Adjusted</span>';
-        else netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· Adjusted</span>';
-      }
+      if(netLabel) netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· Adjusted</span>';
       if(cashInEl) cashInEl.textContent=fmt(adjCash);
     } else {
       ne.textContent=(netCash<0?'-':'')+fmt(netCash);
@@ -11048,38 +11044,40 @@ var _payDealTagCash=0;
 var _payNetAdjusted=false;
 var _payNetAdjustAmt=null;
 var _payDealRows=[];
+var _netLpTimer=null;
+var _netLpFired=false;
+
+function _netLpStart(e){
+  _netLpFired=false;
+  _netLpTimer=setTimeout(function(){
+    _netLpFired=true;
+    // Long press: owner opens edit sheet
+    var isOwnerLp=me&&['vlad','tommy'].some(function(n){return (me.name||'').toLowerCase().indexOf(n)!==-1;});
+    if(!isOwnerLp)return;
+    netDealEdit();
+  },500);
+}
+function _netLpEnd(){
+  if(_netLpTimer){clearTimeout(_netLpTimer);_netLpTimer=null;}
+}
 
 function payToggleNetDeals(){
-  var _isOwnerToggle=me&&['vlad','tommy'].some(function(n){return (me.name||'').toLowerCase().indexOf(n)!==-1;});
-  // If adjusted, tap toggles back to full (keep settings remembered)
+  if(_netLpFired){_netLpFired=false;return;}
+  // Tap always toggles between full and adjusted for everyone
   if(_payNetAdjusted){
     _payNetAdjusted=false;
     _payUpdateStats();
     _payRenderCards();
     return;
   }
-  // If we have saved deal rows, toggle back to adjusted without reopening sheet
+  // If we have saved deal rows, toggle to adjusted
   if(_payDealRows.length&&_payNetAdjustAmt!==null){
     _payNetAdjusted=true;
     _payUpdateStats();
     _payRenderCards();
     return;
   }
-  // First time: collect deal-tagged payment rows and open sheet
-  _payDealRows=[];
-  (_payWeekData||[]).forEach(function(p){
-    if(p.delete_requested)return;
-    if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
-      var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
-      if(v>0) _payDealRows.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
-    }
-  });
-  if(!_payDealRows.length)return;
-  // Owners: open edit sheet. Employees: just toggle to adjusted (uses saved settings from Supabase)
-  if(_isOwnerToggle){
-    netDealRender();
-    document.getElementById('net-deal-sheet').style.display='block';
-  }
+  // No saved adjustments yet — nothing to toggle to
 }
 
 function netDealEdit(){
