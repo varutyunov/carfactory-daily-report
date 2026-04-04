@@ -2199,7 +2199,7 @@ async function sbSignUrl(storagePath){
     });
     if(!r.ok) return '';
     var data=await r.json();
-    var fullUrl=SB_URL+data.signedURL;
+    var fullUrl=SB_URL+'/storage/v1'+data.signedURL;
     _signedUrlCache[storagePath]={url:fullUrl,exp:Date.now()+600000};
     return fullUrl;
   }catch(e){return '';}
