@@ -2183,7 +2183,8 @@ async function sbDelete(table, id) {
 var _signedUrlCache={};
 function _extractStoragePath(url){
   if(!url) return null;
-  var m=url.match(/\/car-photos\/(.+)$/);
+  var clean=url.split('?')[0]; // strip query params (expired tokens)
+  var m=clean.match(/\/car-photos\/(.+)$/);
   return m?m[1]:null;
 }
 async function sbSignUrl(storagePath){
@@ -2208,6 +2209,7 @@ async function sbSignPhotoUrl(url){
   if(!path) return url||'';
   return await sbSignUrl(path);
 }
+function _needsSign(url){return typeof url==='string'&&url.indexOf('/car-photos/')!==-1;}
 async function _signStorageUrls(rows, fields){
   for(var i=0;i<rows.length;i++){
     for(var f=0;f<fields.length;f++){
@@ -2219,7 +2221,7 @@ async function _signStorageUrls(rows, fields){
           var urls=JSON.parse(rows[i][key]);
           var changed=false;
           for(var u=0;u<urls.length;u++){
-            if(urls[u]&&urls[u].indexOf('/public/')!==-1){
+            if(_needsSign(urls[u])){
               var s=await sbSignPhotoUrl(urls[u]);
               if(s){urls[u]=s;changed=true;}
             }
@@ -2228,7 +2230,7 @@ async function _signStorageUrls(rows, fields){
         }catch(e){}
         continue;
       }
-      if(typeof rows[i][key]==='string'&&rows[i][key].indexOf('/public/')!==-1){
+      if(_needsSign(rows[i][key])){
         var signed=await sbSignPhotoUrl(rows[i][key]);
         if(signed) rows[i][key]=signed;
       }
@@ -9618,7 +9620,8 @@ async function depositSave() {
     if(_depData.idPhotoFile) {
       var idExt = _depData.idPhotoFile.name.split('.').pop() || 'jpg';
       var idPath = 'deposits/' + ts + '_id.' + idExt;
-      idPhotoUrl = await sbUpload(idPath, _depData.idPhotoFile);
+      await sbUpload(idPath, _depData.idPhotoFile);
+      idPhotoUrl = SB_URL+'/storage/v1/object/public/car-photos/'+idPath;
     }
 
     // Upload signed form photo if we have one
@@ -9626,7 +9629,8 @@ async function depositSave() {
     if(_depData.signedFormFile) {
       var sfExt = _depData.signedFormFile.name.split('.').pop() || 'jpg';
       var sfPath = 'deposits/' + ts + '_signed.' + sfExt;
-      signedFormUrl = await sbUpload(sfPath, _depData.signedFormFile);
+      await sbUpload(sfPath, _depData.signedFormFile);
+      signedFormUrl = SB_URL+'/storage/v1/object/public/car-photos/'+sfPath;
     }
 
     // Save deposit record
@@ -11498,7 +11502,9 @@ async function payScanSave(){
   if(_payReceiptDataUrl){
     try{
       var blob=await(await fetch(_payReceiptDataUrl)).blob();
-      photoUrl=await sbUpload('payments/'+Date.now()+'.jpg',blob);
+      var _payPhotoPath='payments/'+Date.now()+'.jpg';
+      await sbUpload(_payPhotoPath,blob);
+      photoUrl=SB_URL+'/storage/v1/object/public/car-photos/'+_payPhotoPath;
     }catch(e){
       console.warn('Photo upload failed:',e);
     }
@@ -11855,11 +11861,10 @@ async function dealSubmit() {
       try {
         var ext = validPhotos[i].name.split('.').pop() || 'jpg';
         var path = 'deals/' + ts + '_' + i + '.' + ext;
-        var url = await sbUpload(path, validPhotos[i]);
-        photoUrls.push(url);
+        await sbUpload(path, validPhotos[i]);
+        photoUrls.push(SB_URL+'/storage/v1/object/public/car-photos/'+path);
       } catch(photoErr) {
         console.error('Photo upload failed:', photoErr);
-        // Continue — don't block the deal over a photo
       }
     }
 
