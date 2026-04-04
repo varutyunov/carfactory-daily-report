@@ -11048,7 +11048,9 @@ function payToggleNetDeals(){
   if(_payNetAdjusted){
     _payNetAdjusted=false;
     _payNetAdjustAmt=null;
+    _payDealRows=[];
     _payUpdateStats();
+    _payRenderCards();
     return;
   }
   // Collect deal-tagged payment rows
@@ -11111,6 +11113,7 @@ function netDealApply(){
   _payNetAdjusted=true;
   netDealClose();
   _payUpdateStats();
+  _payRenderCards();
 }
 
 function payShowBreakdown(){
@@ -11235,9 +11238,17 @@ function _payRenderCards(){
     list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No payments this week.<br><span style="font-size:12px;color:#333;">Scan your first payment above.</span></div>';
     return;
   }
-  // Group by date
+  // Build set of excluded deal customers when adjusted
+  var excludedDeals=new Set();
+  if(_payNetAdjusted&&_payDealRows.length){
+    _payDealRows.forEach(function(d){if(!d.include) excludedDeals.add((d.name||'').toLowerCase());});
+  }
+  // Group by date, filtering excluded deals
   var groups={};
   _payWeekData.forEach(function(p){
+    if(_payNetAdjusted&&p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
+      if(excludedDeals.has((p.customer_name||'').toLowerCase())) return;
+    }
     var d=p.payment_date||'Unknown';
     if(!groups[d])groups[d]=[];
     groups[d].push(p);
