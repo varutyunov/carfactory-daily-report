@@ -10985,7 +10985,7 @@ async function loadPaymentWeek(){
     _payWeekData=[];
   }
   await cashPayoutsLoad();
-  _netDealLoad();
+  await _netDealLoad();
   _payUpdateStats();
   _payRenderCards();
   _cashPayoutsRenderInline();
@@ -11029,7 +11029,11 @@ function _payUpdateStats(){
       var adjNet=adjCash-paidOut;
       ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
       ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
-      if(netLabel) netLabel.innerHTML='Net Cash <span onclick="event.stopPropagation();netDealEdit()" style="color:#f59e0b;font-weight:700;text-decoration:underline;text-decoration-style:dotted;cursor:pointer;">· Adjusted</span>';
+      var _isOwnerNet=me&&['vlad','tommy'].some(function(n){return (me.name||'').toLowerCase().indexOf(n)!==-1;});
+      if(netLabel){
+        if(_isOwnerNet) netLabel.innerHTML='Net Cash <span onclick="event.stopPropagation();netDealEdit()" style="color:#f59e0b;font-weight:700;text-decoration:underline;text-decoration-style:dotted;cursor:pointer;">· Adjusted</span>';
+        else netLabel.innerHTML='Net Cash <span style="color:#f59e0b;font-weight:700;">· Adjusted</span>';
+      }
       if(cashInEl) cashInEl.textContent=fmt(adjCash);
     } else {
       ne.textContent=(netCash<0?'-':'')+fmt(netCash);
@@ -11046,6 +11050,7 @@ var _payNetAdjustAmt=null;
 var _payDealRows=[];
 
 function payToggleNetDeals(){
+  var _isOwnerToggle=me&&['vlad','tommy'].some(function(n){return (me.name||'').toLowerCase().indexOf(n)!==-1;});
   // If adjusted, tap toggles back to full (keep settings remembered)
   if(_payNetAdjusted){
     _payNetAdjusted=false;
@@ -11070,8 +11075,11 @@ function payToggleNetDeals(){
     }
   });
   if(!_payDealRows.length)return;
-  netDealRender();
-  document.getElementById('net-deal-sheet').style.display='block';
+  // Owners: open edit sheet. Employees: just toggle to adjusted (uses saved settings from Supabase)
+  if(_isOwnerToggle){
+    netDealRender();
+    document.getElementById('net-deal-sheet').style.display='block';
+  }
 }
 
 function netDealEdit(){
@@ -11147,43 +11155,61 @@ function _netDealKey(){
   return 'cf_netdeal_'+_payWeekKey(_payCurrentWeekStart)+'_'+_payLocation;
 }
 
-function _netDealSave(){
+async function _netDealSave(){
   var key=_netDealKey();if(!key)return;
+  var data=_payDealRows.map(function(d){return {name:d.name,vehicle:d.vehicle,amount:d.amount,include:d.include,custom:d.custom};});
+  // Save to localStorage as fast cache
+  try{localStorage.setItem(key,JSON.stringify(data));}catch(e){}
+  // Save to Supabase for permanent persistence
   try{
-    var data=_payDealRows.map(function(d){return {name:d.name,vehicle:d.vehicle,amount:d.amount,include:d.include,custom:d.custom};});
-    localStorage.setItem(key,JSON.stringify(data));
-  }catch(e){}
+    var existing=await sbGet('app_settings','key=eq.'+encodeURIComponent(key)+'&limit=1');
+    if(Array.isArray(existing)&&existing.length){
+      await sbPatch('app_settings',existing[0].id,{value:data,updated_at:new Date().toISOString()});
+    }else{
+      await sbPost('app_settings',{key:key,value:data,updated_at:new Date().toISOString()});
+    }
+  }catch(e){console.error('Net deal save to Supabase failed:',e);}
 }
 
-function _netDealLoad(){
+function _netDealApplySaved(saved){
+  if(!Array.isArray(saved)||!saved.length)return;
+  var current=[];
+  (_payWeekData||[]).forEach(function(p){
+    if(p.delete_requested)return;
+    if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
+      var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+      if(v>0) current.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
+    }
+  });
+  if(!current.length)return;
+  var savedMap={};
+  saved.forEach(function(s){savedMap[(s.name||'').toLowerCase()]=s;});
+  current.forEach(function(d){
+    var s=savedMap[(d.name||'').toLowerCase()];
+    if(s){d.include=s.include;d.custom=Math.min(s.custom,d.amount);}
+  });
+  _payDealRows=current;
+  var total=0;
+  current.forEach(function(d){total+=d.custom||0;});
+  _payNetAdjustAmt=total;
+  _payNetAdjusted=true;
+}
+
+async function _netDealLoad(){
   var key=_netDealKey();if(!key)return;
+  // Try Supabase first (permanent), fall back to localStorage
+  try{
+    var rows=await sbGet('app_settings','key=eq.'+encodeURIComponent(key)+'&limit=1');
+    if(Array.isArray(rows)&&rows.length&&rows[0].value){
+      _netDealApplySaved(rows[0].value);
+      return;
+    }
+  }catch(e){console.error('Net deal load from Supabase failed:',e);}
+  // Fallback to localStorage
   try{
     var raw=localStorage.getItem(key);
     if(!raw)return;
-    var saved=JSON.parse(raw);
-    if(!Array.isArray(saved)||!saved.length)return;
-    // Rebuild deal rows from current payment data, apply saved settings
-    var current=[];
-    (_payWeekData||[]).forEach(function(p){
-      if(p.delete_requested)return;
-      if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
-        var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
-        if(v>0) current.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
-      }
-    });
-    if(!current.length)return;
-    // Match saved settings by customer name
-    var savedMap={};
-    saved.forEach(function(s){savedMap[(s.name||'').toLowerCase()]=s;});
-    current.forEach(function(d){
-      var s=savedMap[(d.name||'').toLowerCase()];
-      if(s){d.include=s.include;d.custom=Math.min(s.custom,d.amount);}
-    });
-    _payDealRows=current;
-    var total=0;
-    current.forEach(function(d){total+=d.custom||0;});
-    _payNetAdjustAmt=total;
-    _payNetAdjusted=true;
+    _netDealApplySaved(JSON.parse(raw));
   }catch(e){}
 }
 
