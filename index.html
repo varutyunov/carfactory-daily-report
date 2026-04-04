@@ -10984,6 +10984,7 @@ async function loadPaymentWeek(){
     _payWeekData=[];
   }
   await cashPayoutsLoad();
+  _netDealLoad();
   _payUpdateStats();
   _payRenderCards();
   _cashPayoutsRenderInline();
@@ -11134,9 +11135,55 @@ function netDealApply(){
   _payDealRows.forEach(function(d){total+=d.custom||0;});
   _payNetAdjustAmt=total;
   _payNetAdjusted=true;
+  _netDealSave();
   netDealClose();
   _payUpdateStats();
   _payRenderCards();
+}
+
+function _netDealKey(){
+  if(!_payCurrentWeekStart)return null;
+  return 'cf_netdeal_'+_payWeekKey(_payCurrentWeekStart)+'_'+_payLocation;
+}
+
+function _netDealSave(){
+  var key=_netDealKey();if(!key)return;
+  try{
+    var data=_payDealRows.map(function(d){return {name:d.name,vehicle:d.vehicle,amount:d.amount,include:d.include,custom:d.custom};});
+    localStorage.setItem(key,JSON.stringify(data));
+  }catch(e){}
+}
+
+function _netDealLoad(){
+  var key=_netDealKey();if(!key)return;
+  try{
+    var raw=localStorage.getItem(key);
+    if(!raw)return;
+    var saved=JSON.parse(raw);
+    if(!Array.isArray(saved)||!saved.length)return;
+    // Rebuild deal rows from current payment data, apply saved settings
+    var current=[];
+    (_payWeekData||[]).forEach(function(p){
+      if(p.delete_requested)return;
+      if(p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0){
+        var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+        if(v>0) current.push({name:p.customer_name||'Unknown',vehicle:p.raw_ocr_text.replace('Deal \u2014 ',''),amount:v,include:true,custom:v});
+      }
+    });
+    if(!current.length)return;
+    // Match saved settings by customer name
+    var savedMap={};
+    saved.forEach(function(s){savedMap[(s.name||'').toLowerCase()]=s;});
+    current.forEach(function(d){
+      var s=savedMap[(d.name||'').toLowerCase()];
+      if(s){d.include=s.include;d.custom=Math.min(s.custom,d.amount);}
+    });
+    _payDealRows=current;
+    var total=0;
+    current.forEach(function(d){total+=d.custom||0;});
+    _payNetAdjustAmt=total;
+    _payNetAdjusted=true;
+  }catch(e){}
 }
 
 function payShowBreakdown(){
