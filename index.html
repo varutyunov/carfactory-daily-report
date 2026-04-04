@@ -1034,11 +1034,12 @@ canvas{display:none;}
       <!-- Cash collected now (shown when any cash payment exists) -->
       <div id="deal-add-week-wrap" style="display:none;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:12px 14px;margin-bottom:14px;">
         <div style="font-size:13px;color:#4ade80;font-weight:600;margin-bottom:8px;">💵 Cash to post to this week</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <input id="deal-cash-now" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:12px 14px;font-size:18px;font-weight:700;outline:none;text-align:right;"/>
-          <button onclick="dealCashNowFull()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;">Full</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input id="deal-cash-now" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:12px 14px;font-size:18px;font-weight:700;outline:none;text-align:right;min-width:0;"/>
+          <button onclick="dealCashNowNone()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">None</button>
+          <button onclick="dealCashNowFull()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Full</button>
         </div>
-        <div style="font-size:11px;color:rgba(74,222,128,.5);margin-top:6px;">Enter partial amount if only a deposit was collected</div>
+        <div style="font-size:11px;color:rgba(74,222,128,.5);margin-top:6px;">Enter partial amount if only a deposit was collected, or None to skip</div>
       </div>
 
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
@@ -11969,6 +11970,11 @@ function dealUpdateWeekToggleVisibility() {
     var cur=parseFloat((cashNowEl.value||'').replace(/[^0-9.]/g,''))||0;
     if(cur<=0||cur>cashTotal) cashNowEl.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
+}
+
+function dealCashNowNone(){
+  var el=document.getElementById('deal-cash-now');
+  if(el) el.value='$0.00';
 }
 
 function dealCashNowFull(){
