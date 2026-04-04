@@ -3194,7 +3194,7 @@ function renderInv(){
   var _stEl=document.getElementById('sync-st');
   if(_stEl){
     if(invRecentOnly) _stEl.textContent='Showing newest '+items.length+' vehicles by stock #';
-    else _stEl.textContent='Ready to sync  ·  v Mar-24';
+    else if(!_stEl.textContent.match(/^(Synced!|Sync|Adding)/)) _stEl.textContent='Ready to sync  ·  v Mar-24';
   }
   document.getElementById('inv-list').innerHTML='<div class="inv-grid">'+items.map(car=>{
     const pxI=!car.photo&&pxCache[String(car.id)];
@@ -4670,13 +4670,18 @@ async function syncLocation(loc){
     var sbPatches=[];var toInsertSB=[];
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
-      var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
+      // VIN match first (authoritative), then stock fallback
+      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock];
       if(exist){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
+        // Update location to match this CSV
+        if(loc&&loc!==exist.location){exist.location=loc;patch.location=loc;}
+        // Update name if it changed
+        if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
@@ -4754,13 +4759,18 @@ async function syncNow(){
     imp.forEach(function(c){
       var _fc=fixColor(c.color);
       if(_fc){if(c.vin)colorMap[c.vin]=_fc;if(c.stock)colorMap[c.stock]=_fc;}
-      var exist=existByStock[c.stock]||(c.vin?existByVin[c.vin]:null);
+      // VIN match first (authoritative), then stock fallback
+      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock];
       if(exist){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case: same VIN, new stock number)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
+        // Update location to match merged CSV (DeLand wins in merge, so this is authoritative)
+        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
+        // Update name if it changed
+        if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
@@ -4782,12 +4792,16 @@ async function syncNow(){
     }
     if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     // Remove cars no longer in either CSV — protect by stock number OR VIN
+    // If DeLand CSV failed to load, don't remove DeLand cars (they'd be wiped by stale merge)
+    var hasDeland=deland.length>0;
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
     var allCsvVins=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
       if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
+      // Don't remove DeLand cars if DeLand CSV wasn't loaded
+      if(!hasDeland&&(c.location||'DeBary')==='DeLand') return true;
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
