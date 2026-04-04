@@ -2503,9 +2503,9 @@ async function doLogin(){
     return;
   }
   hideLoading();
-  if(!authResult || !authResult.id){loginFail(u);document.getElementById('lerr').textContent='Invalid username or PIN';return;}
+  if(!authResult || !authResult.success || !authResult.user){loginFail(u);document.getElementById('lerr').textContent='Invalid username or PIN';return;}
   loginOk(u);
-  const e=authResult;
+  const e=authResult.user;
   me=e;
   // Save session for auto-login if remember-me is checked
   const rememberMe=document.getElementById('remember-me');
