@@ -10763,11 +10763,15 @@ async function _payLoadDealCash(){
   var we=weekEnd.toISOString().slice(0,10);
   var loc=_payLocation; // 'DeBary' or 'DeLand'
   try{
-    var rows=await sbGet('deals','location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,total_collected,created_at,location');
+    var rows=await sbGet('deals','location=eq.'+loc+'&created_at=gte.'+ws+'T00:00:00&created_at=lt.'+we+'T00:00:00&select=customer_name,vehicle_desc,payments,created_at,location');
     if(!Array.isArray(rows)){ _payDealCashRows=[]; return; }
-    // deal_cash = total_collected (full deal amount)
+    // deal_cash = only cash-method payments from the deal
     rows.forEach(function(d){
-      d.deal_cash=parseFloat(d.total_collected)||0;
+      var c=0;
+      try{var pmts=typeof d.payments==='string'?JSON.parse(d.payments||'[]'):d.payments||[];
+        pmts.forEach(function(p){if((p.method||'').toLowerCase()==='cash')c+=parseFloat(p.amount)||0;});
+      }catch(e){}
+      d.deal_cash=c;
     });
     rows=rows.filter(function(d){return d.deal_cash>0;});
     // Exclude deals that already have a payment row posted via the deal upload toggle
