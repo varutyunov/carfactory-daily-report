@@ -12390,9 +12390,9 @@ function cashPayoutsOpen(){
   var isJesseSelf=userName.indexOf('jesse')!==-1;
   var isMannySelf=userName.indexOf('manny')!==-1;
   var isOwner=['vlad','tommy'].some(function(n){return userName.indexOf(n)!==-1;});
-  // Cash Out Deal button — owners only
+  // Cash Out Deal button — owners + Manny + Jesse
   var codWrap=document.getElementById('cp-cash-out-deal-wrap');
-  if(codWrap) codWrap.style.display=isOwner?'block':'none';
+  if(codWrap) codWrap.style.display=(isOwner||isMannySelf||isJesseSelf)?'block':'none';
   // Manny row: hide from Jesse (Jesse gets his own button injected below)
   var mannyRow=document.getElementById('payroll-row-manny');
   if(mannyRow) mannyRow.style.display=isJesseSelf?'none':'flex';
