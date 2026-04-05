@@ -417,14 +417,15 @@ canvas{display:none;}
 #mgr-calendar{overflow-y:auto;background:#000;}
 .cal-wrap{padding:0 0 80px;}
 /* ── Month navigation ── */
-.cal-nav{display:flex;align-items:center;padding:14px 16px 8px;gap:6px;}
+.cal-nav{display:flex;align-items:center;padding:10px 16px 6px;gap:6px;}
 .cal-month{font-family:'Google Sans','Barlow Condensed',sans-serif;font-size:20px;font-weight:500;color:#e3e3e3;letter-spacing:.3px;flex:1;}
 .cal-nav-btn{background:none;border:none;color:#8ab4f8;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
 .cal-nav-btn:active{background:rgba(138,180,248,.1);}
 /* ── Mini month grid ── */
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0;padding:0 8px 6px;}
-.cal-dow{font-size:11px;color:#9aa0a6;text-align:center;padding:6px 0 4px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;}
-.cal-day{aspect-ratio:1;min-width:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background .15s;border:none;margin:1px;}
+.cal-grid-wrap{overflow:hidden;position:relative;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0;padding:0 8px 4px;}
+.cal-dow{font-size:11px;color:#9aa0a6;text-align:center;padding:4px 0 2px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;}
+.cal-day{width:100%;height:36px;min-width:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background .15s;border:none;}
 .cal-day.empty{cursor:default;}
 .cal-day-num{font-size:13px;font-weight:500;color:#9aa0a6;line-height:1;}
 .cal-day.today{background:#8ab4f8;}
@@ -440,7 +441,7 @@ canvas{display:none;}
 .cal-dot-ev{width:4px;height:4px;border-radius:50%;background:#8ab4f8;flex-shrink:0;}
 .cal-dot-pickup{width:4px;height:4px;border-radius:50%;background:#fbbc04;flex-shrink:0;}
 /* ── Divider ── */
-.cal-divider{height:1px;background:#2d2d2d;margin:0 16px;}
+.cal-divider{height:1px;background:#2d2d2d;margin:0 16px 0;}
 /* ── Day detail panel ── */
 .cal-detail{padding:14px 16px;margin-bottom:0;background:transparent;border:none;border-radius:0;}
 .cal-detail-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
@@ -466,8 +467,8 @@ canvas{display:none;}
 .cal-event-edit-btn{background:transparent;color:#8ab4f8;margin-left:0;margin-right:0;}
 .cal-event-del-btn{background:transparent;color:#ea4335;}
 /* ── Schedule / agenda section ── */
-.cal-schedule-section{padding:0 16px;}
-.cal-schedule-day{display:flex;align-items:flex-start;padding:16px 0 8px;gap:16px;}
+.cal-schedule-section{padding:4px 16px 0;}
+.cal-schedule-day{display:flex;align-items:flex-start;padding:12px 0 6px;gap:14px;}
 .cal-schedule-date{min-width:48px;text-align:center;}
 .cal-schedule-daynum{font-size:26px;font-weight:400;color:#8ab4f8;line-height:1;}
 .cal-schedule-daynum.today{background:#8ab4f8;color:#000;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;margin:0 auto;}
@@ -5932,6 +5933,43 @@ var _calEditId=null;
 var _calTimeCache='';
 var _calSnapTimer=null;
 var _calSnapFired=false;
+var _calSwX0=null;
+var _calSwY0=null;
+var _calSwDir=null;
+
+function _calSwStart(e){
+  var t=e.touches[0];
+  _calSwX0=t.clientX;
+  _calSwY0=t.clientY;
+  _calSwDir=null;
+}
+function _calSwMove(e){
+  if(_calSwX0===null) return;
+  var t=e.touches[0];
+  var dx=t.clientX-_calSwX0;
+  var dy=t.clientY-_calSwY0;
+  if(_calSwDir===null){
+    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>10) _calSwDir='h';
+    else if(Math.abs(dy)>10) _calSwDir='v';
+  }
+  if(_calSwDir==='h'){
+    e.preventDefault();
+    var grid=document.getElementById('cal-grid-inner');
+    if(grid) grid.style.transform='translateX('+dx+'px)';
+  }
+}
+function _calSwEnd(e){
+  if(_calSwX0===null) return;
+  var t=e.changedTouches[0];
+  var dx=t.clientX-_calSwX0;
+  _calSwX0=null;_calSwY0=null;
+  var grid=document.getElementById('cal-grid-inner');
+  if(grid) grid.style.transform='';
+  if(_calSwDir==='h'&&Math.abs(dx)>50){
+    if(dx>0) calPrev(); else calNext();
+  }
+  _calSwDir=null;
+}
 
 function _calSnapStart(e){
   _calSnapFired=false;
@@ -6057,8 +6095,9 @@ function renderCalendar(){
   out+='<button class="cal-nav-btn" onclick="calPrev()">&#8249;</button>';
   out+='<button class="cal-nav-btn" onclick="calNext()">&#8250;</button>';
   out+='</div>';
-  // ── Mini month grid ──
-  out+='<div class="cal-grid">';
+  // ── Mini month grid (swipeable) ──
+  out+='<div class="cal-grid-wrap" id="cal-grid-wrap" ontouchstart="_calSwStart(event)" ontouchmove="_calSwMove(event)" ontouchend="_calSwEnd(event)">';
+  out+='<div class="cal-grid" id="cal-grid-inner">';
   ['S','M','T','W','T','F','S'].forEach(function(d){out+='<div class="cal-dow">'+d+'</div>';});
   for(var i=0;i<firstDay;i++) out+='<div class="cal-day empty"></div>';
   for(var d=1;d<=daysInMonth;d++){
@@ -6078,7 +6117,7 @@ function renderCalendar(){
     }
     out+='<div class="'+cls+'" onclick="calSelectDay('+d+')"><div class="cal-day-num">'+d+'</div>'+dots+'</div>';
   }
-  out+='</div>';
+  out+='</div></div>';
   // ── Divider ──
   out+='<div class="cal-divider"></div>';
   // ── Schedule / agenda view (shows selected day or today, then upcoming) ──
