@@ -345,9 +345,25 @@
     log('');
     log('☁️  Saving to Supabase...');
 
+    // Preserve repo_flagged before deleting customers
+    var flagRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + _loc + '&repo_flagged=eq.true&select=account,repo_flagged', {
+      method: 'GET', headers: SB_HEADERS
+    });
+    var flaggedAccounts = {};
+    if (flagRes.ok) {
+      var flagged = await flagRes.json();
+      flagged.forEach(function(f) { flaggedAccounts[f.account] = true; });
+      if (Object.keys(flaggedAccounts).length) log('  🚩 Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
+    }
+
     // Clear existing for this location
     await sbDeleteByLocation('carpay_customers', _loc);
     await sbDeleteByLocation('carpay_payments', _loc);
+
+    // Re-apply repo_flagged
+    customers.forEach(function(c) {
+      if (flaggedAccounts[c.account]) c.repo_flagged = true;
+    });
 
     var custsDone = await sbUpsert('carpay_customers', customers);
     log('  ✅ ' + custsDone + ' customers saved', '#30d158');

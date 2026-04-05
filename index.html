@@ -7712,8 +7712,8 @@ async function cpRepoFlag(account, flagged){
   }catch(e){}
   // Re-open to reflect change
   cpOpenAccount(account);
-  // Re-render late list to show/hide flag indicator
-  cpRenderLate();
+  // Re-render repo list to show/hide flag indicator
+  cpRenderRepo();
 }
 
 function cpRenderAll(){cpRenderToday();cpRenderCustomers();cpRenderRepo();cpRenderHistory();}

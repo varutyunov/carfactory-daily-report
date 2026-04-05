@@ -360,8 +360,25 @@ async function main() {
     });
     console.log('  Total payments: ' + allPayments.length + ' (' + recentPayments.length + ' recent + ' + added + ' from history)');
 
+    // Preserve repo_flagged before deleting customers
+    const existingRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + loc.name + '&repo_flagged=eq.true&select=account,repo_flagged', {
+      method: 'GET',
+      headers: SB_HEADERS
+    });
+    const flaggedAccounts = {};
+    if (existingRes.ok) {
+      const flagged = await existingRes.json();
+      flagged.forEach(f => { flaggedAccounts[f.account] = true; });
+      console.log('  Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
+    }
+
     await sbDeleteByLocation('carpay_customers', loc.name);
     await sbDeleteByLocation('carpay_payments', loc.name);
+
+    // Re-apply repo_flagged to customers before upsert
+    customers.forEach(c => {
+      if (flaggedAccounts[c.account]) c.repo_flagged = true;
+    });
 
     const custCount = await sbUpsert('carpay_customers', customers);
     const payCount = await sbUpsert('carpay_payments', allPayments);
