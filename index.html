@@ -8598,7 +8598,9 @@ async function repoSaveGpsSerial(account){
     if(ptResult.health&&ptResult.health.length) msg+='\n\n⚠️ '+ptResult.health.join('\n⚠️ ');
     alert(msg);
   } else if(ptResult){
-    alert('⚠️ GPS saved locally.\n\nPasstime: '+(ptResult.error||'Unknown error'));
+    var errMsg='⚠️ GPS saved locally.\n\nPasstime: '+(ptResult.error||'Unknown error');
+    if(ptResult.log&&ptResult.log.length) errMsg+='\n\n'+ptResult.log.join('\n');
+    alert(errMsg);
   }
 
   // Refresh account view
