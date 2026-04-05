@@ -7888,7 +7888,7 @@ async function cpOpenAccount(account){
     html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">GPS Serial Number</label>';
     html+='<div style="display:flex;gap:8px;align-items:center;">';
     html+='<input id="repo-gps-serial" value="'+(_gpsSerial||'').replace(/"/g,'&quot;')+'" placeholder="e.g. E1234567" style="flex:1;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;font-family:monospace;letter-spacing:.5px;outline:none;" onclick="event.stopPropagation()"/>';
-    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:10px 18px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Add GPS</button>';
+    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:10px 18px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📡 Sync GPS</button>';
     html+='</div></div>';
   } else {
     // GPS status overview
@@ -8519,7 +8519,7 @@ function repoOpenAccount(account) {
   history.pushState({repoAcct:true},'');
 }
 
-// ── GPS serial save + create GPS record from account view ───────────────────
+// ── GPS serial save + register in Passtime from account view ────────────────
 async function repoSaveGpsSerial(account){
   var el=document.getElementById('repo-gps-serial');
   if(!el) return;
@@ -8528,7 +8528,18 @@ async function repoSaveGpsSerial(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
   if(!cust) return;
 
-  showLoading('Saving GPS...');
+  // Parse customer name: "LAST, FIRST MIDDLE" → firstName, lastName
+  var nameParts=(cust.name||'').split(',');
+  var lastName=(nameParts[0]||'').trim();
+  var firstName=(nameParts[1]||'').trim().split(' ')[0]||'';
+
+  // Get vehicle info from cache
+  var vd=_repoVehicleCache[account]||{};
+  var vehParts=(cust.vehicle||'').split(' ');
+  var vinVal=vd.vin||cust.vin||'';
+  var colorVal=vd.color||cust.color||'';
+
+  showLoading('Registering in Passtime...');
 
   // Save serial to vehicle cache
   var existing=await repoLoadVehicle(account)||{};
@@ -8536,7 +8547,7 @@ async function repoSaveGpsSerial(account){
   await repoSaveVehicle(account, existing);
   _repoVehicleCache[account]=existing;
 
-  // Create/update repo_gps_signals entry so GPS section shows as tracked
+  // Create/update repo_gps_signals entry
   var payload={
     account:account,
     customer_name:cust.name,
@@ -8558,8 +8569,39 @@ async function repoSaveGpsSerial(account){
     });
   }catch(e){console.error('GPS save error',e);}
 
+  // Call Netlify function to register/update in Passtime
+  var ptResult=null;
+  try{
+    var ptRes=await fetch('/.netlify/functions/gps-lookup',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        serial:serial,
+        firstName:firstName,
+        lastName:lastName,
+        account:account,
+        vin:vinVal,
+        color:colorVal
+      })
+    });
+    ptResult=await ptRes.json();
+  }catch(e){
+    console.error('Passtime lookup error',e);
+    ptResult={success:false,error:e.message};
+  }
+
   hideLoading();
-  // Refresh account view to show GPS data
+
+  // Show result
+  if(ptResult&&ptResult.success){
+    var msg='✅ '+ptResult.message;
+    if(ptResult.health&&ptResult.health.length) msg+='\n\n⚠️ '+ptResult.health.join('\n⚠️ ');
+    alert(msg);
+  } else if(ptResult){
+    alert('⚠️ GPS saved locally.\n\nPasstime: '+(ptResult.error||'Unknown error'));
+  }
+
+  // Refresh account view
   cpOpenAccount(account);
 }
 
