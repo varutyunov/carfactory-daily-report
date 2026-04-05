@@ -1,0 +1,53 @@
+name: GPS Register — Single Device
+
+on:
+  workflow_dispatch:
+    inputs:
+      serial:
+        description: 'GPS serial number'
+        required: true
+      first_name:
+        description: 'Customer first name'
+        required: true
+      last_name:
+        description: 'Customer last name'
+        required: true
+      account:
+        description: 'Customer account number'
+        required: true
+      vin:
+        description: 'Vehicle VIN'
+        required: false
+        default: ''
+      color:
+        description: 'Vehicle color'
+        required: false
+        default: ''
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: npx playwright install chromium --with-deps
+
+      - name: Register GPS Device
+        run: node scripts/gps-register-single.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          PASSTIME_ACCOUNT: ${{ secrets.PASSTIME_ACCOUNT }}
+          PASSTIME_USER: ${{ secrets.PASSTIME_USER }}
+          PASSTIME_PASS: ${{ secrets.PASSTIME_PASS }}
+          GPS_SERIAL: ${{ inputs.serial }}
+          GPS_FIRST_NAME: ${{ inputs.first_name }}
+          GPS_LAST_NAME: ${{ inputs.last_name }}
+          GPS_ACCOUNT: ${{ inputs.account }}
+          GPS_VIN: ${{ inputs.vin }}
+          GPS_COLOR: ${{ inputs.color }}
