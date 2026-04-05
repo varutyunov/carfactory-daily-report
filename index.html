@@ -7883,17 +7883,13 @@ async function cpOpenAccount(account){
     html+='<div style="font-size:14px;font-weight:700;color:#ff453a;">GPS NOT FOUND</div>';
     html+='<div style="font-size:12px;color:#888;margin-top:4px;">No GPS signal on record for this account</div>';
     html+='</div>';
-    // Serial input + Passtime lookup
-    html+='<div style="margin-bottom:10px;">';
+    // Serial input — saves serial + creates GPS record
+    html+='<div style="margin-top:10px;">';
     html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">GPS Serial Number</label>';
     html+='<div style="display:flex;gap:8px;align-items:center;">';
     html+='<input id="repo-gps-serial" value="'+(_gpsSerial||'').replace(/"/g,'&quot;')+'" placeholder="e.g. E1234567" style="flex:1;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;font-family:monospace;letter-spacing:.5px;outline:none;" onclick="event.stopPropagation()"/>';
-    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:8px 14px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:8px;color:#60a5fa;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Save</button>';
+    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:10px 18px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Add GPS</button>';
     html+='</div></div>';
-    html+='<div style="display:flex;gap:8px;">';
-    html+='<a href="https://secure.passtimeusa.com/OCMSv2/Dashboard/CustomerRpt.aspx" target="_blank" onclick="event.stopPropagation();" style="flex:1;display:block;text-align:center;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;color:#f59e0b;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;">📡 Look Up in Passtime</a>';
-    html+='<button onclick="event.stopPropagation();repoGpsQuickEdit(\''+account+'\')" style="flex:1;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;">✏️ Enter GPS Data</button>';
-    html+='</div>';
   } else {
     // GPS status overview
     var gpsOk=!gps.out_of_state&&!gps.battery_low&&(gps.days_since_move||0)<7;
@@ -7932,6 +7928,12 @@ async function cpOpenAccount(account){
       html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
       html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Last Signal</div>';
       html+='<div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+updText+'</div></div>';
+    }
+    // GPS serial display
+    if(_gpsSerial){
+      html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Serial</div>';
+      html+='<div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;font-family:monospace;letter-spacing:.5px;">'+_gpsSerial+'</div></div>';
     }
     html+='</div>';
     // GPS alerts
@@ -8517,17 +8519,48 @@ function repoOpenAccount(account) {
   history.pushState({repoAcct:true},'');
 }
 
-// ── GPS serial save + quick edit from account view ──────────────────────────
+// ── GPS serial save + create GPS record from account view ───────────────────
 async function repoSaveGpsSerial(account){
   var el=document.getElementById('repo-gps-serial');
   if(!el) return;
   var serial=el.value.trim();
+  if(!serial){alert('Enter a GPS serial number');return;}
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust) return;
+
+  showLoading('Saving GPS...');
+
+  // Save serial to vehicle cache
   var existing=await repoLoadVehicle(account)||{};
   existing.gps_serial=serial;
   await repoSaveVehicle(account, existing);
   _repoVehicleCache[account]=existing;
-  var btn=el.nextElementSibling;
-  if(btn){btn.textContent='✓';setTimeout(function(){btn.textContent='Save';},1500);}
+
+  // Create/update repo_gps_signals entry so GPS section shows as tracked
+  var payload={
+    account:account,
+    customer_name:cust.name,
+    out_of_state:false,
+    last_state:'FL',
+    last_address:null,
+    days_since_move:0,
+    battery_low:false,
+    battery_status:'Unknown',
+    updated_at:new Date().toISOString(),
+    updated_by:me?me.name:''
+  };
+
+  try{
+    await fetch(SB_URL+'/rest/v1/repo_gps_signals',{
+      method:'POST',
+      headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body:JSON.stringify(payload)
+    });
+  }catch(e){console.error('GPS save error',e);}
+
+  hideLoading();
+  // Refresh account view to show GPS data
+  cpOpenAccount(account);
 }
 
 function repoGpsQuickEdit(account){
