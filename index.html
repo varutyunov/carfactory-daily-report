@@ -7874,11 +7874,25 @@ async function cpOpenAccount(account){
   // ── GPS Analytics ──
   html+='<div style="background:#0d0d0d;border:1px solid '+(gps?'#1a1a1a':'rgba(255,69,58,.3)')+';border-radius:14px;padding:16px;margin-bottom:12px;">';
   html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:'+(gps?'#60a5fa':'#ff453a')+';letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📡 GPS Tracking</div>';
+  // GPS serial from deal or repo vehicle cache
+  var _gpsSerial=(dealCar&&dealCar.gps_serial?dealCar.gps_serial:'');
+  if(!_gpsSerial&&_repoVehicleCache[account]&&_repoVehicleCache[account].gps_serial) _gpsSerial=_repoVehicleCache[account].gps_serial;
   if(!gps){
-    html+='<div style="background:#1a1212;border:1px solid rgba(255,69,58,.25);border-radius:10px;padding:14px;text-align:center;">';
+    html+='<div style="background:#1a1212;border:1px solid rgba(255,69,58,.25);border-radius:10px;padding:14px;text-align:center;margin-bottom:10px;">';
     html+='<div style="font-size:24px;margin-bottom:6px;">⚠️</div>';
     html+='<div style="font-size:14px;font-weight:700;color:#ff453a;">GPS NOT FOUND</div>';
     html+='<div style="font-size:12px;color:#888;margin-top:4px;">No GPS signal on record for this account</div>';
+    html+='</div>';
+    // Serial input + Passtime lookup
+    html+='<div style="margin-bottom:10px;">';
+    html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">GPS Serial Number</label>';
+    html+='<div style="display:flex;gap:8px;align-items:center;">';
+    html+='<input id="repo-gps-serial" value="'+(_gpsSerial||'').replace(/"/g,'&quot;')+'" placeholder="e.g. E1234567" style="flex:1;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;font-family:monospace;letter-spacing:.5px;outline:none;" onclick="event.stopPropagation()"/>';
+    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:8px 14px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:8px;color:#60a5fa;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Save</button>';
+    html+='</div></div>';
+    html+='<div style="display:flex;gap:8px;">';
+    html+='<a href="https://secure.passtimeusa.com/OCMSv2/Dashboard/CustomerRpt.aspx" target="_blank" onclick="event.stopPropagation();" style="flex:1;display:block;text-align:center;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;color:#f59e0b;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;">📡 Look Up in Passtime</a>';
+    html+='<button onclick="event.stopPropagation();repoGpsQuickEdit(\''+account+'\')" style="flex:1;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;">✏️ Enter GPS Data</button>';
     html+='</div>';
   } else {
     // GPS status overview
@@ -8501,6 +8515,115 @@ function repoOpenAccount(account) {
   overlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
   history.pushState({repoAcct:true},'');
+}
+
+// ── GPS serial save + quick edit from account view ──────────────────────────
+async function repoSaveGpsSerial(account){
+  var el=document.getElementById('repo-gps-serial');
+  if(!el) return;
+  var serial=el.value.trim();
+  var existing=await repoLoadVehicle(account)||{};
+  existing.gps_serial=serial;
+  await repoSaveVehicle(account, existing);
+  _repoVehicleCache[account]=existing;
+  var btn=el.nextElementSibling;
+  if(btn){btn.textContent='✓';setTimeout(function(){btn.textContent='Save';},1500);}
+}
+
+function repoGpsQuickEdit(account){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust) return;
+  var html='<div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;" onclick="this.remove();">';
+  html+='<div onclick="event.stopPropagation();" style="background:#0d0d0d;border-radius:20px 20px 0 0;border-top:1px solid #1a1a1a;padding:20px 16px 44px;width:100%;box-sizing:border-box;">';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">🛰 GPS — '+cust.name.split(',')[0]+'</div>';
+
+  // Out of state
+  html+='<div style="margin-bottom:12px;">';
+  html+='<label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Out of State?</label>';
+  html+='<div style="display:flex;gap:8px;margin-top:6px;">';
+  html+='<button id="gps-oos-yes" onclick="document.getElementById(\'gps-oos-no\').style.opacity=\'0.4\';this.style.opacity=\'1\';document.getElementById(\'gps-state-wrap\').style.display=\'block\';" style="flex:1;padding:10px;border-radius:10px;border:2px solid #333;background:transparent;color:#888;font-weight:700;font-size:14px;cursor:pointer;opacity:0.4;">🚨 Yes</button>';
+  html+='<button id="gps-oos-no" onclick="document.getElementById(\'gps-oos-yes\').style.opacity=\'0.4\';this.style.opacity=\'1\';document.getElementById(\'gps-state-wrap\').style.display=\'none\';" style="flex:1;padding:10px;border-radius:10px;border:2px solid #30d158;background:rgba(48,209,88,.1);color:#30d158;font-weight:700;font-size:14px;cursor:pointer;">✓ In FL</button>';
+  html+='</div>';
+  html+='<div id="gps-state-wrap" style="margin-top:8px;display:none;">';
+  html+='<input id="gps-state" placeholder="State (e.g. GA)" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;"/>';
+  html+='</div></div>';
+
+  // Days since move
+  html+='<div style="margin-bottom:12px;">';
+  html+='<label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Days Since Last Movement</label>';
+  html+='<input id="gps-days-move" type="number" min="0" placeholder="0" style="width:100%;box-sizing:border-box;margin-top:6px;background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:15px;outline:none;"/>';
+  html+='</div>';
+
+  // Battery
+  html+='<div style="margin-bottom:16px;">';
+  html+='<label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Battery Status</label>';
+  html+='<div id="gps-battery-row" style="display:flex;gap:8px;margin-top:6px;">';
+  ['Good','Low','Critical','Unknown'].forEach(function(b){
+    var col=b==='Good'?'#30d158':b==='Low'?'#fbbf24':b==='Critical'?'#ff453a':'#888';
+    html+='<button onclick="Array.from(this.parentNode.children).forEach(function(x){x.style.opacity=\'0.4\';});this.style.opacity=\'1\';" style="flex:1;padding:8px 4px;border-radius:10px;border:1px solid '+col+'44;background:'+col+'11;color:'+col+';font-size:12px;font-weight:700;cursor:pointer;opacity:'+(b==='Good'?'1':'0.4')+';">'+b+'</button>';
+  });
+  html+='</div></div>';
+
+  // Last address
+  html+='<div style="margin-bottom:16px;">';
+  html+='<label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Last Known Address</label>';
+  html+='<input id="gps-address" placeholder="Address from Passtime..." style="width:100%;box-sizing:border-box;margin-top:6px;background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:13px;outline:none;"/>';
+  html+='</div>';
+
+  html+='<button onclick="repoGpsQuickSave(\''+account+'\')" style="width:100%;padding:14px;background:linear-gradient(145deg,#1a1200,#3d2c00);border:1px solid rgba(245,158,11,.4);border-radius:14px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;cursor:pointer;">SAVE GPS SIGNALS</button>';
+  html+='</div></div>';
+
+  var el=document.createElement('div');
+  el.id='gps-edit-sheet';
+  el.innerHTML=html;
+  document.body.appendChild(el);
+}
+
+async function repoGpsQuickSave(account){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust) return;
+  var sheet=document.getElementById('gps-edit-sheet');
+
+  var oosYes=document.getElementById('gps-oos-yes');
+  var outOfState=oosYes&&parseFloat(oosYes.style.opacity||1)>0.5;
+  var lastState=outOfState?(document.getElementById('gps-state').value.trim().toUpperCase()||null):'FL';
+  var daysMoveEl=document.getElementById('gps-days-move');
+  var daysSinceMove=daysMoveEl?(parseInt(daysMoveEl.value)||0):0;
+  var batteryBtns=sheet?sheet.querySelectorAll('#gps-battery-row button'):[];
+  var batteryStatus='Good';
+  batteryBtns.forEach(function(b){if(parseFloat(b.style.opacity||1)>0.5)batteryStatus=b.textContent.trim();});
+  var batteryLow=batteryStatus==='Low'||batteryStatus==='Critical';
+  var addrEl=document.getElementById('gps-address');
+  var lastAddress=addrEl?addrEl.value.trim():'';
+
+  var payload={
+    account:account,
+    customer_name:cust.name,
+    out_of_state:outOfState,
+    last_state:lastState,
+    last_address:lastAddress||null,
+    days_since_move:daysSinceMove,
+    battery_low:batteryLow,
+    battery_status:batteryStatus,
+    updated_at:new Date().toISOString(),
+    updated_by:me?me.name:''
+  };
+
+  try{
+    showLoading('Saving GPS...');
+    await fetch(SB_URL+'/rest/v1/repo_gps_signals',{
+      method:'POST',
+      headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body:JSON.stringify(payload)
+    });
+    hideLoading();
+    if(sheet) sheet.remove();
+    // Reopen the account to refresh GPS display
+    cpOpenAccount(account);
+  }catch(e){
+    hideLoading();
+    alert('Error saving GPS: '+(e.message||e));
+  }
 }
 
 // ── GPS signal editor ────────────────────────────────────────────────────────
