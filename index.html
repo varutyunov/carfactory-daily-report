@@ -7518,174 +7518,219 @@ async function repoSaveVehicle(account, data){
     }
   }catch(e){console.error('repoSaveVehicle',e);}
 }
-async function repoSaveColor(account){
-  var el=document.getElementById('repo-color-input');
-  if(!el) return;
-  var color=el.value.trim();
+async function repoSaveDetails(account){
+  var colorEl=document.getElementById('repo-color-input');
+  var addrEl=document.getElementById('repo-addr-input');
+  var cityEl=document.getElementById('repo-city-input');
+  var stateEl=document.getElementById('repo-state-input');
+  var zipEl=document.getElementById('repo-zip-input');
   var existing=await repoLoadVehicle(account)||{};
-  existing.color=color;
+  if(colorEl) existing.color=colorEl.value.trim();
+  if(addrEl) existing.address=addrEl.value.trim();
+  if(cityEl) existing.city=cityEl.value.trim();
+  if(stateEl) existing.state=stateEl.value.trim();
+  if(zipEl) existing.zip=zipEl.value.trim();
   await repoSaveVehicle(account, existing);
-  // Brief feedback
-  var btn=document.getElementById('repo-color-save');
+  _repoVehicleCache[account]=existing;
+  var btn=document.getElementById('repo-detail-save');
   if(btn){btn.textContent='✓ Saved';setTimeout(function(){btn.textContent='Save';},1500);}
 }
 
-// ── Hold Harmless Form Generator ──
-function repoGenerateHoldHarmless(account){
+// ── Signature Pad System ──
+var _repoSigCanvas=null, _repoSigCtx=null, _repoSigDrawing=false, _repoSigDataUrl=null, _repoSigCallback=null;
+function repoOpenSignPad(cb){
+  _repoSigCallback=cb;
+  _repoSigDataUrl=null;
+  var existing=document.getElementById('repo-sig-modal');
+  if(existing) existing.remove();
+  var modal=document.createElement('div');
+  modal.id='repo-sig-modal';
+  modal.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML='<div style="color:#fff;font-size:16px;font-weight:700;margin-bottom:12px;">Sign Below</div>'
+    +'<canvas id="repo-sig-canvas" width="686" height="400" style="display:block !important;width:343px;height:200px;background:#fff;border-radius:10px;touch-action:none;cursor:crosshair;"></canvas>'
+    +'<div style="display:flex;gap:10px;margin-top:14px;">'
+    +'<button onclick="repoSigClear()" style="padding:10px 24px;background:#333;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Clear</button>'
+    +'<button onclick="repoSigClose()" style="padding:10px 24px;background:#333;border:none;border-radius:8px;color:#ff453a;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>'
+    +'<button onclick="repoSigDone()" style="padding:10px 24px;background:#60a5fa;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Done</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+  requestAnimationFrame(function(){
+    var c=document.getElementById('repo-sig-canvas');
+    if(!c) return;
+    _repoSigCanvas=c; _repoSigCtx=c.getContext('2d');
+    _repoSigCtx.scale(2,2); _repoSigCtx.lineWidth=2; _repoSigCtx.lineCap='round'; _repoSigCtx.strokeStyle='#000';
+    function pos(e){var r=c.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};}
+    c.addEventListener('pointerdown',function(e){_repoSigDrawing=true;var p=pos(e);_repoSigCtx.beginPath();_repoSigCtx.moveTo(p.x,p.y);e.preventDefault();});
+    c.addEventListener('pointermove',function(e){if(!_repoSigDrawing)return;var p=pos(e);_repoSigCtx.lineTo(p.x,p.y);_repoSigCtx.stroke();e.preventDefault();});
+    c.addEventListener('pointerup',function(){_repoSigDrawing=false;});
+    c.addEventListener('pointerleave',function(){_repoSigDrawing=false;});
+  });
+}
+function repoSigClear(){if(_repoSigCtx&&_repoSigCanvas){_repoSigCtx.clearRect(0,0,_repoSigCanvas.width,_repoSigCanvas.height);}}
+function repoSigClose(){var m=document.getElementById('repo-sig-modal');if(m)m.remove();_repoSigCanvas=null;_repoSigCtx=null;if(_repoSigCallback)_repoSigCallback(null);}
+function repoSigDone(){
+  if(_repoSigCanvas) _repoSigDataUrl=_repoSigCanvas.toDataURL('image/png');
+  var m=document.getElementById('repo-sig-modal');if(m)m.remove();
+  _repoSigCanvas=null;_repoSigCtx=null;
+  if(_repoSigCallback)_repoSigCallback(_repoSigDataUrl);
+}
+
+// ── Hold Harmless PDF Generator (jsPDF) ──
+function _repoGetFormData(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
-  if(!cust) return;
+  if(!cust) return null;
   var vd=_repoVehicleCache[account]||{};
-  // Fallback: lookup from sold inventory if cache is empty
-  if(!vd.vin){
-    var si=soldInventoryLookup(cust.name, cust.location);
-    if(si){vd.vin=si.vin;vd.year=si.year;vd.make=si.make;vd.model=si.model;}
-  }
-  var pays=_cpData.payments.filter(function(p){return p.account===account;});
-
-  // Parse vehicle string "2005 Chevrolet Avalanche"
+  if(!vd.vin){var si=soldInventoryLookup(cust.name, cust.location);if(si){vd.vin=si.vin;vd.year=si.year;vd.make=si.make;vd.model=si.model;}}
   var vehParts=(cust.vehicle||'').split(' ');
-  var vYear=vd.year||vehParts[0]||'';
-  var vMake=vd.make||vehParts[1]||'';
-  var vModel=vd.model||vehParts.slice(2).join(' ')||'';
-  var vVin=vd.vin||cust.vin||'';
-  var vColor=vd.color||cust.color||'';
-
-  // Debtor name parsing: "LAST, FIRST MIDDLE"
   var nameParts=(cust.name||'').split(',');
-  var lastName=(nameParts[0]||'').trim();
-  var firstMiddle=(nameParts[1]||'').trim();
-  var debtorName=firstMiddle+' '+lastName;
+  var debtorName=((nameParts[1]||'').trim()+' '+(nameParts[0]||'').trim()).trim();
+  var phone=cust.phone||'';var dpC=phone.replace(/\D/g,'');
+  if(dpC.length===10) phone='('+dpC.slice(0,3)+') '+dpC.slice(3,6)+'-'+dpC.slice(6);
+  var today=new Date();var todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+  return {cust:cust,debtorName:debtorName,phone:phone,todayStr:todayStr,
+    vYear:vd.year||vehParts[0]||'',vMake:vd.make||vehParts[1]||'',vModel:vd.model||vehParts.slice(2).join(' ')||'',
+    vVin:vd.vin||cust.vin||'',vColor:vd.color||cust.color||'',
+    addr:vd.address||'',city:vd.city||'',state:vd.state||'',zip:vd.zip||''};
+}
 
-  var today=new Date();
-  var todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+function _repoBuildPDF(fd, sigDataUrl){
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({unit:'mm',format:'letter'});
+  var W=doc.internal.pageSize.getWidth();
+  var mx=15, y=15, lh=5;
 
-  // Debtor phone formatting
-  var debtorPhone=cust.phone||'';
-  var dpClean=debtorPhone.replace(/\D/g,'');
-  if(dpClean.length===10) debtorPhone='('+dpClean.slice(0,3)+') '+dpClean.slice(3,6)+'-'+dpClean.slice(6);
+  // Helper: draw a bordered row of fields
+  function fieldRow(fields, rowH){
+    rowH=rowH||8;
+    var totalFlex=0;fields.forEach(function(f){totalFlex+=f.flex||1;});
+    var cellW=(W-mx*2)/totalFlex;var cx=mx;
+    fields.forEach(function(f){
+      var w=cellW*(f.flex||1);
+      doc.rect(cx,y,w,rowH);
+      doc.setFontSize(7);doc.setFont('helvetica','bold');
+      doc.text(f.label||'',cx+1.5,y+3);
+      doc.setFontSize(9);doc.setFont('helvetica','normal');
+      doc.text(f.value||'',cx+1.5,y+6.5);
+      cx+=w;
+    });
+    y+=rowH;
+  }
+  function sectionTitle(text){
+    doc.setFillColor(230,230,230);doc.rect(mx,y,W-mx*2,7,'F');
+    doc.rect(mx,y,W-mx*2,7);
+    doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text(text,mx+2,y+5);y+=7;
+  }
 
-  // Build form HTML
-  var formHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hold Harmless - '+debtorName+'</title>'
-    +'<style>'
-    +'*{margin:0;padding:0;box-sizing:border-box;}'
-    +'body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto;font-size:14px;}'
-    +'h2{text-align:center;margin-bottom:4px;font-size:18px;}'
-    +'.header{text-align:center;margin-bottom:16px;font-size:12px;line-height:1.5;}'
-    +'.field-row{display:flex;border:1px solid #000;border-top:none;}'
-    +'.field-row:first-child{border-top:1px solid #000;}'
-    +'.field{flex:1;padding:4px 8px;border-right:1px solid #000;font-size:13px;}'
-    +'.field:last-child{border-right:none;}'
-    +'.field label{font-weight:bold;font-size:11px;}'
-    +'.field span{display:block;min-height:18px;}'
-    +'.section-title{font-weight:bold;font-size:14px;padding:6px 8px;border:1px solid #000;border-bottom:none;background:#eee;}'
-    +'.legal{font-size:11px;line-height:1.5;padding:12px;border:1px solid #000;margin-top:0;}'
-    +'.sig-section{margin-top:20px;padding:8px;}'
-    +'.sig-line{border-bottom:1px solid #000;height:40px;margin-top:30px;display:flex;justify-content:space-between;}'
-    +'.sig-label{font-size:12px;margin-top:2px;}'
-    +'@media print{body{padding:10px;}}'
-    +'</style></head><body>'
-    +'<div class="header"><strong style="font-size:16px;">Premier Auto Group LLC dba Car Factory</strong><br>'
-    +'100 S Charles Richard Beall Blvd<br>DeBary FL 32713<br>386-793-3010<br>Vladimir Arutyunov</div>'
-    +'<h2>Hold Harmless Agreement</h2>'
-    +'<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">'
-    +'<div><strong>Date:</strong> '+todayStr+'</div>'
-    +'<div><strong>Acct#:</strong> '+cust.account+'</div>'
-    +'</div>'
-    +'<div style="padding:2px 0 8px;font-size:13px;"><strong>Assignment Type:</strong> Repossession</div>'
+  // Header
+  doc.setFontSize(13);doc.setFont('helvetica','bold');
+  doc.text('Premier Auto Group LLC dba Car Factory',W/2,y,{align:'center'});y+=5;
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text('100 S Charles Richard Beall Blvd',W/2,y,{align:'center'});y+=4;
+  doc.text('DeBary FL 32713',W/2,y,{align:'center'});y+=4;
+  doc.text('386-793-3010',W/2,y,{align:'center'});y+=4;
+  doc.text('Vladimir Arutyunov',W/2,y,{align:'center'});y+=7;
 
-    +'<div class="section-title">Client/Lien Holder &nbsp;&nbsp;&nbsp; Premier Auto Group LLC dba Car Factory</div>'
-    +'<div class="field-row"><div class="field"><label>Address:</label> <span>100 S Charles Richard Beall Blvd</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>City:</label> <span>DeBary</span></div>'
-    +'<div class="field"><label>State:</label> <span>FL</span></div>'
-    +'<div class="field"><label>Zip:</label> <span>32713</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>386-793-3010</span></div>'
-    +'<div class="field"><label>Fax:</label> <span></span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Assigned By:</label> <span>Vladimir Arutyunov</span></div>'
-    +'<div class="field"><label>Extension:</label> <span></span></div></div>'
+  doc.setFontSize(15);doc.setFont('helvetica','bold');
+  doc.text('Hold Harmless Agreement',W/2,y,{align:'center'});y+=7;
 
-    +'<div class="section-title">Debtor &nbsp;&nbsp;&nbsp; '+debtorName+'</div>'
-    +'<div class="field-row"><div class="field"><label>Address:</label> <span></span></div></div>'
-    +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
-    +'<div class="field"><label>State:</label> <span></span></div>'
-    +'<div class="field"><label>Zip:</label> <span></span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+debtorPhone+'</span></div>'
-    +'<div class="field"><label>Cell / Pager:</label> <span>'+debtorPhone+'</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Work:</label> <span></span></div>'
-    +'<div class="field"><label>Phone:</label> <span></span></div></div>'
-    +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
-    +'<div class="field"><label>State:</label> <span></span></div>'
-    +'<div class="field"><label>Zip:</label> <span></span></div></div>'
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('Date: '+fd.todayStr,mx,y);
+  doc.text('Acct#: '+fd.cust.account,W-mx,y,{align:'right'});y+=5;
+  doc.text('Assignment Type: Repossession',mx,y);y+=7;
 
-    +'<div class="section-title">ADDITIONAL INFO</div>'
-    +'<div style="font-size:11px;font-weight:bold;padding:2px 8px;border:1px solid #000;border-top:none;border-bottom:none;background:#f5f5f5;">VEHICLE INFORMATION</div>'
-    +'<div class="field-row"><div class="field"><label>Year:</label> <span>'+vYear+'</span></div>'
-    +'<div class="field"><label>Make:</label> <span>'+vMake+'</span></div>'
-    +'<div class="field"><label>Model:</label> <span>'+vModel+'</span></div></div>'
-    +'<div class="field-row"><div class="field" style="flex:3;"><label>VIN:</label> <span>'+vVin+'</span></div>'
-    +'<div class="field"><label>Color:</label> <span>'+vColor+'</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Key Code 1:</label> <span></span></div>'
-    +'<div class="field"><label>Key Code 2:</label> <span></span></div></div>'
+  // Client/Lien Holder
+  sectionTitle('Client/Lien Holder    Premier Auto Group LLC dba Car Factory');
+  fieldRow([{label:'Address:',value:'100 S Charles Richard Beall Blvd',flex:4}]);
+  fieldRow([{label:'City:',value:'DeBary',flex:2},{label:'State:',value:'FL'},{label:'Zip:',value:'32713'}]);
+  fieldRow([{label:'Phone:',value:'386-793-3010',flex:2},{label:'Fax:',value:'',flex:2}]);
+  fieldRow([{label:'Assigned By:',value:'Vladimir Arutyunov',flex:2},{label:'Extension:',value:'',flex:2}]);
+  y+=3;
 
-    +'<div class="legal">This is your authorization to process for collection or repossession of the above described assignment. '
+  // Debtor
+  sectionTitle('Debtor    '+fd.debtorName);
+  fieldRow([{label:'Address:',value:fd.addr,flex:4}]);
+  fieldRow([{label:'City:',value:fd.city,flex:2},{label:'State:',value:fd.state},{label:'Zip:',value:fd.zip}]);
+  fieldRow([{label:'Phone:',value:fd.phone,flex:2},{label:'Cell / Pager:',value:fd.phone,flex:2}]);
+  fieldRow([{label:'Work:',value:'',flex:2},{label:'Phone:',value:'',flex:2}]);
+  y+=3;
+
+  // Additional Info - Vehicle
+  sectionTitle('ADDITIONAL INFO');
+  doc.setFillColor(245,245,245);doc.rect(mx,y,W-mx*2,6,'F');doc.rect(mx,y,W-mx*2,6);
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('VEHICLE INFORMATION',mx+2,y+4);y+=6;
+  fieldRow([{label:'Year:',value:fd.vYear},{label:'Make:',value:fd.vMake},{label:'Model:',value:fd.vModel}]);
+  fieldRow([{label:'VIN:',value:fd.vVin,flex:3},{label:'Color:',value:fd.vColor}]);
+  fieldRow([{label:'Key Code 1:',value:''},{label:'Key Code 2:',value:''}]);
+  y+=4;
+
+  // Legal text
+  doc.setFontSize(8);doc.setFont('helvetica','normal');
+  var legal='This is your authorization to process for collection or repossession of the above described assignment. '
     +'We agree to indemnify and hold you harmless from and against any and all claims, damage, losses and '
     +'action resulting from or arising out of our efforts to collect or repossess the above claim, except, '
-    +'however, such as may be caused or arisen out of negligence or unauthorized acts of your company, it\'s '
-    +'officers, employees, or the officers or employees of such agents.</div>'
+    +'however, such as may be caused or arisen out of negligence or unauthorized acts of your company, its '
+    +'officers, employees, or the officers or employees of such agents.';
+  var legalLines=doc.splitTextToSize(legal,W-mx*2-4);
+  doc.rect(mx,y,W-mx*2,legalLines.length*3.5+6);
+  doc.text(legalLines,mx+2,y+4);
+  y+=legalLines.length*3.5+10;
 
-    +'<div class="sig-section">'
-    +'<div style="font-weight:bold;margin-bottom:4px;">Authorized By [ Please Print ]:</div>'
-    +'<div style="margin-top:40px;display:flex;gap:40px;">'
-    +'<div style="flex:2;border-top:1px solid #000;padding-top:4px;font-size:12px;">Signature</div>'
-    +'<div style="flex:1;border-top:1px solid #000;padding-top:4px;font-size:12px;">Date</div>'
-    +'</div></div>'
+  // Signature section
+  doc.setFontSize(10);doc.setFont('helvetica','bold');
+  doc.text('Authorized By [ Please Print ]:',mx,y);y+=8;
 
-    +'</body></html>';
+  if(sigDataUrl){
+    try{doc.addImage(sigDataUrl,'PNG',mx,y,60,20);}catch(e){}
+    y+=22;
+  } else {y+=20;}
 
-  // Open in new window for print
-  var win=window.open('','_blank','width=750,height=900');
-  win.document.write(formHtml);
-  win.document.close();
+  doc.line(mx,y,mx+90,y);doc.line(W-mx-50,y,W-mx,y);y+=4;
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text('Signature',mx,y);
+  doc.text('Date: '+fd.todayStr,W-mx-50,y);
+
+  return doc;
+}
+
+function repoGenerateHoldHarmless(account){
+  var fd=_repoGetFormData(account);
+  if(!fd){alert('Customer not found');return;}
+  // Open signature pad, then generate PDF after signing
+  repoOpenSignPad(function(sigData){
+    var doc=_repoBuildPDF(fd, sigData);
+    var fileName='HoldHarmless_'+fd.debtorName.replace(/\s+/g,'_')+'_'+fd.cust.account+'.pdf';
+    // Try Web Share API for mobile
+    if(navigator.share&&navigator.canShare){
+      try{
+        var blob=doc.output('blob');
+        var file=new File([blob],fileName,{type:'application/pdf'});
+        if(navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:'Hold Harmless - '+fd.debtorName}).catch(function(){doc.save(fileName);});
+          return;
+        }
+      }catch(e){}
+    }
+    doc.save(fileName);
+  });
 }
 
 function repoEmailHoldHarmless(account){
-  var cust=_cpData.customers.find(function(c){return c.account===account;});
-  if(!cust) return;
-  var vd=_repoVehicleCache[account]||{};
-  if(!vd.vin){
-    var si=soldInventoryLookup(cust.name, cust.location);
-    if(si){vd.vin=si.vin;vd.year=si.year;vd.make=si.make;vd.model=si.model;}
+  var fd=_repoGetFormData(account);
+  if(!fd){alert('Customer not found');return;}
+  // Generate PDF without signature for quick share
+  var doc=_repoBuildPDF(fd, null);
+  var fileName='HoldHarmless_'+fd.debtorName.replace(/\s+/g,'_')+'_'+fd.cust.account+'.pdf';
+  if(navigator.share&&navigator.canShare){
+    try{
+      var blob=doc.output('blob');
+      var file=new File([blob],fileName,{type:'application/pdf'});
+      if(navigator.canShare({files:[file]})){
+        navigator.share({files:[file],title:'Hold Harmless - '+fd.debtorName}).catch(function(){doc.save(fileName);});
+        return;
+      }
+    }catch(e){}
   }
-  var vehParts=(cust.vehicle||'').split(' ');
-  var vYear=vd.year||vehParts[0]||'';
-  var vMake=vd.make||vehParts[1]||'';
-  var vModel=vd.model||vehParts.slice(2).join(' ')||'';
-  var vVin=vd.vin||cust.vin||'';
-  var vColor=vd.color||cust.color||'';
-  var nameParts=(cust.name||'').split(',');
-  var debtorName=((nameParts[1]||'').trim()+' '+(nameParts[0]||'').trim()).trim();
-  var balDue=cust.currentAmountDue?'$'+parseFloat(cust.currentAmountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'N/A';
-  var pmtAmt=cust.scheduledAmount||cust.paymentAmount||'N/A';
-  var daysLate=parseInt(cust.daysLate)||0;
-
-  var isDeLand=cust.location&&cust.location.toLowerCase()==='deland';
-  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S Charles Richard Beall Blvd, DeBary FL 32713';
-
-  var subject='Hold Harmless Agreement - '+debtorName+' - Acct #'+cust.account;
-  var body='Hold Harmless Agreement%0D%0A'
-    +'Premier Auto Group LLC dba Car Factory%0D%0A'
-    +companyAddr+'%0D%0A'
-    +'Account: '+cust.account+'%0D%0A'
-    +'Date: '+(new Date().toLocaleDateString())+'%0D%0A%0D%0A'
-    +'DEBTOR: '+debtorName+'%0D%0A'
-    +'Phone: '+(cust.phone||'N/A')+'%0D%0A'
-    +'Email: '+(cust.email||'N/A')+'%0D%0A%0D%0A'
-    +'VEHICLE: '+vYear+' '+vMake+' '+vModel+'%0D%0A'
-    +'VIN: '+vVin+'%0D%0A'
-    +'Color: '+vColor+'%0D%0A%0D%0A'
-    +'Assignment Type: Repossession%0D%0A%0D%0A'
-    +'This is your authorization to process for collection or repossession of the above described assignment.';
-
-  window.location.href='mailto:?subject='+encodeURIComponent(subject.replace(/%0D%0A/g,''))+'&body='+body;
+  doc.save(fileName);
 }
 
 async function cpOpenAccount(account){
@@ -7881,11 +7926,20 @@ async function cpOpenAccount(account){
     html+='<div style="font-size:12px;color:#ff453a;margin-bottom:8px;">⚠ VIN not found</div>';
   }
   // Color input
+  var _rvd=_repoVehicleCache[account]||{};
   html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
   html+='<div style="flex:1;"><label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Color</label>';
   html+='<input id="repo-color-input" value="'+(colorStr||'').replace(/"/g,'&quot;')+'" placeholder="e.g. White, Black, Silver" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;" onclick="event.stopPropagation()"/></div>';
-  html+='<button id="repo-color-save" onclick="event.stopPropagation();repoSaveColor(\''+account+'\')" style="margin-top:18px;padding:8px 16px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:8px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;">Save</button>';
   html+='</div>';
+  // Debtor address inputs
+  html+='<div style="margin-bottom:6px;"><label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Debtor Address</label>';
+  html+='<input id="repo-addr-input" value="'+(_rvd.address||'').replace(/"/g,'&quot;')+'" placeholder="Street address" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;margin-bottom:6px;" onclick="event.stopPropagation()"/>';
+  html+='<div style="display:flex;gap:6px;">';
+  html+='<input id="repo-city-input" value="'+(_rvd.city||'').replace(/"/g,'&quot;')+'" placeholder="City" style="flex:2;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;" onclick="event.stopPropagation()"/>';
+  html+='<input id="repo-state-input" value="'+(_rvd.state||'').replace(/"/g,'&quot;')+'" placeholder="ST" style="width:50px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;text-transform:uppercase;" onclick="event.stopPropagation()"/>';
+  html+='<input id="repo-zip-input" value="'+(_rvd.zip||'').replace(/"/g,'&quot;')+'" placeholder="Zip" style="width:70px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;" onclick="event.stopPropagation()"/>';
+  html+='</div></div>';
+  html+='<button id="repo-detail-save" onclick="event.stopPropagation();repoSaveDetails(\''+account+'\')" style="width:100%;margin-top:6px;padding:10px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:8px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">Save Details</button>';
   if(dealCar){
     html+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;">';
     if(dealCar.deal_type) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Deal Type</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.deal_type+'</div></div>';
@@ -7900,8 +7954,8 @@ async function cpOpenAccount(account){
     html+='<div style="background:#0d0d0d;border:1px solid rgba(255,69,58,.25);border-radius:14px;padding:16px;margin-bottom:12px;">';
     html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#ff453a;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📄 Hold Harmless</div>';
     html+='<div style="display:flex;gap:8px;">';
-    html+='<button onclick="event.stopPropagation();repoGenerateHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">📄 Generate Form</button>';
-    html+='<button onclick="event.stopPropagation();repoEmailHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:10px;color:#4ade80;font-size:14px;font-weight:700;cursor:pointer;">✉ Email</button>';
+    html+='<button onclick="event.stopPropagation();repoGenerateHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">✍ Sign & PDF</button>';
+    html+='<button onclick="event.stopPropagation();repoEmailHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:10px;color:#4ade80;font-size:14px;font-weight:700;cursor:pointer;">📤 Share PDF</button>';
     html+='</div></div>';
   }
 
