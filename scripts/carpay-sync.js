@@ -129,6 +129,9 @@ function parseCustomers(html) {
     // AutoPay: checkbox checked = "1" in value or checked attribute
     const autoPayTd = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || [])[4] || '';
     const autoPay = autoPayTd.includes('checked') || autoPayTd.includes('green');
+    // Extract carpay_id from customer link
+    const linkMatch = row.match(/\/dms\/customer\/(\d+)/);
+    const carpayId = linkMatch ? linkMatch[1] : '';
 
     if (!name || !account) return;
     customers.push({
@@ -136,7 +139,8 @@ function parseCustomers(html) {
       account: account,
       days_late: isNaN(daysLate) ? 0 : daysLate,
       next_payment: nextPayment,
-      auto_pay: autoPay
+      auto_pay: autoPay,
+      carpay_id: carpayId
     });
   });
   return customers;
@@ -201,8 +205,8 @@ function parsePayments(html) {
   return payments;
 }
 
-// ── Fetch all payments ────────────────────────────────────────────────────────
-async function cpGetPayments(dealerId) {
+// ── Fetch all payments (recent payments page, paginated) ─────────────────────
+async function cpGetRecentPayments(dealerId) {
   await cpSelectDealer(dealerId);
   const all = [];
   let start = 0;
@@ -213,7 +217,7 @@ async function cpGetPayments(dealerId) {
     const html = await res.text();
     const batch = parsePayments(html);
     all.push.apply(all, batch);
-    console.log('  Payments fetched so far:', all.length);
+    console.log('  Recent payments fetched so far:', all.length);
 
     const totalMatch = html.match(/of\s+([\d,]+)\s+entries/);
     const total = totalMatch ? parseInt(totalMatch[1].replace(/,/g, '')) : 0;
@@ -221,6 +225,68 @@ async function cpGetPayments(dealerId) {
     start += length;
   }
   return all;
+}
+
+// ── Parse payment history from individual customer page ──────────────────────
+function parseCustomerPagePayments(html) {
+  const payments = [];
+  // Find payment history table rows
+  const tbodyMatches = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/g) || [];
+  for (const tbody of tbodyMatches) {
+    const rows = tbody.match(/<tr[\s\S]*?<\/tr>/g) || [];
+    for (const row of rows) {
+      const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
+        td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
+      );
+      if (tds.length >= 4) {
+        const dateStr = tds[0];
+        const status = tds[1].toLowerCase();
+        const method = tds[2];
+        const amount = tds[3];
+        const isValid = status.includes('success') || status.includes('approved') || status.includes('complete') || status.includes('paid') || status.includes('settled');
+        if (dateStr && amount && amount.includes('$') && isValid) {
+          payments.push({ date: dateStr, method: method, amount_sent: amount });
+        }
+      }
+    }
+  }
+  return payments;
+}
+
+// ── Fetch full payment history from each customer's detail page ──────────────
+async function cpGetCustomerPayments(dealerId, customers, location) {
+  await cpSelectDealer(dealerId);
+  const allPayments = [];
+  const batchSize = 5;
+
+  for (let i = 0; i < customers.length; i += batchSize) {
+    const batch = customers.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (cust) => {
+      if (!cust.carpay_id) return;
+      try {
+        const res = await cpFetch('/dms/customer/' + cust.carpay_id);
+        const html = await res.text();
+        const pays = parseCustomerPagePayments(html);
+        pays.forEach(p => {
+          allPayments.push({
+            location: location,
+            carpay_id: cust.carpay_id || null,
+            name: cust.name,
+            account: cust.account,
+            reference: '',
+            date: p.date,
+            time: '',
+            method: p.method || '',
+            amount_sent: p.amount_sent
+          });
+        });
+      } catch (e) { /* skip */ }
+    }));
+    if ((i + batchSize) % 50 === 0 || i + batchSize >= customers.length) {
+      console.log('  Customer payment history: ' + Math.min(i + batchSize, customers.length) + '/' + customers.length + ' (' + allPayments.length + ' payments)');
+    }
+  }
+  return allPayments;
 }
 
 // ── Supabase Upsert ──────────────────────────────────────────────────────────
@@ -272,17 +338,33 @@ async function main() {
     console.log('\nSyncing ' + loc.name + ' (dealerId=' + loc.dealerId + ')...');
 
     const customers = await cpGetCustomers(loc.dealerId);
-    const payments = await cpGetPayments(loc.dealerId);
-    console.log('  Fetched: ' + customers.length + ' customers, ' + payments.length + ' payments');
+    const recentPayments = await cpGetRecentPayments(loc.dealerId);
+    console.log('  Fetched: ' + customers.length + ' customers, ' + recentPayments.length + ' recent payments');
+
+    // Fetch full payment history from each customer's detail page
+    console.log('  Fetching payment history from customer pages...');
+    const customerPayments = await cpGetCustomerPayments(loc.dealerId, customers, loc.name);
+    console.log('  Found ' + customerPayments.length + ' payments from customer pages');
 
     customers.forEach(c => { c.location = loc.name; });
-    payments.forEach(p => { p.location = loc.name; });
+    recentPayments.forEach(p => { p.location = loc.name; });
+
+    // Merge & deduplicate: recent payments (have reference+time) take priority
+    const allPayments = recentPayments.slice();
+    const seenKeys = {};
+    allPayments.forEach(p => { seenKeys[p.account + '|' + p.date + '|' + p.amount_sent] = true; });
+    let added = 0;
+    customerPayments.forEach(p => {
+      const key = p.account + '|' + p.date + '|' + p.amount_sent;
+      if (!seenKeys[key]) { allPayments.push(p); seenKeys[key] = true; added++; }
+    });
+    console.log('  Total payments: ' + allPayments.length + ' (' + recentPayments.length + ' recent + ' + added + ' from history)');
 
     await sbDeleteByLocation('carpay_customers', loc.name);
     await sbDeleteByLocation('carpay_payments', loc.name);
 
     const custCount = await sbUpsert('carpay_customers', customers);
-    const payCount = await sbUpsert('carpay_payments', payments);
+    const payCount = await sbUpsert('carpay_payments', allPayments);
     console.log('  Stored: ' + custCount + ' customers, ' + payCount + ' payments');
 
     totalCustomers += custCount;

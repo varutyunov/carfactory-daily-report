@@ -2524,7 +2524,7 @@ async function syncFromSupabase(showUI){
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
         sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
         sbGet('carpay_customers', 'select=*&order=name&limit=5000').catch(()=>[]),
-        sbGet('carpay_payments', 'select=*&order=synced_at.desc&limit=5000').catch(()=>[])
+        sbGet('carpay_payments', 'select=*&order=synced_at.desc&limit=20000').catch(()=>[])
       ]);
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
       // Merge local-only events (table may not exist in Supabase)

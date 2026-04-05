@@ -132,7 +132,10 @@
         var status = cells[1] ? cells[1].innerText.trim() : '';
         var method = cells[2] ? cells[2].innerText.trim() : '';
         var amount = cells[3] ? cells[3].innerText.trim() : '';
-        if (dateStr && amount && amount.includes('$') && status.toLowerCase().includes('success')) {
+        // Accept successful/approved payments (various status text)
+        var statusLow = status.toLowerCase();
+        var isValid = statusLow.includes('success') || statusLow.includes('approved') || statusLow.includes('complete') || statusLow.includes('paid') || statusLow.includes('settled');
+        if (dateStr && amount && amount.includes('$') && isValid) {
           payments.push({ date: dateStr, status: status, method: method, amount: amount });
         }
       }
@@ -215,6 +218,7 @@
     log('📋 Fetching customer details (phone, vehicle, balance)...');
     log('   This takes ~' + Math.ceil(customers.length / 5) + ' seconds...');
 
+    var customerPayments = []; // collect payment history from each customer page
     var batchSize = 5;
     for (var i = 0; i < customers.length; i += batchSize) {
       var batch = customers.slice(i, i + batchSize);
@@ -230,6 +234,22 @@
           cust.scheduled_amount = details.scheduledAmount || '';
           cust.payment_frequency = details.paymentFrequency || '';
           cust.current_amount_due = details.currentAmountDue;
+          // Collect payment history from customer page
+          if (details.payments && details.payments.length) {
+            details.payments.forEach(function(p) {
+              customerPayments.push({
+                location: _loc,
+                carpay_id: cust.carpay_id,
+                name: cust.name,
+                account: cust.account,
+                reference: '',
+                date: p.date,
+                time: '',
+                method: p.method || '',
+                amount_sent: p.amount || '$0.00'
+              });
+            });
+          }
         } catch(e) {
           // skip
         }
@@ -238,7 +258,7 @@
       log('   ' + pct + '% (' + Math.min(i + batchSize, customers.length) + '/' + customers.length + ')');
       await sleep(200);
     }
-    log('✅ Details fetched', '#30d158');
+    log('✅ Details fetched (' + customerPayments.length + ' payments from customer pages)', '#30d158');
 
     // ── Step 3: Fetch recent payments ───────────────────────────────────────
     log('');
@@ -277,12 +297,34 @@
           });
         }
       });
-      log('✅ Found ' + payments.length + ' payments', '#30d158');
+      log('✅ Found ' + payments.length + ' recent payments', '#30d158');
     } catch(e) {
-      log('⚠ Could not fetch payments: ' + e.message, '#f59e0b');
+      log('⚠ Could not fetch recent payments: ' + e.message, '#f59e0b');
     }
 
-    // ── Step 4: Upsert to Supabase ──────────────────────────────────────────
+    // ── Step 4: Merge & deduplicate payments ────────────────────────────────
+    // Combine recent payments (have reference/time) with customer page payments (full history)
+    var allPayments = payments.slice(); // start with recent payments (higher quality — have reference + time)
+    var recentKeys = {};
+    allPayments.forEach(function(p) {
+      // Key by account + date + amount for dedup
+      var key = p.account + '|' + p.date + '|' + p.amount_sent;
+      recentKeys[key] = true;
+    });
+    // Add customer page payments that aren't already in recent
+    var added = 0;
+    customerPayments.forEach(function(p) {
+      var key = p.account + '|' + p.date + '|' + p.amount_sent;
+      if (!recentKeys[key]) {
+        allPayments.push(p);
+        recentKeys[key] = true;
+        added++;
+      }
+    });
+    log('');
+    log('📊 Total payments: ' + allPayments.length + ' (' + payments.length + ' recent + ' + added + ' from history)', '#60a5fa');
+
+    // ── Step 5: Upsert to Supabase ──────────────────────────────────────────
     log('');
     log('☁️  Saving to Supabase...');
 
@@ -293,8 +335,8 @@
     var custsDone = await sbUpsert('carpay_customers', customers);
     log('  ✅ ' + custsDone + ' customers saved', '#30d158');
 
-    if (payments.length) {
-      var paysDone = await sbUpsert('carpay_payments', payments);
+    if (allPayments.length) {
+      var paysDone = await sbUpsert('carpay_payments', allPayments);
       log('  ✅ ' + paysDone + ' payments saved', '#30d158');
     }
 
@@ -302,7 +344,7 @@
     log('════════════════════════════════');
     log('✅ Sync complete!', '#30d158');
     log('  ' + customers.length + ' customers');
-    log('  ' + payments.length + ' payments');
+    log('  ' + allPayments.length + ' payments (' + added + ' from history)');
     log('  Location: ' + _loc.toUpperCase());
     log('════════════════════════════════');
 
