@@ -13919,7 +13919,7 @@ function cashPayoutsRender(){
     html+='<span style="font-size:11px;color:#444;margin-left:auto;">tap to expand ▾</span>';
     html+='</div>';
     // Expanded detail (hidden by default)
-    html+='<div id="'+detailId+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e1e1e;">';
+    html+='<div id="'+detailId+'" onclick="event.stopPropagation()" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e1e1e;">';
     html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">';
     html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Paid To</div><input id="cp-edit-name-'+idx+'" value="'+p.paid_to.replace(/"/g,'&quot;')+'" onclick="event.stopPropagation()" style="width:100%;background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#fff;font-size:14px;font-weight:600;padding:4px 0 2px;margin-top:2px;outline:none;"/></div>';
     html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount</div><input id="cp-edit-amt-'+idx+'" value="'+fmt(amt)+'" onclick="event.stopPropagation()" oninput="moneyInput(this)" style="width:100%;background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#ef4444;font-size:14px;font-weight:700;padding:4px 0 2px;margin-top:2px;outline:none;"/></div>';
