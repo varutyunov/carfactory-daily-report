@@ -7535,6 +7535,11 @@ function repoGenerateHoldHarmless(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
   if(!cust) return;
   var vd=_repoVehicleCache[account]||{};
+  // Fallback: lookup from sold inventory if cache is empty
+  if(!vd.vin){
+    var si=soldInventoryLookup(cust.name, cust.location);
+    if(si){vd.vin=si.vin;vd.year=si.year;vd.make=si.make;vd.model=si.model;}
+  }
   var pays=_cpData.payments.filter(function(p){return p.account===account;});
 
   // Parse vehicle string "2005 Chevrolet Avalanche"
@@ -7663,6 +7668,10 @@ function repoEmailHoldHarmless(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
   if(!cust) return;
   var vd=_repoVehicleCache[account]||{};
+  if(!vd.vin){
+    var si=soldInventoryLookup(cust.name, cust.location);
+    if(si){vd.vin=si.vin;vd.year=si.year;vd.make=si.make;vd.model=si.model;}
+  }
   var vehParts=(cust.vehicle||'').split(' ');
   var vYear=vd.year||vehParts[0]||'';
   var vMake=vd.make||vehParts[1]||'';
