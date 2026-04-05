@@ -2502,13 +2502,26 @@ async function syncFromSupabase(showUI){
   for(var _attempt=0; _attempt<3; _attempt++){
     try{
       // Always fetch ALL data from Supabase - never use localStorage for inventory/employees
+      // Paginated fetch for large tables (Supabase caps at 1000 per request)
+      async function sbGetAll(table, params){
+        var all=[], offset=0, pageSize=1000;
+        while(true){
+          var sep=params.includes('?')?'&':'';
+          var rows=await sbGet(table, params+sep+'&offset='+offset+'&limit='+pageSize);
+          if(!Array.isArray(rows)||!rows.length) break;
+          all=all.concat(rows);
+          if(rows.length<pageSize) break;
+          offset+=pageSize;
+        }
+        return all;
+      }
       const [emps, inv, asgn, calEvRaw, cpCusts, cpPays] = await Promise.all([
         sbGet('employees', 'order=name&limit=2000'),
         sbGet('inventory', 'order=name&limit=2000&select=*'),
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
         sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
-        sbGet('carpay_customers', 'select=*&order=name&limit=5000').catch(()=>[]),
-        sbGet('carpay_payments', 'select=*&order=synced_at.desc&limit=20000').catch(()=>[])
+        sbGetAll('carpay_customers', 'select=*&order=name').catch(()=>[]),
+        sbGetAll('carpay_payments', 'select=*&order=synced_at.desc').catch(()=>[])
       ]);
       S.calendarEvents = Array.isArray(calEvRaw) ? calEvRaw : [];
       // Merge local-only events (table may not exist in Supabase)
