@@ -220,11 +220,12 @@
 
     var customerPayments = []; // collect payment history from each customer's payment-history tab
     var dealerId = location.search.match(/dealerId=(\d+)/) ? location.search.match(/dealerId=(\d+)/)[1] : '';
-    // Try to detect dealerId from the page if not in URL
     if (!dealerId) {
       var dMatch = document.body.innerHTML.match(/dealerId[=:][\s"']*(\d+)/);
       if (dMatch) dealerId = dMatch[1];
     }
+    // Fallback to known dealer IDs
+    if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
     var batchSize = 5;
     for (var i = 0; i < customers.length; i += batchSize) {
       var batch = customers.slice(i, i + batchSize);
@@ -242,16 +243,11 @@
           cust.payment_frequency = details.paymentFrequency || '';
           cust.current_amount_due = details.currentAmountDue;
 
-          // Fetch payment history tab separately — it's a different page/tab
-          var phUrls = [
-            '/dms/customer/' + cust.carpay_id + '?tabId=payment-history' + (dealerId ? '&dealerId=' + dealerId : ''),
-            '/dms/customer/' + cust.carpay_id + '?tabId=paymentHistory' + (dealerId ? '&dealerId=' + dealerId : ''),
-            '/dms/customer-payment-history/' + cust.carpay_id + (dealerId ? '?dealerId=' + dealerId : '')
-          ];
-          for (var u = 0; u < phUrls.length; u++) {
-            try {
-              var pr = await fetch(phUrls[u], { credentials: 'include' });
-              if (!pr.ok) continue;
+          // Fetch payment history tab — separate page from customer detail
+          try {
+            var phUrl = '/dms/customer/' + cust.carpay_id + '?dealerId=' + dealerId + '&tabId=payment-history';
+            var pr = await fetch(phUrl, { credentials: 'include' });
+            if (pr.ok) {
               var phtml = await pr.text();
               var phPays = parseCustomerPage(phtml, cust.carpay_id).payments;
               if (phPays && phPays.length) {
@@ -268,26 +264,9 @@
                     amount_sent: p.amount || '$0.00'
                   });
                 });
-                break; // found payments, stop trying URLs
               }
-            } catch(e) {}
-          }
-          // Also collect any payments found on main page (fallback)
-          if (details.payments && details.payments.length) {
-            details.payments.forEach(function(p) {
-              customerPayments.push({
-                location: _loc,
-                carpay_id: cust.carpay_id,
-                name: cust.name,
-                account: cust.account,
-                reference: '',
-                date: p.date,
-                time: '',
-                method: p.method || '',
-                amount_sent: p.amount || '$0.00'
-              });
-            });
-          }
+            }
+          } catch(e) {}
         } catch(e) {
           // skip
         }

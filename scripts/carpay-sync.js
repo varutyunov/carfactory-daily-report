@@ -264,7 +264,7 @@ async function cpGetCustomerPayments(dealerId, customers, location) {
     await Promise.all(batch.map(async (cust) => {
       if (!cust.carpay_id) return;
       try {
-        const res = await cpFetch('/dms/customer/' + cust.carpay_id);
+        const res = await cpFetch('/dms/customer/' + cust.carpay_id + '?dealerId=' + dealerId + '&tabId=payment-history');
         const html = await res.text();
         const pays = parseCustomerPagePayments(html);
         pays.forEach(p => {
