@@ -7575,6 +7575,25 @@ function repoSigDone(){
   if(_repoSigCallback)_repoSigCallback(_repoSigDataUrl);
 }
 
+// ── Hold Harmless — Assigned Company Presets ──
+var _repoCompanyPresets=[
+  {name:'Absolute Recovery',address:'1209 N State St',city:'Bunnell',state:'FL',zip:'32110'}
+];
+function repoFillAssignCompany(idx){
+  var p=_repoCompanyPresets[idx];if(!p)return;
+  var el=document.getElementById('repo-assign-company');if(el)el.value=p.name;
+  var el2=document.getElementById('repo-assign-addr');if(el2)el2.value=p.address;
+  var el3=document.getElementById('repo-assign-city');if(el3)el3.value=p.city+', '+p.state+' '+p.zip;
+}
+function _repoGetAssignedCompany(){
+  var nameEl=document.getElementById('repo-assign-company');
+  var addrEl=document.getElementById('repo-assign-addr');
+  var cityEl=document.getElementById('repo-assign-city');
+  var name=(nameEl?nameEl.value:'').trim();
+  if(!name) return null;
+  return {name:name,address:(addrEl?addrEl.value:'').trim(),cityLine:(cityEl?cityEl.value:'').trim()};
+}
+
 // ── Hold Harmless PDF Generator (jsPDF) ──
 function _repoGetFormData(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
@@ -7593,7 +7612,7 @@ function _repoGetFormData(account){
     addr:vd.address||'',city:vd.city||'',state:vd.state||'',zip:vd.zip||''};
 }
 
-function _repoBuildPDF(fd, sigDataUrl){
+function _repoBuildPDF(fd, sigDataUrl, assignedCo){
   var jsPDF=window.jspdf.jsPDF;
   var doc=new jsPDF({unit:'mm',format:'letter'});
   var W=doc.internal.pageSize.getWidth();
@@ -7621,17 +7640,32 @@ function _repoBuildPDF(fd, sigDataUrl){
     doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text(text,mx+2,y+5);y+=7;
   }
 
-  // Header
-  doc.setFontSize(13);doc.setFont('helvetica','bold');
-  doc.text('Premier Auto Group LLC dba Car Factory',W/2,y,{align:'center'});y+=5;
-  doc.setFontSize(9);doc.setFont('helvetica','normal');
-  doc.text('100 S Charles Richard Beall Blvd',W/2,y,{align:'center'});y+=4;
-  doc.text('DeBary FL 32713',W/2,y,{align:'center'});y+=4;
-  doc.text('386-793-3010',W/2,y,{align:'center'});y+=4;
-  doc.text('Vladimir Arutyunov',W/2,y,{align:'center'});y+=7;
-
-  doc.setFontSize(15);doc.setFont('helvetica','bold');
-  doc.text('Hold Harmless Agreement',W/2,y,{align:'center'});y+=7;
+  // Header — if assigned company, split layout; otherwise centered
+  if(assignedCo){
+    // Left side: assigned company
+    var startY=y;
+    doc.setFontSize(11);doc.setFont('helvetica','bold');
+    doc.text(assignedCo.name,mx,y);y+=4.5;
+    doc.setFontSize(9);doc.setFont('helvetica','normal');
+    if(assignedCo.address){doc.text(assignedCo.address,mx,y);y+=3.5;}
+    if(assignedCo.cityLine){doc.text(assignedCo.cityLine,mx,y);y+=3.5;}
+    var leftEndY=y;
+    // Right side: title + date/acct
+    var titleX=W/2+15;
+    doc.setFontSize(15);doc.setFont('helvetica','bold');
+    doc.text('Hold Harmless Agreement',titleX,startY,{align:'center'});
+    y=Math.max(leftEndY,startY+6)+7;
+  } else {
+    doc.setFontSize(13);doc.setFont('helvetica','bold');
+    doc.text('Premier Auto Group LLC dba Car Factory',W/2,y,{align:'center'});y+=5;
+    doc.setFontSize(9);doc.setFont('helvetica','normal');
+    doc.text('100 S Charles Richard Beall Blvd',W/2,y,{align:'center'});y+=4;
+    doc.text('DeBary FL 32713',W/2,y,{align:'center'});y+=4;
+    doc.text('386-793-3010',W/2,y,{align:'center'});y+=4;
+    doc.text('Vladimir Arutyunov',W/2,y,{align:'center'});y+=7;
+    doc.setFontSize(15);doc.setFont('helvetica','bold');
+    doc.text('Hold Harmless Agreement',W/2,y,{align:'center'});y+=7;
+  }
 
   doc.setFontSize(10);doc.setFont('helvetica','normal');
   doc.text('Date: '+fd.todayStr,mx,y);
@@ -7699,9 +7733,10 @@ function _repoBuildPDF(fd, sigDataUrl){
 function repoGenerateHoldHarmless(account){
   var fd=_repoGetFormData(account);
   if(!fd){alert('Customer not found');return;}
+  var assignedCo=_repoGetAssignedCompany();
   // Open signature pad, then generate PDF after signing
   repoOpenSignPad(function(sigData){
-    var doc=_repoBuildPDF(fd, sigData);
+    var doc=_repoBuildPDF(fd, sigData, assignedCo);
     var fileName='HoldHarmless_'+fd.debtorName.replace(/\s+/g,'_')+'_'+fd.cust.account+'.pdf';
     // Try Web Share API for mobile
     if(navigator.share&&navigator.canShare){
@@ -7721,8 +7756,9 @@ function repoGenerateHoldHarmless(account){
 function repoEmailHoldHarmless(account){
   var fd=_repoGetFormData(account);
   if(!fd){alert('Customer not found');return;}
+  var assignedCo=_repoGetAssignedCompany();
   // Generate PDF without signature for quick share
-  var doc=_repoBuildPDF(fd, null);
+  var doc=_repoBuildPDF(fd, null, assignedCo);
   var fileName='HoldHarmless_'+fd.debtorName.replace(/\s+/g,'_')+'_'+fd.cust.account+'.pdf';
   if(navigator.share&&navigator.canShare){
     try{
@@ -7957,6 +7993,18 @@ async function cpOpenAccount(account){
   if(cust&&cust.repoFlagged&&_cashPayoutIsUser()){
     html+='<div style="background:#0d0d0d;border:1px solid rgba(255,69,58,.25);border-radius:14px;padding:16px;margin-bottom:12px;">';
     html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#ff453a;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📄 Hold Harmless</div>';
+    // Assign To company field
+    html+='<div style="margin-bottom:10px;">';
+    html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Assign To (optional)</label>';
+    html+='<input id="repo-assign-company" placeholder="Company name" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;margin-bottom:6px;" onclick="event.stopPropagation()"/>';
+    html+='<input id="repo-assign-addr" placeholder="Address" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:13px;outline:none;margin-bottom:4px;" onclick="event.stopPropagation()"/>';
+    html+='<input id="repo-assign-city" placeholder="City, ST Zip" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:13px;outline:none;margin-bottom:6px;" onclick="event.stopPropagation()"/>';
+    // Quick-fill buttons
+    html+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    for(var pi=0;pi<_repoCompanyPresets.length;pi++){
+      html+='<button onclick="event.stopPropagation();repoFillAssignCompany('+pi+')" style="padding:6px 12px;background:rgba(255,255,255,.06);border:1px solid #333;border-radius:8px;color:#ccc;font-size:12px;font-weight:600;cursor:pointer;">'+_repoCompanyPresets[pi].name+'</button>';
+    }
+    html+='</div></div>';
     html+='<div style="display:flex;gap:8px;">';
     html+='<button onclick="event.stopPropagation();repoGenerateHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">✍ Sign & PDF</button>';
     html+='<button onclick="event.stopPropagation();repoEmailHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:10px;color:#4ade80;font-size:14px;font-weight:700;cursor:pointer;">📤 Share PDF</button>';
