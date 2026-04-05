@@ -7468,23 +7468,28 @@ async function loadSoldInventory(){
   }catch(e){_soldInventory=[];}
   return _soldInventory;
 }
-function soldInventoryLookup(name){
+function soldInventoryLookup(name, location){
   if(!_soldInventory||!name) return null;
   var q=name.toUpperCase().trim();
+  var loc=(location||'').toLowerCase();
+  // Filter by location if provided (index 5 = 'debary' or 'deland')
+  var pool=loc?_soldInventory.filter(function(r){return r[5]===loc;}):_soldInventory;
   // Try exact match first
-  var match=_soldInventory.find(function(r){return r[0]===q;});
+  var match=pool.find(function(r){return r[0]===q;});
   if(match) return{vin:match[1],year:match[2],make:match[3],model:match[4]};
   // Try last name + first name partial
   var parts=q.split(',');
   if(parts.length<2) return null;
   var last=parts[0].trim();
   var first=parts[1].trim().split(' ')[0];
-  match=_soldInventory.find(function(r){
+  match=pool.find(function(r){
     var rp=r[0].split(',');
     if(rp.length<2) return false;
     return rp[0].trim()===last&&rp[1].trim().indexOf(first)===0;
   });
   if(match) return{vin:match[1],year:match[2],make:match[3],model:match[4]};
+  // Fall back to all locations if no match found
+  if(loc){return soldInventoryLookup(name, null);}
   return null;
 }
 
@@ -7857,7 +7862,7 @@ async function cpOpenAccount(account){
   if(!vehicleStr&&dealCar){vehicleStr=dealCar.vehicle_desc||'';vinStr=vinStr||dealCar.vin||'';}
   // Load sold inventory for VIN lookup
   await loadSoldInventory();
-  var soldMatch=soldInventoryLookup(cust?cust.name:'');
+  var soldMatch=soldInventoryLookup(cust?cust.name:'', cust?cust.location:'');
   if(soldMatch&&!vinStr) vinStr=soldMatch.vin;
   // Load repo vehicle overrides (color, vin)
   var repoVeh=await repoLoadVehicle(account);
