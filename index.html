@@ -7458,6 +7458,238 @@ function cpRenderHistory(){
 }
 function cpFilterHistory(){cpRenderHistory();}
 
+// ── Sold Inventory Lookup ──
+var _soldInventory=null;
+async function loadSoldInventory(){
+  if(_soldInventory) return _soldInventory;
+  try{
+    var resp=await fetch('sold-inventory.json?v=1');
+    _soldInventory=await resp.json();
+  }catch(e){_soldInventory=[];}
+  return _soldInventory;
+}
+function soldInventoryLookup(name){
+  if(!_soldInventory||!name) return null;
+  var q=name.toUpperCase().trim();
+  // Try exact match first
+  var match=_soldInventory.find(function(r){return r[0]===q;});
+  if(match) return{vin:match[1],year:match[2],make:match[3],model:match[4]};
+  // Try last name + first name partial
+  var parts=q.split(',');
+  if(parts.length<2) return null;
+  var last=parts[0].trim();
+  var first=parts[1].trim().split(' ')[0];
+  match=_soldInventory.find(function(r){
+    var rp=r[0].split(',');
+    if(rp.length<2) return false;
+    return rp[0].trim()===last&&rp[1].trim().indexOf(first)===0;
+  });
+  if(match) return{vin:match[1],year:match[2],make:match[3],model:match[4]};
+  return null;
+}
+
+// ── Repo Vehicle Overrides (stored in app_settings) ──
+var _repoVehicleCache={};
+async function repoLoadVehicle(account){
+  if(_repoVehicleCache[account]) return _repoVehicleCache[account];
+  try{
+    var rows=await sbGet('app_settings','key=eq.repo_vehicle_'+encodeURIComponent(account));
+    if(rows&&rows.length&&rows[0].value){
+      _repoVehicleCache[account]=rows[0].value;
+      return rows[0].value;
+    }
+  }catch(e){}
+  return null;
+}
+async function repoSaveVehicle(account, data){
+  _repoVehicleCache[account]=data;
+  var key='repo_vehicle_'+account;
+  try{
+    var existing=await sbGet('app_settings','key=eq.'+encodeURIComponent(key));
+    if(existing&&existing.length){
+      await sbPatch('app_settings',existing[0].id,{value:data});
+    } else {
+      await sbPost('app_settings',{key:key,value:data});
+    }
+  }catch(e){console.error('repoSaveVehicle',e);}
+}
+async function repoSaveColor(account){
+  var el=document.getElementById('repo-color-input');
+  if(!el) return;
+  var color=el.value.trim();
+  var existing=await repoLoadVehicle(account)||{};
+  existing.color=color;
+  await repoSaveVehicle(account, existing);
+  // Brief feedback
+  var btn=document.getElementById('repo-color-save');
+  if(btn){btn.textContent='✓ Saved';setTimeout(function(){btn.textContent='Save';},1500);}
+}
+
+// ── Hold Harmless Form Generator ──
+function repoGenerateHoldHarmless(account){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust) return;
+  var vd=_repoVehicleCache[account]||{};
+  var pays=_cpData.payments.filter(function(p){return p.account===account;});
+
+  // Parse vehicle string "2005 Chevrolet Avalanche"
+  var vehParts=(cust.vehicle||'').split(' ');
+  var vYear=vd.year||vehParts[0]||'';
+  var vMake=vd.make||vehParts[1]||'';
+  var vModel=vd.model||vehParts.slice(2).join(' ')||'';
+  var vVin=vd.vin||cust.vin||'';
+  var vColor=vd.color||cust.color||'';
+
+  // Payment info
+  var pmtAmt=cust.scheduledAmount||cust.paymentAmount||'';
+  var daysLate=parseInt(cust.daysLate)||0;
+  var balDue=cust.currentAmountDue?'$'+parseFloat(cust.currentAmountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+
+  // Debtor name parsing: "LAST, FIRST MIDDLE"
+  var nameParts=(cust.name||'').split(',');
+  var lastName=(nameParts[0]||'').trim();
+  var firstMiddle=(nameParts[1]||'').trim();
+  var debtorName=firstMiddle+' '+lastName;
+
+  // Delinquent since — estimate from days late
+  var delinqDate='';
+  if(daysLate>0){
+    var d=new Date();d.setDate(d.getDate()-daysLate);
+    delinqDate=(d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
+  }
+
+  var today=new Date();
+  var todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+
+  // Location info
+  var isDeLand=cust.location&&cust.location.toLowerCase()==='deland';
+  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S US HWY 17-92, DeBary FL 32713';
+  var companyPhone=isDeLand?'386-793-3010':'386-793-3010';
+
+  // Build form HTML
+  var formHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hold Harmless - '+debtorName+'</title>'
+    +'<style>'
+    +'*{margin:0;padding:0;box-sizing:border-box;}'
+    +'body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto;font-size:14px;}'
+    +'h2{text-align:center;margin-bottom:4px;font-size:18px;}'
+    +'.header{text-align:center;margin-bottom:16px;font-size:12px;line-height:1.5;}'
+    +'.field-row{display:flex;border:1px solid #000;border-top:none;}'
+    +'.field-row:first-child{border-top:1px solid #000;}'
+    +'.field{flex:1;padding:4px 8px;border-right:1px solid #000;font-size:13px;}'
+    +'.field:last-child{border-right:none;}'
+    +'.field label{font-weight:bold;font-size:11px;}'
+    +'.field span{display:block;min-height:18px;}'
+    +'.section-title{font-weight:bold;font-size:14px;padding:6px 8px;border:1px solid #000;border-bottom:none;background:#eee;}'
+    +'.legal{font-size:11px;line-height:1.5;padding:12px;border:1px solid #000;margin-top:0;}'
+    +'.sig-section{margin-top:20px;padding:8px;}'
+    +'.sig-line{border-bottom:1px solid #000;height:40px;margin-top:30px;display:flex;justify-content:space-between;}'
+    +'.sig-label{font-size:12px;margin-top:2px;}'
+    +'@media print{body{padding:10px;}}'
+    +'</style></head><body>'
+    +'<div class="header"><strong style="font-size:16px;">Premier Auto Group LLC dba Car Factory</strong><br>'
+    +companyAddr+'<br>'+companyPhone+'<br>Vladimir Arutyunov</div>'
+    +'<h2>Hold Harmless Agreement</h2>'
+    +'<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">'
+    +'<div><strong>Date:</strong> '+todayStr+'</div>'
+    +'<div><strong>Acct#:</strong> '+cust.account+'</div>'
+    +'</div>'
+    +'<div style="padding:2px 0 8px;font-size:13px;"><strong>Assignment Type:</strong> Repossession</div>'
+
+    +'<div class="section-title">Client/Lien Holder &nbsp;&nbsp;&nbsp; Premier Auto Group LLC dba Car Factory</div>'
+    +'<div class="field-row"><div class="field"><label>Address:</label> <span>'+companyAddr.split(',')[0]+'</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>City:</label> <span>'+(isDeLand?'DeLand':'DeBary')+'</span></div>'
+    +'<div class="field"><label>State:</label> <span>FL</span></div>'
+    +'<div class="field"><label>Zip:</label> <span>'+(isDeLand?'32720':'32713')+'</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+companyPhone+'</span></div>'
+    +'<div class="field"><label>Fax:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Assigned By:</label> <span>Vladimir Arutyunov</span></div>'
+    +'<div class="field"><label>Extension:</label> <span></span></div></div>'
+
+    +'<div class="section-title">Debtor</div>'
+    +'<div class="field-row"><div class="field"><label>Address:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
+    +'<div class="field"><label>State:</label> <span></span></div>'
+    +'<div class="field"><label>Zip:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+(cust.phone||'')+'</span></div>'
+    +'<div class="field"><label>Cell / Pager:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Work:</label> <span></span></div>'
+    +'<div class="field"><label>Phone:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
+    +'<div class="field"><label>State:</label> <span></span></div>'
+    +'<div class="field"><label>Zip:</label> <span></span></div></div>'
+
+    +'<div class="section-title">ADDITIONAL INFO</div>'
+    +'<div style="font-size:11px;font-weight:bold;padding:2px 8px;border:1px solid #000;border-top:none;border-bottom:none;background:#f5f5f5;">VEHICLE INFORMATION</div>'
+    +'<div class="field-row"><div class="field"><label>Year:</label> <span>'+vYear+'</span></div>'
+    +'<div class="field"><label>Make:</label> <span>'+vMake+'</span></div>'
+    +'<div class="field"><label>Model:</label> <span>'+vModel+'</span></div></div>'
+    +'<div class="field-row"><div class="field" style="flex:3;"><label>VIN:</label> <span>'+vVin+'</span></div>'
+    +'<div class="field"><label>Color:</label> <span>'+vColor+'</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Key Code 1:</label> <span></span></div>'
+    +'<div class="field"><label>Key Code 2:</label> <span></span></div></div>'
+
+    +'<div style="font-size:11px;font-weight:bold;padding:2px 8px;border:1px solid #000;border-top:none;border-bottom:none;background:#f5f5f5;">PAYMENT INFORMATION</div>'
+    +'<div class="field-row"><div class="field"><label>Monthly Payment:</label> <span>'+pmtAmt+'</span></div>'
+    +'<div class="field"><label>Delinquent Since:</label> <span>'+delinqDate+'</span></div>'
+    +'<div class="field"><label>Balance on Account:</label> <span>'+balDue+'</span></div></div>'
+
+    +'<div class="legal">This is your authorization to process for collection or repossession of the above described assignment. '
+    +'We agree to indemnify and hold you harmless from and against any and all claims, damage, losses and '
+    +'action resulting from or arising out of our efforts to collect or repossess the above claim, except, '
+    +'however, such as may be caused or arisen out of negligence or unauthorized acts of your company, it\'s '
+    +'officers, employees, or the officers or employees of such agents.</div>'
+
+    +'<div class="sig-section">'
+    +'<div style="font-weight:bold;margin-bottom:4px;">Authorized By [ Please Print ]:</div>'
+    +'<div style="margin-top:40px;display:flex;gap:40px;">'
+    +'<div style="flex:2;border-top:1px solid #000;padding-top:4px;font-size:12px;">Signature</div>'
+    +'<div style="flex:1;border-top:1px solid #000;padding-top:4px;font-size:12px;">Date</div>'
+    +'</div></div>'
+
+    +'</body></html>';
+
+  // Open in new window for print
+  var win=window.open('','_blank','width=750,height=900');
+  win.document.write(formHtml);
+  win.document.close();
+}
+
+function repoEmailHoldHarmless(account){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust) return;
+  var vd=_repoVehicleCache[account]||{};
+  var vehParts=(cust.vehicle||'').split(' ');
+  var vYear=vd.year||vehParts[0]||'';
+  var vMake=vd.make||vehParts[1]||'';
+  var vModel=vd.model||vehParts.slice(2).join(' ')||'';
+  var vVin=vd.vin||cust.vin||'';
+  var vColor=vd.color||cust.color||'';
+  var nameParts=(cust.name||'').split(',');
+  var debtorName=((nameParts[1]||'').trim()+' '+(nameParts[0]||'').trim()).trim();
+  var balDue=cust.currentAmountDue?'$'+parseFloat(cust.currentAmountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'N/A';
+  var pmtAmt=cust.scheduledAmount||cust.paymentAmount||'N/A';
+  var daysLate=parseInt(cust.daysLate)||0;
+
+  var subject='Hold Harmless Agreement - '+debtorName+' - Acct #'+cust.account;
+  var body='Hold Harmless Agreement%0D%0A'
+    +'Premier Auto Group LLC dba Car Factory%0D%0A'
+    +'Account: '+cust.account+'%0D%0A'
+    +'Date: '+(new Date().toLocaleDateString())+'%0D%0A%0D%0A'
+    +'DEBTOR: '+debtorName+'%0D%0A'
+    +'Phone: '+(cust.phone||'N/A')+'%0D%0A%0D%0A'
+    +'VEHICLE: '+vYear+' '+vMake+' '+vModel+'%0D%0A'
+    +'VIN: '+vVin+'%0D%0A'
+    +'Color: '+vColor+'%0D%0A%0D%0A'
+    +'PAYMENT INFO:%0D%0A'
+    +'Monthly Payment: '+pmtAmt+'%0D%0A'
+    +'Balance on Account: '+balDue+'%0D%0A'
+    +'Days Late: '+daysLate+'%0D%0A%0D%0A'
+    +'Assignment Type: Repossession%0D%0A%0D%0A'
+    +'This is your authorization to process for collection or repossession of the above described assignment.';
+
+  window.location.href='mailto:?subject='+encodeURIComponent(subject.replace(/%0D%0A/g,''))+'&body='+body;
+}
+
 async function cpOpenAccount(account){
   var overlay=document.getElementById('cp-account-overlay');
   var content=document.getElementById('cp-acct-content');
@@ -7616,25 +7848,63 @@ async function cpOpenAccount(account){
   }
   html+='</div>';
 
-  // ── Vehicle Info ──
+  // ── Vehicle Info (enhanced with sold inventory lookup + repo overrides) ──
   var vehicleStr=cust&&cust.vehicle?cust.vehicle:'';
   var vinStr=cust&&cust.vin?cust.vin:'';
   var colorStr=cust&&cust.color?cust.color:'';
   // Fall back to deals cross-reference
   if(!vehicleStr&&dealCar){vehicleStr=dealCar.vehicle_desc||'';vinStr=vinStr||dealCar.vin||'';}
-  if(vehicleStr||vinStr||dealCar){
-    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Vehicle</div>';
-    if(vehicleStr) html+='<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+vehicleStr+(colorStr?' · '+colorStr:'')+'</div>';
-    if(vinStr) html+='<div style="font-size:12px;color:#555;margin-bottom:8px;">VIN: '+vinStr+'</div>';
-    if(dealCar){
-      html+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;">';
-      if(dealCar.deal_type) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Deal Type</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.deal_type+'</div></div>';
-      if(dealCar.total_collected) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Total Collected</div><div style="font-size:13px;color:#4ade80;font-weight:600;margin-top:2px;">'+dealCar.total_collected+'</div></div>';
-      if(dealCar.gps_serial) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">GPS Serial</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.gps_serial+'</div></div>';
-      html+='</div>';
-    }
+  // Load sold inventory for VIN lookup
+  await loadSoldInventory();
+  var soldMatch=soldInventoryLookup(cust?cust.name:'');
+  if(soldMatch&&!vinStr) vinStr=soldMatch.vin;
+  // Load repo vehicle overrides (color, vin)
+  var repoVeh=await repoLoadVehicle(account);
+  if(repoVeh){
+    if(repoVeh.color) colorStr=repoVeh.color;
+    if(repoVeh.vin) vinStr=repoVeh.vin;
+    if(repoVeh.year) soldMatch=soldMatch||{year:repoVeh.year,make:repoVeh.make,model:repoVeh.model};
+  }
+  // Save VIN to cache if found from sold inventory
+  if(soldMatch&&!repoVeh){
+    _repoVehicleCache[account]={vin:soldMatch.vin,year:soldMatch.year,make:soldMatch.make,model:soldMatch.model,color:colorStr};
+  } else if(repoVeh){
+    if(soldMatch&&!repoVeh.vin){repoVeh.vin=soldMatch.vin;repoVeh.year=soldMatch.year;repoVeh.make=soldMatch.make;repoVeh.model=soldMatch.model;}
+    _repoVehicleCache[account]=repoVeh;
+  }
+
+  // Always show vehicle section
+  html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">🚗 Vehicle</div>';
+  if(vehicleStr) html+='<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+vehicleStr+'</div>';
+  if(vinStr){
+    html+='<div style="font-size:12px;color:#888;margin-bottom:8px;font-family:monospace;letter-spacing:.5px;">VIN: '+vinStr+'</div>';
+  } else {
+    html+='<div style="font-size:12px;color:#ff453a;margin-bottom:8px;">⚠ VIN not found</div>';
+  }
+  // Color input
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+  html+='<div style="flex:1;"><label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Color</label>';
+  html+='<input id="repo-color-input" value="'+(colorStr||'').replace(/"/g,'&quot;')+'" placeholder="e.g. White, Black, Silver" style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;outline:none;" onclick="event.stopPropagation()"/></div>';
+  html+='<button id="repo-color-save" onclick="event.stopPropagation();repoSaveColor(\''+account+'\')" style="margin-top:18px;padding:8px 16px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:8px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;">Save</button>';
+  html+='</div>';
+  if(dealCar){
+    html+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;">';
+    if(dealCar.deal_type) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Deal Type</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.deal_type+'</div></div>';
+    if(dealCar.total_collected) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">Total Collected</div><div style="font-size:13px;color:#4ade80;font-weight:600;margin-top:2px;">'+dealCar.total_collected+'</div></div>';
+    if(dealCar.gps_serial) html+='<div><div style="font-size:11px;color:#555;text-transform:uppercase;">GPS Serial</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dealCar.gps_serial+'</div></div>';
     html+='</div>';
+  }
+  html+='</div>';
+
+  // ── Hold Harmless Actions (repo flagged only) ──
+  if(cust&&cust.repoFlagged&&_cashPayoutIsUser()){
+    html+='<div style="background:#0d0d0d;border:1px solid rgba(255,69,58,.25);border-radius:14px;padding:16px;margin-bottom:12px;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#ff453a;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📄 Hold Harmless</div>';
+    html+='<div style="display:flex;gap:8px;">';
+    html+='<button onclick="event.stopPropagation();repoGenerateHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">📄 Generate Form</button>';
+    html+='<button onclick="event.stopPropagation();repoEmailHoldHarmless(\''+account+'\')" style="flex:1;padding:12px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:10px;color:#4ade80;font-size:14px;font-weight:700;cursor:pointer;">✉ Email</button>';
+    html+='</div></div>';
   }
 
   // ── Repo Score Breakdown ──
