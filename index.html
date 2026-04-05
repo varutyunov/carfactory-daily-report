@@ -965,8 +965,6 @@ body.light .cal-fab{background:#4488ff !important;}
             <div id="cp-repo" class="cp-section" style="display:none;">
               <div class="cp-stat-row">
                 <div class="cp-stat"><div class="cp-stat-val cp-late" id="cp-repo-flagged">—</div><div class="cp-stat-label">Flagged</div></div>
-                <div class="cp-stat"><div class="cp-stat-val" id="cp-repo-atrisk">—</div><div class="cp-stat-label">At Risk</div></div>
-                <div class="cp-stat"><div class="cp-stat-val" id="cp-repo-nogps">—</div><div class="cp-stat-label">No GPS</div></div>
               </div>
               <div id="cp-repo-list"><div class="cp-empty">Analyzing accounts...</div></div>
             </div>
@@ -7403,63 +7401,36 @@ async function cpRenderRepo(){
     (gpsRows||[]).forEach(function(g){gpsMap[g.account]=g;});
   }catch(e){}
 
-  // Score all customers and build categories
-  var flagged=[], atRisk=[], noGps=[];
+  // Only show accounts YOU flagged
+  var flagged=[];
   locCusts.forEach(function(c){
+    if(!c.repoFlagged) return;
     var pays=_cpData.payments.filter(function(p){return p.account===c.account;});
     var gps=gpsMap[c.account]||null;
     var result=repoScoreAccount(c,pays.map(function(p){return{date:p.date,amount_sent:p.amountSent,method:p.method};}),gps);
-    var item={cust:c,result:result,gps:gps,pays:pays};
-    if(c.repoFlagged) flagged.push(item);
-    if(result.score>=40&&!c.repoFlagged) atRisk.push(item);
-    if(!gps) noGps.push(item);
+    flagged.push({cust:c,result:result,gps:gps,pays:pays});
   });
-
-  // Sort by score descending
   flagged.sort(function(a,b){return b.result.score-a.result.score;});
-  atRisk.sort(function(a,b){return b.result.score-a.result.score;});
-  noGps.sort(function(a,b){return parseInt(b.cust.daysLate)-parseInt(a.cust.daysLate);});
 
-  // Update stat counts
+  // Update stat count
   var fe=document.getElementById('cp-repo-flagged');if(fe)fe.textContent=flagged.length;
-  var ae=document.getElementById('cp-repo-atrisk');if(ae)ae.textContent=atRisk.length;
-  var ge=document.getElementById('cp-repo-nogps');if(ge)ge.textContent=noGps.length;
 
-  if(!flagged.length&&!atRisk.length&&!noGps.length){
-    list.innerHTML='<div class="cp-empty">All accounts look good</div>';
+  if(!flagged.length){
+    list.innerHTML='<div class="cp-empty">No accounts flagged for repo</div>';
     return;
   }
 
-  function repoCard(item){
+  list.innerHTML=flagged.map(function(item){
     var c=item.cust,r=item.result;
     var daysNum=parseInt(c.daysLate)||0;
     var scoreColor=r.risk.color;
     var gpsBadge=item.gps?'':'<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:rgba(255,69,58,.15);color:#ff453a;border:1px solid rgba(255,69,58,.3);margin-left:6px;">NO GPS</span>';
-    var flagBadge=c.repoFlagged?'<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:rgba(255,69,58,.2);color:#ff453a;border:1px solid rgba(255,69,58,.4);margin-left:6px;">🚩 FLAGGED</span>':'';
     return '<div class="cp-card" onclick="cpOpenAccount(\''+c.account+'\')" style="border-color:'+scoreColor+'44;cursor:pointer;-webkit-tap-highlight-color:transparent;">'
-      +'<div class="cp-card-row"><div class="cp-card-name">'+c.name+flagBadge+gpsBadge+'</div>'
+      +'<div class="cp-card-row"><div class="cp-card-name">'+c.name+gpsBadge+'</div>'
       +'<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:12px;font-weight:800;color:'+scoreColor+';">'+r.risk.emoji+' '+r.score+'</span></div></div>'
       +'<div class="cp-card-row"><div class="cp-card-date">Acct #'+c.account+(daysNum>0?' · '+daysNum+' days late':'')+(c.vehicle?' · '+c.vehicle:'')+'</div></div>'
       +'</div>';
-  }
-
-  var html='';
-  // Flagged section
-  if(flagged.length){
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#ff453a;letter-spacing:1px;text-transform:uppercase;padding:10px 0 6px;">🚩 Repo Flagged ('+flagged.length+')</div>';
-    html+=flagged.map(repoCard).join('');
-  }
-  // At risk section
-  if(atRisk.length){
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#fbbf24;letter-spacing:1px;text-transform:uppercase;padding:10px 0 6px;">⚠️ At Risk ('+atRisk.length+')</div>';
-    html+=atRisk.map(repoCard).join('');
-  }
-  // No GPS section
-  if(noGps.length){
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;padding:10px 0 6px;">📡 No GPS Signal ('+noGps.length+')</div>';
-    html+=noGps.map(repoCard).join('');
-  }
-  list.innerHTML=html;
+  }).join('');
 }
 function cpRenderHistory(){
   var list=document.getElementById('cp-hist-list');
