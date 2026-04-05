@@ -7563,8 +7563,13 @@ function repoGenerateHoldHarmless(account){
 
   // Location info
   var isDeLand=cust.location&&cust.location.toLowerCase()==='deland';
-  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S US HWY 17-92, DeBary FL 32713';
-  var companyPhone=isDeLand?'386-793-3010':'386-793-3010';
+  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S Charles Richard Beall Blvd, DeBary FL 32713';
+  var companyPhone='386-793-3010';
+
+  // Debtor phone formatting
+  var debtorPhone=cust.phone||'';
+  var dpClean=debtorPhone.replace(/\D/g,'');
+  if(dpClean.length===10) debtorPhone='('+dpClean.slice(0,3)+') '+dpClean.slice(3,6)+'-'+dpClean.slice(6);
 
   // Build form HTML
   var formHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hold Harmless - '+debtorName+'</title>'
@@ -7596,7 +7601,7 @@ function repoGenerateHoldHarmless(account){
     +'<div style="padding:2px 0 8px;font-size:13px;"><strong>Assignment Type:</strong> Repossession</div>'
 
     +'<div class="section-title">Client/Lien Holder &nbsp;&nbsp;&nbsp; Premier Auto Group LLC dba Car Factory</div>'
-    +'<div class="field-row"><div class="field"><label>Address:</label> <span>'+companyAddr.split(',')[0]+'</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Address:</label> <span>'+(isDeLand?'2800 S Woodland Blvd':'100 S Charles Richard Beall Blvd')+'</span></div></div>'
     +'<div class="field-row"><div class="field"><label>City:</label> <span>'+(isDeLand?'DeLand':'DeBary')+'</span></div>'
     +'<div class="field"><label>State:</label> <span>FL</span></div>'
     +'<div class="field"><label>Zip:</label> <span>'+(isDeLand?'32720':'32713')+'</span></div></div>'
@@ -7605,13 +7610,13 @@ function repoGenerateHoldHarmless(account){
     +'<div class="field-row"><div class="field"><label>Assigned By:</label> <span>Vladimir Arutyunov</span></div>'
     +'<div class="field"><label>Extension:</label> <span></span></div></div>'
 
-    +'<div class="section-title">Debtor</div>'
+    +'<div class="section-title">Debtor &nbsp;&nbsp;&nbsp; '+debtorName+'</div>'
     +'<div class="field-row"><div class="field"><label>Address:</label> <span></span></div></div>'
     +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
     +'<div class="field"><label>State:</label> <span></span></div>'
     +'<div class="field"><label>Zip:</label> <span></span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+(cust.phone||'')+'</span></div>'
-    +'<div class="field"><label>Cell / Pager:</label> <span></span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+debtorPhone+'</span></div>'
+    +'<div class="field"><label>Cell / Pager:</label> <span>'+debtorPhone+'</span></div></div>'
     +'<div class="field-row"><div class="field"><label>Work:</label> <span></span></div>'
     +'<div class="field"><label>Phone:</label> <span></span></div></div>'
     +'<div class="field-row"><div class="field"><label>City:</label> <span></span></div>'
@@ -7627,11 +7632,6 @@ function repoGenerateHoldHarmless(account){
     +'<div class="field"><label>Color:</label> <span>'+vColor+'</span></div></div>'
     +'<div class="field-row"><div class="field"><label>Key Code 1:</label> <span></span></div>'
     +'<div class="field"><label>Key Code 2:</label> <span></span></div></div>'
-
-    +'<div style="font-size:11px;font-weight:bold;padding:2px 8px;border:1px solid #000;border-top:none;border-bottom:none;background:#f5f5f5;">PAYMENT INFORMATION</div>'
-    +'<div class="field-row"><div class="field"><label>Monthly Payment:</label> <span>'+pmtAmt+'</span></div>'
-    +'<div class="field"><label>Delinquent Since:</label> <span>'+delinqDate+'</span></div>'
-    +'<div class="field"><label>Balance on Account:</label> <span>'+balDue+'</span></div></div>'
 
     +'<div class="legal">This is your authorization to process for collection or repossession of the above described assignment. '
     +'We agree to indemnify and hold you harmless from and against any and all claims, damage, losses and '
@@ -7670,20 +7670,21 @@ function repoEmailHoldHarmless(account){
   var pmtAmt=cust.scheduledAmount||cust.paymentAmount||'N/A';
   var daysLate=parseInt(cust.daysLate)||0;
 
+  var isDeLand=cust.location&&cust.location.toLowerCase()==='deland';
+  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S Charles Richard Beall Blvd, DeBary FL 32713';
+
   var subject='Hold Harmless Agreement - '+debtorName+' - Acct #'+cust.account;
   var body='Hold Harmless Agreement%0D%0A'
     +'Premier Auto Group LLC dba Car Factory%0D%0A'
+    +companyAddr+'%0D%0A'
     +'Account: '+cust.account+'%0D%0A'
     +'Date: '+(new Date().toLocaleDateString())+'%0D%0A%0D%0A'
     +'DEBTOR: '+debtorName+'%0D%0A'
-    +'Phone: '+(cust.phone||'N/A')+'%0D%0A%0D%0A'
+    +'Phone: '+(cust.phone||'N/A')+'%0D%0A'
+    +'Email: '+(cust.email||'N/A')+'%0D%0A%0D%0A'
     +'VEHICLE: '+vYear+' '+vMake+' '+vModel+'%0D%0A'
     +'VIN: '+vVin+'%0D%0A'
     +'Color: '+vColor+'%0D%0A%0D%0A'
-    +'PAYMENT INFO:%0D%0A'
-    +'Monthly Payment: '+pmtAmt+'%0D%0A'
-    +'Balance on Account: '+balDue+'%0D%0A'
-    +'Days Late: '+daysLate+'%0D%0A%0D%0A'
     +'Assignment Type: Repossession%0D%0A%0D%0A'
     +'This is your authorization to process for collection or repossession of the above described assignment.';
 
