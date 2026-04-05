@@ -11348,6 +11348,45 @@ function openPayScanForm(){
   document.getElementById('pay-card-fee-section').style.display='none';
 }
 
+function payEditPayment(id){
+  var p=_payWeekData.find(function(x){return x.id===id;});
+  if(!p)return;
+  _payEditId=id;
+  _payViewMode='scan';
+  _payReceiptDataUrl=null;
+  _payMethod=(p.payment_method||'cash').toLowerCase();
+  _payCardFeeAdded=!!p.card_fee_added;
+  document.getElementById('pay-view-title').textContent='EDIT PAYMENT';
+  document.getElementById('pay-list-view').style.display='none';
+  document.getElementById('pay-detail-view').style.display='none';
+  document.getElementById('pay-scan-view').style.display='block';
+  document.getElementById('pay-scan-preview').style.display='none';
+  document.getElementById('pay-scan-progress').style.display='none';
+  document.getElementById('pay-scan-fields').style.display='block';
+  document.getElementById('pay-scan-capture').style.display='none';
+  document.getElementById('pay-skip-photo-btn').style.display='none';
+  // Fill form with existing data
+  document.getElementById('pay-scan-name').value=p.customer_name||'';
+  document.getElementById('pay-scan-date').value=p.payment_date||'';
+  document.getElementById('pay-scan-time').value=p.payment_time||'';
+  document.getElementById('pay-scan-amount').value=p.amount||'';
+  document.getElementById('pay-scan-year').value=p.vehicle_year||'';
+  document.getElementById('pay-scan-make').value=p.vehicle_make||'';
+  document.getElementById('pay-scan-model').value=p.vehicle_model||'';
+  document.getElementById('pay-scan-vin').value=p.vehicle_vin||'';
+  document.getElementById('pay-scan-color').value=p.vehicle_color||'';
+  var noteEl=document.getElementById('pay-scan-note');if(noteEl)noteEl.value=p.notes||'';
+  document.getElementById('pay-scan-raw').textContent=p.raw_ocr_text||'';
+  payMethodSelect(_payMethod);
+  var feeToggle=document.getElementById('pay-card-fee-toggle');
+  if(feeToggle)feeToggle.checked=_payCardFeeAdded;
+  document.getElementById('pay-card-fee-section').style.display=_payMethod==='card'?'block':'none';
+  if(_payCardFeeAdded) payCalcCardFee();
+  var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
+  if(saveBtn) saveBtn.textContent='Save Changes';
+  history.pushState({payEdit:true},'');
+}
+
 function payFormSkipPhoto(){
   document.getElementById('pay-scan-capture').style.display='none';
   document.getElementById('pay-skip-photo-btn').style.display='none';
@@ -12084,6 +12123,11 @@ function payViewDetail(id){
   }
   html+='</div>';
 
+  // Edit button (owners only)
+  if(_payIsOwner()){
+    html+='<button onclick="payEditPayment('+p.id+')" style="width:100%;margin-top:8px;padding:14px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:14px;color:#4ade80;font-size:15px;font-weight:600;cursor:pointer;">✏️ Edit Payment</button>';
+  }
+
   // Move location (owners only)
   if(_payIsOwner()){
     var otherLoc=p.location==='DeBary'?'DeLand':'DeBary';
@@ -12455,16 +12499,22 @@ async function payScanSave(){
   };
 
   try{
-    await sbPost('payments', record);
+    if(_payEditId){
+      // Update existing payment
+      await sbPatch('payments', _payEditId, record);
+    } else {
+      await sbPost('payments', record);
+    }
   }catch(e){
     console.error('Payment save error:',e);
     alert('Error saving payment: '+(e.message||e));
     _paySaving=false;
-    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent=_payEditId?'Save Changes':'Save Payment';}
     return;
   }
 
   _paySaving=false;
+  _payEditId=null;
   // Go back to list
   _payViewMode='list';
   document.getElementById('pay-view-title').textContent='PAYMENTS';
@@ -13808,6 +13858,25 @@ async function codSelectDeal(id){
   }
 }
 
+async function cashPayoutSaveEdit(id,idx){
+  var nameEl=document.getElementById('cp-edit-name-'+idx);
+  var amtEl=document.getElementById('cp-edit-amt-'+idx);
+  if(!nameEl||!amtEl)return;
+  var newName=nameEl.value.trim();
+  var newAmt=parseFloat(amtEl.value.replace(/[^0-9.]/g,''))||0;
+  if(!newName){alert('Enter a name.');return;}
+  if(newAmt<=0){alert('Enter an amount.');return;}
+  try{
+    await sbPatch('cash_payouts',id,{paid_to:newName,amount:newAmt});
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
+}
+
 async function cashPayoutDelete(id){
   if(!confirm('Delete this payout?'))return;
   try{
@@ -13852,13 +13921,15 @@ function cashPayoutsRender(){
     // Expanded detail (hidden by default)
     html+='<div id="'+detailId+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e1e1e;">';
     html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">';
-    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Paid To</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+p.paid_to+'</div></div>';
-    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount</div><div style="font-size:14px;color:#ef4444;font-weight:700;margin-top:2px;">'+fmt(amt)+'</div></div>';
-    if(dateStr) html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Date</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dateStr+'</div></div>';
+    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Paid To</div><input id="cp-edit-name-'+idx+'" value="'+p.paid_to.replace(/"/g,'&quot;')+'" onclick="event.stopPropagation()" style="width:100%;background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#fff;font-size:14px;font-weight:600;padding:4px 0 2px;margin-top:2px;outline:none;"/></div>';
+    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount</div><input id="cp-edit-amt-'+idx+'" value="'+fmt(amt)+'" onclick="event.stopPropagation()" oninput="moneyInput(this)" style="width:100%;background:transparent;border:none;border-bottom:1px solid #2a2a2a;color:#ef4444;font-size:14px;font-weight:700;padding:4px 0 2px;margin-top:2px;outline:none;"/></div>';
+    if(dateStr) html+='<div style="grid-column:1/-1;background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Date</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dateStr+'</div></div>';
     if(p.logged_by) html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Logged By</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+p.logged_by+'</div></div>';
-    if(p.notes) html+='<div style="grid-column:1/-1;background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Notes</div><div style="font-size:13px;color:#fff;margin-top:2px;">'+p.notes+'</div></div>';
     html+='</div>';
-    html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="width:100%;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Delete Payout</button>';
+    html+='<div style="display:flex;gap:8px;">';
+    html+='<button onclick="event.stopPropagation();cashPayoutSaveEdit('+p.id+','+idx+')" style="flex:1;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Save Changes</button>';
+    html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="flex:1;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Delete</button>';
+    html+='</div>';
     html+='</div>';
     html+='</div>';
   });
