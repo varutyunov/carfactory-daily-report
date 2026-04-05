@@ -13831,22 +13831,35 @@ function cashPayoutsRender(){
   var fmt=function(v){return '$'+parseFloat(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var total=0;
   var html='';
-  _cashPayouts.forEach(function(p){
+  _cashPayouts.forEach(function(p,idx){
     var amt=parseFloat(p.amount)||0;
     total+=amt;
     var dt=p.created_at?new Date(p.created_at):null;
     var timeStr=dt?dt.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
-    html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;">';
-    html+='<div style="flex:1;min-width:0;">';
+    var dateStr=dt?dt.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}):'';
+    var detailId='cp-payout-detail-'+idx;
+    html+='<div onclick="var d=document.getElementById(\''+detailId+'\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';" style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    // Header row — name + amount
     html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">';
-    html+='<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.paid_to+'</div>';
-    html+='<span style="font-size:16px;font-weight:700;color:#ef4444;">-'+fmt(amt)+'</span>';
+    html+='<div style="font-size:16px;font-weight:700;color:#fff;">'+p.paid_to+'</div>';
+    html+='<span style="font-size:18px;font-weight:800;color:#ef4444;">-'+fmt(amt)+'</span>';
     html+='</div>';
+    // Subtitle
     html+='<div style="display:flex;align-items:center;gap:6px;">';
-    if(timeStr) html+='<span style="font-size:11px;color:#555;">'+timeStr+'</span>';
-    if(p.logged_by) html+='<span style="font-size:11px;color:#444;margin-left:auto;">'+p.logged_by+'</span>';
-    html+='</div></div>';
-    html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:14px;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
+    if(timeStr) html+='<span style="font-size:12px;color:#555;">'+timeStr+'</span>';
+    html+='<span style="font-size:11px;color:#444;margin-left:auto;">tap to expand ▾</span>';
+    html+='</div>';
+    // Expanded detail (hidden by default)
+    html+='<div id="'+detailId+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e1e1e;">';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">';
+    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Paid To</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+p.paid_to+'</div></div>';
+    html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount</div><div style="font-size:14px;color:#ef4444;font-weight:700;margin-top:2px;">'+fmt(amt)+'</div></div>';
+    if(dateStr) html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Date</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+dateStr+'</div></div>';
+    if(p.logged_by) html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Logged By</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+p.logged_by+'</div></div>';
+    if(p.notes) html+='<div style="grid-column:1/-1;background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Notes</div><div style="font-size:13px;color:#fff;margin-top:2px;">'+p.notes+'</div></div>';
+    html+='</div>';
+    html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="width:100%;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Delete Payout</button>';
+    html+='</div>';
     html+='</div>';
   });
   html+='<div style="display:flex;justify-content:space-between;padding:12px 16px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;margin-top:4px;">';
