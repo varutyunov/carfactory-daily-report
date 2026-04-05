@@ -7684,10 +7684,14 @@ function _repoBuildPDF(fd, sigDataUrl){
     y+=22;
   } else {y+=20;}
 
+  // Date value printed above the date line
+  doc.setFontSize(11);doc.setFont('helvetica','normal');
+  doc.text(fd.todayStr,W-mx-50+2,y-4);
+
   doc.line(mx,y,mx+90,y);doc.line(W-mx-50,y,W-mx,y);y+=4;
   doc.setFontSize(9);doc.setFont('helvetica','normal');
   doc.text('Signature',mx,y);
-  doc.text('Date: '+fd.todayStr,W-mx-50,y);
+  doc.text('Date',W-mx-50,y);
 
   return doc;
 }
