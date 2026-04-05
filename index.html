@@ -7415,26 +7415,51 @@ function cpRenderHistory(){
 }
 function cpFilterHistory(){cpRenderHistory();}
 
-function cpOpenAccount(account){
+async function cpOpenAccount(account){
   var overlay=document.getElementById('cp-account-overlay');
   var content=document.getElementById('cp-acct-content');
   var titleEl=document.getElementById('cp-acct-title');
   if(!overlay||!content)return;
   var cust=_cpData.customers.find(function(c){return c.account===account;});
   var pays=_cpData.payments.filter(function(p){return p.account===account;});
-  // Cross-reference deals for car info if carpay doesn't have it
+  // Cross-reference deals for car info
   var dealCar=null;
   if(cust&&_dealsData&&_dealsData.length){
     dealCar=_dealsData.find(function(d){return d.customer_name&&cust.name&&d.customer_name.toLowerCase()===cust.name.toLowerCase();});
   }
+  // Fetch GPS data for this account
+  var gps=null;
+  try{
+    var gpsRows=await sbGet('repo_gps_signals','account=eq.'+encodeURIComponent(account)+'&limit=1');
+    if(gpsRows&&gpsRows.length) gps=gpsRows[0];
+  }catch(e){}
+  // Compute repo score
+  var repoResult=null;
+  if(cust) repoResult=repoScoreAccount(cust,pays.map(function(p){return{date:p.date,amount_sent:p.amountSent,method:p.method};}),gps);
+
   if(titleEl) titleEl.textContent=cust?cust.name.toUpperCase():'ACCOUNT #'+account;
   var html='';
-  // ── Account Status ──
+
   if(cust){
     var daysNum=parseInt(cust.daysLate)||0;
     var statusColor=daysNum>0?'#ff453a':'#30d158';
     var statusText=daysNum>0?daysNum+' DAYS LATE':'CURRENT';
     var isRepoFlagged=!!cust.repoFlagged;
+
+    // ── Repo Score Banner ──
+    if(repoResult){
+      var r=repoResult.risk;
+      html+='<div style="background:'+r.bg+';border:1px solid '+r.color+'44;border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">';
+      html+='<div style="width:52px;height:52px;border-radius:50%;background:'+r.color+'22;border:2px solid '+r.color+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+      html+='<div style="font-size:20px;font-weight:900;color:'+r.color+';">'+repoResult.score+'</div></div>';
+      html+='<div style="flex:1;min-width:0;">';
+      html+='<div style="font-size:14px;font-weight:800;color:'+r.color+';letter-spacing:1px;">'+r.emoji+' '+r.level+'</div>';
+      var narrative=repoNarrative(cust,repoResult,pays.map(function(p){return{date:p.date,amount_sent:p.amountSent};}));
+      html+='<div style="font-size:12px;color:#9aa0a6;margin-top:3px;line-height:1.4;">'+narrative+'</div>';
+      html+='</div></div>';
+    }
+
+    // ── Account Status ──
     html+='<div style="background:#0d0d0d;border:1px solid '+(isRepoFlagged?'rgba(255,69,58,.4)':'#1a1a1a')+';border-radius:14px;padding:16px;margin-bottom:12px;">';
     html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
     html+='<div><div style="font-size:18px;font-weight:700;color:#fff;">'+cust.name+'</div>';
@@ -7450,26 +7475,34 @@ function cpOpenAccount(account){
     html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Frequency</div><div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+(cust.paymentFrequency||'—')+'</div></div>';
     html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Auto-Pay</div><div style="font-size:14px;color:'+(cust.autoPay?'#30d158':'#888')+';font-weight:600;margin-top:2px;">'+(cust.autoPay?'✓ Yes':'No')+'</div></div>';
     html+='</div>';
-    // Contact info
-    if(cust.phone||cust.email){
-      html+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-      if(cust.phone){
-        var ph=cust.phone.replace(/\D/g,'');
-        var phFmt=ph.length===10?'('+ph.slice(0,3)+') '+ph.slice(3,6)+'-'+ph.slice(6):cust.phone;
-        html+='<a href="tel:'+ph+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
-        html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">📞 Phone</div>';
-        html+='<div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+phFmt+'</div></a>';
-      }
-      if(cust.email){
-        html+='<a href="mailto:'+cust.email+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
-        html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">✉ Email</div>';
-        html+='<div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;word-break:break-all;">'+cust.email+'</div></a>';
-      }
-      html+='</div>';
+
+    // ── Contact Info (always show, flag missing) ──
+    html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">';
+    if(cust.phone){
+      var ph=cust.phone.replace(/\D/g,'');
+      var phFmt=ph.length===10?'('+ph.slice(0,3)+') '+ph.slice(3,6)+'-'+ph.slice(6):cust.phone;
+      html+='<a href="tel:'+ph+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
+      html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">📞 Phone</div>';
+      html+='<div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+phFmt+'</div></a>';
+    } else {
+      html+='<div style="flex:1;min-width:120px;background:#1a1212;border:1px solid rgba(255,69,58,.2);border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#ff453a;text-transform:uppercase;letter-spacing:1px;">📞 Phone</div>';
+      html+='<div style="font-size:13px;color:#666;font-weight:600;margin-top:2px;">Not on file</div></div>';
     }
+    if(cust.email){
+      html+='<a href="mailto:'+cust.email+'" style="flex:1;min-width:120px;background:#162032;border:1px solid rgba(96,165,250,.25);border-radius:10px;padding:10px 12px;text-decoration:none;display:block;">';
+      html+='<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">✉ Email</div>';
+      html+='<div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;word-break:break-all;">'+cust.email+'</div></a>';
+    } else {
+      html+='<div style="flex:1;min-width:120px;background:#1a1212;border:1px solid rgba(255,69,58,.2);border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#ff453a;text-transform:uppercase;letter-spacing:1px;">✉ Email</div>';
+      html+='<div style="font-size:13px;color:#666;font-weight:600;margin-top:2px;">Not on file</div></div>';
+    }
+    html+='</div>';
+
     // Repo flag (owners only)
     if(_cashPayoutIsUser()){
-      html+='<div style="margin-top:12px;">';
+      html+='<div style="margin-bottom:12px;">';
       if(isRepoFlagged){
         html+='<button onclick="cpRepoFlag(\''+account+'\',false)" style="width:100%;padding:10px;background:rgba(255,69,58,.15);border:1px solid rgba(255,69,58,.4);border-radius:10px;color:#ff453a;font-size:14px;font-weight:700;cursor:pointer;">🚩 REPO FLAGGED — Tap to Clear</button>';
       } else {
@@ -7479,6 +7512,67 @@ function cpOpenAccount(account){
     }
     html+='</div>';
   }
+
+  // ── GPS Analytics ──
+  html+='<div style="background:#0d0d0d;border:1px solid '+(gps?'#1a1a1a':'rgba(255,69,58,.3)')+';border-radius:14px;padding:16px;margin-bottom:12px;">';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:'+(gps?'#60a5fa':'#ff453a')+';letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">📡 GPS Tracking</div>';
+  if(!gps){
+    html+='<div style="background:#1a1212;border:1px solid rgba(255,69,58,.25);border-radius:10px;padding:14px;text-align:center;">';
+    html+='<div style="font-size:24px;margin-bottom:6px;">⚠️</div>';
+    html+='<div style="font-size:14px;font-weight:700;color:#ff453a;">GPS NOT FOUND</div>';
+    html+='<div style="font-size:12px;color:#888;margin-top:4px;">No GPS signal on record for this account</div>';
+    html+='</div>';
+  } else {
+    // GPS status overview
+    var gpsOk=!gps.out_of_state&&!gps.battery_low&&(gps.days_since_move||0)<7;
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+    // Last seen
+    if(gps.last_address){
+      html+='<div style="grid-column:1/-1;background:#161616;border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Last Location</div>';
+      html+='<div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">📌 '+gps.last_address+'</div></div>';
+    }
+    // State
+    if(gps.last_state){
+      var stateColor=gps.out_of_state?'#ff453a':'#30d158';
+      html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">State</div>';
+      html+='<div style="font-size:14px;color:'+stateColor+';font-weight:700;margin-top:2px;">'+gps.last_state+(gps.out_of_state?' 🚨':'')+'</div></div>';
+    }
+    // Movement
+    html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
+    html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Movement</div>';
+    var moveColor=(gps.days_since_move||0)>=7?'#ff453a':(gps.days_since_move||0)>=3?'#fbbf24':'#30d158';
+    var moveText=(gps.days_since_move||0)===0?'Active today':(gps.days_since_move||0)+' days idle';
+    html+='<div style="font-size:14px;color:'+moveColor+';font-weight:700;margin-top:2px;">'+moveText+'</div></div>';
+    // Battery
+    if(gps.battery_status||gps.battery_low){
+      var batColor=gps.battery_low?'#ff453a':'#30d158';
+      html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Battery</div>';
+      html+='<div style="font-size:14px;color:'+batColor+';font-weight:700;margin-top:2px;">'+(gps.battery_status||'Low')+(gps.battery_low?' ⚠':'')+'</div></div>';
+    }
+    // Last update
+    if(gps.updated_at){
+      var updDate=new Date(gps.updated_at);
+      var updAgo=Math.floor((Date.now()-updDate.getTime())/3600000);
+      var updText=updAgo<1?'Just now':updAgo<24?updAgo+'h ago':Math.floor(updAgo/24)+'d ago';
+      html+='<div style="background:#161616;border-radius:10px;padding:10px 12px;">';
+      html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Last Signal</div>';
+      html+='<div style="font-size:14px;color:#fff;font-weight:600;margin-top:2px;">'+updText+'</div></div>';
+    }
+    html+='</div>';
+    // GPS alerts
+    if(gps.out_of_state||gps.battery_low||(gps.days_since_move||0)>=7){
+      html+='<div style="background:rgba(255,69,58,.08);border:1px solid rgba(255,69,58,.25);border-radius:10px;padding:10px 12px;">';
+      if(gps.out_of_state) html+='<div style="font-size:13px;color:#ff453a;font-weight:600;">🚨 OUT OF STATE — '+gps.last_state+'</div>';
+      if((gps.days_since_move||0)>=7) html+='<div style="font-size:13px;color:#ff453a;font-weight:600;margin-top:4px;">📍 No movement for '+gps.days_since_move+' days</div>';
+      if(gps.battery_low) html+='<div style="font-size:13px;color:#ff453a;font-weight:600;margin-top:4px;">🔋 Battery low — possible tamper</div>';
+      html+='</div>';
+    }
+  }
+  html+='</div>';
+
   // ── Vehicle Info ──
   var vehicleStr=cust&&cust.vehicle?cust.vehicle:'';
   var vinStr=cust&&cust.vin?cust.vin:'';
@@ -7499,6 +7593,35 @@ function cpOpenAccount(account){
     }
     html+='</div>';
   }
+
+  // ── Repo Score Breakdown ──
+  if(repoResult&&repoResult.score>0){
+    html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#ff453a;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Score Breakdown</div>';
+    var factors=repoResult.factors;
+    var fList=[
+      {label:'Days Late',score:factors.days_late.score,detail:factors.days_late.label},
+      {label:'Payment Recency',score:factors.payment_recency.score,detail:factors.payment_recency.label},
+      {label:'Payment Amount',score:factors.payment_completeness.score,detail:factors.payment_completeness.label},
+      {label:'Auto-Pay',score:factors.auto_pay.score,detail:factors.auto_pay.label},
+      {label:'Payment Trend',score:factors.payment_trend.score,detail:factors.payment_trend.label},
+      {label:'Debt Burden',score:factors.debt_burden.score,detail:factors.debt_burden.label},
+      {label:'GPS Signals',score:factors.gps.score,detail:factors.gps.flags.length?factors.gps.flags.map(function(f){return f.text;}).join(', '):(gps?'No GPS alerts':'No GPS data')}
+    ];
+    fList.forEach(function(f){
+      var barW=Math.min(100,Math.max(5,f.score*3));
+      var barColor=f.score>=20?'#ff453a':f.score>=10?'#fbbf24':f.score>0?'#60a5fa':'#30d158';
+      html+='<div style="margin-bottom:8px;">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">';
+      html+='<span style="font-size:12px;color:#9aa0a6;">'+f.label+'</span>';
+      html+='<span style="font-size:12px;font-weight:700;color:'+barColor+';">'+(f.score>0?'+':'')+f.score+'</span></div>';
+      html+='<div style="height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden;margin-bottom:2px;"><div style="height:100%;width:'+barW+'%;background:'+barColor+';border-radius:2px;"></div></div>';
+      html+='<div style="font-size:11px;color:#555;">'+f.detail+'</div>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+
   // ── Payment History ──
   html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin:6px 0 8px;">Payment History ('+pays.length+')</div>';
   if(!pays.length){
