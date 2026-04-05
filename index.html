@@ -7550,31 +7550,14 @@ function repoGenerateHoldHarmless(account){
   var vVin=vd.vin||cust.vin||'';
   var vColor=vd.color||cust.color||'';
 
-  // Payment info
-  var pmtAmt=cust.scheduledAmount||cust.paymentAmount||'';
-  var daysLate=parseInt(cust.daysLate)||0;
-  var balDue=cust.currentAmountDue?'$'+parseFloat(cust.currentAmountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
-
   // Debtor name parsing: "LAST, FIRST MIDDLE"
   var nameParts=(cust.name||'').split(',');
   var lastName=(nameParts[0]||'').trim();
   var firstMiddle=(nameParts[1]||'').trim();
   var debtorName=firstMiddle+' '+lastName;
 
-  // Delinquent since — estimate from days late
-  var delinqDate='';
-  if(daysLate>0){
-    var d=new Date();d.setDate(d.getDate()-daysLate);
-    delinqDate=(d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
-  }
-
   var today=new Date();
   var todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
-
-  // Location info
-  var isDeLand=cust.location&&cust.location.toLowerCase()==='deland';
-  var companyAddr=isDeLand?'2800 S Woodland Blvd, DeLand FL 32720':'100 S Charles Richard Beall Blvd, DeBary FL 32713';
-  var companyPhone='386-793-3010';
 
   // Debtor phone formatting
   var debtorPhone=cust.phone||'';
@@ -7611,11 +7594,11 @@ function repoGenerateHoldHarmless(account){
     +'<div style="padding:2px 0 8px;font-size:13px;"><strong>Assignment Type:</strong> Repossession</div>'
 
     +'<div class="section-title">Client/Lien Holder &nbsp;&nbsp;&nbsp; Premier Auto Group LLC dba Car Factory</div>'
-    +'<div class="field-row"><div class="field"><label>Address:</label> <span>'+(isDeLand?'2800 S Woodland Blvd':'100 S Charles Richard Beall Blvd')+'</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>City:</label> <span>'+(isDeLand?'DeLand':'DeBary')+'</span></div>'
+    +'<div class="field-row"><div class="field"><label>Address:</label> <span>100 S Charles Richard Beall Blvd</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>City:</label> <span>DeBary</span></div>'
     +'<div class="field"><label>State:</label> <span>FL</span></div>'
-    +'<div class="field"><label>Zip:</label> <span>'+(isDeLand?'32720':'32713')+'</span></div></div>'
-    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>'+companyPhone+'</span></div>'
+    +'<div class="field"><label>Zip:</label> <span>32713</span></div></div>'
+    +'<div class="field-row"><div class="field"><label>Phone:</label> <span>386-793-3010</span></div>'
     +'<div class="field"><label>Fax:</label> <span></span></div></div>'
     +'<div class="field-row"><div class="field"><label>Assigned By:</label> <span>Vladimir Arutyunov</span></div>'
     +'<div class="field"><label>Extension:</label> <span></span></div></div>'
