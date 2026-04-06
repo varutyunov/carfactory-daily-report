@@ -117,6 +117,7 @@ async function main() {
   for (const c of toUpdate) {
     const ex = existingByStock.get(c.stock);
     const patch = {};
+    if (c.name && c.name !== ex.name) patch.name = c.name;
     if (c.color) patch.color = c.color;
     if (c.location) patch.location = c.location;
     if (!Object.keys(patch).length) continue;
