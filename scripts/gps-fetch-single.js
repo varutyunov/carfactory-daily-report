@@ -132,7 +132,11 @@ async function main() {
   await writeResult({ status: 'processing', account: ACCOUNT, timestamp: new Date().toISOString() });
 
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(20000);
 
   try {
     // ── Login ──
@@ -161,8 +165,13 @@ async function main() {
       await waitForNav(page);
     }
 
-    if (page.url().includes('Login')) {
-      throw new Error('Login failed — still on login page');
+    await sleep(3000);
+
+    const postLoginUrl = page.url();
+    console.log('  Post-login URL:', postLoginUrl);
+
+    if (postLoginUrl.includes('Login')) {
+      throw new Error('Login failed — still on login page. URL: ' + postLoginUrl);
     }
     console.log('✅ Logged in');
 
