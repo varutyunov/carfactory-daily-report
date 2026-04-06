@@ -3999,35 +3999,10 @@ async function markPhotosDone(carId){
 }
 function renderMgrPhotos(){
   var el=document.getElementById('mgr-photos-list');
-  var inQueue=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
-  if(inQueue.length){
-    el.innerHTML='<div class="car-grid">'+inQueue.map(function(car){return mgrCatTile(car,'photos',"mgrCatSheet("+car.id+",'photos')");}).join('')+'</div>';
-    applyPexels(inQueue);
-    return;
-  }
-  // Queue empty — show full inventory so user can browse & add any car
-  var allCars=(S.inventory||[]).filter(function(car){
-    var ws=getWorkState(car.id);
-    var already=ws.categories&&ws.categories.photos&&(ws.categories.photos.sectionPool||ws.categories.photos.confirmed);
-    return !already;
-  });
-  allCars.sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
-  if(!allCars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
-  var o='<div style="font-size:12px;color:#666;text-align:center;padding:6px 0 10px;">Tap a vehicle to add it to the Photos queue</div>';
-  o+='<div class="car-grid">';
-  allCars.forEach(function(car){
-    var pxUrl=!car.photo&&pxCache[String(car.id)];
-    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
-    var sub=(car.stock||'')+(car.color?' · '+car.color:'');
-    o+='<div class="car-tile" onclick="addCarToTab('+car.id+',\'photos\')" style="border-color:#1d4ed8;">';
-    o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Add</span>';
-    o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
-    o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
-    o+='</div>';
-  });
-  o+='</div>';
-  el.innerHTML=o;
-  applyPexels(allCars);
+  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
+  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'photos',"mgrCatSheet("+car.id+",'photos')");}).join('')+'</div>';
+  applyPexels(cars);
 }
 async function approvePhotos(carId){
   const ws=getWorkState(carId);
@@ -4215,27 +4190,7 @@ function renderMgrTasks(){
       allItems.push({a:a,car:car,emp:emp,text:clean,urgent:typeof t==='object'?!!t.urgent:false,submitted:a.submitted,origIdx:origIdx});
     });
   });
-  if(!allItems.length){
-    // No tasks — show full inventory so user can browse & assign
-    var allCars=(S.inventory||[]).slice().sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
-    if(!allCars.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
-    var o='<div style="font-size:12px;color:#666;text-align:center;padding:6px 0 10px;">Tap a vehicle to assign tasks</div>';
-    o+='<div class="car-grid">';
-    allCars.forEach(function(car){
-      var pxUrl=!car.photo&&pxCache[String(car.id)];
-      var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
-      var sub=(car.stock||'')+(car.color?' · '+car.color:'');
-      o+='<div class="car-tile" onclick="openAssign('+car.id+')" style="border-color:#1d4ed8;">';
-      o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Assign</span>';
-      o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
-      o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
-      o+='</div>';
-    });
-    o+='</div>';
-    el.innerHTML=o;
-    applyPexels(allCars);
-    return;
-  }
+  if(!allItems.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
   var o='<div style="display:flex;flex-direction:column;gap:8px;">';
   allItems.forEach(function(item){
     var c=item.car;
