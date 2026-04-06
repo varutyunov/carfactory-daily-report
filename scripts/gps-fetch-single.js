@@ -141,37 +141,63 @@ async function main() {
   try {
     // ── Login ──
     console.log('🔐 Logging into Passtime...');
+    console.log('  Account:', PT_ACCOUNT, '| User:', PT_USER, '| Pass length:', (PT_PASS||'').length);
     await page.goto(PASSTIME_URL, { waitUntil: 'networkidle' });
-    await sleep(2000);
+    await sleep(3000);
 
-    await page.evaluate(({ account, user, pass }) => {
-      document.getElementById('login_DealerNumber').value = account;
-      document.getElementById('login_UserName').value = user;
-      document.getElementById('login_Password').value = pass;
-      var btn = document.querySelector('input[value*="Login"]');
-      if (btn) { btn.disabled = false; btn.click(); }
-    }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS });
+    // Check if login form elements exist
+    const formCheck = await page.evaluate(() => {
+      return {
+        dealer: !!document.getElementById('login_DealerNumber'),
+        user: !!document.getElementById('login_UserName'),
+        pass: !!document.getElementById('login_Password'),
+        btn: !!document.querySelector('input[value*="Login"]'),
+        url: window.location.href,
+        title: document.title
+      };
+    });
+    console.log('  Form check:', JSON.stringify(formCheck));
+
+    // Fill and submit using individual field interactions for reliability
+    await page.fill('#login_DealerNumber', PT_ACCOUNT);
+    await page.fill('#login_UserName', PT_USER);
+    await page.fill('#login_Password', PT_PASS);
+    await sleep(500);
+
+    // Click login button
+    const loginBtn = await page.$('input[value*="Login"]');
+    if (loginBtn) {
+      await loginBtn.click();
+    } else {
+      // Fallback: try submit via evaluate
+      await page.evaluate(() => {
+        var btn = document.querySelector('input[value*="Login"]');
+        if (btn) { btn.disabled = false; btn.click(); }
+      });
+    }
 
     await waitForNav(page);
+    await sleep(3000);
 
     // Skip renewal check
     const skipBtn = await page.$('input[value*="Skip"]');
     if (skipBtn) {
       console.log('  Skipping renewal check...');
-      await page.evaluate(() => {
-        var btn = document.querySelector('input[value*="Skip"]');
-        if (btn) { btn.disabled = false; btn.click(); }
-      });
+      await skipBtn.click();
       await waitForNav(page);
     }
-
-    await sleep(3000);
 
     const postLoginUrl = page.url();
     console.log('  Post-login URL:', postLoginUrl);
 
     if (postLoginUrl.includes('Login')) {
-      throw new Error('Login failed — still on login page. URL: ' + postLoginUrl);
+      // Grab any error message on the page
+      const pageError = await page.evaluate(() => {
+        var err = document.querySelector('.error, .validation-summary-errors, [id*="Error"], [id*="error"], .alert');
+        return err ? err.innerText : document.body.innerText.substring(0, 500);
+      });
+      console.log('  Page content:', pageError);
+      throw new Error('Login failed — still on login page');
     }
     console.log('✅ Logged in');
 
