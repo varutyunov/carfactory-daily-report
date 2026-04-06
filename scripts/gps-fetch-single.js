@@ -145,39 +145,49 @@ async function main() {
     await page.goto(PASSTIME_URL, { waitUntil: 'networkidle' });
     await sleep(3000);
 
-    // Check if login form elements exist
-    const formCheck = await page.evaluate(() => {
-      return {
-        dealer: !!document.getElementById('login_DealerNumber'),
-        user: !!document.getElementById('login_UserName'),
-        pass: !!document.getElementById('login_Password'),
-        btn: !!document.querySelector('input[value*="Login"]'),
-        url: window.location.href,
-        title: document.title
-      };
-    });
-    console.log('  Form check:', JSON.stringify(formCheck));
-
-    // Fill and submit using individual field interactions for reliability
-    await page.fill('#login_DealerNumber', PT_ACCOUNT);
-    await page.fill('#login_UserName', PT_USER);
-    await page.fill('#login_Password', PT_PASS);
+    // Clear and type into each field (simulates real keystrokes for ASP.NET)
+    await page.click('#login_DealerNumber', { clickCount: 3 });
+    await page.keyboard.type(PT_ACCOUNT);
+    await page.click('#login_UserName', { clickCount: 3 });
+    await page.keyboard.type(PT_USER);
+    await page.click('#login_Password', { clickCount: 3 });
+    await page.keyboard.type(PT_PASS);
     await sleep(500);
 
-    // Click login button
-    const loginBtn = await page.$('input[value*="Login"]');
-    if (loginBtn) {
-      await loginBtn.click();
-    } else {
-      // Fallback: try submit via evaluate
-      await page.evaluate(() => {
-        var btn = document.querySelector('input[value*="Login"]');
-        if (btn) { btn.disabled = false; btn.click(); }
-      });
-    }
+    // Submit via ASP.NET postback (more reliable than button click)
+    await page.evaluate(() => {
+      // Try direct form submit first
+      var btn = document.querySelector('input[value*="Login"]');
+      if (btn) { btn.disabled = false; btn.click(); }
+    });
 
-    await waitForNav(page);
+    await waitForNav(page, 30000);
     await sleep(3000);
+
+    // Check for 2FA prompt
+    const pageState = await page.evaluate(() => {
+      var text = document.body.innerText;
+      return {
+        url: window.location.href,
+        has2fa: /two.?factor|verification|code|authenticate/i.test(text),
+        hasError: /invalid|incorrect|wrong|failed|locked/i.test(text),
+        errorText: (document.querySelector('.error, .validation-summary-errors, [id*="Error"], .alert') || {}).innerText || '',
+        bodySnippet: text.substring(0, 300)
+      };
+    });
+    console.log('  Page state:', JSON.stringify(pageState));
+
+    // Take screenshot and upload to Supabase storage for debugging
+    try {
+      const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 60 });
+      const screenshotName = 'gps-debug/login-' + Date.now() + '.jpg';
+      const upRes = await fetch(`${SB_URL}/storage/v1/object/${screenshotName}`, {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+        body: screenshotBuf
+      });
+      console.log('  Screenshot uploaded:', screenshotName, upRes.status);
+    } catch (e) { console.log('  Screenshot upload failed:', e.message); }
 
     // Skip renewal check
     const skipBtn = await page.$('input[value*="Skip"]');
@@ -187,17 +197,11 @@ async function main() {
       await waitForNav(page);
     }
 
-    const postLoginUrl = page.url();
-    console.log('  Post-login URL:', postLoginUrl);
-
-    if (postLoginUrl.includes('Login')) {
-      // Grab any error message on the page
-      const pageError = await page.evaluate(() => {
-        var err = document.querySelector('.error, .validation-summary-errors, [id*="Error"], [id*="error"], .alert');
-        return err ? err.innerText : document.body.innerText.substring(0, 500);
-      });
-      console.log('  Page content:', pageError);
-      throw new Error('Login failed — still on login page');
+    if (pageState.url.includes('Login')) {
+      if (pageState.has2fa) {
+        throw new Error('Login requires 2FA — cannot complete in CI mode');
+      }
+      throw new Error('Login failed. Error: ' + (pageState.errorText || pageState.bodySnippet.substring(0, 200)));
     }
     console.log('✅ Logged in');
 
