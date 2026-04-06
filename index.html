@@ -5899,13 +5899,15 @@ function renderProgFull(){
   }
   o+='</div>';
   // ── Bottom actions ──
-  o+='<div style="padding:16px 14px 80px;display:flex;gap:8px;">';
+  o+='<div style="padding:16px 14px 10px;display:flex;gap:8px;">';
   if(allConfirmed&&!carAssigns.length){
     o+='<button onclick="mgrMarkCarComplete('+car.id+')" style="flex:1;background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);color:#30d158;font-size:14px;font-weight:700;border-radius:12px;padding:14px;cursor:pointer;">🏁 Mark Car Complete</button>';
   } else {
     o+='<button onclick="openWfTask('+car.id+')" style="flex:1;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);color:#a78bfa;font-size:14px;font-weight:600;border-radius:12px;padding:14px;cursor:pointer;">+ Assign Task</button>';
-    o+='<button onclick="removeCarFromProgress('+car.id+');closeProgCar();" style="background:#111;border:1px solid #1e1e1e;color:#555;font-size:20px;font-weight:600;border-radius:12px;padding:14px 18px;cursor:pointer;">↩</button>';
   }
+  o+='</div>';
+  o+='<div style="padding:0 14px 80px;">';
+  o+='<button onclick="if(confirm(\'Remove this car from progress? All category flags and assignments will be cleared.\')){removeCarFromProgress('+car.id+');closeProgCar();}" style="width:100%;background:rgba(255,69,58,0.06);border:1px solid rgba(255,69,58,0.18);color:#ff453a;font-size:14px;font-weight:600;border-radius:12px;padding:14px;cursor:pointer;">Remove from Progress</button>';
   o+='</div>';
   el.innerHTML=o;
   applyPexels([car]);
