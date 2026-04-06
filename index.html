@@ -1798,7 +1798,7 @@ body.light .cal-fab{background:#4488ff !important;}
 
     <div class="view" id="mgr-parts"><div style="padding:14px;"><div id="cat-search-wrap-parts"></div><div id="mgr-parts-list"></div></div></div>
 
-    <div class="view" id="mgr-tasks"><div style="padding:14px;" id="rev-list"></div></div>
+    <div class="view" id="mgr-tasks"><div style="padding:14px;"><div id="cat-search-wrap-tasks"></div><div id="rev-list"></div></div></div>
 
     <div class="view" id="mgr-employees">
       <div style="padding:14px;">
@@ -4152,6 +4152,43 @@ async function markPartsDone(carId){
   updateTabBadges();
 }
 // ── REPAIR QUEUE ────────────────────────────────────────────────────────────
+function initTasksSearchBar(){
+  var wrap=document.getElementById('cat-search-wrap-tasks');
+  if(!wrap||document.getElementById('tasks-search-inp')) return;
+  wrap.innerHTML=
+    '<div style="position:relative;margin-bottom:14px;">'+
+      '<input id="tasks-search-inp" oninput="renderTasksSearchResults()" '+
+        'placeholder="Search to add a vehicle..." autocomplete="off" '+
+        'style="width:100%;box-sizing:border-box;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:11px 14px;color:#fff;font-size:14px;outline:none;-webkit-appearance:none;" />'+
+      '<div id="tasks-search-results"></div>'+
+    '</div>';
+}
+function renderTasksSearchResults(){
+  var inp=document.getElementById('tasks-search-inp');
+  var el=document.getElementById('tasks-search-results');
+  if(!inp||!el) return;
+  var q=inp.value.trim().toLowerCase();
+  if(!q){el.innerHTML='';return;}
+  var matches=(S.inventory||[]).filter(function(car){
+    return fuzzyMatch([car.name,car.stock||'',car.vin||'',car.color||''],q);
+  }).slice(0,12);
+  if(!matches.length){el.innerHTML='<div style="font-size:12px;color:#444;padding:6px 4px;">No matches</div>';return;}
+  var o='<div class="car-grid" style="margin-top:10px;">';
+  matches.forEach(function(car){
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+    var hasTask=S.assignments.some(function(a){return a.inventoryId===car.id&&!a.approved;});
+    o+='<div class="car-tile" onclick="openAssign('+car.id+')" style="border-color:'+(hasTask?'rgba(48,209,88,0.4)':'#1d4ed8')+';">';
+    o+='<span class="tile-badge" style="background:'+(hasTask?'#30d158':'#1d4ed8')+';color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">'+(hasTask?'Active':'+ Assign')+'</span>';
+    o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
+    o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
+  applyPexels(matches);
+}
 function renderMgrTasks(){
   var el=document.getElementById('rev-list');
   if(!el) return;
@@ -4178,7 +4215,27 @@ function renderMgrTasks(){
       allItems.push({a:a,car:car,emp:emp,text:clean,urgent:typeof t==='object'?!!t.urgent:false,submitted:a.submitted,origIdx:origIdx});
     });
   });
-  if(!allItems.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
+  if(!allItems.length){
+    // No tasks — show full inventory so user can browse & assign
+    var allCars=(S.inventory||[]).slice().sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
+    if(!allCars.length){el.innerHTML='<div class="empty"><div class="ei">✅</div><div class="et">No active tasks</div></div>';return;}
+    var o='<div style="font-size:12px;color:#666;text-align:center;padding:6px 0 10px;">Tap a vehicle to assign tasks</div>';
+    o+='<div class="car-grid">';
+    allCars.forEach(function(car){
+      var pxUrl=!car.photo&&pxCache[String(car.id)];
+      var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+      var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+      o+='<div class="car-tile" onclick="openAssign('+car.id+')" style="border-color:#1d4ed8;">';
+      o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Assign</span>';
+      o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
+      o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
+      o+='</div>';
+    });
+    o+='</div>';
+    el.innerHTML=o;
+    applyPexels(allCars);
+    return;
+  }
   var o='<div style="display:flex;flex-direction:column;gap:8px;">';
   allItems.forEach(function(item){
     var c=item.car;
@@ -4210,8 +4267,29 @@ function mgrTaskSheet(aid,idx,taskText,carName){
       ? '<button onclick="mgrApproveSubmitted(\''+aid+'\')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Approve</button>'
       : '<button onclick="mgrMarkTaskDone(\''+aid+'\','+idx+')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Done</button>'
     )+
+    '<button onclick="mgrDeleteTask(\''+aid+'\','+idx+')" style="width:100%;padding:12px;background:rgba(255,69,58,0.06);border:1px solid rgba(255,69,58,0.18);border-radius:12px;color:#ff453a;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px;">Delete Task</button>'+
     '<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #222;border-radius:12px;color:#555;font-size:14px;cursor:pointer;">Cancel</button>';
   openM('m-detail-done');
+}
+async function mgrDeleteTask(aid,idx){
+  if(!confirm('Delete this task?')) return;
+  closeM('m-detail-done');
+  var a=S.assignments.find(function(x){return String(x.id)===String(aid);});
+  if(!a) return;
+  showLoading('Deleting...');
+  try{
+    a.tasks.splice(idx,1);
+    if(!a.tasks.length){
+      // No tasks left — delete the entire assignment
+      await sbDelete('assignments',a.id);
+      S.assignments=S.assignments.filter(function(x){return String(x.id)!==String(aid);});
+    } else {
+      await sbPatch('assignments',a.id,{tasks:a.tasks});
+    }
+    sv();
+    renderMgrTasks();renderAssigned();updateTabBadges();updateHomeBadges();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
 }
 async function mgrApproveSubmitted(aid){
   closeM('m-detail-done');
@@ -5575,7 +5653,7 @@ function mgrGoSection(id, label){
   if(view){var fc=view.querySelector('div');if(fc&&!fc.classList.contains('mgr-section-pad'))fc.classList.add('mgr-section-pad');}
   if(id==='inventory'){invTab='all';['all','paint','detail','photos'].forEach(function(t){var b=document.getElementById('inv-tab-'+t);if(b)b.classList.toggle('on',t==='all');var p=document.getElementById('inv-pane-'+t);if(p)p.style.display=t==='all'?'block':'none';});var rb=document.getElementById('recent-btn');if(rb){rb.style.background='';rb.style.color='';rb.style.borderColor='';}invRecentOnly=false;renderInv();}
   else if(id==='assigned')renderAssigned();
-  else if(id==='tasks'){renderMgrTasks();markBadgeSeen('tasks');}
+  else if(id==='tasks'){initTasksSearchBar();renderMgrTasks();markBadgeSeen('tasks');}
   else if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();markBadgeSeen('repair');}
   else if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();markBadgeSeen('detail');}
   else if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();markBadgeSeen('photos');}
