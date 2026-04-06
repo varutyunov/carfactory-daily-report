@@ -2530,6 +2530,8 @@ async function syncFromSupabase(showUI){
           S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
         }
       }catch(e){}
+      // Keep localStorage in sync with Supabase so all users see same data
+      try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e){}
       // CarPay data
       _cpData.customers=(Array.isArray(cpCusts)?cpCusts:[]).map(function(c){
         var veh=[c.year||c.vehicle_year,c.make||c.vehicle_make,c.model||c.vehicle_model].filter(Boolean).join(' ')||c.vehicle||c.vehicle_desc||c.vehicle_info||'';
@@ -6345,7 +6347,7 @@ async function calSaveEvent(){
   if(btn){btn.textContent='Saving...';btn.disabled=true;}
   if(!S.calendarEvents) S.calendarEvents=[];
   if(_calEditId){
-    // Edit existing event
+    // Edit existing event — sync to Supabase
     var idx=S.calendarEvents.findIndex(function(e){return String(e.id)===String(_calEditId);});
     if(idx!==-1){
       S.calendarEvents[idx].title=title;
@@ -6353,6 +6355,10 @@ async function calSaveEvent(){
       S.calendarEvents[idx].event_time=time||null;
       S.calendarEvents[idx].notes=notes||null;
       S.calendarEvents[idx].notify=notify;
+    }
+    // Persist edit to Supabase so all users see it
+    if(!String(_calEditId).startsWith('local_')){
+      try{await sbPatch('calendar_events',_calEditId,{title:title,event_date:date,event_time:time||null,notes:notes||null});}catch(e){}
     }
     S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
     try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e2){}
