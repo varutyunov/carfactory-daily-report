@@ -13,6 +13,10 @@ on:
         description: 'Customer first name'
         required: false
         default: ''
+      mfa_code:
+        description: 'Passtime MFA code'
+        required: false
+        default: ''
 
 jobs:
   fetch:
@@ -41,3 +45,4 @@ jobs:
           GPS_ACCOUNT: ${{ inputs.account }}
           GPS_LAST_NAME: ${{ inputs.last_name }}
           GPS_FIRST_NAME: ${{ inputs.first_name }}
+          GPS_MFA_CODE: ${{ inputs.mfa_code }}

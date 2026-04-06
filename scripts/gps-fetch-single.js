@@ -19,6 +19,7 @@ const SB_KEY = process.env.SUPABASE_KEY;
 const PT_ACCOUNT = process.env.PASSTIME_ACCOUNT || '15270';
 const PT_USER = process.env.PASSTIME_USER || 'Vladimir';
 const PT_PASS = process.env.PASSTIME_PASS;
+const MFA_CODE = (process.env.GPS_MFA_CODE || '').trim();
 const PASSTIME_URL = 'https://secure.passtimeusa.com';
 
 const ACCOUNT = (process.env.GPS_ACCOUNT || '').trim();
@@ -141,53 +142,44 @@ async function main() {
   try {
     // ── Login ──
     console.log('🔐 Logging into Passtime...');
-    console.log('  Account:', PT_ACCOUNT, '| User:', PT_USER, '| Pass length:', (PT_PASS||'').length);
+    console.log('  MFA:', MFA_CODE ? 'provided' : 'none');
     await page.goto(PASSTIME_URL, { waitUntil: 'networkidle' });
     await sleep(3000);
 
-    // Clear and type into each field (simulates real keystrokes for ASP.NET)
-    await page.click('#login_DealerNumber', { clickCount: 3 });
-    await page.keyboard.type(PT_ACCOUNT);
-    await page.click('#login_UserName', { clickCount: 3 });
-    await page.keyboard.type(PT_USER);
-    await page.click('#login_Password', { clickCount: 3 });
-    await page.keyboard.type(PT_PASS);
-    await sleep(500);
-
-    // Submit via ASP.NET postback (more reliable than button click)
-    await page.evaluate(() => {
-      // Try direct form submit first
-      var btn = document.querySelector('input[value*="Login"]');
-      if (btn) { btn.disabled = false; btn.click(); }
+    // Log all input IDs for debugging
+    const inputIds = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('input')).map(el => el.id + '[' + el.type + ']').join(', ');
     });
+    console.log('  Inputs:', inputIds);
+
+    // Fill login form using evaluate — same pattern as working gps-sync.js
+    await page.evaluate(({ account, user, pass, mfa }) => {
+      // Fill known fields
+      var el;
+      el = document.getElementById('login_DealerNumber'); if (el) el.value = account;
+      el = document.getElementById('login_UserName'); if (el) el.value = user;
+      el = document.getElementById('login_Password'); if (el) el.value = pass;
+
+      // Find and fill MFA field
+      if (mfa) {
+        // Try common MFA field IDs
+        var mfaField = document.getElementById('login_MFA')
+          || document.getElementById('login_mfa')
+          || document.getElementById('txtMFA')
+          || document.querySelector('input[id*="MFA" i]')
+          || document.querySelector('input[name*="MFA" i]');
+        if (mfaField) mfaField.value = mfa;
+      }
+
+      // Click login button
+      var btn = document.querySelector('input[type="submit"]')
+        || document.querySelector('input[value*="Login"]')
+        || document.querySelector('input[value*="Sign"]');
+      if (btn) { btn.disabled = false; btn.click(); }
+    }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS, mfa: MFA_CODE });
 
     await waitForNav(page, 30000);
     await sleep(3000);
-
-    // Check for 2FA prompt
-    const pageState = await page.evaluate(() => {
-      var text = document.body.innerText;
-      return {
-        url: window.location.href,
-        has2fa: /two.?factor|verification|code|authenticate/i.test(text),
-        hasError: /invalid|incorrect|wrong|failed|locked/i.test(text),
-        errorText: (document.querySelector('.error, .validation-summary-errors, [id*="Error"], .alert') || {}).innerText || '',
-        bodySnippet: text.substring(0, 300)
-      };
-    });
-    console.log('  Page state:', JSON.stringify(pageState));
-
-    // Take screenshot and upload to Supabase storage for debugging
-    try {
-      const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 60 });
-      const screenshotName = 'gps-debug/login-' + Date.now() + '.jpg';
-      const upRes = await fetch(`${SB_URL}/storage/v1/object/${screenshotName}`, {
-        method: 'POST',
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-        body: screenshotBuf
-      });
-      console.log('  Screenshot uploaded:', screenshotName, upRes.status);
-    } catch (e) { console.log('  Screenshot upload failed:', e.message); }
 
     // Skip renewal check
     const skipBtn = await page.$('input[value*="Skip"]');
@@ -197,11 +189,13 @@ async function main() {
       await waitForNav(page);
     }
 
-    if (pageState.url.includes('Login')) {
-      if (pageState.has2fa) {
-        throw new Error('Login requires 2FA — cannot complete in CI mode');
-      }
-      throw new Error('Login failed. Error: ' + (pageState.errorText || pageState.bodySnippet.substring(0, 200)));
+    const postLoginUrl = page.url();
+    console.log('  Post-login URL:', postLoginUrl);
+
+    if (postLoginUrl.includes('Login')) {
+      const pageText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+      console.log('  Page text:', pageText);
+      throw new Error('Login failed — still on login page');
     }
     console.log('✅ Logged in');
 

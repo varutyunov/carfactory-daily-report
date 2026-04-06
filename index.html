@@ -8532,6 +8532,11 @@ async function repoFetchGps(account){
 
   if(!lastName){alert('No last name available');return;}
 
+  // Prompt for MFA code
+  var mfaCode=prompt('Enter Passtime MFA code\n(check your authenticator app)');
+  if(mfaCode===null) return; // cancelled
+  mfaCode=(mfaCode||'').trim();
+
   var ghToken=await _getGhToken();
   if(!ghToken){alert('GitHub token required for Passtime sync');return;}
 
@@ -8545,11 +8550,11 @@ async function repoFetchGps(account){
       body:JSON.stringify({key:'gps_fetch_'+account,value:JSON.stringify({status:'queued',account:account,timestamp:new Date().toISOString()})})
     });
 
-    // Dispatch gps-fetch workflow
+    // Dispatch gps-fetch workflow with MFA code
     var dispRes=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/gps-fetch.yml/dispatches',{
       method:'POST',
       headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify({ref:'master',inputs:{account:account,last_name:lastName,first_name:firstName}})
+      body:JSON.stringify({ref:'master',inputs:{account:account,last_name:lastName,first_name:firstName,mfa_code:mfaCode}})
     });
 
     if(dispRes.status===204||dispRes.status===200){
