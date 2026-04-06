@@ -152,42 +152,43 @@ async function main() {
     });
     console.log('  Inputs:', inputIds);
 
-    // Fill login form
-    await page.evaluate(({ account, user, pass, mfa }) => {
-      // Fill known fields
-      var el;
-      el = document.getElementById('login_DealerNumber'); if (el) el.value = account;
-      el = document.getElementById('login_UserName'); if (el) el.value = user;
-      el = document.getElementById('login_Password'); if (el) el.value = pass;
+    // Fill login using Playwright's fill() which triggers change events
+    await page.fill('#login_DealerNumber', PT_ACCOUNT);
+    await page.fill('#login_UserName', PT_USER);
+    await page.fill('#login_Password', PT_PASS);
 
-      // MFA: the text input has NO id — it's a nameless input[type=text] next to login_hfMFASection
-      // Find it by looking for text inputs without an id
-      if (mfa) {
-        var allInputs = document.querySelectorAll('input[type="text"]');
-        var filled = false;
-        for (var i = 0; i < allInputs.length; i++) {
-          var inp = allInputs[i];
-          // Skip inputs we already filled
-          if (inp.id === 'login_DealerNumber' || inp.id === 'login_UserName') continue;
-          // This is the mystery MFA input (no id, type=text)
-          if (!inp.id || inp.id === '') {
-            inp.value = mfa;
-            console.log('MFA filled into unnamed input index ' + i);
-            filled = true;
-            break;
+    // MFA: find the unnamed text input (no id, between DealerNumber and UserName)
+    if (MFA_CODE) {
+      const mfaFilled = await page.evaluate((mfa) => {
+        var inputs = document.querySelectorAll('input[type="text"]');
+        for (var i = 0; i < inputs.length; i++) {
+          if (!inputs[i].id || inputs[i].id === '') {
+            inputs[i].value = mfa;
+            inputs[i].dispatchEvent(new Event('change', {bubbles:true}));
+            inputs[i].dispatchEvent(new Event('input', {bubbles:true}));
+            return 'filled at index ' + i;
           }
         }
-        if (!filled) console.log('MFA input not found');
-      }
+        return 'not found';
+      }, MFA_CODE);
+      console.log('  MFA:', mfaFilled);
+    }
+    await sleep(500);
 
-      // Click login — it's a <input type="button"> with id login_LoginButton
-      var btn = document.getElementById('login_LoginButton')
-        || document.querySelector('input[type="button"]')
-        || document.querySelector('input[type="submit"]')
-        || document.querySelector('input[value*="Login"]');
-      if (btn) { btn.disabled = false; btn.click(); }
-      else { console.log('Login button not found'); }
-    }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS, mfa: MFA_CODE });
+    // Verify fields were filled
+    const fieldCheck = await page.evaluate(() => {
+      return {
+        dealer: (document.getElementById('login_DealerNumber') || {}).value || '',
+        user: (document.getElementById('login_UserName') || {}).value || '',
+        passLen: ((document.getElementById('login_Password') || {}).value || '').length,
+        btnOnclick: (document.getElementById('login_LoginButton') || {}).getAttribute('onclick') || '',
+        btnValue: (document.getElementById('login_LoginButton') || {}).value || ''
+      };
+    });
+    console.log('  Field check:', JSON.stringify(fieldCheck));
+
+    // Click login button
+    await page.click('#login_LoginButton');
 
     await waitForNav(page, 30000);
     await sleep(3000);
