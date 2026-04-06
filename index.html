@@ -1494,11 +1494,8 @@ body.light .cal-fab{background:#4488ff !important;}
           <button id="payroll-btn-manny" onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
         </div>
       </div>
-      <!-- Payroll calculator view (hidden by default) -->
-      <div id="cp-payroll-view" style="display:none;">
-        <div id="cp-payroll-content"></div>
-      </div>
     </div>
+    <!-- Payroll view is rendered into cash-payouts-list dynamically -->
     <div id="cash-payouts-list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 44px;flex:1;display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 </div>
@@ -14696,16 +14693,29 @@ var _payrollExtraSign=1;
 function payrollOpen(who){
   _payrollExtras=[];
   _payrollExtraSign=1;
-  document.getElementById('cp-main-view').style.display='none';
-  document.getElementById('cash-payouts-list').style.display='none';
-  document.getElementById('cp-payroll-view').style.display='block';
+  // Hide original cash payouts sheet
+  document.getElementById('cash-payouts-sheet').style.display='none';
+  // Show payroll as its own full-screen overlay — reliable iOS scroll
+  var ov=document.getElementById('payroll-overlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='payroll-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:9500;background:#0d0d0d;overflow-y:scroll;-webkit-overflow-scrolling:touch;';
+    ov.innerHTML='<div style="padding:16px 16px 100px;"><div id="cp-payroll-content"></div></div>';
+    document.body.appendChild(ov);
+  } else {
+    ov.querySelector('#cp-payroll-content').innerHTML='';
+    ov.style.display='block';
+    ov.scrollTop=0;
+  }
   payrollRender(who);
 }
 
 function payrollBack(){
-  document.getElementById('cp-payroll-view').style.display='none';
-  document.getElementById('cp-main-view').style.display='block';
-  document.getElementById('cash-payouts-list').style.display='flex';
+  var ov=document.getElementById('payroll-overlay');
+  if(ov) ov.style.display='none';
+  // Re-show cash payouts sheet
+  document.getElementById('cash-payouts-sheet').style.display='block';
 }
 
 function payrollRender(who){
@@ -14794,7 +14804,7 @@ function payrollRender(who){
   // Submit
   html+='<button onclick="payrollSubmit(\''+who+'\')" style="width:100%;padding:14px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:12px;color:#34d399;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Pay '+name+'</button>';
 
-  html+='</div>';
+  html+='<div style="height:80px;"></div></div>';
   content.innerHTML=html;
 }
 
@@ -15099,37 +15109,50 @@ function openDealDetail(id) {
     html += '<button onclick="dealEditAddPayment('+d.id+')" style="margin-top:6px;width:100%;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">+ Add Payment</button>';
     html += '</div>';
 
-    // Cash posted to week (None/Full/Custom)
+    // Cash allocation across weeks
     var dealCashTotal=0;
     payments.forEach(function(p){if(p.method==='cash')dealCashTotal+=parseFloat(p.amount)||0;});
-    // Find existing posted amount from payment row
-    var postedAmt=dealCashTotal;
     var tagPfx='Deal \u2014 ';
-    if(_payWeekData&&_payWeekData.length){
-      var matchRow=_payWeekData.find(function(r){return r.raw_ocr_text&&r.raw_ocr_text.indexOf(tagPfx)===0&&r.customer_name===d.customer_name;});
-      if(matchRow) postedAmt=parseFloat((matchRow.amount||'').replace(/[^0-9.]/g,''))||0;
-    }
-    html += '<div style="margin-bottom:10px;">';
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Posted to Week</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center;">';
-    html += '<input id="de-cashpost-'+d.id+'" type="text" inputmode="decimal" value="$'+postedAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;min-width:0;" data-deal-cash="'+dealCashTotal+'"/>';
-    html += '<button onclick="dealEditCashNone('+d.id+')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">None</button>';
-    html += '<button onclick="dealEditCashFull('+d.id+')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Full</button>';
-    html += '</div>';
-    html += '<div style="font-size:11px;color:#555;margin-top:4px;">Total deal cash: $'+dealCashTotal.toLocaleString('en-US',{minimumFractionDigits:2})+' — adjust how much counts towards net cash</div>';
-    html += '</div>';
-
-    // Cash flows into week
-    html += '<div style="margin-bottom:10px;">';
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Flows Into Week Of</div>';
     var dealDt=new Date(d.created_at);
     var dealWk=_payGetWeekStart(dealDt);
-    var wkStr=dealWk.toISOString().slice(0,10);
-    html += '<div style="display:flex;gap:6px;align-items:center;">';
-    html += '<button onclick="dealEditWeekNav('+d.id+',-1)" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#60a5fa;padding:10px 14px;font-size:16px;cursor:pointer;">←</button>';
-    html += '<div id="de-week-'+d.id+'" data-week="'+wkStr+'" style="flex:1;text-align:center;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;padding:12px;font-size:14px;font-weight:700;color:#f59e0b;">'+_dealEditWeekLabel(dealWk)+'</div>';
-    html += '<button onclick="dealEditWeekNav('+d.id+',1)" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;color:#60a5fa;padding:10px 14px;font-size:16px;cursor:pointer;">→</button>';
+    var prevWk=new Date(dealWk);prevWk.setDate(prevWk.getDate()-7);
+    var nextWk=new Date(dealWk);nextWk.setDate(nextWk.getDate()+7);
+    // Look up existing payment rows for this deal across all 3 weeks
+    var _deWkAmts={prev:0,curr:0,next:0};
+    window._deAllocWeeks={prev:prevWk.toISOString().slice(0,10),curr:dealWk.toISOString().slice(0,10),next:nextWk.toISOString().slice(0,10)};
+    if(_payWeekData&&_payWeekData.length){
+      // Check current week
+      var matchCurr=_payWeekData.find(function(r){return r.raw_ocr_text&&r.raw_ocr_text.indexOf(tagPfx)===0&&r.customer_name===d.customer_name;});
+      if(matchCurr) _deWkAmts.curr=parseFloat((matchCurr.amount||'').replace(/[^0-9.]/g,''))||0;
+    }
+    // Default: if no allocation found anywhere, put full cash in current week
+    if(_deWkAmts.prev===0&&_deWkAmts.curr===0&&_deWkAmts.next===0) _deWkAmts.curr=dealCashTotal;
+
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Cash Allocation</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button onclick="dealEditCashNone('+d.id+')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">None</button>';
+    html += '<button onclick="dealEditCashFull('+d.id+')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:8px;color:#4ade80;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Full</button>';
     html += '</div></div>';
+    // 3 week rows: prev, current, next
+    var weekRows=[
+      {key:'prev',wk:prevWk,amt:_deWkAmts.prev,label:'← Prev'},
+      {key:'curr',wk:dealWk,amt:_deWkAmts.curr,label:'Current'},
+      {key:'next',wk:nextWk,amt:_deWkAmts.next,label:'Next →'}
+    ];
+    weekRows.forEach(function(wr){
+      var isCurrent=wr.key==='curr';
+      var borderColor=isCurrent?'rgba(245,158,11,.4)':'#1e1e1e';
+      html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;'+(isCurrent?'background:rgba(245,158,11,.06);border-radius:10px;padding:6px 8px;border:1px solid rgba(245,158,11,.15);':'padding:2px 0;')+'">';
+      html += '<div style="width:60px;flex-shrink:0;font-size:11px;font-weight:700;color:'+(isCurrent?'#f59e0b':'#555')+';text-transform:uppercase;letter-spacing:.5px;">'+wr.label+'</div>';
+      html += '<div style="flex:1;font-size:12px;color:#777;">'+_dealEditWeekLabel(wr.wk)+'</div>';
+      html += '<input id="de-cashwk-'+wr.key+'-'+d.id+'" type="text" inputmode="decimal" value="$'+wr.amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'" oninput="moneyInput(this);dealEditAllocCheck('+d.id+')" style="width:110px;background:#0a0a0a;border:1px solid '+borderColor+';border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;text-align:right;"/>';
+      html += '</div>';
+    });
+    html += '<div id="de-alloc-total-'+d.id+'" style="font-size:11px;color:#555;margin-top:2px;">Total deal cash: $'+dealCashTotal.toLocaleString('en-US',{minimumFractionDigits:2})+' — allocated: $'+((_deWkAmts.prev+_deWkAmts.curr+_deWkAmts.next).toLocaleString('en-US',{minimumFractionDigits:2}))+'</div>';
+    html += '<input type="hidden" id="de-dealcash-'+d.id+'" value="'+dealCashTotal+'"/>';
+    html += '</div>';
 
     // GPS Serial (if finance)
     if(isFinance){
@@ -15225,22 +15248,44 @@ function dealEditRecalcCash(id){
     var m=methodEls[i]?methodEls[i].value:'cash';
     if(m==='cash')cashTotal+=a;
   }
-  var el=document.getElementById('de-cashpost-'+id);
-  if(el){
-    el.dataset.dealCash=cashTotal;
-    el.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  }
+  var hid=document.getElementById('de-dealcash-'+id);
+  if(hid) hid.value=cashTotal;
+  // Reset allocation: put full in current week
+  var currEl=document.getElementById('de-cashwk-curr-'+id);
+  if(currEl) currEl.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  var prevEl=document.getElementById('de-cashwk-prev-'+id);
+  if(prevEl) prevEl.value='$0.00';
+  var nextEl=document.getElementById('de-cashwk-next-'+id);
+  if(nextEl) nextEl.value='$0.00';
+  dealEditAllocCheck(id);
 }
 
 function dealEditCashNone(id){
-  var el=document.getElementById('de-cashpost-'+id);
-  if(el) el.value='$0.00';
+  ['prev','curr','next'].forEach(function(k){
+    var el=document.getElementById('de-cashwk-'+k+'-'+id);
+    if(el) el.value='$0.00';
+  });
+  dealEditAllocCheck(id);
 }
 function dealEditCashFull(id){
-  var el=document.getElementById('de-cashpost-'+id);
-  if(el){
-    var total=parseFloat(el.dataset.dealCash)||0;
-    el.value='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  var total=parseFloat((document.getElementById('de-dealcash-'+id)||{}).value)||0;
+  ['prev','curr','next'].forEach(function(k){
+    var el=document.getElementById('de-cashwk-'+k+'-'+id);
+    if(el) el.value=k==='curr'?'$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'$0.00';
+  });
+  dealEditAllocCheck(id);
+}
+function dealEditAllocCheck(id){
+  var total=parseFloat((document.getElementById('de-dealcash-'+id)||{}).value)||0;
+  var sum=0;
+  ['prev','curr','next'].forEach(function(k){
+    var el=document.getElementById('de-cashwk-'+k+'-'+id);
+    if(el) sum+=parseFloat((el.value||'').replace(/[^0-9.]/g,''))||0;
+  });
+  var lbl=document.getElementById('de-alloc-total-'+id);
+  if(lbl){
+    var over=sum>total+0.01;
+    lbl.innerHTML='Total deal cash: $'+total.toLocaleString('en-US',{minimumFractionDigits:2})+' — allocated: <span style="color:'+(over?'#ef4444':'#4ade80')+'">$'+sum.toLocaleString('en-US',{minimumFractionDigits:2})+'</span>';
   }
 }
 
@@ -15248,14 +15293,6 @@ function _dealEditWeekLabel(dt){
   var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var end=new Date(dt);end.setDate(end.getDate()+6);
   return m[dt.getMonth()]+' '+dt.getDate()+' – '+m[end.getMonth()]+' '+end.getDate();
-}
-
-function dealEditWeekNav(id,dir){
-  var el=document.getElementById('de-week-'+id);if(!el)return;
-  var cur=new Date(el.dataset.week+'T12:00:00');
-  cur.setDate(cur.getDate()+(dir*7));
-  el.dataset.week=cur.toISOString().slice(0,10);
-  el.textContent=_dealEditWeekLabel(cur);
 }
 
 async function dealEditSave(id){
@@ -15288,98 +15325,78 @@ async function dealEditSave(id){
     }
     patch.payments=JSON.stringify(newPayments);
     patch.total_collected=newTotal;
-    // Week — adjust created_at to target week
-    var weekEl=document.getElementById('de-week-'+id);
-    if(weekEl){
-      var targetWk=weekEl.dataset.week;
-      var origWk=_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
-      if(targetWk!==origWk){
-        // Move created_at to same time-of-day but in target week
-        var orig=new Date(d.created_at);
-        var origWkDt=_payGetWeekStart(orig);
-        var dayOffset=Math.round((orig-origWkDt)/(1000*60*60*24));
-        var newDt=new Date(targetWk+'T'+orig.toISOString().split('T')[1]);
-        newDt.setDate(newDt.getDate()+dayOffset);
-        patch.created_at=newDt.toISOString();
-      }
-    }
-    // Also update the corresponding payment row in payments table
+    // Deal stays in its original week — cash allocation handles week distribution
+    // Multi-week cash allocation — update payment rows per week
     var tagPrefix='Deal \u2014 ';
     var dealTag=tagPrefix+(d.vehicle_desc||'');
-    var existingPay=null;
+    var allocWeeks=window._deAllocWeeks||{};
+    var allocAmts={};
+    ['prev','curr','next'].forEach(function(k){
+      var el=document.getElementById('de-cashwk-'+k+'-'+id);
+      allocAmts[k]=el?parseFloat((el.value||'').replace(/[^0-9.]/g,''))||0:0;
+    });
+    // Fetch all existing payment rows for this deal
+    var existingPayRows=[];
     try{
-      // Search by exact raw_ocr_text tag (vehicle-specific) — most reliable match
-      var payRows=await sbGet('payments','raw_ocr_text=eq.'+encodeURIComponent(dealTag)+'&limit=5');
-      if(Array.isArray(payRows)&&payRows.length){
-        // If multiple, prefer same week
-        var wkTarget=weekEl?weekEl.dataset.week:_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
-        existingPay=payRows.find(function(r){return r.week_start===wkTarget;})||payRows[0];
-        // Clean up any duplicates
-        for(var di=0;di<payRows.length;di++){
-          if(payRows[di].id!==existingPay.id){
-            try{await sbDelete('payments',payRows[di].id);}catch(e){}
-          }
-        }
-      }
+      var payRows=await sbGet('payments','raw_ocr_text=eq.'+encodeURIComponent(dealTag)+'&limit=10');
+      if(Array.isArray(payRows)) existingPayRows=payRows;
     }catch(e){}
 
-    // Read custom cash-post-to-week amount
-    var cashPostEl=document.getElementById('de-cashpost-'+id);
-    var cashAmt=0;
-    if(cashPostEl) cashAmt=parseFloat((cashPostEl.value||'').replace(/[^0-9.]/g,''))||0;
+    // Parse vehicle info
+    var vDesc=d.vehicle_desc||'';
+    var vParts=vDesc.split(' ');
+    var vYear=vParts[0]||'';
+    var vMake=vParts[1]||'';
+    var vModel=vParts.slice(2).join(' ')||'';
+    var custName=patch.customer_name||d.customer_name;
 
-    if(existingPay){
-      var payPatch={};
-      // Update customer name if changed
-      if(patch.customer_name) payPatch.customer_name=patch.customer_name;
-      // Update amount to custom cash-post value
-      payPatch.amount='$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      // Update week
-      if(weekEl){
-        var tWk=weekEl.dataset.week;
-        if(tWk!==existingPay.week_start) payPatch.week_start=tWk;
+    // For each of the 3 weeks, create/update/delete payment row
+    var totalPosted=0;
+    for(var wki=0;wki<3;wki++){
+      var wkKey=['prev','curr','next'][wki];
+      var wkDate=allocWeeks[wkKey];
+      var amt=allocAmts[wkKey];
+      totalPosted+=amt;
+      // Find existing row for this week
+      var existing=existingPayRows.find(function(r){return r.week_start===wkDate;});
+      if(existing){
+        // Remove from list so leftovers get cleaned up
+        existingPayRows=existingPayRows.filter(function(r){return r.id!==existing.id;});
+        if(amt>0){
+          var payPatch={amount:'$'+amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+          if(patch.customer_name) payPatch.customer_name=custName;
+          await sbPatch('payments',existing.id,payPatch);
+        } else {
+          await sbDelete('payments',existing.id);
+        }
+      } else if(amt>0){
+        await sbPost('payments',{
+          customer_name:custName,
+          payment_date:new Date().toISOString().slice(0,10),
+          payment_time:null,
+          amount:'$'+amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
+          payment_method:'cash',
+          card_fee_added:false,
+          original_amount:null,
+          vehicle_year:vYear,
+          vehicle_make:vMake,
+          vehicle_model:vModel,
+          vehicle_vin:d.vin||'',
+          vehicle_color:d.color||'',
+          receipt_photo_url:null,
+          location:d.location||'',
+          logged_by:me?me.name:'',
+          week_start:wkDate,
+          raw_ocr_text:dealTag,
+          created_at:new Date().toISOString()
+        });
       }
-      // Update tag if vehicle changed
-      if(patch.customer_name||patch.deal_type){
-        payPatch.raw_ocr_text=tagPrefix+(d.vehicle_desc||'');
-      }
-      if(Object.keys(payPatch).length){
-        await sbPatch('payments',existingPay.id,payPatch);
-      }
-      // If no more cash, delete the payment row
-      if(cashAmt<=0){
-        await sbDelete('payments',existingPay.id);
-      }
-    } else if(!existingPay&&cashAmt>0){
-      // No existing payment row but user wants cash posted — create one
-      var wk=weekEl?weekEl.dataset.week:_payGetWeekStart(new Date(d.created_at)).toISOString().slice(0,10);
-      // Parse vehicle info from vehicle_desc (e.g. "2017 Tesla Model S")
-      var vDesc=d.vehicle_desc||'';
-      var vParts=vDesc.split(' ');
-      var vYear=vParts[0]||'';
-      var vMake=vParts[1]||'';
-      var vModel=vParts.slice(2).join(' ')||'';
-      await sbPost('payments',{
-        customer_name:patch.customer_name||d.customer_name,
-        payment_date:new Date().toISOString().slice(0,10),
-        payment_time:null,
-        amount:'$'+cashAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
-        payment_method:'cash',
-        card_fee_added:false,
-        original_amount:null,
-        vehicle_year:vYear,
-        vehicle_make:vMake,
-        vehicle_model:vModel,
-        vehicle_vin:d.vin||'',
-        vehicle_color:d.color||'',
-        receipt_photo_url:null,
-        location:d.location||'',
-        logged_by:me?me.name:'',
-        week_start:wk,
-        raw_ocr_text:tagPrefix+vDesc,
-        created_at:new Date().toISOString()
-      });
     }
+    // Clean up any leftover old payment rows not matching the 3 weeks
+    for(var ri=0;ri<existingPayRows.length;ri++){
+      try{await sbDelete('payments',existingPayRows[ri].id);}catch(e){}
+    }
+    var cashAmt=totalPosted;
 
     // Save deal
     if(Object.keys(patch).length){
