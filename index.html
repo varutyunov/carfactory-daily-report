@@ -4193,8 +4193,6 @@ async function mgrApproveSubmitted(aid){
   await approve(aid);
 }
 function mgrCatSheet(carId,cat){
-  // Photos: open full photo review instead of simple sheet
-  if(cat==='photos'){mgrPhotoReview(carId).catch(function(e){alert('Photo error: '+e.message);});return;}
   var car=S.inventory.find(function(c){return c.id===carId;});
   if(!car) return;
   var ws=getWorkState(carId);
@@ -4211,6 +4209,11 @@ function mgrCatSheet(carId,cat){
     var itemTexts=repairs.map(function(r){return typeof r==='string'?r:(r.text||'');}).filter(Boolean);
     if(itemTexts.length) extraHTML='<div style="font-size:12px;color:#666;margin-bottom:16px;line-height:1.6;">'+itemTexts.map(function(t){return'· '+t;}).join('<br>')+'</div>';
   }
+  // Photos: add a "View Photos" button
+  var photoBtnHTML='';
+  if(cat==='photos'){
+    photoBtnHTML='<button onclick="closeM(\'m-detail-done\');mgrPhotoReview('+carId+').catch(function(e){alert(e.message);})" style="width:100%;padding:14px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:12px;color:#60a5fa;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">📷 View Photos</button>';
+  }
   var body=document.getElementById('detail-done-body');
   body.innerHTML=
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'+
@@ -4221,6 +4224,7 @@ function mgrCatSheet(carId,cat){
       '</div>'+
     '</div>'+
     extraHTML+
+    photoBtnHTML+
     '<button onclick="mgrCatApprove('+carId+',\''+cat+'\')" style="width:100%;padding:14px;background:#30d158;border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">✓ Done</button>'+
     '<div style="display:flex;gap:8px;">'+
       '<button onclick="closeM(\'m-detail-done\')" style="flex:1;padding:12px;background:none;border:1px solid #222;border-radius:12px;color:#555;font-size:14px;cursor:pointer;">Cancel</button>'+
