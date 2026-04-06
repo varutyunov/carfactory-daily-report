@@ -180,15 +180,23 @@ async function main() {
       return {
         dealer: (document.getElementById('login_DealerNumber') || {}).value || '',
         user: (document.getElementById('login_UserName') || {}).value || '',
-        passLen: ((document.getElementById('login_Password') || {}).value || '').length,
-        btnOnclick: (document.getElementById('login_LoginButton') || {}).getAttribute('onclick') || '',
-        btnValue: (document.getElementById('login_LoginButton') || {}).value || ''
+        passLen: ((document.getElementById('login_Password') || {}).value || '').length
       };
     });
     console.log('  Field check:', JSON.stringify(fieldCheck));
 
-    // Click login button
-    await page.click('#login_LoginButton');
+    // Submit via __doPostBack directly — bypasses client-side validation
+    // which may fail on the unnamed MFA input
+    await page.evaluate(() => {
+      // Disable validation to prevent client-side blocking
+      if (typeof Page_ClientValidate === 'function') {
+        try { Page_IsValid = true; } catch(e) {}
+      }
+      // Call the postback directly
+      WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(
+        "login$LoginButton", "", false, "", "", false, true
+      ));
+    });
 
     await waitForNav(page, 30000);
     await sleep(3000);
