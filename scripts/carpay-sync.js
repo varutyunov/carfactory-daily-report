@@ -292,9 +292,19 @@ async function cpGetCustomerPayments(dealerId, customers, location) {
 // ── Supabase Upsert ──────────────────────────────────────────────────────────
 async function sbUpsert(table, rows) {
   if (!rows.length) return 0;
+  // Normalize: ensure all rows have the same keys (PostgREST requires this)
+  const allKeys = {};
+  rows.forEach(r => { Object.keys(r).forEach(k => { allKeys[k] = true; }); });
+  const keyList = Object.keys(allKeys);
+  const normalized = rows.map(r => {
+    const out = {};
+    keyList.forEach(k => { out[k] = r[k] !== undefined ? r[k] : null; });
+    return out;
+  });
+
   let upserted = 0;
-  for (let i = 0; i < rows.length; i += 50) {
-    const batch = rows.slice(i, i + 50);
+  for (let i = 0; i < normalized.length; i += 50) {
+    const batch = normalized.slice(i, i + 50);
     const res = await fetch(SB_URL + '/rest/v1/' + table, {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
