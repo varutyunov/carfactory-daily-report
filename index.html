@@ -3999,10 +3999,35 @@ async function markPhotosDone(carId){
 }
 function renderMgrPhotos(){
   var el=document.getElementById('mgr-photos-list');
-  var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
-  if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'photos',"mgrCatSheet("+car.id+",'photos')");}).join('')+'</div>';
-  applyPexels(cars);
+  var inQueue=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.photos&&ws.categories.photos.sectionPool;});
+  if(inQueue.length){
+    el.innerHTML='<div class="car-grid">'+inQueue.map(function(car){return mgrCatTile(car,'photos',"mgrCatSheet("+car.id+",'photos')");}).join('')+'</div>';
+    applyPexels(inQueue);
+    return;
+  }
+  // Queue empty — show full inventory so user can browse & add any car
+  var allCars=(S.inventory||[]).filter(function(car){
+    var ws=getWorkState(car.id);
+    var already=ws.categories&&ws.categories.photos&&(ws.categories.photos.sectionPool||ws.categories.photos.confirmed);
+    return !already;
+  });
+  allCars.sort(function(a,b){return(b.stock||'').localeCompare(a.stock||'');});
+  if(!allCars.length){el.innerHTML='<div class="empty"><div class="ei">📷</div><div class="et">No vehicles in Photos queue</div></div>';return;}
+  var o='<div style="font-size:12px;color:#666;text-align:center;padding:6px 0 10px;">Tap a vehicle to add it to the Photos queue</div>';
+  o+='<div class="car-grid">';
+  allCars.forEach(function(car){
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+    o+='<div class="car-tile" onclick="addCarToTab('+car.id+',\'photos\')" style="border-color:#1d4ed8;">';
+    o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Add</span>';
+    o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
+    o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
+  applyPexels(allCars);
 }
 async function approvePhotos(carId){
   const ws=getWorkState(carId);
@@ -4345,7 +4370,7 @@ function renderCatSearchResults(cat){
     var already=ws.categories&&ws.categories[cat]&&(ws.categories[cat].sectionPool||ws.categories[cat].confirmed);
     if(already) return false;
     return fuzzyMatch([car.name,car.stock||'',car.vin||'',car.color||''],q);
-  }).slice(0,6);
+  }).slice(0,12);
   if(!matches.length){el.innerHTML='<div style="font-size:12px;color:#444;padding:6px 4px;">No matches</div>';return;}
   var o='<div class="car-grid" style="margin-top:10px;">';
   matches.forEach(function(car){
