@@ -152,7 +152,7 @@ async function main() {
     });
     console.log('  Inputs:', inputIds);
 
-    // Fill login form using evaluate — same pattern as working gps-sync.js
+    // Fill login form
     await page.evaluate(({ account, user, pass, mfa }) => {
       // Fill known fields
       var el;
@@ -160,22 +160,33 @@ async function main() {
       el = document.getElementById('login_UserName'); if (el) el.value = user;
       el = document.getElementById('login_Password'); if (el) el.value = pass;
 
-      // Find and fill MFA field
+      // MFA: the text input has NO id — it's a nameless input[type=text] next to login_hfMFASection
+      // Find it by looking for text inputs without an id
       if (mfa) {
-        // Try common MFA field IDs
-        var mfaField = document.getElementById('login_MFA')
-          || document.getElementById('login_mfa')
-          || document.getElementById('txtMFA')
-          || document.querySelector('input[id*="MFA" i]')
-          || document.querySelector('input[name*="MFA" i]');
-        if (mfaField) mfaField.value = mfa;
+        var allInputs = document.querySelectorAll('input[type="text"]');
+        var filled = false;
+        for (var i = 0; i < allInputs.length; i++) {
+          var inp = allInputs[i];
+          // Skip inputs we already filled
+          if (inp.id === 'login_DealerNumber' || inp.id === 'login_UserName') continue;
+          // This is the mystery MFA input (no id, type=text)
+          if (!inp.id || inp.id === '') {
+            inp.value = mfa;
+            console.log('MFA filled into unnamed input index ' + i);
+            filled = true;
+            break;
+          }
+        }
+        if (!filled) console.log('MFA input not found');
       }
 
-      // Click login button
-      var btn = document.querySelector('input[type="submit"]')
-        || document.querySelector('input[value*="Login"]')
-        || document.querySelector('input[value*="Sign"]');
+      // Click login — it's a <input type="button"> with id login_LoginButton
+      var btn = document.getElementById('login_LoginButton')
+        || document.querySelector('input[type="button"]')
+        || document.querySelector('input[type="submit"]')
+        || document.querySelector('input[value*="Login"]');
       if (btn) { btn.disabled = false; btn.click(); }
+      else { console.log('Login button not found'); }
     }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS, mfa: MFA_CODE });
 
     await waitForNav(page, 30000);
