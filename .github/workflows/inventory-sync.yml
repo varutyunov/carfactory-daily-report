@@ -1,6 +1,12 @@
 name: Inventory Sync
 
 on:
+  push:
+    paths:
+      - 'InventoryMaster.csv'
+      - 'InventoryMasterDeLand.csv'
+      - 'InventoryMasterDeland.csv'
+    branches: [main, master]
   schedule:
     # Every 2 hours during business hours (Mon-Sat, 8am-8pm ET = 12-24 UTC)
     - cron: '30 12,14,16,18,20,22,0 * * 1-6'
