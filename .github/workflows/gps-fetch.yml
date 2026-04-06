@@ -1,0 +1,40 @@
+name: GPS Fetch — Pull from Passtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      account:
+        description: 'CarPay account number'
+        required: true
+      last_name:
+        description: 'Customer last name'
+        required: true
+      first_name:
+        description: 'Customer first name'
+        required: false
+        default: ''
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: npx playwright install chromium --with-deps
+
+      - name: Fetch GPS Data
+        run: node scripts/gps-fetch-single.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          PASSTIME_ACCOUNT: ${{ secrets.PASSTIME_ACCOUNT }}
+          PASSTIME_USER: ${{ secrets.PASSTIME_USER }}
+          PASSTIME_PASS: ${{ secrets.PASSTIME_PASS }}
+          GPS_ACCOUNT: ${{ inputs.account }}
+          GPS_LAST_NAME: ${{ inputs.last_name }}
+          GPS_FIRST_NAME: ${{ inputs.first_name }}

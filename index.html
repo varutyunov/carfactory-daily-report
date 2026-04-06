@@ -7883,12 +7883,14 @@ async function cpOpenAccount(account){
     html+='<div style="font-size:14px;font-weight:700;color:#ff453a;">GPS NOT FOUND</div>';
     html+='<div style="font-size:12px;color:#888;margin-top:4px;">No GPS signal on record for this account</div>';
     html+='</div>';
-    // Serial input — saves serial + creates GPS record
+    // Fetch from Passtime button — searches by customer name, no serial needed
+    html+='<button onclick="event.stopPropagation();repoFetchGps(\''+account+'\')" style="width:100%;margin-top:10px;padding:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;font-size:14px;font-weight:700;cursor:pointer;">🔍 Fetch from Passtime</button>';
+    // Serial input — for new devices not yet in Passtime
     html+='<div style="margin-top:10px;">';
-    html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">GPS Serial Number</label>';
+    html+='<label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">Or Register New — GPS Serial Number</label>';
     html+='<div style="display:flex;gap:8px;align-items:center;">';
     html+='<input id="repo-gps-serial" value="'+(_gpsSerial||'').replace(/"/g,'&quot;')+'" placeholder="e.g. E1234567" style="flex:1;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff;font-size:14px;font-family:monospace;letter-spacing:.5px;outline:none;" onclick="event.stopPropagation()"/>';
-    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:10px 18px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📡 Sync GPS</button>';
+    html+='<button onclick="event.stopPropagation();repoSaveGpsSerial(\''+account+'\')" style="padding:10px 18px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📡 Register</button>';
     html+='</div></div>';
   } else {
     // GPS status overview
@@ -8517,6 +8519,88 @@ function repoOpenAccount(account) {
   overlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
   history.pushState({repoAcct:true},'');
+}
+
+// ── GPS fetch from Passtime — search by customer name ────────────────────────
+async function repoFetchGps(account){
+  var cust=_cpData.customers.find(function(c){return c.account===account;});
+  if(!cust){alert('Customer not found');return;}
+
+  var nameParts=(cust.name||'').split(',');
+  var lastName=(nameParts[0]||'').trim();
+  var firstName=(nameParts[1]||'').trim().split(' ')[0]||'';
+
+  if(!lastName){alert('No last name available');return;}
+
+  var ghToken=await _getGhToken();
+  if(!ghToken){alert('GitHub token required for Passtime sync');return;}
+
+  showLoading('Searching Passtime for '+lastName+'...');
+
+  try{
+    // Write processing status
+    await fetch(SB_URL+'/rest/v1/app_settings',{
+      method:'POST',
+      headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body:JSON.stringify({key:'gps_fetch_'+account,value:JSON.stringify({status:'queued',account:account,timestamp:new Date().toISOString()})})
+    });
+
+    // Dispatch gps-fetch workflow
+    var dispRes=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/gps-fetch.yml/dispatches',{
+      method:'POST',
+      headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify({ref:'master',inputs:{account:account,last_name:lastName,first_name:firstName}})
+    });
+
+    if(dispRes.status===204||dispRes.status===200){
+      showLoading('Fetching GPS from Passtime... ~30s');
+      var result=await _pollGpsFetchResult(account,90);
+      hideLoading();
+      if(result&&result.status==='success'){
+        var msg='\u2705 '+result.message;
+        if(result.serial) msg+='\nSerial: '+result.serial;
+        if(result.batteryStatus) msg+='\nBattery: '+result.batteryStatus;
+        if(result.lastAddress) msg+='\nLocation: '+result.lastAddress;
+        if(result.health&&result.health.length) msg+='\n\n\u26a0\ufe0f '+result.health.join('\n\u26a0\ufe0f ');
+        alert(msg);
+      } else if(result&&result.status==='error'){
+        alert('\u26a0\ufe0f '+(result.message||'Not found in Passtime'));
+      } else {
+        alert('\u26a0\ufe0f Passtime fetch is still running \u2014 check back in a minute.');
+      }
+    } else {
+      hideLoading();
+      if(dispRes.status===401||dispRes.status===403){
+        _ghToken=null;localStorage.removeItem('cf_gh_token');
+        alert('\u26a0\ufe0f GitHub token invalid. Try again.');
+      } else {
+        alert('\u26a0\ufe0f GitHub Actions error: '+dispRes.status);
+      }
+    }
+  }catch(e){
+    hideLoading();
+    alert('\u26a0\ufe0f Error: '+e.message);
+  }
+
+  cpOpenAccount(account);
+}
+
+// Poll for gps_fetch_{account} result
+async function _pollGpsFetchResult(account,maxSec){
+  var key='gps_fetch_'+account;
+  var start=Date.now();
+  while((Date.now()-start)<maxSec*1000){
+    await new Promise(function(r){setTimeout(r,5000);});
+    try{
+      var r=await fetch(SB_URL+'/rest/v1/app_settings?key=eq.'+encodeURIComponent(key)+'&select=value',{headers:Object.assign({},SB_HEADERS,{'Cache-Control':'no-cache'})});
+      var d=await r.json();
+      if(d&&d.length&&d[0].value){
+        var val=JSON.parse(d[0].value);
+        if(val.status==='success'||val.status==='error') return val;
+      }
+    }catch(e){}
+  }
+  return null;
 }
 
 // ── GPS serial save + register in Passtime via GitHub Actions ────────────────
