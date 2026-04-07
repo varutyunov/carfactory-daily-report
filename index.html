@@ -1211,6 +1211,9 @@ body.light .cal-fab{background:#4488ff !important;}
         <span style="font-size:20px;">📷</span> Scan New Payment
       </button>
 
+      <!-- Payment Search -->
+      <input id="pay-search" placeholder="Search all payments by name or amount..." oninput="paySearchAll(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
+
       <!-- Payment Cards List -->
       <div id="pay-list-items" style="display:flex;flex-direction:column;gap:10px;">
         <div style="text-align:center;color:#555;padding:40px 0;">Loading payments...</div>
@@ -12746,6 +12749,9 @@ function payCalcCardFee(){
 async function loadPaymentWeek(){
   var list=document.getElementById('pay-list-items');
   if(!list)return;
+  // Clear any active search
+  _paySearchActive=false;_paySearchResults=[];
+  var si=document.getElementById('pay-search');if(si)si.value='';
   list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   var wk=_payWeekKey(_payCurrentWeekStart);
   try{
@@ -13324,6 +13330,90 @@ function _payRenderCards(){
     });
   });
   list.innerHTML=html;
+}
+
+var _paySearchTimeout=null;
+var _paySearchActive=false;
+var _paySearchResults=[];
+function paySearchAll(q){
+  q=(q||'').trim();
+  clearTimeout(_paySearchTimeout);
+  if(!q){
+    _paySearchActive=false;
+    _paySearchResults=[];
+    _payRenderCards();
+    return;
+  }
+  _paySearchTimeout=setTimeout(async function(){
+    var list=document.getElementById('pay-list-items');
+    list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Searching...</div>';
+    try{
+      var allPays=await sbGet('payments','location=eq.'+_payLocation+'&order=payment_date.desc,created_at.desc&limit=5000');
+      var ql=q.toLowerCase();
+      var isAmt=ql.replace(/[$,]/g,'').match(/^\d+\.?\d*$/);
+      _paySearchResults=allPays.filter(function(p){
+        if(isAmt){
+          var pAmt=parseFloat((p.amount||'0').replace(/[$,]/g,''))||0;
+          var sAmt=parseFloat(ql.replace(/[$,]/g,''))||0;
+          if(Math.abs(pAmt-sAmt)<0.01) return true;
+          if(p.amount&&p.amount.indexOf(ql.replace(/[$,]/g,''))!==-1) return true;
+        }
+        return fuzzyMatch([p.customer_name||'',p.vehicle_year||'',p.vehicle_make||'',p.vehicle_model||''],ql);
+      });
+      _paySearchActive=true;
+      _payRenderSearchResults();
+    }catch(e){
+      list.innerHTML='<div style="text-align:center;color:#ef4444;padding:40px 0;">Search error: '+(e.message||e)+'</div>';
+    }
+  },400);
+}
+function _payRenderSearchResults(){
+  var list=document.getElementById('pay-list-items');
+  if(!_paySearchResults.length){list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No payments found.</div>';return;}
+  var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var groups={};
+  _paySearchResults.forEach(function(p){
+    var d=p.payment_date||'Unknown';
+    if(!groups[d])groups[d]=[];
+    groups[d].push(p);
+  });
+  var html='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">'+_paySearchResults.length+' result'+(_paySearchResults.length!==1?'s':'')+' across all weeks</div>';
+  Object.keys(groups).sort().reverse().forEach(function(dateStr){
+    var dt=new Date(dateStr+'T12:00:00');
+    var dayName=days[dt.getDay()]||'';
+    var label=dayName+', '+m[dt.getMonth()]+' '+dt.getDate()+', '+dt.getFullYear();
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin:8px 0 6px;">'+label+'</div>';
+    groups[dateStr].forEach(function(p){
+      var amt=p.amount||'$0';
+      var name=p.customer_name||'Unknown';
+      var method=p.payment_method||'cash';
+      var methodBadge='';
+      if(method==='cash') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);">CASH</span>';
+      else if(method==='card') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);">CARD</span>';
+      else if(method==='check') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);">CHECK</span>';
+      else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
+      var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
+      html+='<div onclick="payViewSearchResult('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">';
+      html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+      html+='<div style="font-size:15px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>';
+      html+='<span style="font-size:16px;font-weight:700;color:#4ade80;">'+amt+'</span></div>';
+      if(veh) html+='<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+'</div>';
+      html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">'+methodBadge;
+      if(p.payment_time) html+='<span style="font-size:11px;color:#555;">'+p.payment_time+'</span>';
+      html+='<span style="font-size:11px;color:#555;margin-left:auto;">'+(p.logged_by||'')+'</span>';
+      html+='</div></div>';
+    });
+  });
+  list.innerHTML=html;
+}
+function payViewSearchResult(id){
+  var p=_paySearchResults.find(function(x){return x.id===id;});
+  if(!p){p=_payWeekData.find(function(x){return x.id===id;});}
+  if(!p)return;
+  // Temporarily add to _payWeekData so payViewDetail can find it
+  if(!_payWeekData.find(function(x){return x.id===id;})){_payWeekData.push(p);}
+  payViewDetail(id);
 }
 
 function payViewDetail(id){
@@ -14294,9 +14384,9 @@ function dealsPickLocation(loc) {
   '</div>';
   var isEmp=me&&me.role==='employee';
   var breakdownBtn=isEmp?'':'<button onclick="dealsShowBreakdown()" style="width:100%;padding:11px 16px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;color:#888;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;"><span>View Full Breakdown</span><span style="color:#555;font-size:16px;">&#9776;</span></button>';
-  var searchHtml='<input id="deals-search" placeholder="Search by customer, vehicle, stock..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
+  var searchHtml='<input id="deals-search" placeholder="Search all deals by name or vehicle..." oninput="dealsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
   var uploadBtn='<button onclick="openDealForm(\''+_dealsLocation+'\')" style="width:100%;padding:13px 16px;background:linear-gradient(145deg,#1a1000,#4a3000);border:1px solid rgba(245,158,11,.35);border-radius:12px;color:#f59e0b;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;">📤 Upload Deal</button>';
-  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
+  body.innerHTML = '<div style="padding:12px;">' + toggleHtml + weekNav + statsHtml + searchHtml + uploadBtn + breakdownBtn + '<div id="deals-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading...</div></div></div>';
   loadDeals();
 }
 
@@ -14379,18 +14469,23 @@ function _dealsUpdateStats(){
 
 function dealsFilter(q) {
   q = (q||'').toLowerCase().trim();
-  if(!q) { _dealsFiltered = _dealsData; }
+  if(!q) { _dealsFiltered = _dealsData; _dealsSearchAll=false; }
   else {
-    _dealsFiltered = _dealsData.filter(function(d) {
+    // Search ALL deals across all weeks, not just current week
+    _dealsFiltered = (_dealsAllData||[]).filter(function(d) {
       return fuzzyMatch([d.customer_name||'',d.vehicle_desc||'',d.stock||'',d.created_by||''],q);
     });
+    _dealsSearchAll=true;
   }
   renderDeals();
 }
+var _dealsSearchAll=false;
 
 function renderDeals() {
   var list = document.getElementById('deals-list');
-  if(!_dealsFiltered.length) { list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">No deals this week.</div>'; return; }
+  var noMsg=_dealsSearchAll?'No deals found.':'No deals this week.';
+  if(!_dealsFiltered.length) { list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">'+noMsg+'</div>'; return; }
+  if(_dealsSearchAll){list.innerHTML='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">'+_dealsFiltered.length+' result'+ (_dealsFiltered.length!==1?'s':'') +' across all weeks</div>';}
   // Group by date
   var groups={};
   _dealsFiltered.forEach(function(d){
@@ -14401,7 +14496,7 @@ function renderDeals() {
   });
   var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var html='';
+  var html=_dealsSearchAll?(list.innerHTML||''):'';
   var totalDeals=_dealsFiltered.length;
   var dealNum=totalDeals;
   Object.keys(groups).sort().reverse().forEach(function(dateStr){
