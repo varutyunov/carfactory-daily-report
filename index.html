@@ -5600,6 +5600,8 @@ function goHome(){
   }
 }
 function goMgrHome(){
+  // If inside a progress car detail, go back to progress list instead of home
+  if(_progFullCar){closeProgCar();return;}
   document.querySelectorAll('.mgr-section-pad').forEach(function(el){el.classList.remove('mgr-section-pad');});
   var bar=document.getElementById('mgr-back-bar');
   if(bar) bar.style.display='none';
