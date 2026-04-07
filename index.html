@@ -7952,7 +7952,8 @@ function cpRenderToday(){
   var locPays=_cpData.payments.filter(function(p){return p.location===_cpLoc;});
   if(!locPays.length){container.innerHTML='<div class="cp-empty">No payment data yet</div>';return;}
   var byDate={};
-  locPays.forEach(function(p){if(p.date){if(!byDate[p.date])byDate[p.date]=[];byDate[p.date].push(p);}});
+  function cpNormDate(s){return (s||'').replace(/ 0(\d),/,' $1,');}
+  locPays.forEach(function(p){if(p.date){var k=cpNormDate(p.date);if(!byDate[k])byDate[k]=[];byDate[k].push(p);}});
   var now=new Date();now.setHours(0,0,0,0);
   var html='';
   for(var i=0;i<10;i++){
