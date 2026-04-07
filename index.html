@@ -1791,9 +1791,9 @@ body.light .cal-fab{background:#4488ff !important;}
     <div class="view" id="mgr-paint"><div style="padding:14px;"><div id="cat-search-wrap-paint"></div><div id="mgr-paint-list"></div></div></div>
 
     <div class="view" id="mgr-progress">
-      <div style="padding:14px;" id="mgr-progress-content">
+      <div style="padding:14px;"><div id="cat-search-wrap-progress"></div><div id="mgr-progress-content">
         <p style="color:#555;font-size:13px;padding:20px 0;">Loading progress...</p>
-      </div>
+      </div></div>
     </div>
 
     <div class="view" id="mgr-parts"><div style="padding:14px;"><div id="cat-search-wrap-parts"></div><div id="mgr-parts-list"></div></div></div>
@@ -5614,7 +5614,7 @@ function mgrGoSection(id, label){
   else if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();markBadgeSeen('photos');}
   else if(id==='parts'){initCatSearchBar('parts');renderMgrParts();markBadgeSeen('parts');}
   else if(id==='employees')renderTeam();
-  else if(id==='progress'){renderProgress();markBadgeSeen('progress');}
+  else if(id==='progress'){initProgressSearchBar();renderProgress();markBadgeSeen('progress');}
   else if(id==='calendar')renderCalendar();
   else if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();markBadgeSeen('paint');}
   updateTabBadges();
@@ -5771,6 +5771,108 @@ async function mgrMarkCarComplete(carId){
   hideLoading();
   renderProgress();renderInv();updateTabBadges();updateHomeBadges();
   renderMgrPaint();renderMgrRepair();renderMgrDetail();renderMgrPhotos();renderMgrParts();
+}
+
+/* ── PROGRESS SEARCH BAR ── */
+function initProgressSearchBar(){
+  var wrap=document.getElementById('cat-search-wrap-progress');
+  if(!wrap||document.getElementById('progress-search-inp')) return;
+  wrap.innerHTML=
+    '<div style="position:relative;margin-bottom:14px;">'+
+      '<input id="progress-search-inp" oninput="renderProgressSearchResults()" '+
+        'placeholder="Search to add a vehicle..." autocomplete="off" '+
+        'style="width:100%;box-sizing:border-box;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:11px 14px;color:#fff;font-size:14px;outline:none;-webkit-appearance:none;" />'+
+      '<div id="progress-search-results"></div>'+
+    '</div>';
+}
+function renderProgressSearchResults(){
+  var inp=document.getElementById('progress-search-inp');
+  var el=document.getElementById('progress-search-results');
+  if(!inp||!el) return;
+  var q=inp.value.trim().toLowerCase();
+  if(!q){el.innerHTML='';return;}
+  // Get cars already in progress
+  var tabTypes=['paint','detail','repair','photos','parts'];
+  var inProgress=new Set();
+  (S.inventory||[]).forEach(function(car){
+    var ws=getWorkState(car.id);
+    if(ws.categories){
+      tabTypes.forEach(function(t){
+        if(ws.categories[t]&&(ws.categories[t].sectionPool||ws.categories[t].confirmed)) inProgress.add(car.id);
+      });
+    }
+  });
+  (S.assignments||[]).forEach(function(a){if(!a.approved) inProgress.add(a.inventoryId);});
+  var matches=(S.inventory||[]).filter(function(car){
+    if(inProgress.has(car.id)) return false;
+    return fuzzyMatch([car.name,car.stock||'',car.vin||'',car.color||''],q);
+  }).slice(0,12);
+  if(!matches.length){el.innerHTML='<div style="font-size:12px;color:#444;padding:6px 4px;">No matches</div>';return;}
+  var o='<div class="car-grid" style="margin-top:10px;">';
+  matches.forEach(function(car){
+    var pxUrl=!car.photo&&pxCache[String(car.id)];
+    var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
+    var sub=(car.stock||'')+(car.color?' · '+car.color:'');
+    o+='<div class="car-tile" onclick="addCarToProgressSheet('+car.id+')" style="border-color:#1d4ed8;">';
+    o+='<span class="tile-badge" style="background:#1d4ed8;color:#fff;font-size:10px;padding:3px 8px;border-radius:8px;position:absolute;top:8px;right:8px;z-index:2;">+ Add</span>';
+    o+='<div class="tile-photo-wrap">'+photoHTML+'</div>';
+    o+='<div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div>';
+    o+='</div>';
+  });
+  o+='</div>';
+  el.innerHTML=o;
+  applyPexels(matches);
+}
+function addCarToProgressSheet(carId){
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(!car) return;
+  var cats=['repair','parts','detail','photos','paint'];
+  var labels={repair:'🔧 Repair',parts:'📦 Parts',detail:'✨ Detail',photos:'📷 Photos',paint:'🎨 Paint'};
+  var body=document.getElementById('detail-done-body');
+  body.innerHTML=
+    '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:4px;">Add to Progress</div>'+
+    '<div style="font-size:12px;color:#555;margin-bottom:16px;">'+car.name+'</div>'+
+    '<div style="font-size:12px;color:#888;margin-bottom:10px;">Select categories:</div>'+
+    '<div id="prog-cat-picks" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'+
+    cats.map(function(c){
+      return '<label style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;cursor:pointer;" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked;event.preventDefault();">'+
+        '<input type="checkbox" value="'+c+'" style="width:20px;height:20px;accent-color:#a78bfa;" onclick="event.stopPropagation();"/>'+
+        '<span style="font-size:15px;color:#ccc;">'+labels[c]+'</span>'+
+      '</label>';
+    }).join('')+
+    '</div>'+
+    '<button onclick="confirmAddToProgress('+carId+')" style="width:100%;padding:14px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:#a78bfa;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">Add to Progress</button>'+
+    '<button onclick="closeM(\'m-detail-done\')" style="width:100%;padding:12px;background:none;border:1px solid #222;border-radius:12px;color:#555;font-size:14px;cursor:pointer;">Cancel</button>';
+  openM('m-detail-done');
+}
+async function confirmAddToProgress(carId){
+  var checks=document.querySelectorAll('#prog-cat-picks input[type=checkbox]:checked');
+  var selected=[];
+  checks.forEach(function(cb){selected.push(cb.value);});
+  if(!selected.length){alert('Select at least one category');return;}
+  closeM('m-detail-done');
+  showLoading('Adding...');
+  try{
+    var car=S.inventory.find(function(c){return c.id===carId;});
+    var ws=getWorkState(carId);
+    if(!ws.categories) ws.categories={};
+    selected.forEach(function(cat){
+      if(!ws.categories[cat]) ws.categories[cat]={};
+      ws.categories[cat].sectionPool=true;
+      ws.categories[cat].addedAt=new Date().toISOString();
+    });
+    if(car) car.work=ws;
+    await saveWorkState(carId);
+    addToProgress(carId);
+    // Clear search
+    var inp=document.getElementById('progress-search-inp');
+    if(inp) inp.value='';
+    var res=document.getElementById('progress-search-results');
+    if(res) res.innerHTML='';
+    renderProgress();updateTabBadges();updateHomeBadges();
+    renderMgrRepair();renderMgrDetail();renderMgrPhotos();renderMgrParts();renderMgrPaint();
+  }catch(e){alert('Error: '+e.message);}
+  hideLoading();
 }
 
 /* ── PROGRESS VIEW ── */
