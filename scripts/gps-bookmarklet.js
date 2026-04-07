@@ -435,7 +435,39 @@
 
         if (pfound) {
           var pgd = scrapeGpsDetail(pr.doc);
-          log('\u2705 Serial: ' + pgd.serial + ' | Battery: ' + pgd.battery + ' | Last: ' + pgd.lastReported, '#30d158');
+
+          // Navigate to ViewMap.aspx to get location/address
+          var locAddress = null;
+          var locLat = null;
+          var locLong = null;
+          var locState = null;
+          var outOfState = false;
+          try {
+            var mapFields = getAspFields(pr.doc);
+            mapFields['__EVENTTARGET'] = 'ctl00$MainContent$ViewDetailMenu1$LnkBtnLocateTRAX';
+            mapFields['__EVENTARGUMENT'] = '';
+            var mapPage = await postForm(BASE + 'ViewDetail.aspx', mapFields);
+            if (mapPage.url.includes('ViewMap.aspx')) {
+              var mapDoc = mapPage.doc;
+              var addrEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblAddress');
+              var latEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblLat');
+              var lngEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblLong');
+              if (addrEl) locAddress = addrEl.innerText.replace(/^Address:\s*/i, '').trim();
+              if (latEl) locLat = latEl.innerText.replace(/^Lat:\s*/i, '').trim();
+              if (lngEl) locLong = lngEl.innerText.replace(/^Long:\s*/i, '').trim();
+              // Detect state from address
+              if (locAddress) {
+                var stMatch = locAddress.match(/,\s*([A-Z]{2})\s+\d{5}/);
+                if (stMatch) {
+                  locState = stMatch[1];
+                  outOfState = locState !== 'FL';
+                }
+              }
+            }
+          } catch(mapErr) { /* location scrape failed, continue with what we have */ }
+
+          var addrLog = locAddress ? ' | 📌 ' + locAddress : '';
+          log('\u2705 Serial: ' + pgd.serial + ' | Battery: ' + pgd.battery + addrLog, '#30d158');
 
           // Parse customer name for storage
           var nameParts = (pt.name || '').trim().split(/\s+/);
@@ -449,6 +481,9 @@
             battery_status: pgd.battery || 'Unknown',
             battery_low: (pgd.battery || '').toLowerCase() === 'low' || (pgd.battery || '').toLowerCase() === 'fair',
             last_seen: pgd.lastReported && !isNaN(new Date(pgd.lastReported).getTime()) ? new Date(pgd.lastReported).toISOString() : null,
+            last_address: locAddress || null,
+            last_state: locState || null,
+            out_of_state: outOfState,
             updated_at: new Date().toISOString(),
             updated_by: 'GPS Bookmarklet'
           });
