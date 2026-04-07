@@ -260,7 +260,7 @@
               customer_name: (td.last_name || gd.lastName).toUpperCase() + ', ' + (td.first_name || gd.firstName).toUpperCase(),
               battery_status: gd.battery || 'Unknown',
               battery_low: (gd.battery || '').toLowerCase() === 'low' || (gd.battery || '').toLowerCase() === 'fair',
-              last_seen: gd.lastReported ? new Date(gd.lastReported).toISOString() : null,
+              last_seen: gd.lastReported && !isNaN(new Date(gd.lastReported).getTime()) ? new Date(gd.lastReported).toISOString() : null,
               updated_at: now,
               updated_by: 'GPS Bookmarklet'
             });
@@ -426,7 +426,7 @@
             customer_name: storedName,
             battery_status: pgd.battery || 'Unknown',
             battery_low: (pgd.battery || '').toLowerCase() === 'low' || (pgd.battery || '').toLowerCase() === 'fair',
-            last_seen: pgd.lastReported ? new Date(pgd.lastReported).toISOString() : null,
+            last_seen: pgd.lastReported && !isNaN(new Date(pgd.lastReported).getTime()) ? new Date(pgd.lastReported).toISOString() : null,
             updated_at: new Date().toISOString(),
             updated_by: 'GPS Bookmarklet'
           });
