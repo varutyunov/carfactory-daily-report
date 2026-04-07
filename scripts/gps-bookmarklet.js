@@ -398,7 +398,9 @@
     // Parse name: "LAST, FIRST" → last name for search
     var nameParts = (c.name || '').split(',');
     var lastName = (nameParts[0] || '').trim();
-    pullTargets.push({ name: c.name, account: c.account, lastName: lastName, searchBy: 'AccountNumber' });
+    var firstName = (nameParts[1] || '').trim().split(' ')[0] || '';
+    if (!lastName) return;
+    pullTargets.push({ name: c.name, account: c.account, lastName: lastName, firstName: firstName, searchBy: 'LastName' });
   });
 
   log('Finance deals: ' + allFinance.length + ', CarPay customers: ' + allCarpay.length + ', ' + pullTargets.length + ' need GPS refresh');
@@ -413,8 +415,8 @@
       log('\u{1F50D} ' + (pi+1) + '/' + pullTargets.length + ': ' + pt.name);
 
       try {
-        // Search by VIN or account number depending on source
-        var searchVal = pt.searchBy === 'VinNumber' ? pt.vin : pt.account;
+        // Search by VIN or last name depending on source
+        var searchVal = pt.searchBy === 'VinNumber' ? pt.vin : (pt.searchBy === 'LastName' ? pt.lastName : pt.account);
         var ps = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
         var pf = getAspFields(ps.doc);
         pf['ctl00$searchCustomerCTL$searchCustomerDDL'] = pt.searchBy;
@@ -426,10 +428,32 @@
         if (pr.url.includes('ViewDetail.aspx')) {
           pfound = true;
         } else if (pr.url.includes('CustomerSearchListing')) {
-          var pfl = pr.doc.querySelector('#MainContent_gvCustomers a');
-          if (pfl) {
-            var pfh = pfl.getAttribute('href');
-            if (pfh) { pr = await fetchPage(BASE + pfh); pfound = pr.url.includes('ViewDetail.aspx'); }
+          // Multiple results — try to match by first name
+          var rows = pr.doc.querySelectorAll('#MainContent_gvCustomers tr');
+          var matched = false;
+          if (pt.firstName && rows.length > 1) {
+            for (var ri = 1; ri < rows.length; ri++) {
+              var cells = rows[ri].querySelectorAll('td');
+              if (cells.length > 1) {
+                var rowName = (cells[1].innerText || '').toLowerCase();
+                if (rowName.includes(pt.firstName.toLowerCase())) {
+                  var rl = rows[ri].querySelector('a');
+                  if (rl) {
+                    var rh = rl.getAttribute('href');
+                    if (rh) { pr = await fetchPage(BASE + rh); pfound = pr.url.includes('ViewDetail.aspx'); matched = true; }
+                  }
+                  break;
+                }
+              }
+            }
+          }
+          // Fallback: click first result
+          if (!matched) {
+            var pfl = pr.doc.querySelector('#MainContent_gvCustomers a');
+            if (pfl) {
+              var pfh = pfl.getAttribute('href');
+              if (pfh) { pr = await fetchPage(BASE + pfh); pfound = pr.url.includes('ViewDetail.aspx'); }
+            }
           }
         }
 
