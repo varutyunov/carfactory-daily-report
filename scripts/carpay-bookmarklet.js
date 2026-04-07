@@ -67,7 +67,7 @@
         body: JSON.stringify(batch)
       });
       if (r.ok) done += batch.length;
-      else log('  ⚠ Upsert error: ' + (await r.text()).slice(0, 80), '#f59e0b');
+      else { var errTxt = await r.text(); log('  ⚠ Upsert error (batch ' + i + '): ' + errTxt.slice(0, 200), '#f59e0b'); }
     }
     return done;
   }
@@ -378,6 +378,11 @@
       flagged.forEach(function(f) { flaggedAccounts[f.account] = true; });
       if (Object.keys(flaggedAccounts).length) log('  🚩 Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
     }
+
+    // Debug: verify data before save
+    var _sample = customers.slice(0, 2).map(function(c) { return c.name + ' ph=' + (c.phone||'NULL') + ' veh=' + (c.vehicle||'NULL'); });
+    log('  🔍 Pre-save sample: ' + _sample.join(' | '), '#f59e0b');
+    log('  🔍 Keys: ' + Object.keys(customers[0] || {}).join(', '), '#f59e0b');
 
     // Clear existing for this location
     await sbDeleteByLocation('carpay_customers', _loc);
