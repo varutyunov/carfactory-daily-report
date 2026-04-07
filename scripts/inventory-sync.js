@@ -10,7 +10,6 @@ const HEADERS = {
 };
 
 async function sbGetAll(table, select) {
-  // Paginate to get ALL rows (Supabase default limit is 1000)
   const all = [];
   let offset = 0;
   const limit = 1000;
@@ -34,16 +33,14 @@ function parseCsv(csvPath, forceLocation) {
   console.log(`[${csvPath}] Columns:`, hdrs.join(', '));
 
   const cars = [];
-  const stocks = new Set();
   for (let i = 1; i < lines.length; i++) {
     const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
     const r = {};
     hdrs.forEach((h, j) => r[h] = vals[j] || '');
-    if ((r['status'] !== 'INSTOCK' && r['status'] !== 'REPO') || !r['make'] || !r['stockno']) continue;
+    if ((r['status'] !== 'INSTOCK' && r['status'] !== 'REPO') || !r['make'] || !r['vin']) continue;
 
     const color = r['colorexterior'] || r['color'] || r['extcolor'] || '';
 
-    // forceLocation overrides lotno-based logic
     let location;
     if (forceLocation) {
       location = forceLocation;
@@ -54,108 +51,96 @@ function parseCsv(csvPath, forceLocation) {
 
     cars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
-      stock: r['stockno'],
-      vin: r['vin'] || '',
+      stock: r['stockno'] || '',
+      vin: r['vin'],
       location,
       color
     });
-    stocks.add(r['stockno']);
   }
   console.log(`[${csvPath}] INSTOCK:`, cars.length);
-  return { cars, stocks };
+  return cars;
 }
 
 async function main() {
   // Parse both CSV files
-  const debary = parseCsv('InventoryMaster.csv', null); // uses lotno: 2=DeLand, else DeBary
-  const deland = fs.existsSync('InventoryMasterDeLand.csv')
+  const debaryCars = parseCsv('InventoryMaster.csv', null);
+  const delandCars = fs.existsSync('InventoryMasterDeLand.csv')
     ? parseCsv('InventoryMasterDeLand.csv', 'DeLand')
-    : { cars: [], stocks: new Set() };
+    : [];
 
-  const allCsvCars = [...debary.cars, ...deland.cars];
-  const allCsvStocks = new Set([...debary.stocks, ...deland.stocks]);
-
-  // Deduplicate by VIN across both files
+  // Deduplicate by VIN — VIN is the unique identifier
   const seen = new Set();
-  const csvCars = allCsvCars.filter(c => {
-    if (c.vin && seen.has(c.vin)) return false;
-    if (c.vin) seen.add(c.vin);
+  const csvCars = [...debaryCars, ...delandCars].filter(c => {
+    if (seen.has(c.vin)) return false;
+    seen.add(c.vin);
     return true;
   });
+  const allCsvVins = new Set(csvCars.map(c => c.vin));
 
   console.log('Total INSTOCK (both lots):', csvCars.length);
 
-  // Get ALL existing vehicles from Supabase (paginated)
-  const existing = await sbGetAll('inventory', 'id,stock,vin,name');
-  const existingByStock = new Map(existing.map(c => [c.stock, c]));
+  // Get ALL existing vehicles from Supabase
+  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color');
   const existingByVin = new Map(existing.filter(c => c.vin).map(c => [c.vin, c]));
   console.log('Currently in DB:', existing.length);
 
-  // --- ADD NEW CARS ---
-  const toInsert = csvCars.filter(c => {
-    // Match by VIN first (more reliable), then by stock
-    if (c.vin && existingByVin.has(c.vin)) return false;
-    // Only skip by stock if VIN also matches (same car), not if stock reused across locations
-    if (existingByStock.has(c.stock)) {
-      const ex = existingByStock.get(c.stock);
-      if (!c.vin || !ex.vin || c.vin === ex.vin) return false;
-      // Different VIN = different car reusing stock#, needs insert
-      return true;
-    }
-    return true;
-  });
+  // --- ADD NEW CARS (VIN not in DB) ---
+  const toInsert = csvCars.filter(c => !existingByVin.has(c.vin));
 
   let added = 0;
   if (toInsert.length > 0) {
     console.log('New cars to add:', toInsert.length);
-    for (let i = 0; i < toInsert.length; i += 50) {
-      const batch = toInsert.slice(i, i + 50);
+    for (const car of toInsert) {
       const res = await fetch(SB_URL + '/rest/v1/inventory', {
-        method: 'POST', headers: HEADERS, body: JSON.stringify(batch)
+        method: 'POST', headers: HEADERS, body: JSON.stringify([car])
       });
       if (res.ok) { added += (await res.json()).length; }
-      else { console.error('Insert batch error:', await res.text()); }
+      else {
+        const errText = await res.text();
+        // Stock unique constraint conflict — insert without stock, then patch stock on
+        if (errText.includes('inventory_stock_key')) {
+          console.log('Stock conflict for', car.vin, '- inserting without stock then patching');
+          const { stock, ...carNoStock } = car;
+          const res2 = await fetch(SB_URL + '/rest/v1/inventory', {
+            method: 'POST', headers: HEADERS, body: JSON.stringify([carNoStock])
+          });
+          if (res2.ok) { added += (await res2.json()).length; }
+          else { console.error('Insert (no stock) error:', await res2.text()); }
+        } else {
+          console.error('Insert error for', car.vin, ':', errText);
+        }
+      }
     }
   }
 
-  // --- UPDATE EXISTING CARS (location + color + vin) ---
-  const toUpdate = csvCars.filter(c => {
-    if (c.vin && existingByVin.has(c.vin)) return true;
-    if (existingByStock.has(c.stock)) {
-      const ex = existingByStock.get(c.stock);
-      if (!c.vin || !ex.vin || c.vin === ex.vin) return true;
-    }
-    return false;
-  });
+  // --- UPDATE EXISTING CARS (match by VIN) ---
   let updated = 0;
-  for (const c of toUpdate) {
-    // Match by VIN first, fallback to stock
-    const ex = (c.vin && existingByVin.has(c.vin)) ? existingByVin.get(c.vin) : existingByStock.get(c.stock);
+  for (const c of csvCars) {
+    const ex = existingByVin.get(c.vin);
     if (!ex) continue;
     const patch = {};
     if (c.name && c.name !== ex.name) patch.name = c.name;
-    if (c.color) patch.color = c.color;
-    if (c.location) patch.location = c.location;
-    if (c.vin && c.vin !== ex.vin) patch.vin = c.vin;
+    if (c.color && c.color !== ex.color) patch.color = c.color;
+    if (c.location && c.location !== ex.location) patch.location = c.location;
     if (c.stock && c.stock !== ex.stock) patch.stock = c.stock;
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
     });
     if (res.ok) updated++;
-    else console.error('Update error for', c.stock, ':', await res.text());
+    else console.error('Update error for', c.vin, ':', await res.text());
   }
   console.log('Updated:', updated);
 
-  // --- REMOVE SOLD CARS ---
+  // --- REMOVE SOLD CARS (VIN no longer in any CSV) ---
   const assignments = await sbGetAll('assignments', 'inventory_id,approved');
   const activeAssignments = new Set(
     assignments.filter(a => !a.approved).map(a => a.inventory_id)
   );
 
   const toRemove = existing.filter(c => {
-    if (!c.stock) return false;
-    if (allCsvStocks.has(c.stock)) return false;
+    if (!c.vin) return false;
+    if (allCsvVins.has(c.vin)) return false;
     if (activeAssignments.has(c.id)) return false;
     return true;
   });
@@ -169,11 +154,11 @@ async function main() {
         { method: 'DELETE', headers: HEADERS }
       );
       if (res.ok) { removed++; }
-      else { console.error('Delete error for', car.stock, ':', await res.text()); }
+      else { console.error('Delete error for', car.vin, ':', await res.text()); }
     }
   }
 
   console.log('=== SYNC COMPLETE ===');
-  console.log('Added:', added, '| Removed:', removed, '| Total now:', existing.length + added - removed);
+  console.log('Added:', added, '| Updated:', updated, '| Removed:', removed, '| Total now:', existing.length + added - removed);
 }
 main().catch(e => { console.error(e); process.exit(1); });
