@@ -4448,7 +4448,7 @@ function renderMgrRepair(){
   if(!el) return;
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div><div class="es" style="font-size:12px;color:#444;margin-top:6px;">Search above to add a vehicle</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'repair','mgrRepairSheet('+car.id+')');}).join('')+'</div>';
+  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'repair','openRepairDetail('+car.id+')');}).join('')+'</div>';
   applyPexels(cars);
 }
 async function removeFromRepairQueue(carId){
@@ -4514,6 +4514,155 @@ async function removeRepairItem(carId,idx){
   if(cRRi) cRRi.work=wsRRi;
   await saveWorkState(carId);
   renderMgrRepair();
+}
+
+var _repairDetailCarId=null;
+function openRepairDetail(carId){
+  _repairDetailCarId=carId;
+  renderRepairDetail();
+}
+function closeRepairDetail(){
+  _repairDetailCarId=null;
+  var ov=document.getElementById('repair-detail-overlay');
+  if(ov) ov.remove();
+  renderMgrRepair();updateTabBadges();updateHomeBadges();renderProgress();
+}
+function renderRepairDetail(){
+  var car=S.inventory.find(function(c){return c.id===_repairDetailCarId;});
+  if(!car){closeRepairDetail();return;}
+  var ws=getWorkState(car.id);
+  var cd=(ws.categories&&ws.categories.repair)||{};
+  var items=cd.items||[];
+  var pxUrl=!car.photo&&pxCache[String(car.id)];
+  var thumbSrc=car.photo||pxUrl||'';
+  var thumbHTML=thumbSrc?'<img src="'+thumbSrc+'" style="width:52px;height:52px;border-radius:14px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:52px;height:52px;border-radius:14px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+
+  var ov=document.getElementById('repair-detail-overlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='repair-detail-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    document.body.appendChild(ov);
+  }
+
+  var o='';
+  // Header
+  o+='<div style="position:sticky;top:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">';
+  o+='<div style="display:flex;align-items:center;gap:14px;">';
+  o+='<button onclick="closeRepairDetail()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:20px;cursor:pointer;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">←</button>';
+  o+=thumbHTML;
+  o+='<div style="flex:1;min-width:0;">';
+  o+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>';
+  o+='<div style="font-size:12px;color:#555;margin-top:1px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>';
+  o+='</div>';
+  o+='</div>';
+  o+='</div>';
+
+  // Repairs list
+  o+='<div style="padding:20px 16px 16px;">';
+  o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:14px;">REPAIRS</div>';
+
+  if(!items.length){
+    o+='<div style="text-align:center;padding:30px 0;color:#444;font-size:14px;">No repairs listed yet</div>';
+  } else {
+    items.forEach(function(item,i){
+      var text=typeof item==='string'?item:(item.text||'');
+      var done=typeof item==='object'?!!item.done:false;
+      o+='<div style="display:flex;align-items:center;gap:14px;padding:16px 18px;background:'+(done?'#0a1a0d':'#0d0d0d')+';border:1px solid '+(done?'rgba(48,209,88,0.2)':'#1e1e1e')+';border-radius:14px;margin-bottom:10px;">';
+      o+='<div onclick="repairDetailToggle('+car.id+','+i+')" style="width:28px;height:28px;border-radius:50%;border:2.5px solid '+(done?'#30d158':'#333')+';background:'+(done?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">';
+      if(done) o+='<svg width="12" height="10" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      o+='</div>';
+      o+='<div style="flex:1;min-width:0;font-size:17px;color:'+(done?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(done?'line-through':'none')+';">'+text+'</div>';
+      o+='<button onclick="repairDetailRemove('+car.id+','+i+')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>';
+      o+='</div>';
+    });
+  }
+
+  // Add repair input
+  o+='<div style="display:flex;gap:8px;margin-top:6px;">';
+  o+='<input id="repair-add-inp" placeholder="Add a repair..." onkeydown="if(event.key===\'Enter\')repairDetailAdd('+car.id+')" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:14px 16px;color:#fff;font-size:16px;outline:none;-webkit-appearance:none;"/>';
+  o+='<button onclick="repairDetailAdd('+car.id+')" style="background:rgba(251,146,60,0.15);border:1px solid rgba(251,146,60,0.3);border-radius:12px;padding:14px 18px;color:#fb923c;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0;">+</button>';
+  o+='</div>';
+  o+='</div>';
+
+  // Bottom actions
+  o+='<div style="padding:10px 16px 40px;display:flex;flex-direction:column;gap:10px;">';
+  var hasDone=items.some(function(x){return typeof x==='object'&&x.done;});
+  if(hasDone){
+    o+='<button onclick="repairDetailClearDone('+car.id+')" style="width:100%;padding:14px;background:rgba(255,255,255,0.04);border:1px solid #222;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Clear Done Items</button>';
+  }
+  var allDone=items.length>0&&items.every(function(x){return typeof x==='object'&&x.done;});
+  if(allDone){
+    o+='<button onclick="repairDetailMarkComplete('+car.id+')" style="width:100%;padding:16px;background:rgba(48,209,88,0.12);border:1px solid rgba(48,209,88,0.3);border-radius:14px;color:#30d158;font-size:16px;font-weight:700;cursor:pointer;">✓ All Repairs Done</button>';
+  }
+  o+='<button onclick="closeRepairDetail();removeFromRepairQueue('+car.id+')" style="width:100%;padding:14px;background:rgba(255,69,58,0.06);border:1px solid rgba(255,69,58,0.18);border-radius:14px;color:#ff453a;font-size:14px;font-weight:600;cursor:pointer;">Remove from Repairs</button>';
+  o+='</div>';
+
+  ov.innerHTML=o;
+}
+async function repairDetailToggle(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  var items=ws.categories.repair.items||[];
+  if(idx<0||idx>=items.length) return;
+  var it=items[idx];
+  var txt=typeof it==='string'?it:(it.text||'');
+  var done=typeof it==='object'?!!it.done:false;
+  items[idx]={text:txt,done:!done};
+  ws.categories.repair.items=items;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderRepairDetail();
+}
+async function repairDetailAdd(carId){
+  var inp=document.getElementById('repair-add-inp');
+  if(!inp) return;
+  var text=inp.value.trim();
+  if(!text) return;
+  var ws=getWorkState(carId);
+  if(!ws.categories) ws.categories={};
+  if(!ws.categories.repair) ws.categories.repair={sectionPool:true,items:[]};
+  if(!ws.categories.repair.items) ws.categories.repair.items=[];
+  ws.categories.repair.items.push({text:text,done:false});
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderRepairDetail();
+  var newInp=document.getElementById('repair-add-inp');
+  if(newInp){newInp.focus();}
+}
+async function repairDetailRemove(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  var items=ws.categories.repair.items||[];
+  if(idx<0||idx>=items.length) return;
+  items.splice(idx,1);
+  ws.categories.repair.items=items;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderRepairDetail();
+}
+async function repairDetailClearDone(carId){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  ws.categories.repair.items=(ws.categories.repair.items||[]).filter(function(x){return !(typeof x==='object'&&x.done);});
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderRepairDetail();
+}
+async function repairDetailMarkComplete(carId){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  ws.categories.repair.confirmed=true;
+  ws.categories.repair.reviewed=true;
+  ws.categories.repair.sectionPool=false;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  closeRepairDetail();
 }
 
 function mgrRepairSheet(carId){
@@ -5696,6 +5845,8 @@ function goMgrHome(){
   if(_progFullCar){closeProgCar();return;}
   // If inside parts detail, go back to parts list
   if(_partsDetailCarId){closePartsDetail();return;}
+  // If inside repair detail, go back to repair list
+  if(_repairDetailCarId){closeRepairDetail();return;}
   document.querySelectorAll('.mgr-section-pad').forEach(function(el){el.classList.remove('mgr-section-pad');});
   var bar=document.getElementById('mgr-back-bar');
   if(bar) bar.style.display='none';
@@ -6080,7 +6231,7 @@ function renderProgFull(){
       var subText='';
       if(c.doneBy) subText='by '+c.doneBy;
       else if(c.assignedTo&&c.assignedTo.length){var en=c.assignedTo.map(function(id){var e=(S.employees||[]).find(function(x){return x.id===id;});return e?e.name:null;}).filter(Boolean);if(en.length)subText=en.join(', ');}
-      var tapFn=t==='repair'?'mgrRepairSheet('+car.id+')':t==='parts'?'openPartsDetail('+car.id+')':'mgrCatSheet('+car.id+',\''+t+'\')';
+      var tapFn=t==='repair'?'openRepairDetail('+car.id+')':t==='parts'?'openPartsDetail('+car.id+')':'mgrCatSheet('+car.id+',\''+t+'\')';
       o+='<div style="display:flex;align-items:stretch;background:#0d0d0d;border:1px solid '+(isConf?'rgba(48,209,88,0.2)':isPend?'rgba(255,159,10,0.2)':'#1e1e1e')+';border-radius:14px;overflow:hidden;margin-bottom:0;">';
       o+='<div onclick="'+tapFn+'" style="flex:1;display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
       o+='<div style="width:42px;height:42px;border-radius:12px;background:'+meta.color+'10;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+meta.icon+'</div>';
