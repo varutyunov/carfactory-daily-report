@@ -140,36 +140,105 @@ async function passtimeLogin(page) {
     }
   } else {
     // ── CI: Automated login ───────────────────────────────────────────────
-    await page.evaluate(({ account, user, pass }) => {
-      document.getElementById('login_DealerNumber').value = account;
-      document.getElementById('login_UserName').value = user;
-      document.getElementById('login_Password').value = pass;
-      var btn = document.querySelector('input[value*="Login"]');
-      if (btn) { btn.disabled = false; btn.click(); }
-    }, { account: PT_ACCOUNT, user: PT_USER, pass: PT_PASS });
+    // Use Playwright fill() to properly trigger input/change events
+    console.log('  Filling login form...');
 
-    await waitForNav(page);
-  }
-
-  // Skip EliteRenewalCheck if present
-  const skipBtn = await page.$('input[value*="Skip"]');
-  if (skipBtn) {
-    console.log('  Skipping Elite renewal check...');
-    await page.evaluate(() => {
-      var btn = document.querySelector('input[value*="Skip"]');
-      if (btn) { btn.disabled = false; btn.click(); }
+    // Log what fields exist on the page
+    const fieldCheck = await page.evaluate(() => {
+      return {
+        dealer: !!document.getElementById('login_DealerNumber'),
+        user: !!document.getElementById('login_UserName'),
+        pass: !!document.getElementById('login_Password'),
+        btn: !!document.querySelector('input[value*="Login"]'),
+        pageTitle: document.title,
+        bodySnippet: document.body.innerText.substring(0, 300)
+      };
     });
-    await waitForNav(page);
+    console.log('  Page title:', fieldCheck.pageTitle);
+    console.log('  Fields found — dealer:', fieldCheck.dealer, 'user:', fieldCheck.user, 'pass:', fieldCheck.pass, 'btn:', fieldCheck.btn);
+
+    if (!fieldCheck.dealer || !fieldCheck.user || !fieldCheck.pass) {
+      console.log('  ❌ Login form fields not found. Page content:', fieldCheck.bodySnippet);
+      return false;
+    }
+
+    await page.fill('#login_DealerNumber', PT_ACCOUNT);
+    await page.fill('#login_UserName', PT_USER);
+    await page.fill('#login_Password', PT_PASS);
+    await sleep(500);
+
+    // Click login button
+    const loginBtn = await page.$('input[value*="Login"]');
+    if (loginBtn) {
+      await loginBtn.click();
+    } else {
+      // Try submit via form
+      await page.evaluate(() => {
+        var form = document.querySelector('form');
+        if (form) form.submit();
+      });
+    }
+
+    await waitForNav(page, 30000);
+    await sleep(3000);
+
+    // Log where we ended up
+    console.log('  Post-login URL:', page.url());
+    const postLoginText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+    console.log('  Post-login page text:', postLoginText.substring(0, 200));
   }
 
-  const finalUrl = page.url();
-  if (finalUrl.includes('CustomerRpt') || finalUrl.includes('Dashboard') || finalUrl.includes('Default')) {
-    console.log('✅ Logged in — on Dashboard. Starting automation...');
-    return true;
+  // Handle post-login pages (2FA, security questions, renewal check, etc.)
+  let attempts = 0;
+  while (attempts < 5) {
+    const currentUrl = page.url();
+    attempts++;
+
+    // Success — on dashboard
+    if (currentUrl.includes('CustomerRpt') || currentUrl.includes('Dashboard') || currentUrl.includes('Default')) {
+      console.log('✅ Logged in — on Dashboard. Starting automation...');
+      return true;
+    }
+
+    // Skip EliteRenewalCheck if present
+    if (currentUrl.includes('EliteRenewalCheck')) {
+      console.log('  Skipping Elite renewal check...');
+      const skipBtn = await page.$('input[value*="Skip"]');
+      if (skipBtn) {
+        await skipBtn.click();
+        await waitForNav(page);
+        continue;
+      }
+    }
+
+    // Check for 2FA / verification page
+    const pageText = await page.evaluate(() => document.body.innerText);
+    if (/verification|security code|two.?factor|2fa|one.?time/i.test(pageText)) {
+      console.log('  ❌ 2FA/verification page detected — cannot proceed in CI mode');
+      console.log('  Page text:', pageText.substring(0, 300));
+      return false;
+    }
+
+    // Check for invalid credentials
+    if (/invalid|incorrect|wrong password|failed/i.test(pageText)) {
+      console.log('  ❌ Invalid credentials — login rejected');
+      return false;
+    }
+
+    // Still on login page
+    if (currentUrl.includes('Login') || currentUrl.includes('login')) {
+      console.log('  ⚠️  Still on login page after attempt. URL:', currentUrl);
+      console.log('  Page text:', pageText.substring(0, 300));
+      return false;
+    }
+
+    // Unknown page — log and try waiting
+    console.log('  ⚠️  Unexpected page (attempt', attempts, '):', currentUrl);
+    await sleep(3000);
   }
 
-  console.log('⚠️  Login may have issues — current URL:', finalUrl);
-  return true;
+  console.log('⚠️  Login flow did not reach dashboard after', attempts, 'checks');
+  return false;
 }
 
 // ── Search from Dashboard ────────────────────────────────────────────────────
