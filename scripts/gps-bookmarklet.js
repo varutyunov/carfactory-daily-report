@@ -434,37 +434,42 @@
         if (pr.url.includes('ViewDetail.aspx')) {
           pfound = true;
         } else if (pr.url.includes('CustomerSearchListing')) {
-          // Multiple results — try to match by first name
+          // Multiple results — match by first name only, never guess
           var rows = pr.doc.querySelectorAll('#MainContent_gvCustomers tr');
-          var matched = false;
           if (pt.firstName && rows.length > 1) {
             for (var ri = 1; ri < rows.length; ri++) {
               var cells = rows[ri].querySelectorAll('td');
               if (cells.length > 1) {
-                var rowName = (cells[1].innerText || '').toLowerCase();
+                var rowName = (cells[1].textContent || '').toLowerCase();
                 if (rowName.includes(pt.firstName.toLowerCase())) {
                   var rl = rows[ri].querySelector('a');
                   if (rl) {
                     var rh = rl.getAttribute('href');
-                    if (rh) { pr = await fetchPage(BASE + rh); pfound = pr.url.includes('ViewDetail.aspx'); matched = true; }
+                    if (rh) { pr = await fetchPage(BASE + rh); pfound = pr.url.includes('ViewDetail.aspx'); }
                   }
                   break;
                 }
               }
             }
           }
-          // Fallback: click first result
-          if (!matched) {
-            var pfl = pr.doc.querySelector('#MainContent_gvCustomers a');
-            if (pfl) {
-              var pfh = pfl.getAttribute('href');
-              if (pfh) { pr = await fetchPage(BASE + pfh); pfound = pr.url.includes('ViewDetail.aspx'); }
-            }
-          }
+          if (!pfound) { log('  Multiple results, no first name match — skipped', '#888'); }
         }
 
         if (pfound) {
           var pgd = scrapeGpsDetail(pr.doc);
+
+          // Verify this is actually our customer (not a different dealer's customer with same last name)
+          var detailFirst = (pgd.firstName || '').toLowerCase();
+          var detailLast = (pgd.lastName || '').toLowerCase();
+          var searchFirst = (pt.firstName || '').toLowerCase();
+          var searchLast = (pt.lastName || '').toLowerCase();
+          if (searchFirst && detailFirst && !detailFirst.includes(searchFirst) && !searchFirst.includes(detailFirst)) {
+            log('  Name mismatch: searched ' + pt.firstName + ' ' + pt.lastName + ', found ' + pgd.firstName + ' ' + pgd.lastName + ' — skipped', '#f59e0b');
+            pfound = false;
+          }
+        }
+
+        if (pfound) {
 
           // Navigate to ViewMap.aspx to get location/address
           var locAddress = null;
@@ -482,9 +487,9 @@
               var addrEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblAddress');
               var latEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblLat');
               var lngEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblLong');
-              if (addrEl) locAddress = addrEl.innerText.replace(/^Address:\s*/i, '').trim();
-              if (latEl) locLat = latEl.innerText.replace(/^Lat:\s*/i, '').trim();
-              if (lngEl) locLong = lngEl.innerText.replace(/^Long:\s*/i, '').trim();
+              if (addrEl) locAddress = (addrEl.textContent || '').replace(/^Address:\s*/i, '').trim();
+              if (latEl) locLat = (latEl.textContent || '').replace(/^Lat:\s*/i, '').trim();
+              if (lngEl) locLong = (lngEl.textContent || '').replace(/^Long:\s*/i, '').trim();
               // Detect state from address
               if (locAddress) {
                 var stMatch = locAddress.match(/,\s*([A-Z]{2})\s+\d{5}/);
