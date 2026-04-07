@@ -95,6 +95,12 @@ async function waitForNav(page, timeout = 15000) {
   await sleep(1000);
 }
 
+function promptUser(question) {
+  const readline = require('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(question, ans => { rl.close(); resolve(ans); }));
+}
+
 // ── Passtime Login ───────────────────────────────────────────────────────────
 
 async function passtimeLogin(page) {
@@ -103,40 +109,88 @@ async function passtimeLogin(page) {
   await sleep(2000);
 
   if (LOCAL_MODE) {
-    // ── Local: User logs in manually, we just wait ────────────────────────
-    // Pre-fill account number and username as a convenience
-    await page.evaluate(({ account, user }) => {
-      var acct = document.getElementById('login_DealerNumber');
-      var usr = document.getElementById('login_UserName');
-      if (acct) acct.value = account;
-      if (usr) usr.value = user;
-      var pwd = document.getElementById('login_Password');
-      if (pwd) pwd.focus();
-    }, { account: PT_ACCOUNT, user: PT_USER });
+    // ── Local: Auto-fill login, handle 2FA if it appears ─────────────────
+    console.log('  Filling login form...');
+    await page.fill('#login_DealerNumber', PT_ACCOUNT);
+    await page.fill('#login_UserName', PT_USER);
+    await page.fill('#login_Password', PT_PASS);
+    await sleep(500);
 
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('   LOG IN NOW — Enter your password and complete 2FA.');
-    console.log('   The script will take over once you reach the dashboard.');
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('');
-
-    // Poll every 3 seconds for up to 5 minutes waiting for dashboard
-    const maxWait = 300000;
-    const start = Date.now();
-    let landed = false;
-    while (Date.now() - start < maxWait) {
-      await sleep(3000);
-      const currentUrl = page.url();
-      if (currentUrl.includes('CustomerRpt') || currentUrl.includes('Dashboard') || currentUrl.includes('Default') || currentUrl.includes('EliteRenewalCheck')) {
-        landed = true;
-        break;
+    // Submit via ASP.NET postback
+    await page.evaluate(() => {
+      if (typeof Page_Validators !== 'undefined') {
+        for (var i = 0; i < Page_Validators.length; i++) Page_Validators[i].isvalid = true;
       }
-    }
+      WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(
+        "login$LoginButton", "", true, "", "", false, true
+      ));
+    });
+    await waitForNav(page, 30000);
+    await sleep(2000);
 
-    if (!landed) {
-      console.log('❌ Timed out waiting for login (5 minutes). Exiting.');
-      return false;
+    // Check if 2FA page appeared
+    const post = page.url();
+    if (!post.includes('CustomerRpt') && !post.includes('Dashboard') && !post.includes('Default') && !post.includes('EliteRenewalCheck')) {
+      // Likely 2FA — look for a text input for the code
+      const has2fa = await page.evaluate(() => {
+        var inputs = document.querySelectorAll('input[type=text],input[type=number],input[type=tel]');
+        for (var i = 0; i < inputs.length; i++) {
+          var inp = inputs[i];
+          if (inp.offsetParent !== null && !inp.id.includes('hidden')) return inp.id || inp.name || 'unknown';
+        }
+        return null;
+      });
+
+      if (has2fa) {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('   🔐 2FA REQUIRED — Enter 6-digit code from Google Auth');
+        console.log('═══════════════════════════════════════════════════════════');
+        const code = await promptUser('  Enter code: ');
+        const trimmed = code.trim();
+
+        // Find the visible text input and fill it
+        await page.evaluate((val) => {
+          var inputs = document.querySelectorAll('input[type=text],input[type=number],input[type=tel]');
+          for (var i = 0; i < inputs.length; i++) {
+            var inp = inputs[i];
+            if (inp.offsetParent !== null && !inp.id.includes('hidden')) {
+              inp.value = val;
+              inp.dispatchEvent(new Event('input', {bubbles:true}));
+              inp.dispatchEvent(new Event('change', {bubbles:true}));
+              break;
+            }
+          }
+        }, trimmed);
+        await sleep(300);
+
+        // Click the submit/verify button
+        await page.evaluate(() => {
+          var btns = document.querySelectorAll('input[type=submit],input[type=button],button[type=submit]');
+          for (var i = 0; i < btns.length; i++) {
+            var b = btns[i];
+            var t = (b.value + ' ' + b.innerText).toLowerCase();
+            if (t.includes('verify') || t.includes('submit') || t.includes('continue') || t.includes('confirm') || t.includes('login')) {
+              b.click(); return;
+            }
+          }
+          // Fallback — click first visible submit
+          if (btns.length) btns[0].click();
+        });
+        await waitForNav(page, 30000);
+        await sleep(2000);
+      } else {
+        // Unknown page — wait for manual intervention
+        console.log('  ⚠️  Unexpected page after login:', post);
+        console.log('  Complete login manually — script will resume when you reach the dashboard.');
+        const maxWait = 300000;
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+          await sleep(3000);
+          const u = page.url();
+          if (u.includes('CustomerRpt') || u.includes('Dashboard') || u.includes('Default') || u.includes('EliteRenewalCheck')) break;
+        }
+      }
     }
   } else {
     // ── CI: Automated login ───────────────────────────────────────────────
