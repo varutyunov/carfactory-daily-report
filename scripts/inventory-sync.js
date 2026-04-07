@@ -93,8 +93,15 @@ async function main() {
 
   // --- ADD NEW CARS ---
   const toInsert = csvCars.filter(c => {
-    if (existingByStock.has(c.stock)) return false;
+    // Match by VIN first (more reliable), then by stock
     if (c.vin && existingByVin.has(c.vin)) return false;
+    // Only skip by stock if VIN also matches (same car), not if stock reused across locations
+    if (existingByStock.has(c.stock)) {
+      const ex = existingByStock.get(c.stock);
+      if (!c.vin || !ex.vin || c.vin === ex.vin) return false;
+      // Different VIN = different car reusing stock#, needs insert
+      return true;
+    }
     return true;
   });
 
@@ -111,15 +118,26 @@ async function main() {
     }
   }
 
-  // --- UPDATE EXISTING CARS (location + color) ---
-  const toUpdate = csvCars.filter(c => existingByStock.has(c.stock));
+  // --- UPDATE EXISTING CARS (location + color + vin) ---
+  const toUpdate = csvCars.filter(c => {
+    if (c.vin && existingByVin.has(c.vin)) return true;
+    if (existingByStock.has(c.stock)) {
+      const ex = existingByStock.get(c.stock);
+      if (!c.vin || !ex.vin || c.vin === ex.vin) return true;
+    }
+    return false;
+  });
   let updated = 0;
   for (const c of toUpdate) {
-    const ex = existingByStock.get(c.stock);
+    // Match by VIN first, fallback to stock
+    const ex = (c.vin && existingByVin.has(c.vin)) ? existingByVin.get(c.vin) : existingByStock.get(c.stock);
+    if (!ex) continue;
     const patch = {};
     if (c.name && c.name !== ex.name) patch.name = c.name;
     if (c.color) patch.color = c.color;
     if (c.location) patch.location = c.location;
+    if (c.vin && c.vin !== ex.vin) patch.vin = c.vin;
+    if (c.stock && c.stock !== ex.stock) patch.stock = c.stock;
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
