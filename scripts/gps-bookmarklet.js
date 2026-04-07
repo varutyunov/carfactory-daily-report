@@ -373,8 +373,8 @@
   // Get existing GPS signals to know which accounts already have data
   var existingGps = {};
   try {
-    var gpsRows = await sbGet('repo_gps_signals', 'select=account,updated_at');
-    gpsRows.forEach(function(g) { existingGps[g.account] = g.updated_at; });
+    var gpsRows = await sbGet('repo_gps_signals', 'select=account,updated_at,battery_mode');
+    gpsRows.forEach(function(g) { existingGps[g.account] = g; });
   } catch(e) {}
 
   // Build pull targets from deals (search by VIN) and CarPay customers (search by account)
@@ -382,11 +382,17 @@
   var seenAccounts = {};
   var oneDayAgo = new Date(Date.now() - 86400000).toISOString();
 
+  // Skip logic: skip if battery_mode is already populated AND updated within 24h
+  function shouldSkip(acct) {
+    var ex = existingGps[acct];
+    return ex && ex.battery_mode && ex.updated_at > oneDayAgo;
+  }
+
   // First: deals with VINs
   allFinance.forEach(function(d) {
     if (!d.vin) return;
     var acct = d.stock || String(d.id);
-    if (existingGps[acct] && existingGps[acct] > oneDayAgo) return;
+    if (shouldSkip(acct)) return;
     seenAccounts[acct] = true;
     pullTargets.push({ name: d.customer_name, vin: d.vin, account: acct, searchBy: 'VinNumber' });
   });
@@ -394,7 +400,7 @@
   // Second: CarPay customers not already covered by a deal
   allCarpay.forEach(function(c) {
     if (seenAccounts[c.account]) return;
-    if (existingGps[c.account] && existingGps[c.account] > oneDayAgo) return;
+    if (shouldSkip(c.account)) return;
     // Parse name: "LAST, FIRST" → last name for search
     var nameParts = (c.name || '').split(',');
     var lastName = (nameParts[0] || '').trim();
@@ -470,9 +476,7 @@
             var mapFields = getAspFields(pr.doc);
             mapFields['__EVENTTARGET'] = 'ctl00$MainContent$ViewDetailMenu1$LnkBtnLocateTRAX';
             mapFields['__EVENTARGUMENT'] = '';
-            // Cross-page postback: ASP.NET targets ViewMap.aspx, not the current page
-            var viewMapUrl = pr.url.replace(/ViewDetail\.aspx/i, 'ViewMap.aspx');
-            var mapPage = await postForm(viewMapUrl, mapFields);
+            var mapPage = await postForm(pr.url, mapFields);
             if (mapPage.url.includes('ViewMap.aspx')) {
               var mapDoc = mapPage.doc;
               var addrEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblAddress');
