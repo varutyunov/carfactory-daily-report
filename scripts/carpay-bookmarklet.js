@@ -83,14 +83,15 @@
   function parseCustomerPage(html, carpayId) {
     var parser = new DOMParser();
     var doc = parser.parseFromString(html, 'text/html');
-    var text = doc.body ? doc.body.innerText : '';
+    var text = doc.body ? (doc.body.textContent || doc.body.innerText || '') : '';
 
     // Vehicle — appears in header
     var vehicle = '';
     var vehicleMatch = text.match(/Customer ID:\s*\d+\s*([\w\s]+(?:\d{4}\s+\w+.*?))\s*(?:Back to|Regular Scheduled)/i);
     if (!vehicleMatch) {
       // Try from page title area
-      var headerText = (doc.querySelector('.customer-header, .page-header, h2, h1') || {}).innerText || '';
+      var headerEl = doc.querySelector('.customer-header, .page-header, h2, h1');
+      var headerText = headerEl ? (headerEl.textContent || headerEl.innerText || '') : '';
       var vm = headerText.match(/(\d{4}\s+\w[\w\s]+)/);
       if (vm) vehicle = vm[1].trim();
     } else {
@@ -114,13 +115,36 @@
     var dueMatch = text.match(/Current Amount Due:\s*\$([\d,]+\.?\d*)/i);
     var currentAmountDue = dueMatch ? parseFloat(dueMatch[1].replace(/,/g, '')) : null;
 
-    // Phone — look for +1 (XXX) XXX-XXXX pattern
-    var phoneMatch = text.match(/\+1\s*\((\d{3})\)\s*(\d{3})-(\d{4})/);
-    var phone = phoneMatch ? phoneMatch[1] + phoneMatch[2] + phoneMatch[3] : '';
+    // Phone — try DOM elements first, then broad regex
+    var phone = '';
+    var phoneEl = doc.querySelector('a[href^="tel:"], [data-phone], input[name*="phone"], .phone');
+    if (phoneEl) {
+      var phVal = phoneEl.getAttribute('href') || phoneEl.getAttribute('data-phone') || phoneEl.value || phoneEl.textContent || '';
+      phone = phVal.replace(/^tel:/, '').replace(/\D/g, '');
+      if (phone.length === 11 && phone[0] === '1') phone = phone.slice(1);
+    }
+    if (!phone || phone.length !== 10) {
+      // Try +1 (XXX) XXX-XXXX
+      var pm1 = text.match(/\+?1?\s*\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/);
+      // Try (XXX) XXX-XXXX
+      var pm2 = text.match(/\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/);
+      // Try XXX-XXX-XXXX or XXX.XXX.XXXX
+      var pm3 = text.match(/(?:^|[^\d])(\d{3})[.\-](\d{3})[.\-](\d{4})(?:[^\d]|$)/);
+      var pm = pm1 || pm2 || pm3;
+      if (pm) phone = pm[1] + pm[2] + pm[3];
+    }
 
-    // Email
-    var emailMatch = text.match(/([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})/i);
-    var email = emailMatch ? emailMatch[1].toLowerCase() : '';
+    // Email — try DOM elements first, then regex
+    var email = '';
+    var emailEl = doc.querySelector('a[href^="mailto:"], [data-email], input[type="email"], input[name*="email"]');
+    if (emailEl) {
+      var emVal = emailEl.getAttribute('href') || emailEl.getAttribute('data-email') || emailEl.value || emailEl.textContent || '';
+      email = emVal.replace(/^mailto:/, '').trim().toLowerCase();
+    }
+    if (!email || !email.includes('@')) {
+      var emailMatch = text.match(/([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})/i);
+      email = emailMatch ? emailMatch[1].toLowerCase() : '';
+    }
 
     // Payment history
     var payments = [];
@@ -128,10 +152,10 @@
     rows.forEach(function(tr) {
       var cells = tr.querySelectorAll('td');
       if (cells.length >= 4) {
-        var dateStr = cells[0] ? cells[0].innerText.trim() : '';
-        var status = cells[1] ? cells[1].innerText.trim() : '';
-        var method = cells[2] ? cells[2].innerText.trim() : '';
-        var amount = cells[3] ? cells[3].innerText.trim() : '';
+        var dateStr = cells[0] ? (cells[0].textContent || '').trim() : '';
+        var status = cells[1] ? (cells[1].textContent || '').trim() : '';
+        var method = cells[2] ? (cells[2].textContent || '').trim() : '';
+        var amount = cells[3] ? (cells[3].textContent || '').trim() : '';
         // Accept successful/approved payments (various status text)
         var statusLow = status.toLowerCase();
         var isValid = statusLow.includes('success') || statusLow.includes('approved') || statusLow.includes('complete') || statusLow.includes('paid') || statusLow.includes('settled');
@@ -197,12 +221,12 @@
         var link = tr.querySelector('a[href*="/dms/customer/"]');
         var href = link ? link.getAttribute('href') : '';
         var idMatch = href.match(/\/dms\/customer\/(\d+)/);
-        if (cells[0] && cells[0].innerText.trim()) {
+        if (cells[0] && (cells[0].textContent || '').trim()) {
           customers.push({
-            name: cells[0].innerText.trim(),
-            account: cells[1] ? cells[1].innerText.trim() : '',
-            next_payment: cells[7] ? cells[7].innerText.trim() : '',
-            days_late: parseInt(cells[8] ? cells[8].innerText.trim().replace(/[()]/g,'') : '0') || 0,
+            name: (cells[0].textContent || '').trim(),
+            account: cells[1] ? (cells[1].textContent || '').trim() : '',
+            next_payment: cells[7] ? (cells[7].textContent || '').trim() : '',
+            days_late: parseInt(cells[8] ? (cells[8].textContent || '').trim().replace(/[()]/g,'') : '0') || 0,
             auto_pay: false,
             carpay_id: idMatch ? idMatch[1] : '',
             location: _loc
@@ -242,6 +266,10 @@
           cust.scheduled_amount = details.scheduledAmount || '';
           cust.payment_frequency = details.paymentFrequency || '';
           cust.current_amount_due = details.currentAmountDue;
+          // Debug: log first 3 customer details
+          if (i === 0) {
+            log('  📊 ' + cust.name + ': ph=' + (cust.phone||'none') + ' em=' + (cust.email||'none') + ' veh=' + (cust.vehicle||'none'), '#f59e0b');
+          }
 
           // Fetch payment history tab — separate page from customer detail
           try {
@@ -275,7 +303,11 @@
       log('   ' + pct + '% (' + Math.min(i + batchSize, customers.length) + '/' + customers.length + ' customers, ' + customerPayments.length + ' payments)');
       await sleep(200);
     }
-    log('✅ Details fetched (' + customerPayments.length + ' payments from customer pages)', '#30d158');
+    var _phCount = customers.filter(function(c){return c.phone;}).length;
+    var _emCount = customers.filter(function(c){return c.email;}).length;
+    var _vhCount = customers.filter(function(c){return c.vehicle;}).length;
+    log('✅ Details fetched — 📞 ' + _phCount + ' phones, ✉ ' + _emCount + ' emails, 🚗 ' + _vhCount + ' vehicles', '#30d158');
+    log('   (' + customerPayments.length + ' payments from customer pages)');
 
     // ── Step 3: Fetch recent payments ───────────────────────────────────────
     log('');
