@@ -49,12 +49,14 @@ function parseCsv(csvPath, forceLocation) {
       location = lot === '2' ? 'DeLand' : 'DeBary';
     }
 
+    const miles = parseInt(r['currentmiles']) || null;
     cars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
       stock: r['stockno'] || '',
       vin: r['vin'],
       location,
-      color
+      color,
+      miles
     });
   }
   console.log(`[${csvPath}] INSTOCK:`, cars.length);
@@ -80,7 +82,7 @@ async function main() {
   console.log('Total INSTOCK (both lots):', csvCars.length);
 
   // Get ALL existing vehicles from Supabase
-  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color');
+  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color,miles');
   const existingByVin = new Map(existing.filter(c => c.vin).map(c => [c.vin, c]));
   console.log('Currently in DB:', existing.length);
 
@@ -123,6 +125,7 @@ async function main() {
     if (c.color && c.color !== ex.color) patch.color = c.color;
     if (c.location && c.location !== ex.location) patch.location = c.location;
     if (c.stock && c.stock !== ex.stock) patch.stock = c.stock;
+    if (c.miles && c.miles !== ex.miles) patch.miles = c.miles;
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
