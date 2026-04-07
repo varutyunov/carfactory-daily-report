@@ -8064,7 +8064,9 @@ async function cpRenderBattery(){
   try{gpsRows=await sbGet('repo_gps_signals','select=account,customer_name,battery_mode,battery_status,battery_low,last_seen,updated_at&order=updated_at.desc');}catch(e){}
   var flagged=gpsRows.filter(function(g){
     var mode=(g.battery_mode||'').toLowerCase();
-    return mode!=='endurance';
+    var badMode=mode==='active'||mode==='trip'||mode==='recovery';
+    var lowBat=g.battery_low===true;
+    return badMode||lowBat;
   });
   var locCusts=_cpData.customers.filter(function(c){return c.location===_cpLoc;});
   var locAccts={};locCusts.forEach(function(c){locAccts[c.account]=c;});
@@ -8073,14 +8075,16 @@ async function cpRenderBattery(){
   if(!locFlagged.length){list.innerHTML='<div class="cp-empty">All devices in Endurance mode</div>';return;}
   list.innerHTML=locFlagged.map(function(g){
     var cust=locAccts[g.account];
-    var mode=g.battery_mode||'Unknown';
-    var modeColor=mode==='Active'?'#ff453a':mode==='Trip'?'#f59e0b':mode==='Recovery'?'#60a5fa':'#888';
+    var mode=g.battery_mode||'';
+    var badMode=mode&&mode.toLowerCase()!=='endurance'&&mode.toLowerCase()!=='';
+    var label=badMode?mode:(g.battery_low?'Low Battery':'Flag');
+    var modeColor=mode==='Active'?'#ff453a':mode==='Trip'?'#f59e0b':mode==='Recovery'?'#60a5fa':g.battery_low?'#ff453a':'#888';
     var batText=g.battery_status||'';
     var updAgo='';
     if(g.updated_at){var h=Math.floor((Date.now()-new Date(g.updated_at).getTime())/3600000);updAgo=h<1?'Just now':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
     return '<div class="cp-card" onclick="cpOpenAccount(\''+g.account+'\')" style="border-left:3px solid '+modeColor+';cursor:pointer;-webkit-tap-highlight-color:transparent;">'
       +'<div class="cp-card-row"><div class="cp-card-name">'+(cust?cust.name:g.customer_name)+'</div>'
-      +'<span style="font-size:12px;font-weight:800;color:'+modeColor+';padding:2px 8px;background:'+modeColor+'18;border-radius:6px;">'+mode+'</span></div>'
+      +'<span style="font-size:12px;font-weight:800;color:'+modeColor+';padding:2px 8px;background:'+modeColor+'18;border-radius:6px;">'+label+'</span></div>'
       +'<div class="cp-card-row"><div class="cp-card-date">Acct #'+g.account+(batText?' · Battery: '+batText:'')+(updAgo?' · '+updAgo:'')+'</div></div>'
       +'</div>';
   }).join('');
