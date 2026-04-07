@@ -129,8 +129,327 @@
     return;
   }
 
-  // ── Fetch deals ─────────────────────────────────────────────────────────────
-  log('\u{1F4E1} Fetching deals from Supabase...');
+  // ── Supabase upsert helper ─────────────────────────────────────────────────
+  async function sbUpsert(table, body) {
+    var r = await fetch(SB_URL + '/rest/v1/' + table, {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('sbUpsert ' + table + ': ' + (await r.text()));
+  }
+
+  // ── Scrape GPS data from a ViewDetail page doc ────────────────────────────
+  function scrapeGpsDetail(doc) {
+    function txt(id) { var el = doc.getElementById('MainContent_' + id); return el ? el.innerText.trim() : ''; }
+    return {
+      serial: txt('serialnumber'),
+      battery: txt('LblEncoreBat'),
+      powerMode: txt('LblEncorePwrMode'),
+      lastReported: txt('Lbllastreport1'),
+      airtimeExpires: txt('Lblairtime1'),
+      product: txt('product'),
+      verifyDate: txt('LblVerifyDate'),
+      firstName: txt('firstname'),
+      lastName: txt('lastname'),
+      vin: txt('vin'),
+      make: txt('make'),
+      model: txt('model'),
+      year: txt('year'),
+      color: txt('color'),
+      account: txt('account')
+    };
+  }
+
+  // ── PHASE 0: Check for queued fetch/register tasks from the app ───────────
+  log('\u{1F4E1} Checking for queued tasks...');
+  var queuedTasks = [];
+  try {
+    var allSettings = await sbGet('app_settings', 'key=like.gps_fetch_*&select=key,value');
+    var regSettings = await sbGet('app_settings', 'key=like.gps_register_*&select=key,value');
+    allSettings.concat(regSettings).forEach(function(s) {
+      try {
+        var v = JSON.parse(s.value);
+        if (v.status === 'queued') queuedTasks.push({ key: s.key, data: v });
+      } catch(e) {}
+    });
+  } catch(e) {}
+
+  if (queuedTasks.length) {
+    log('Found ' + queuedTasks.length + ' queued task(s)', '#60a5fa');
+
+    for (var qi = 0; qi < queuedTasks.length; qi++) {
+      var task = queuedTasks[qi];
+      var td = task.data;
+
+      if (task.key.startsWith('gps_fetch_')) {
+        // ── FETCH task: search Passtime by last name, scrape GPS data ──
+        var acctId = td.account || task.key.replace('gps_fetch_', '');
+        log('');
+        log('\u{1F50D} FETCH: Searching for account ' + acctId + '...');
+
+        try {
+          // Search by account number first
+          var sp = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
+          var sf = getAspFields(sp.doc);
+          sf['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'AccountNumber';
+          sf['ctl00$searchCustomerCTL$searchTxt'] = acctId;
+          sf['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
+          var rp = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', sf);
+
+          var found = false;
+          if (rp.url.includes('ViewDetail.aspx')) {
+            found = true;
+          } else if (rp.url.includes('CustomerSearchListing')) {
+            var fl = rp.doc.querySelector('#MainContent_gvCustomers a');
+            if (fl) {
+              var hp = fl.getAttribute('href');
+              if (hp) { rp = await fetchPage(BASE + hp); found = rp.url.includes('ViewDetail.aspx'); }
+            }
+          }
+
+          // If not found by account, try by last name
+          if (!found && td.last_name) {
+            log('  Not found by account, trying last name: ' + td.last_name);
+            sp = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
+            sf = getAspFields(sp.doc);
+            sf['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'LastName';
+            sf['ctl00$searchCustomerCTL$searchTxt'] = td.last_name;
+            sf['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
+            rp = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', sf);
+
+            if (rp.url.includes('ViewDetail.aspx')) {
+              found = true;
+            } else if (rp.url.includes('CustomerSearchListing')) {
+              // Multiple results — look for matching first name
+              var rows = rp.doc.querySelectorAll('#MainContent_gvCustomers tr');
+              for (var ri = 1; ri < rows.length; ri++) {
+                var cells = rows[ri].querySelectorAll('td');
+                if (cells.length > 1) {
+                  var rowName = (cells[1].innerText || '').toLowerCase();
+                  if (td.first_name && rowName.includes(td.first_name.toLowerCase())) {
+                    var rl = rows[ri].querySelector('a');
+                    if (rl) {
+                      var rh = rl.getAttribute('href');
+                      if (rh) { rp = await fetchPage(BASE + rh); found = rp.url.includes('ViewDetail.aspx'); }
+                    }
+                    break;
+                  }
+                }
+              }
+              // Fallback: click first result
+              if (!found) {
+                var firstLink = rp.doc.querySelector('#MainContent_gvCustomers a');
+                if (firstLink) {
+                  var fh = firstLink.getAttribute('href');
+                  if (fh) { rp = await fetchPage(BASE + fh); found = rp.url.includes('ViewDetail.aspx'); }
+                }
+              }
+            }
+          }
+
+          if (found) {
+            var gd = scrapeGpsDetail(rp.doc);
+            log('\u2705 Found: ' + gd.firstName + ' ' + gd.lastName + ' | Serial: ' + gd.serial, '#30d158');
+            log('  Battery: ' + gd.battery + ' | Last: ' + gd.lastReported);
+
+            // Save to repo_gps_signals
+            var now = new Date().toISOString();
+            await sbUpsert('repo_gps_signals', {
+              account: acctId,
+              customer_name: (td.last_name || gd.lastName).toUpperCase() + ', ' + (td.first_name || gd.firstName).toUpperCase(),
+              battery_status: gd.battery || 'Unknown',
+              battery_low: (gd.battery || '').toLowerCase() === 'low' || (gd.battery || '').toLowerCase() === 'fair',
+              last_seen: gd.lastReported ? new Date(gd.lastReported).toISOString() : null,
+              updated_at: now,
+              updated_by: 'GPS Bookmarklet'
+            });
+
+            // Write success result
+            await sbUpsert('app_settings', {
+              key: task.key,
+              value: JSON.stringify({
+                status: 'success',
+                message: 'Found in Passtime',
+                serial: gd.serial,
+                batteryStatus: gd.battery,
+                powerMode: gd.powerMode,
+                lastReported: gd.lastReported,
+                airtimeExpires: gd.airtimeExpires,
+                timestamp: now
+              })
+            });
+            log('\u{1F4E4} Saved to app', '#30d158');
+          } else {
+            log('\u274C Not found in Passtime', '#ff453a');
+            await sbUpsert('app_settings', {
+              key: task.key,
+              value: JSON.stringify({ status: 'error', message: 'Not found in Passtime', timestamp: new Date().toISOString() })
+            });
+          }
+        } catch(fe) {
+          log('\u274C Fetch error: ' + fe.message, '#ef4444');
+          await sbUpsert('app_settings', { key: task.key, value: JSON.stringify({ status: 'error', message: fe.message, timestamp: new Date().toISOString() }) });
+        }
+
+      } else if (task.key.startsWith('gps_register_')) {
+        // ── REGISTER task: add/update serial in Passtime ──
+        var serial = td.serial || task.key.replace('gps_register_', '');
+        log('');
+        log('\u{1F4E1} REGISTER: Serial ' + serial + ' for ' + (td.first_name || '') + ' ' + (td.last_name || ''));
+
+        // This uses the same push logic as the existing bookmarklet
+        // Search first to see if serial exists
+        try {
+          var sp2 = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
+          var sf2 = getAspFields(sp2.doc);
+          sf2['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'SerialNumber';
+          sf2['ctl00$searchCustomerCTL$searchTxt'] = serial;
+          sf2['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
+          var rp2 = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', sf2);
+
+          if (rp2.url.includes('ViewDetail.aspx')) {
+            // Already exists — edit it
+            log('  Found existing — editing...');
+            var editPage = await fetchPage(BASE + 'ViewDetail.aspx?M=ED');
+            var editFields = getAspFields(editPage.doc);
+            editFields['ctl00$MainContent$eAccountNumber'] = td.account || '';
+            editFields['ctl00$MainContent$efirstname'] = td.first_name || '';
+            editFields['ctl00$MainContent$elastname'] = td.last_name || '';
+            editFields['ctl00$MainContent$eVIN'] = td.vin || '';
+            editFields['ctl00$MainContent$eColor'] = td.color || '';
+            editFields['ctl00$MainContent$eInventoryStockNumber'] = td.account || '';
+            editFields['ctl00$MainContent$btnEditSubmit'] = 'Submit';
+            var saveRes = await postForm(BASE + 'ViewDetail.aspx?M=ED', editFields);
+
+            if (saveRes.url.includes('ViewDetail.aspx') && !saveRes.url.includes('M=ED')) {
+              // Scrape updated data
+              var gd2 = scrapeGpsDetail(saveRes.doc);
+              log('\u2705 Updated!', '#30d158');
+              await sbUpsert('app_settings', {
+                key: task.key,
+                value: JSON.stringify({ status: 'success', message: 'Updated in Passtime', serial: serial, batteryStatus: gd2.battery, timestamp: new Date().toISOString() })
+              });
+            } else {
+              log('\u274C Edit may have failed', '#ef4444');
+              await sbUpsert('app_settings', { key: task.key, value: JSON.stringify({ status: 'error', message: 'Edit failed', timestamp: new Date().toISOString() }) });
+            }
+          } else {
+            // Not found — add new (same iframe approach as push mode)
+            log('  Not found — will be added during push phase if in inventory');
+            await sbUpsert('app_settings', {
+              key: task.key,
+              value: JSON.stringify({ status: 'error', message: 'Serial not found in Passtime. Run full GPS sync to add it.', timestamp: new Date().toISOString() })
+            });
+          }
+        } catch(re) {
+          log('\u274C Register error: ' + re.message, '#ef4444');
+          await sbUpsert('app_settings', { key: task.key, value: JSON.stringify({ status: 'error', message: re.message, timestamp: new Date().toISOString() }) });
+        }
+      }
+
+      await sleep(1000);
+    }
+    log('');
+  }
+
+  // ── PHASE 1: Pull GPS data for ALL finance deals ──────────────────────────
+  log('\u{1F4E1} Pulling GPS data for all finance deals...');
+  var allFinance = [];
+  try {
+    allFinance = await sbGet('deals', 'deal_type=eq.finance&select=id,customer_name,vin,stock,gps_serial&order=created_at.desc');
+  } catch(e) {
+    log('\u26a0\ufe0f Could not fetch deals: ' + e.message, '#f59e0b');
+  }
+
+  // Get existing GPS signals to know which accounts already have data
+  var existingGps = {};
+  try {
+    var gpsRows = await sbGet('repo_gps_signals', 'select=account,updated_at');
+    gpsRows.forEach(function(g) { existingGps[g.account] = g.updated_at; });
+  } catch(e) {}
+
+  // Find deals with VINs that don't have fresh GPS data (older than 24h or missing)
+  var pullTargets = [];
+  var oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+  allFinance.forEach(function(d) {
+    if (!d.vin) return;
+    var acct = d.stock || String(d.id);
+    // Skip if GPS data is fresh (less than 24h old)
+    if (existingGps[acct] && existingGps[acct] > oneDayAgo) return;
+    pullTargets.push({ id: d.id, name: d.customer_name, vin: d.vin, account: acct, serial: d.gps_serial });
+  });
+
+  log('Finance deals: ' + allFinance.length + ' total, ' + pullTargets.length + ' need GPS refresh');
+
+  if (pullTargets.length > 0) {
+    var pullSuccess = 0;
+    var pullSkip = 0;
+
+    for (var pi = 0; pi < pullTargets.length; pi++) {
+      var pt = pullTargets[pi];
+      log('');
+      log('\u{1F50D} ' + (pi+1) + '/' + pullTargets.length + ': ' + pt.name);
+
+      try {
+        // Search by VIN
+        var ps = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
+        var pf = getAspFields(ps.doc);
+        pf['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'VinNumber';
+        pf['ctl00$searchCustomerCTL$searchTxt'] = pt.vin;
+        pf['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
+        var pr = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', pf);
+
+        var pfound = false;
+        if (pr.url.includes('ViewDetail.aspx')) {
+          pfound = true;
+        } else if (pr.url.includes('CustomerSearchListing')) {
+          var pfl = pr.doc.querySelector('#MainContent_gvCustomers a');
+          if (pfl) {
+            var pfh = pfl.getAttribute('href');
+            if (pfh) { pr = await fetchPage(BASE + pfh); pfound = pr.url.includes('ViewDetail.aspx'); }
+          }
+        }
+
+        if (pfound) {
+          var pgd = scrapeGpsDetail(pr.doc);
+          log('\u2705 Serial: ' + pgd.serial + ' | Battery: ' + pgd.battery + ' | Last: ' + pgd.lastReported, '#30d158');
+
+          // Parse customer name for storage
+          var nameParts = (pt.name || '').trim().split(/\s+/);
+          var storedName = nameParts.length > 1
+            ? nameParts.slice(1).join(' ').toUpperCase() + ', ' + nameParts[0].toUpperCase()
+            : (pt.name || '').toUpperCase();
+
+          await sbUpsert('repo_gps_signals', {
+            account: pt.account,
+            customer_name: storedName,
+            battery_status: pgd.battery || 'Unknown',
+            battery_low: (pgd.battery || '').toLowerCase() === 'low' || (pgd.battery || '').toLowerCase() === 'fair',
+            last_seen: pgd.lastReported ? new Date(pgd.lastReported).toISOString() : null,
+            updated_at: new Date().toISOString(),
+            updated_by: 'GPS Bookmarklet'
+          });
+          pullSuccess++;
+        } else {
+          log('  Not in Passtime', '#888');
+          pullSkip++;
+        }
+      } catch(pe) {
+        log('  Error: ' + pe.message, '#ef4444');
+        pullSkip++;
+      }
+
+      await sleep(300);
+    }
+
+    log('');
+    log('Pull complete: \u2705 ' + pullSuccess + ' updated, \u23ED\uFE0F ' + pullSkip + ' not found', pullSuccess > 0 ? '#30d158' : '#888');
+  }
+
+  // ── PHASE 2: Push new deals to Passtime (existing behavior) ───────────────
+  log('');
+  log('\u{1F4E1} Checking for new deals to push...');
   var deals;
   try {
     deals = await sbGet('deals', 'gps_uploaded=eq.false&order=created_at.asc');
@@ -146,7 +465,11 @@
   log('Found ' + deals.length + ' unprocessed, ' + dealsWithGps.length + ' with GPS serials');
 
   if (!dealsWithGps.length) {
-    log('\u2705 Nothing to process \u2014 all up to date!', '#30d158');
+    log('\u2705 No new deals to push!', '#30d158');
+    log('');
+    log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
+    log('\u{1F4CA} GPS SYNC COMPLETE', '#30d158');
+    log('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550');
     return;
   }
 

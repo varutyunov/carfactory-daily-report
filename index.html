@@ -9133,106 +9133,24 @@ async function repoFetchGps(account){
 
   if(!lastName){alert('No last name available');return;}
 
-  // Prompt for MFA code
-  var mfaCode=prompt('Enter Passtime MFA code\n(check your authenticator app)');
-  if(mfaCode===null) return; // cancelled
-  mfaCode=(mfaCode||'').trim();
-
-  var ghToken=await _getGhToken();
-  if(!ghToken){alert('GitHub token required for Passtime sync');return;}
-
-  showLoading('Searching Passtime for '+lastName+'...');
+  showLoading('Queuing GPS fetch...');
 
   try{
-    // Write processing status
+    // Queue task for bookmarklet pickup
     await fetch(SB_URL+'/rest/v1/app_settings',{
       method:'POST',
       headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),
-      body:JSON.stringify({key:'gps_fetch_'+account,value:JSON.stringify({status:'queued',account:account,timestamp:new Date().toISOString()})})
+      body:JSON.stringify({key:'gps_fetch_'+account,value:JSON.stringify({status:'queued',account:account,last_name:lastName,first_name:firstName,timestamp:new Date().toISOString()})})
     });
 
-    // Dispatch gps-fetch workflow with MFA code
-    var dispRes=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/gps-fetch.yml/dispatches',{
-      method:'POST',
-      headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify({ref:'master',inputs:{account:account,last_name:lastName,first_name:firstName,mfa_code:mfaCode}})
-    });
-
-    if(dispRes.status===204||dispRes.status===200){
-      showLoading('Fetching GPS from Passtime... ~30s');
-      var result=await _pollGpsFetchResult(account,90);
-      hideLoading();
-      if(result&&result.status==='success'){
-        var msg='\u2705 '+result.message;
-        if(result.serial) msg+='\nSerial: '+result.serial;
-        if(result.batteryStatus) msg+='\nBattery: '+result.batteryStatus;
-        if(result.lastAddress) msg+='\nLocation: '+result.lastAddress;
-        if(result.health&&result.health.length) msg+='\n\n\u26a0\ufe0f '+result.health.join('\n\u26a0\ufe0f ');
-        alert(msg);
-      } else if(result&&result.status==='error'){
-        alert('\u26a0\ufe0f '+(result.message||'Not found in Passtime'));
-      } else {
-        alert('\u26a0\ufe0f Passtime fetch is still running \u2014 check back in a minute.');
-      }
-    } else {
-      hideLoading();
-      if(dispRes.status===401||dispRes.status===403){
-        _ghToken=null;localStorage.removeItem('cf_gh_token');
-        alert('\u26a0\ufe0f GitHub token invalid. Try again.');
-      } else {
-        alert('\u26a0\ufe0f GitHub Actions error: '+dispRes.status);
-      }
-    }
+    hideLoading();
+    alert('📡 GPS fetch queued!\n\nGo to Passtime and click the ⚡ GPS Sync bookmarklet to pull the data.');
   }catch(e){
     hideLoading();
-    alert('\u26a0\ufe0f Error: '+e.message);
+    alert('⚠️ Error: '+e.message);
   }
 
   cpOpenAccount(account);
-}
-
-// Poll for gps_fetch_{account} result
-async function _pollGpsFetchResult(account,maxSec){
-  var key='gps_fetch_'+account;
-  var start=Date.now();
-  while((Date.now()-start)<maxSec*1000){
-    await new Promise(function(r){setTimeout(r,5000);});
-    try{
-      var r=await fetch(SB_URL+'/rest/v1/app_settings?key=eq.'+encodeURIComponent(key)+'&select=value',{headers:Object.assign({},SB_HEADERS,{'Cache-Control':'no-cache'})});
-      var d=await r.json();
-      if(d&&d.length&&d[0].value){
-        var val=JSON.parse(d[0].value);
-        if(val.status==='success'||val.status==='error') return val;
-      }
-    }catch(e){}
-  }
-  return null;
-}
-
-// ── GPS serial save + register in Passtime via GitHub Actions ────────────────
-var _ghToken=null;
-async function _getGhToken(){
-  if(_ghToken) return _ghToken;
-  // Try localStorage first
-  var t=localStorage.getItem('cf_gh_token');
-  if(t){_ghToken=t;return t;}
-  // Try Supabase app_settings
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/app_settings?key=eq.github_token&select=value',{headers:SB_HEADERS});
-    var d=await r.json();
-    if(d&&d.length&&d[0].value){_ghToken=d[0].value;localStorage.setItem('cf_gh_token',d[0].value);return d[0].value;}
-  }catch(e){}
-  // Prompt user
-  var tok=prompt('Enter GitHub Personal Access Token\n(needed once for Passtime sync)');
-  if(!tok) return null;
-  tok=tok.trim();
-  _ghToken=tok;
-  localStorage.setItem('cf_gh_token',tok);
-  // Save to Supabase for other devices
-  try{
-    await fetch(SB_URL+'/rest/v1/app_settings',{method:'POST',headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify({key:'github_token',value:tok})});
-  }catch(e){}
-  return tok;
 }
 
 async function repoSaveGpsSerial(account){
@@ -9283,83 +9201,20 @@ async function repoSaveGpsSerial(account){
     });
   }catch(e){console.error('GPS save error',e);}
 
-  // Trigger GitHub Actions workflow to register in Passtime
-  var ghToken=await _getGhToken();
-  if(!ghToken){
-    hideLoading();
-    alert('⚠️ GPS saved locally but Passtime sync skipped — no GitHub token.');
-    cpOpenAccount(account);
-    return;
-  }
-
-  showLoading('Triggering Passtime sync...');
-
+  // Queue register task for bookmarklet pickup
   try{
-    // Write "processing" status so we know it's pending
     await fetch(SB_URL+'/rest/v1/app_settings',{
       method:'POST',
       headers:Object.assign({},SB_HEADERS,{'Prefer':'resolution=merge-duplicates,return=minimal'}),
-      body:JSON.stringify({key:'gps_register_'+serial,value:JSON.stringify({status:'queued',serial:serial,timestamp:new Date().toISOString()})})
+      body:JSON.stringify({key:'gps_register_'+serial,value:JSON.stringify({status:'queued',serial:serial,first_name:firstName,last_name:lastName,account:account,vin:vinVal,color:colorVal,timestamp:new Date().toISOString()})})
     });
+  }catch(e){console.error('GPS queue error',e);}
 
-    // Dispatch the workflow
-    var dispRes=await fetch('https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/gps-register.yml/dispatches',{
-      method:'POST',
-      headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify({ref:'master',inputs:{serial:serial,first_name:firstName,last_name:lastName,account:account,vin:vinVal,color:colorVal}})
-    });
-
-    if(dispRes.status===204||dispRes.status===200){
-      showLoading('Passtime sync running... ~30s');
-      // Poll Supabase for result
-      var result=await _pollGpsRegisterResult(serial,60);
-      hideLoading();
-      if(result&&result.status==='success'){
-        var msg='\u2705 '+result.message;
-        if(result.health&&result.health.length) msg+='\n\n\u26a0\ufe0f '+result.health.join('\n\u26a0\ufe0f ');
-        alert(msg);
-      } else if(result&&result.status==='error'){
-        alert('\u26a0\ufe0f Passtime: '+(result.message||'Unknown error'));
-      } else {
-        alert('\u26a0\ufe0f GPS saved locally. Passtime sync is still running — check back in a minute.');
-      }
-    } else {
-      var errBody=await dispRes.text();
-      hideLoading();
-      console.error('GitHub dispatch error',dispRes.status,errBody);
-      if(dispRes.status===401||dispRes.status===403){
-        _ghToken=null;localStorage.removeItem('cf_gh_token');
-        alert('\u26a0\ufe0f GitHub token invalid or expired. Try again — you\'ll be prompted for a new token.');
-      } else {
-        alert('\u26a0\ufe0f GPS saved locally.\n\nGitHub Actions error: '+dispRes.status);
-      }
-    }
-  }catch(e){
-    hideLoading();
-    console.error('GPS register error',e);
-    alert('\u26a0\ufe0f GPS saved locally.\n\nPasstime sync error: '+e.message);
-  }
-
+  hideLoading();
+  alert('📡 GPS serial saved!\n\nSerial: '+serial+'\n\nGo to Passtime and click the ⚡ GPS Sync bookmarklet to register it.');
   cpOpenAccount(account);
 }
 
-// Poll Supabase for gps_register_{serial} result (max seconds)
-async function _pollGpsRegisterResult(serial,maxSec){
-  var key='gps_register_'+serial;
-  var start=Date.now();
-  while((Date.now()-start)<maxSec*1000){
-    await new Promise(function(r){setTimeout(r,5000);});
-    try{
-      var r=await fetch(SB_URL+'/rest/v1/app_settings?key=eq.'+encodeURIComponent(key)+'&select=value',{headers:Object.assign({},SB_HEADERS,{'Cache-Control':'no-cache'})});
-      var d=await r.json();
-      if(d&&d.length&&d[0].value){
-        var val=JSON.parse(d[0].value);
-        if(val.status==='success'||val.status==='error') return val;
-      }
-    }catch(e){}
-  }
-  return null;
-}
 
 function repoGpsQuickEdit(account){
   var cust=_cpData.customers.find(function(c){return c.account===account;});
