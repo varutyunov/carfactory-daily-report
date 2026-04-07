@@ -470,7 +470,9 @@
             var mapFields = getAspFields(pr.doc);
             mapFields['__EVENTTARGET'] = 'ctl00$MainContent$ViewDetailMenu1$LnkBtnLocateTRAX';
             mapFields['__EVENTARGUMENT'] = '';
-            var mapPage = await postForm(pr.url, mapFields);
+            // Cross-page postback: ASP.NET targets ViewMap.aspx, not the current page
+            var viewMapUrl = pr.url.replace(/ViewDetail\.aspx/i, 'ViewMap.aspx');
+            var mapPage = await postForm(viewMapUrl, mapFields);
             if (mapPage.url.includes('ViewMap.aspx')) {
               var mapDoc = mapPage.doc;
               var addrEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblAddress');
