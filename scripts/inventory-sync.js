@@ -64,8 +64,8 @@ function parseCsv(csvPath, forceLocation) {
 async function main() {
   // Parse both CSV files
   const debaryCars = parseCsv('InventoryMaster.csv', null);
-  const delandCars = fs.existsSync('InventoryMasterDeLand.csv')
-    ? parseCsv('InventoryMasterDeLand.csv', 'DeLand')
+  const delandCars = fs.existsSync('InventoryMasterDeland.csv')
+    ? parseCsv('InventoryMasterDeland.csv', 'DeLand')
     : [];
 
   // Deduplicate by VIN — VIN is the unique identifier
@@ -99,13 +99,13 @@ async function main() {
         const errText = await res.text();
         // Stock unique constraint conflict — insert without stock, then patch stock on
         if (errText.includes('inventory_stock_key')) {
-          console.log('Stock conflict for', car.vin, '- inserting without stock then patching');
-          const { stock, ...carNoStock } = car;
+          console.log('Stock conflict for', car.vin, '- inserting with VIN-based stock');
+          const carAlt = { ...car, stock: car.vin.slice(-8) };
           const res2 = await fetch(SB_URL + '/rest/v1/inventory', {
-            method: 'POST', headers: HEADERS, body: JSON.stringify([carNoStock])
+            method: 'POST', headers: HEADERS, body: JSON.stringify([carAlt])
           });
           if (res2.ok) { added += (await res2.json()).length; }
-          else { console.error('Insert (no stock) error:', await res2.text()); }
+          else { console.error('Insert (alt stock) error:', await res2.text()); }
         } else {
           console.error('Insert error for', car.vin, ':', errText);
         }
