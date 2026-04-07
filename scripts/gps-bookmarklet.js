@@ -353,13 +353,21 @@
     log('');
   }
 
-  // ── PHASE 1: Pull GPS data for ALL finance deals ──────────────────────────
-  log('\u{1F4E1} Pulling GPS data for all finance deals...');
+  // ── PHASE 1: Pull GPS data for ALL finance customers ───────────────────────
+  log('\u{1F4E1} Pulling GPS data for all finance customers...');
   var allFinance = [];
   try {
     allFinance = await sbGet('deals', 'deal_type=eq.finance&select=id,customer_name,vin,stock,gps_serial&order=created_at.desc');
   } catch(e) {
     log('\u26a0\ufe0f Could not fetch deals: ' + e.message, '#f59e0b');
+  }
+
+  // Also fetch all CarPay customers (covers old deals without deal records)
+  var allCarpay = [];
+  try {
+    allCarpay = await sbGet('carpay_customers', 'select=account,name,location');
+  } catch(e) {
+    log('\u26a0\ufe0f Could not fetch CarPay customers: ' + e.message, '#f59e0b');
   }
 
   // Get existing GPS signals to know which accounts already have data
@@ -369,18 +377,31 @@
     gpsRows.forEach(function(g) { existingGps[g.account] = g.updated_at; });
   } catch(e) {}
 
-  // Find deals with VINs that don't have fresh GPS data (older than 24h or missing)
+  // Build pull targets from deals (search by VIN) and CarPay customers (search by account)
   var pullTargets = [];
+  var seenAccounts = {};
   var oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+
+  // First: deals with VINs
   allFinance.forEach(function(d) {
     if (!d.vin) return;
     var acct = d.stock || String(d.id);
-    // Skip if GPS data is fresh (less than 24h old)
     if (existingGps[acct] && existingGps[acct] > oneDayAgo) return;
-    pullTargets.push({ id: d.id, name: d.customer_name, vin: d.vin, account: acct, serial: d.gps_serial });
+    seenAccounts[acct] = true;
+    pullTargets.push({ name: d.customer_name, vin: d.vin, account: acct, searchBy: 'VinNumber' });
   });
 
-  log('Finance deals: ' + allFinance.length + ' total, ' + pullTargets.length + ' need GPS refresh');
+  // Second: CarPay customers not already covered by a deal
+  allCarpay.forEach(function(c) {
+    if (seenAccounts[c.account]) return;
+    if (existingGps[c.account] && existingGps[c.account] > oneDayAgo) return;
+    // Parse name: "LAST, FIRST" → last name for search
+    var nameParts = (c.name || '').split(',');
+    var lastName = (nameParts[0] || '').trim();
+    pullTargets.push({ name: c.name, account: c.account, lastName: lastName, searchBy: 'AccountNumber' });
+  });
+
+  log('Finance deals: ' + allFinance.length + ', CarPay customers: ' + allCarpay.length + ', ' + pullTargets.length + ' need GPS refresh');
 
   if (pullTargets.length > 0) {
     var pullSuccess = 0;
@@ -392,11 +413,12 @@
       log('\u{1F50D} ' + (pi+1) + '/' + pullTargets.length + ': ' + pt.name);
 
       try {
-        // Search by VIN
+        // Search by VIN or account number depending on source
+        var searchVal = pt.searchBy === 'VinNumber' ? pt.vin : pt.account;
         var ps = await fetchPage(SEARCH_BASE + 'CustomerRpt.aspx');
         var pf = getAspFields(ps.doc);
-        pf['ctl00$searchCustomerCTL$searchCustomerDDL'] = 'VinNumber';
-        pf['ctl00$searchCustomerCTL$searchTxt'] = pt.vin;
+        pf['ctl00$searchCustomerCTL$searchCustomerDDL'] = pt.searchBy;
+        pf['ctl00$searchCustomerCTL$searchTxt'] = searchVal;
         pf['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
         var pr = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', pf);
 
