@@ -230,8 +230,33 @@
 
     // ── Step 2: Fetch individual pages for contact/vehicle/balance ──────────
     log('');
+    // Load existing customer data to skip detail fetch for customers we already have
+    var existingMap = {};
+    try {
+      var exRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + _loc + '&select=account,phone,email,vehicle,scheduled_amount,payment_frequency,current_amount_due', {
+        headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
+      });
+      if (exRes.ok) {
+        (await exRes.json()).forEach(function(c) { existingMap[c.account] = c; });
+      }
+    } catch(e) {}
+
+    var needFetch = customers.filter(function(c) {
+      var ex = existingMap[c.account];
+      if (ex && ex.phone && ex.vehicle) {
+        // Carry forward existing data
+        c.phone = ex.phone; c.email = ex.email || ''; c.vehicle = ex.vehicle;
+        c.scheduled_amount = ex.scheduled_amount || ''; c.payment_frequency = ex.payment_frequency || '';
+        c.current_amount_due = ex.current_amount_due;
+        return false;
+      }
+      return true;
+    });
+    var skipped = customers.length - needFetch.length;
+
     log('📋 Fetching customer details (phone, vehicle, balance)...');
-    log('   This takes ~' + Math.ceil(customers.length / 5) + ' seconds...');
+    if (skipped) log('   ⚡ ' + skipped + ' already cached, fetching ' + needFetch.length + ' remaining', '#60a5fa');
+    else log('   This takes ~' + Math.ceil(customers.length / 5) + ' seconds...');
 
     var customerPayments = []; // collect payment history from each customer's payment-history tab
     var dealerId = location.search.match(/dealerId=(\d+)/) ? location.search.match(/dealerId=(\d+)/)[1] : '';
@@ -242,8 +267,8 @@
     // Fallback to known dealer IDs
     if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
     var batchSize = 5;
-    for (var i = 0; i < customers.length; i += batchSize) {
-      var batch = customers.slice(i, i + batchSize);
+    for (var i = 0; i < needFetch.length; i += batchSize) {
+      var batch = needFetch.slice(i, i + batchSize);
       await Promise.all(batch.map(async function(cust) {
         if (!cust.carpay_id) return;
         try {
@@ -290,8 +315,8 @@
           // skip
         }
       }));
-      var pct = Math.min(100, Math.round(((i + batchSize) / customers.length) * 100));
-      log('   ' + pct + '% (' + Math.min(i + batchSize, customers.length) + '/' + customers.length + ' customers, ' + customerPayments.length + ' payments)');
+      var pct = Math.min(100, Math.round(((i + batchSize) / needFetch.length) * 100));
+      log('   ' + pct + '% (' + Math.min(i + batchSize, needFetch.length) + '/' + needFetch.length + ' fetched, ' + customerPayments.length + ' payments)');
       await sleep(200);
     }
     var _phCount = customers.filter(function(c){return c.phone;}).length;
