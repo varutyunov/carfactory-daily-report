@@ -4798,12 +4798,73 @@ async function addPartFromRepair(carId,repairText,partName){
   renderMgrParts();updateTabBadges();updateHomeBadges();
 }
 
+var _partsViewMode=localStorage.getItem('cf_parts_view')||'tiles';
+function togglePartsView(){
+  _partsViewMode=_partsViewMode==='tiles'?'list':'tiles';
+  localStorage.setItem('cf_parts_view',_partsViewMode);
+  renderMgrParts();
+}
 function renderMgrParts(){
   var el=document.getElementById('mgr-parts-list');
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.parts&&ws.categories.parts.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">📦</div><div class="et">No vehicles in Parts queue</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'parts',"openPartsDetail("+car.id+")");}).join('')+'</div>';
-  applyPexels(cars);
+  // View toggle button
+  var toggleBtn='<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">'+
+    '<button onclick="togglePartsView()" style="background:rgba(255,255,255,0.05);border:1px solid #222;border-radius:8px;padding:6px 12px;color:#888;font-size:12px;font-weight:600;cursor:pointer;">'+
+    (_partsViewMode==='tiles'?'☰ List View':'⊞ Tile View')+
+    '</button></div>';
+  if(_partsViewMode==='tiles'){
+    el.innerHTML=toggleBtn+'<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'parts',"openPartsDetail("+car.id+")");}).join('')+'</div>';
+    applyPexels(cars);
+  } else {
+    // Flat list of all parts across all cars
+    var allItems=[];
+    cars.forEach(function(car){
+      var ws=getWorkState(car.id);
+      var repairs=(ws.categories.parts.repairs||[]);
+      if(!repairs.length){
+        allItems.push({car:car,text:'(no parts listed)',idx:-1,bought:false});
+      } else {
+        repairs.forEach(function(r,i){
+          var bought=typeof r==='object'?!!r.bought:false;
+          var text=typeof r==='string'?r:(r.text||'');
+          allItems.push({car:car,text:text,idx:i,bought:bought});
+        });
+      }
+    });
+    var o=toggleBtn+'<div style="display:flex;flex-direction:column;gap:8px;">';
+    allItems.forEach(function(item){
+      o+='<div onclick="'+(item.idx>=0?'partsListToggle('+item.car.id+','+item.idx+')':'openPartsDetail('+item.car.id+')')+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:'+(item.bought?'#0a1a0d':'#0d0d0d')+';border:1px solid '+(item.bought?'rgba(48,209,88,0.2)':'#1e1e1e')+';border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+      if(item.idx>=0){
+        o+='<div style="width:26px;height:26px;border-radius:50%;border:2.5px solid '+(item.bought?'#30d158':'#333')+';background:'+(item.bought?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+        if(item.bought) o+='<svg width="11" height="9" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        o+='</div>';
+      }
+      o+='<div style="flex:1;min-width:0;">';
+      o+='<div style="font-size:16px;color:'+(item.bought?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(item.bought?'line-through':'none')+';">'+item.text+'</div>';
+      o+='<div style="font-size:11px;color:#444;margin-top:2px;">'+item.car.name+(item.car.stock?' · '+item.car.stock:'')+'</div>';
+      o+='</div>';
+      o+='<div style="font-size:16px;color:#2a2a2a;flex-shrink:0;">›</div>';
+      o+='</div>';
+    });
+    o+='</div>';
+    el.innerHTML=o;
+  }
+}
+async function partsListToggle(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.parts) return;
+  var repairs=ws.categories.parts.repairs||[];
+  if(idx<0||idx>=repairs.length) return;
+  var r=repairs[idx];
+  var txt=typeof r==='string'?r:(r.text||'');
+  var bought=typeof r==='object'?!!r.bought:false;
+  repairs[idx]={text:txt,bought:!bought};
+  ws.categories.parts.repairs=repairs;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrParts();
 }
 var _partsDetailCarId=null;
 function openPartsDetail(carId){
