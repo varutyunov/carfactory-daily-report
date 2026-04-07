@@ -63,7 +63,7 @@
       var batch = rows.slice(i, i + 50);
       var r = await fetch(SB_URL + '/rest/v1/' + table, {
         method: 'POST',
-        headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=minimal' }),
         body: JSON.stringify(batch)
       });
       if (r.ok) done += batch.length;
