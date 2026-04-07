@@ -4638,19 +4638,15 @@ function renderRepairDetail(){
       o+='<div onclick="repairDetailToggle('+car.id+','+i+')" style="width:28px;height:28px;border-radius:50%;border:2.5px solid '+(done?'#30d158':'#333')+';background:'+(done?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">';
       if(done) o+='<svg width="12" height="10" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       o+='</div>';
-      o+='<div style="flex:1;min-width:0;font-size:17px;color:'+(done?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(done?'line-through':'none')+';">'+text+'</div>';
+      o+='<div onclick="openRepairEditSheet('+car.id+','+i+')" style="flex:1;min-width:0;font-size:17px;color:'+(done?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(done?'line-through':'none')+';cursor:pointer;">'+text+'</div>';
       o+='<button onclick="repairDetailRemove('+car.id+','+i+')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>';
       o+='</div>';
-      // Part link row
+      // Part link row — only show if part is attached
       if(hasPart){
         var partItem=linkedParts.find(function(p){return typeof p==='object'&&p.fromRepair===text;});
         var partBought=partItem&&partItem.bought;
         o+='<div style="padding:0 18px 12px;display:flex;align-items:center;gap:8px;">';
         o+='<span style="font-size:12px;color:'+(partBought?'#30d158':'#fbbf24')+';">📦 '+(partBought?'Part ordered':'Part needed')+': '+partItem.text+'</span>';
-        o+='</div>';
-      } else if(!done){
-        o+='<div style="padding:0 18px 10px;">';
-        o+='<button onclick="repairAttachPartPrompt('+car.id+','+i+',\''+text.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:#555;font-size:12px;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;"><span style="color:#fbbf24;">📦</span> Attach Part</button>';
         o+='</div>';
       }
       o+='</div>';
@@ -4720,6 +4716,72 @@ async function repairAttachPartPrompt(carId,idx,repairText){
   var partName=prompt('Part needed for "'+repairText+'":');
   if(!partName||!partName.trim()) return;
   await addPartFromRepair(carId,repairText,partName.trim());
+  renderRepairDetail();
+}
+function openRepairEditSheet(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  var items=ws.categories.repair.items||[];
+  if(idx<0||idx>=items.length) return;
+  var item=items[idx];
+  var text=typeof item==='string'?item:(item.text||'');
+  var done=typeof item==='object'?!!item.done:false;
+  // Check if already has a linked part
+  var partsWs=(ws.categories&&ws.categories.parts)||{};
+  var linkedParts=partsWs.repairs||[];
+  var hasPart=linkedParts.some(function(p){return typeof p==='object'&&p.fromRepair===text;});
+  var partItem=hasPart?linkedParts.find(function(p){return typeof p==='object'&&p.fromRepair===text;}):null;
+
+  var old=document.getElementById('repair-edit-sheet');
+  if(old) old.remove();
+  var sh=document.createElement('div');
+  sh.id='repair-edit-sheet';
+  sh.style.cssText='position:fixed;inset:0;z-index:999999;display:flex;align-items:flex-end;justify-content:center;';
+  var o='<div onclick="closeRepairEditSheet(event)" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);"></div>';
+  o+='<div style="position:relative;width:100%;max-width:420px;background:#1a1a1a;border-radius:20px 20px 0 0;padding:24px 20px 40px;z-index:1;">';
+  o+='<div style="width:36px;height:4px;background:#333;border-radius:2px;margin:0 auto 20px;"></div>';
+  o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:16px;">EDIT REPAIR</div>';
+  // Repair name
+  o+='<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px;">'+text+'</div>';
+  // Part section
+  if(hasPart&&partItem){
+    var partBought=partItem.bought;
+    o+='<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px 18px;margin-bottom:16px;">';
+    o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:8px;">LINKED PART</div>';
+    o+='<div style="display:flex;align-items:center;gap:8px;">';
+    o+='<span style="font-size:15px;color:'+(partBought?'#30d158':'#fbbf24')+';">📦 '+(partBought?'Ordered':'Needed')+': '+partItem.text+'</span>';
+    o+='</div></div>';
+  } else if(!done){
+    o+='<div style="margin-bottom:16px;">';
+    o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:10px;">ATTACH PART</div>';
+    o+='<div style="display:flex;gap:8px;">';
+    o+='<input id="repair-edit-part-inp" placeholder="Part name..." style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:14px 16px;color:#fff;font-size:16px;outline:none;-webkit-appearance:none;"/>';
+    o+='<button onclick="submitRepairEditPart('+carId+','+idx+')" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:14px 16px;color:#fbbf24;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;">📦 Add</button>';
+    o+='</div></div>';
+  }
+  // Actions
+  o+='<button onclick="closeRepairEditSheet()" style="width:100%;padding:14px;background:rgba(255,255,255,0.04);border:1px solid #222;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Close</button>';
+  o+='</div>';
+  sh.innerHTML=o;
+  document.body.appendChild(sh);
+}
+function closeRepairEditSheet(e){
+  if(e) e.stopPropagation();
+  var sh=document.getElementById('repair-edit-sheet');
+  if(sh) sh.remove();
+}
+async function submitRepairEditPart(carId,idx){
+  var inp=document.getElementById('repair-edit-part-inp');
+  if(!inp) return;
+  var partName=inp.value.trim();
+  if(!partName) return;
+  var ws=getWorkState(carId);
+  var items=(ws.categories&&ws.categories.repair&&ws.categories.repair.items)||[];
+  if(idx<0||idx>=items.length) return;
+  var item=items[idx];
+  var repairText=typeof item==='string'?item:(item.text||'');
+  await addPartFromRepair(carId,repairText,partName);
+  closeRepairEditSheet();
   renderRepairDetail();
 }
 async function repairDetailRemove(carId,idx){
