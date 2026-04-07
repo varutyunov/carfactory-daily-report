@@ -8711,7 +8711,16 @@ async function cpRepoFlag(account, flagged){
   cpRenderRepo();
 }
 
-function cpRenderAll(){cpRenderToday();cpRenderCustomers();cpRenderRepo();cpRenderHistory();}
+function cpEnrichVehicles(){
+  _cpData.customers.forEach(function(c){
+    if(c.vehicle) return;
+    // Try sold inventory
+    if(_soldInventory){var si=soldInventoryLookup(c.name,c.location);if(si){c.vehicle=[si.year,si.make,si.model].filter(Boolean).join(' ');return;}}
+    // Try deals
+    if(_dealsData&&_dealsData.length){var d=_dealsData.find(function(dl){return dl.customer_name&&c.name&&dl.customer_name.toLowerCase()===c.name.toLowerCase();});if(d&&d.vehicle_desc){c.vehicle=d.vehicle_desc;}}
+  });
+}
+async function cpRenderAll(){await loadSoldInventory();cpEnrichVehicles();cpRenderToday();cpRenderCustomers();cpRenderRepo();cpRenderHistory();}
 
 /* ── REPO BRAIN ────────────────────────────────────────────────────────────── */
 var _repoAnalysis = []; // cached analysis results
