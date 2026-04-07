@@ -4443,13 +4443,72 @@ async function addCarToTab(carId,cat){
   else if(cat==='repair') renderMgrRepair();
   updateTabBadges();updateHomeBadges();renderProgress();
 }
+var _repairViewMode=localStorage.getItem('cf_repair_view')||'tiles';
+function toggleRepairView(){
+  _repairViewMode=_repairViewMode==='tiles'?'list':'tiles';
+  localStorage.setItem('cf_repair_view',_repairViewMode);
+  renderMgrRepair();
+}
 function renderMgrRepair(){
   var el=document.getElementById('mgr-repair-list');
   if(!el) return;
   var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories.repair&&ws.categories.repair.sectionPool;});
   if(!cars.length){el.innerHTML='<div class="empty"><div class="ei">🔧</div><div class="et">No vehicles in Repair queue</div><div class="es" style="font-size:12px;color:#444;margin-top:6px;">Search above to add a vehicle</div></div>';return;}
-  el.innerHTML='<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'repair','openRepairDetail('+car.id+')');}).join('')+'</div>';
-  applyPexels(cars);
+  var toggleBtn='<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">'+
+    '<button onclick="toggleRepairView()" style="background:rgba(255,255,255,0.05);border:1px solid #222;border-radius:8px;padding:6px 12px;color:#888;font-size:12px;font-weight:600;cursor:pointer;">'+
+    (_repairViewMode==='tiles'?'☰ List View':'⊞ Tile View')+
+    '</button></div>';
+  if(_repairViewMode==='tiles'){
+    el.innerHTML=toggleBtn+'<div class="car-grid">'+cars.map(function(car){return mgrCatTile(car,'repair','openRepairDetail('+car.id+')');}).join('')+'</div>';
+    applyPexels(cars);
+  } else {
+    var allItems=[];
+    cars.forEach(function(car){
+      var ws=getWorkState(car.id);
+      var items=(ws.categories.repair.items||[]);
+      if(!items.length){
+        allItems.push({car:car,text:'(no repairs listed)',idx:-1,done:false});
+      } else {
+        items.forEach(function(item,i){
+          var done=typeof item==='object'?!!item.done:false;
+          var text=typeof item==='string'?item:(item.text||'');
+          allItems.push({car:car,text:text,idx:i,done:done});
+        });
+      }
+    });
+    var o=toggleBtn+'<div style="display:flex;flex-direction:column;gap:8px;">';
+    allItems.forEach(function(item){
+      o+='<div onclick="'+(item.idx>=0?'repairListToggle('+item.car.id+','+item.idx+')':'openRepairDetail('+item.car.id+')')+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:'+(item.done?'#0a1a0d':'#0d0d0d')+';border:1px solid '+(item.done?'rgba(48,209,88,0.2)':'#1e1e1e')+';border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+      if(item.idx>=0){
+        o+='<div style="width:26px;height:26px;border-radius:50%;border:2.5px solid '+(item.done?'#30d158':'#333')+';background:'+(item.done?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+        if(item.done) o+='<svg width="11" height="9" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        o+='</div>';
+      }
+      o+='<div style="flex:1;min-width:0;">';
+      o+='<div style="font-size:16px;color:'+(item.done?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(item.done?'line-through':'none')+';">'+item.text+'</div>';
+      o+='<div style="font-size:11px;color:#444;margin-top:2px;">'+item.car.name+(item.car.stock?' · '+item.car.stock:'')+'</div>';
+      o+='</div>';
+      o+='<div style="font-size:16px;color:#2a2a2a;flex-shrink:0;">›</div>';
+      o+='</div>';
+    });
+    o+='</div>';
+    el.innerHTML=o;
+  }
+}
+async function repairListToggle(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair) return;
+  var items=ws.categories.repair.items||[];
+  if(idx<0||idx>=items.length) return;
+  var it=items[idx];
+  var txt=typeof it==='string'?it:(it.text||'');
+  var done=typeof it==='object'?!!it.done:false;
+  items[idx]={text:txt,done:!done};
+  ws.categories.repair.items=items;
+  var car=S.inventory.find(function(c){return c.id===carId;});
+  if(car) car.work=ws;
+  await saveWorkState(carId);
+  renderMgrRepair();
 }
 async function removeFromRepairQueue(carId){
   showLoading('Removing...');
