@@ -228,6 +228,17 @@
 
     log('✅ Found ' + customers.length + ' customers', '#30d158');
 
+    // Safety check: don't wipe database if we found suspiciously few customers
+    if (customers.length < 10) {
+      log('');
+      log('⛔ SAFETY STOP: Only found ' + customers.length + ' customers.', '#ef4444');
+      log('   Expected 50+. Are you on the customers list page?', '#ef4444');
+      log('   Go to dealers.carpay.com/dms/customers first.', '#f59e0b');
+      document.getElementById('cp-sync-run').disabled = false;
+      document.getElementById('cp-sync-loc').style.display = 'flex';
+      return;
+    }
+
     // ── Step 2: Fetch individual pages for contact/vehicle/balance ──────────
     log('');
     // Load existing customer data to skip detail fetch for customers we already have
