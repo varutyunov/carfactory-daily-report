@@ -140,7 +140,6 @@ async function passtimeLogin(page) {
     }
   } else {
     // ── CI: Automated login ───────────────────────────────────────────────
-    // Use Playwright fill() to properly trigger input/change events
     console.log('  Filling login form...');
 
     // Log what fields exist on the page
@@ -149,7 +148,7 @@ async function passtimeLogin(page) {
         dealer: !!document.getElementById('login_DealerNumber'),
         user: !!document.getElementById('login_UserName'),
         pass: !!document.getElementById('login_Password'),
-        btn: !!document.querySelector('input[value*="Login"]'),
+        btn: !!document.getElementById('login_LoginButton'),
         pageTitle: document.title,
         bodySnippet: document.body.innerText.substring(0, 300)
       };
@@ -162,22 +161,26 @@ async function passtimeLogin(page) {
       return false;
     }
 
+    // Use Playwright fill() to set values with proper input events
     await page.fill('#login_DealerNumber', PT_ACCOUNT);
     await page.fill('#login_UserName', PT_USER);
     await page.fill('#login_Password', PT_PASS);
     await sleep(500);
 
-    // Click login button
-    const loginBtn = await page.$('input[value*="Login"]');
-    if (loginBtn) {
-      await loginBtn.click();
-    } else {
-      // Try submit via form
-      await page.evaluate(() => {
-        var form = document.querySelector('form');
-        if (form) form.submit();
-      });
-    }
+    // Force ASP.NET validators to pass (they check .value but may not
+    // recognize Playwright's programmatic input), then trigger postback
+    await page.evaluate(() => {
+      // Force all validators valid so postback proceeds
+      if (typeof Page_Validators !== 'undefined') {
+        for (var i = 0; i < Page_Validators.length; i++) {
+          Page_Validators[i].isvalid = true;
+        }
+      }
+      // Trigger the login postback directly (same as button onclick)
+      WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(
+        "login$LoginButton", "", true, "", "", false, true
+      ));
+    });
 
     await waitForNav(page, 30000);
     await sleep(3000);
