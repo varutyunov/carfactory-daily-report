@@ -2,6 +2,7 @@ name: GPS Sync — Passtime OASIS
 
 on:
   schedule:
+    # Daily at 9AM ET (14:00 UTC)
     - cron: '0 14 * * *'
   workflow_dispatch:
 
@@ -16,9 +17,9 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install playwright
 
-      - name: Install Playwright
+      - name: Install Playwright browser
         run: npx playwright install chromium --with-deps
 
       - name: Run GPS Sync
