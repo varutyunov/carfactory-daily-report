@@ -13349,6 +13349,7 @@ function paySearchAll(q){
     list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Searching...</div>';
     try{
       var allPays=await sbGet('payments','location=eq.'+_payLocation+'&order=payment_date.desc,created_at.desc&limit=5000');
+      await _signStorageUrls(allPays, ['receipt_photo_url']);
       var ql=q.toLowerCase();
       var isAmt=ql.replace(/[$,]/g,'').match(/^\d+\.?\d*$/);
       _paySearchResults=allPays.filter(function(p){
@@ -13394,15 +13395,19 @@ function _payRenderSearchResults(){
       else if(method==='check') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);">CHECK</span>';
       else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
       var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
-      html+='<div onclick="payViewSearchResult('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">';
+      var color=p.vehicle_color?(' · '+p.vehicle_color):'';
+      var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
+      html+='<div onclick="payViewSearchResult('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:rgba(255,255,255,.05);">';
+      if(thumb) html+=thumb;
+      html+='<div style="flex:1;min-width:0;">';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
       html+='<div style="font-size:15px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>';
       html+='<span style="font-size:16px;font-weight:700;color:#4ade80;">'+amt+'</span></div>';
-      if(veh) html+='<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+'</div>';
+      if(veh) html+='<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+color+'</div>';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">'+methodBadge;
       if(p.payment_time) html+='<span style="font-size:11px;color:#555;">'+p.payment_time+'</span>';
       html+='<span style="font-size:11px;color:#555;margin-left:auto;">'+(p.logged_by||'')+'</span>';
-      html+='</div></div>';
+      html+='</div></div></div>';
     });
   });
   list.innerHTML=html;
@@ -15581,6 +15586,7 @@ async function payrollSubmit(who){
 function openDealDetail(id) {
   _dealsViewingDetail = true;
   var d = _dealsData.find(function(x){ return x.id === id; });
+  if(!d) d = (_dealsAllData||[]).find(function(x){ return x.id === id; });
   if(!d) return;
   document.getElementById('deals-view-title').textContent = d.customer_name || 'Deal';
 
