@@ -85,23 +85,15 @@
     var doc = parser.parseFromString(html, 'text/html');
     var text = doc.body ? (doc.body.textContent || doc.body.innerText || '') : '';
 
-    // Vehicle — appears in header
+    // Vehicle — pattern: "Login as Customer YEAR MAKE MODEL Customer ID: NNNN"
     var vehicle = '';
-    var vehicleMatch = text.match(/Customer ID:\s*\d+\s*([\w\s]+(?:\d{4}\s+\w+.*?))\s*(?:Back to|Regular Scheduled)/i);
-    if (!vehicleMatch) {
-      // Try from page title area
-      var headerEl = doc.querySelector('.customer-header, .page-header, h2, h1');
-      var headerText = headerEl ? (headerEl.textContent || headerEl.innerText || '') : '';
-      var vm = headerText.match(/(\d{4}\s+\w[\w\s]+)/);
-      if (vm) vehicle = vm[1].trim();
-    } else {
-      vehicle = vehicleMatch[1].trim();
-    }
-
-    // Get vehicle from the header more reliably
-    var allText = text;
-    var vMatch = allText.match(/Login as Customer\s+([\w\s]+\d{4}\s+[\w\s]+)\s+Customer ID/);
+    var vMatch = text.match(/Login as Customer\s+(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+)*)\s+Customer ID/);
     if (vMatch) vehicle = vMatch[1].trim();
+    if (!vehicle) {
+      // Fallback: "YEAR MAKE MODEL Customer ID:"
+      var vMatch2 = text.match(/(\d{4}\s+[A-Za-z]+\s+[A-Za-z]+)\s+Customer ID/);
+      if (vMatch2) vehicle = vMatch2[1].trim();
+    }
 
     // Scheduled amount
     var schedMatch = text.match(/Regular Scheduled Amount:\s*\$([\d,]+\.?\d*)/i);
@@ -115,23 +107,22 @@
     var dueMatch = text.match(/Current Amount Due:\s*\$([\d,]+\.?\d*)/i);
     var currentAmountDue = dueMatch ? parseFloat(dueMatch[1].replace(/,/g, '')) : null;
 
-    // Phone — try DOM elements first, then broad regex
+    // Phone — from tel: links, skip CarPay support (877)
     var phone = '';
-    var phoneEl = doc.querySelector('a[href^="tel:"], [data-phone], input[name*="phone"], .phone');
-    if (phoneEl) {
-      var phVal = phoneEl.getAttribute('href') || phoneEl.getAttribute('data-phone') || phoneEl.value || phoneEl.textContent || '';
-      phone = phVal.replace(/^tel:/, '').replace(/\D/g, '');
-      if (phone.length === 11 && phone[0] === '1') phone = phone.slice(1);
+    var telLinks = doc.querySelectorAll('a[href^="tel:"]');
+    for (var ti = 0; ti < telLinks.length; ti++) {
+      var ph = (telLinks[ti].getAttribute('href') || '').replace(/^tel:/, '').replace(/\D/g, '');
+      if (ph.length === 11 && ph[0] === '1') ph = ph.slice(1);
+      if (ph.length === 10 && !ph.startsWith('877') && !ph.startsWith('800') && !ph.startsWith('888')) { phone = ph; break; }
     }
-    if (!phone || phone.length !== 10) {
-      // Try +1 (XXX) XXX-XXXX
-      var pm1 = text.match(/\+?1?\s*\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/);
-      // Try (XXX) XXX-XXXX
-      var pm2 = text.match(/\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/);
-      // Try XXX-XXX-XXXX or XXX.XXX.XXXX
-      var pm3 = text.match(/(?:^|[^\d])(\d{3})[.\-](\d{3})[.\-](\d{4})(?:[^\d]|$)/);
-      var pm = pm1 || pm2 || pm3;
-      if (pm) phone = pm[1] + pm[2] + pm[3];
+    if (!phone) {
+      // Fallback: regex, skip toll-free
+      var allPhones = text.match(/\+?1?\s*\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/g) || [];
+      for (var pi2 = 0; pi2 < allPhones.length; pi2++) {
+        var digits = allPhones[pi2].replace(/\D/g, '');
+        if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1);
+        if (digits.length === 10 && !digits.startsWith('877') && !digits.startsWith('800') && !digits.startsWith('888')) { phone = digits; break; }
+      }
     }
 
     // Email — try DOM elements first, then regex
