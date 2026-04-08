@@ -655,6 +655,7 @@ body.light .cal-fab{background:#4488ff !important;}
     <button class="mt" onclick="mgrGo('paint',this)" id="tab-paint">Paint</button>
     <button class="mt" onclick="mgrGo('employees',this)">Team</button>
     <button class="mt" onclick="mgrGo('deals',this)" id="tab-deals">Deals</button>
+    <button class="mt" onclick="mgrGo('payroll',this)" id="tab-payroll">Pay</button>
   </div>
   <div class="content">
 
@@ -1823,6 +1824,10 @@ body.light .cal-fab{background:#4488ff !important;}
       </div>
     </div>
 
+    <div class="view" id="mgr-payroll">
+      <div id="mgr-payroll-content" style="padding-bottom:80px;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -2688,7 +2693,7 @@ function showView(id){
   var mh=document.getElementById('mgr-home');
   if(mh) mh.style.display=(id==='mgr-home')?'':'none';
 }
-function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}if(id==='deals')openDealsView();updateTabBadges();}
+function mgrGo(id,btn){document.querySelectorAll('#mtabs .mt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');showView('mgr-'+id);if(id==='inventory')renderInv();if(id==='assigned')renderAssigned();if(id==='repair'){initCatSearchBar('repair');renderMgrRepair();}if(id==='detail'){initCatSearchBar('detail');renderMgrDetail();}if(id==='photos'){initCatSearchBar('photos');renderMgrPhotos();}if(id==='parts'){initCatSearchBar('parts');renderMgrParts();}if(id==='tasks')renderMgrTasks();if(id==='employees')renderTeam();if(id==='paint'){initCatSearchBar('paint');renderMgrPaint();}if(id==='deals')openDealsView();if(id==='payroll')renderPayrollView();updateTabBadges();}
 
 function updateTabBadges(){
   var tabs={tasks:document.getElementById('tab-tasks'),detail:document.getElementById('tab-detail'),photos:document.getElementById('tab-photos'),repair:document.getElementById('tab-repair'),parts:document.getElementById('tab-parts'),paint:document.getElementById('tab-paint')};
@@ -15585,6 +15590,194 @@ async function payrollSubmit(who){
     alert('Error: '+(e.message||e));
   }
 }
+
+// ── PAYROLL VIEW ─────────────────────────────────────────────────────────────
+var _prLocation='DeBary';
+var _prPeriodStart=null;
+var _prDeals=[];
+var _prPayouts=[];
+var _PR_REV=399;
+var _PR_DB_EMP=['Ricky','Scott','Manny','Dennis'];
+var _PR_DL_EMP=['Jesse'];
+var _PR_ANCHOR=new Date(2025,0,5);
+
+function _prGetWeekStart(d){var dt=new Date(d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()-dt.getDay());return dt;}
+function _prGetPeriodStart(d){var ws=_prGetWeekStart(d);var diff=Math.floor((ws-_PR_ANCHOR)/(7*86400000));var pw=diff-(((diff%2)+2)%2);var ps=new Date(_PR_ANCHOR);ps.setDate(ps.getDate()+pw*7);return ps;}
+function _prGetPeriodEnd(ps){var pe=new Date(ps);pe.setDate(pe.getDate()+13);return pe;}
+function _prFmtDate(d){var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return m[d.getMonth()]+' '+d.getDate();}
+function _prDateKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _prWeekKeys(ps){var w1=_prDateKey(ps);var w2d=new Date(ps);w2d.setDate(w2d.getDate()+7);return[w1,_prDateKey(w2d)];}
+function _prFmt$(v){return'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function renderPayrollView(){
+  if(!_prPeriodStart) _prPeriodStart=_prGetPeriodStart(new Date());
+  var el=document.getElementById('mgr-payroll-content');
+  if(!el)return;
+  el.innerHTML='<div style="padding:12px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#30d158;font-family:\'Barlow Condensed\',sans-serif;">Payroll</div><div style="font-size:13px;color:#666;margin-top:2px;">Biweekly period overview</div></div>'+
+  '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">'+
+  '<button onclick="_prNav(-1)" style="background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:18px;width:40px;height:40px;cursor:pointer;">&#9664;</button>'+
+  '<div id="pr-period-label" style="font-size:15px;font-weight:700;color:#ccc;text-align:center;line-height:1.4;font-family:\'Barlow Condensed\',sans-serif;"></div>'+
+  '<button onclick="_prNav(1)" style="background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:18px;width:40px;height:40px;cursor:pointer;">&#9654;</button></div>'+
+  '<div style="display:flex;gap:8px;padding:0 16px 12px;">'+
+  '<div id="pr-tab-debary" onclick="_prSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeBary</div>'+
+  '<div id="pr-tab-deland" onclick="_prSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeLand</div></div>'+
+  '<div id="pr-data"></div><div id="pr-history"></div>';
+  _prUpdateLocTabs();
+  _prUpdateLabel();
+  _prLoadPeriod();
+}
+
+function _prUpdateLocTabs(){
+  var db=document.getElementById('pr-tab-debary'),dl=document.getElementById('pr-tab-deland');
+  if(!db||!dl)return;
+  if(_prLocation==='DeBary'){db.style.background='linear-gradient(145deg,#0d2818,#1a4d30)';db.style.borderColor='rgba(48,209,88,.4)';db.style.color='#30d158';dl.style.background='#111';dl.style.borderColor='#333';dl.style.color='#888';}
+  else{dl.style.background='linear-gradient(145deg,#0d2818,#1a4d30)';dl.style.borderColor='rgba(48,209,88,.4)';dl.style.color='#30d158';db.style.background='#111';db.style.borderColor='#333';db.style.color='#888';}
+}
+
+function _prSetLoc(loc){_prLocation=loc;_prUpdateLocTabs();_prRender();}
+
+function _prNav(dir){
+  var ps=new Date(_prPeriodStart);ps.setDate(ps.getDate()+dir*14);
+  if(dir>0&&ps>_prGetPeriodStart(new Date()))return;
+  _prPeriodStart=ps;_prUpdateLabel();_prLoadPeriod();
+}
+
+function _prNavTo(ts){_prPeriodStart=new Date(ts);_prUpdateLabel();_prLoadPeriod();var el=document.getElementById('mgr-payroll-content');if(el)el.scrollTop=0;}
+
+function _prUpdateLabel(){
+  var ps=_prPeriodStart,pe=_prGetPeriodEnd(ps);
+  var isCurrent=ps.getTime()===_prGetPeriodStart(new Date()).getTime();
+  var label=_prFmtDate(ps)+' – '+_prFmtDate(pe)+', '+pe.getFullYear();
+  var el=document.getElementById('pr-period-label');
+  if(el) el.innerHTML=label+'<div style="font-size:12px;color:#666;font-weight:500;">'+(isCurrent?'Current Period':'Past Period')+'</div>';
+}
+
+async function _prLoadPeriod(){
+  var dataEl=document.getElementById('pr-data');
+  if(dataEl) dataEl.innerHTML='<div style="text-align:center;padding:40px 16px;color:#444;font-size:14px;">Loading payroll data...</div>';
+  var ps=_prPeriodStart,peNext=new Date(_prGetPeriodEnd(ps));peNext.setDate(peNext.getDate()+1);
+  var wks=_prWeekKeys(ps);
+  try{
+    var results=await Promise.all([
+      sbGet('deals','created_at=gte.'+_prDateKey(ps)+'T00:00:00&created_at=lt.'+_prDateKey(peNext)+'T00:00:00&select=id,customer_name,vehicle_desc,location,created_at,deal_type,created_by'),
+      sbGet('cash_payouts','or=(week_start.eq.'+wks[0]+',week_start.eq.'+wks[1]+')&order=created_at.desc&select=id,paid_to,amount,week_start,location,logged_by,created_at')
+    ]);
+    _prDeals=Array.isArray(results[0])?results[0]:[];
+    _prPayouts=Array.isArray(results[1])?results[1]:[];
+    _prRender();
+    _prLoadHistory();
+  }catch(e){if(dataEl)dataEl.innerHTML='<div style="text-align:center;padding:40px;color:#f87171;">Error: '+e.message+'</div>';}
+}
+
+function _prRender(){
+  var loc=_prLocation;
+  var employees=loc==='DeBary'?_PR_DB_EMP:_PR_DL_EMP;
+  var deals=_prDeals.filter(function(d){return d.location===loc;});
+  var carsSold=deals.length,revenue=carsSold*_PR_REV;
+  var payrollPayouts=_prPayouts.filter(function(p){return p.location===loc&&(p.paid_to||'').toLowerCase().indexOf('payroll')!==-1;});
+  var otherPayouts=_prPayouts.filter(function(p){return p.location===loc&&(p.paid_to||'').toLowerCase().indexOf('payroll')===-1;});
+  var empPayroll={},totalPayroll=0;
+  employees.forEach(function(n){empPayroll[n]={amount:0,details:[]};});
+  payrollPayouts.forEach(function(p){
+    var amt=parseFloat(p.amount)||0;
+    var empName=(p.paid_to||'').replace(/\s*[—–\-]\s*Payroll.*/i,'').trim();
+    var matched=employees.find(function(e){return empName.toLowerCase()===e.toLowerCase();});
+    if(matched){empPayroll[matched].amount+=amt;var det=(p.logged_by||'').split('|').slice(1).join('|').trim();if(det)empPayroll[matched].details.push(det);}
+    totalPayroll+=amt;
+  });
+  var totalOther=0;otherPayouts.forEach(function(p){totalOther+=parseFloat(p.amount)||0;});
+  var net=revenue-totalPayroll;
+  var cs='style="margin:12px 16px;background:#111;border:1px solid #1e1e1e;border-radius:16px;overflow:hidden;"';
+  var h='';
+  // Revenue
+  h+='<div '+cs+'>';
+  h+='<div style="padding:14px 16px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;font-family:\'Barlow Condensed\',sans-serif;">Revenue</div><div style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;background:#0d2818;color:#30d158;">'+loc+'</div></div>';
+  h+='<div style="display:flex;border-bottom:1px solid #1a1a1a;">';
+  h+='<div style="flex:1;padding:14px 16px;text-align:center;border-right:1px solid #1a1a1a;"><div style="font-size:24px;font-weight:900;color:#30d158;">'+carsSold+'</div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Cars Sold</div></div>';
+  h+='<div style="flex:1;padding:14px 16px;text-align:center;"><div style="font-size:24px;font-weight:900;color:#30d158;">'+_prFmt$(revenue)+'</div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Revenue ($'+_PR_REV+'/car)</div></div></div>';
+  if(deals.length){
+    deals.sort(function(a,b){return new Date(a.created_at)-new Date(b.created_at);});
+    deals.forEach(function(d,i){
+      var dt=d.created_at?new Date(d.created_at):null;var ds=dt?(dt.getMonth()+1)+'/'+dt.getDate():'';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;">';
+      h+='<div><div style="font-size:14px;color:#aaa;">'+(i+1)+'. '+(d.customer_name||'Unknown')+'</div>';
+      if(d.vehicle_desc) h+='<div style="font-size:12px;color:#555;margin-top:1px;">'+d.vehicle_desc+'</div>';
+      h+='</div><div style="font-size:12px;color:#555;">'+ds+'</div></div>';
+    });
+  }else{h+='<div style="text-align:center;padding:20px 16px;color:#333;font-size:13px;">No deals this period</div>';}
+  h+='</div>';
+  // Payroll
+  h+='<div '+cs+'>';
+  h+='<div style="padding:14px 16px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;font-family:\'Barlow Condensed\',sans-serif;">Payroll</div><div style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;background:#1a0a0a;color:#f87171;">'+(totalPayroll>0?'-'+_prFmt$(totalPayroll):'$0.00')+'</div></div>';
+  employees.forEach(function(name){
+    var ep=empPayroll[name];
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a1a;">';
+    h+='<div><div style="font-size:15px;font-weight:700;color:#ddd;">'+name+'</div>';
+    if(ep.amount>0&&ep.details.length) h+='<div style="font-size:12px;color:#666;margin-top:2px;max-width:200px;">'+ep.details[0]+'</div>';
+    h+='</div>';
+    if(ep.amount>0) h+='<div style="font-size:17px;font-weight:800;color:#f87171;">-'+_prFmt$(ep.amount)+'</div>';
+    else h+='<div style="font-size:13px;color:#444;font-style:italic;">Not paid yet</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  // Other payouts
+  if(otherPayouts.length){
+    h+='<div '+cs+'>';
+    h+='<div style="padding:14px 16px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;font-family:\'Barlow Condensed\',sans-serif;">Other Payouts</div><div style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;background:#1a1a0a;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
+    otherPayouts.forEach(function(p){
+      var amt=parseFloat(p.amount)||0;var dt=p.created_at?new Date(p.created_at):null;
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a1a;"><div><div style="font-size:15px;font-weight:700;color:#ddd;">'+(p.paid_to||'Unknown')+'</div>';
+      if(dt) h+='<div style="font-size:12px;color:#666;margin-top:2px;">'+(dt.getMonth()+1)+'/'+dt.getDate()+'</div>';
+      h+='</div><div style="font-size:17px;font-weight:800;color:#f87171;">-'+_prFmt$(amt)+'</div></div>';
+    });
+    h+='</div>';
+  }
+  // Net
+  var nc=net>=0?'#30d158':'#f87171';
+  h+='<div '+cs+'>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0d1117;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:'+nc+';">Net</div><div style="font-size:22px;font-weight:900;letter-spacing:1px;color:'+nc+';">'+(net<0?'-':'')+_prFmt$(net)+'</div></div>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Revenue ('+carsSold+' x $'+_PR_REV+')</div><div style="font-size:15px;font-weight:700;color:#30d158;">+'+_prFmt$(revenue)+'</div></div>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Total Payroll</div><div style="font-size:15px;font-weight:700;color:#f87171;">-'+_prFmt$(totalPayroll)+'</div></div>';
+  if(totalOther>0) h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;"><div style="font-size:14px;color:#888;">Other Payouts</div><div style="font-size:15px;font-weight:700;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
+  h+='</div>';
+  var el=document.getElementById('pr-data');if(el)el.innerHTML=h;
+}
+
+async function _prLoadHistory(){
+  var section=document.getElementById('pr-history');if(!section)return;
+  section.innerHTML='<div style="font-size:14px;font-weight:700;color:#666;letter-spacing:1px;text-transform:uppercase;padding:20px 16px 8px;font-family:\'Barlow Condensed\',sans-serif;">Previous Periods</div><div style="text-align:center;padding:20px;color:#444;font-size:14px;">Loading...</div>';
+  var current=_prPeriodStart;
+  var h='<div style="font-size:14px;font-weight:700;color:#666;letter-spacing:1px;text-transform:uppercase;padding:20px 16px 8px;font-family:\'Barlow Condensed\',sans-serif;">Previous Periods</div>';
+  var hasAny=false;
+  for(var i=1;i<=6;i++){
+    var ps=new Date(current);ps.setDate(ps.getDate()-i*14);
+    var pe=_prGetPeriodEnd(ps);var peN=new Date(pe);peN.setDate(peN.getDate()+1);var wks=_prWeekKeys(ps);
+    try{
+      var r=await Promise.all([
+        sbGet('deals','created_at=gte.'+_prDateKey(ps)+'T00:00:00&created_at=lt.'+_prDateKey(peN)+'T00:00:00&select=id,location'),
+        sbGet('cash_payouts','or=(week_start.eq.'+wks[0]+',week_start.eq.'+wks[1]+')&select=id,paid_to,amount,location')
+      ]);
+      var hD=Array.isArray(r[0])?r[0]:[],hP=Array.isArray(r[1])?r[1]:[];
+      var dbC=hD.filter(function(d){return d.location==='DeBary';}).length,dbPR=0;
+      hP.filter(function(p){return p.location==='DeBary'&&(p.paid_to||'').toLowerCase().indexOf('payroll')!==-1;}).forEach(function(p){dbPR+=parseFloat(p.amount)||0;});
+      var dbN=dbC*_PR_REV-dbPR;
+      var dlC=hD.filter(function(d){return d.location==='DeLand';}).length,dlPR=0;
+      hP.filter(function(p){return p.location==='DeLand'&&(p.paid_to||'').toLowerCase().indexOf('payroll')!==-1;}).forEach(function(p){dlPR+=parseFloat(p.amount)||0;});
+      var dlN=dlC*_PR_REV-dlPR;
+      if(dbC===0&&dlC===0&&dbPR===0&&dlPR===0)continue;
+      hasAny=true;
+      h+='<div onclick="_prNavTo('+ps.getTime()+')" style="margin:8px 16px;background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:14px 16px;cursor:pointer;">';
+      h+='<div style="font-size:14px;font-weight:700;color:#aaa;">'+_prFmtDate(ps)+' – '+_prFmtDate(pe)+', '+ps.getFullYear()+'</div>';
+      h+='<div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">';
+      h+='<div style="font-size:12px;color:#666;">DB: <b style="color:#999;">'+dbC+' cars</b> · Net <b style="color:'+(dbN>=0?'#30d158':'#f87171')+';">'+(dbN<0?'-':'')+_prFmt$(dbN)+'</b></div>';
+      if(dlC>0||dlPR>0) h+='<div style="font-size:12px;color:#666;">DL: <b style="color:#999;">'+dlC+' cars</b> · Net <b style="color:'+(dlN>=0?'#30d158':'#f87171')+';">'+(dlN<0?'-':'')+_prFmt$(dlN)+'</b></div>';
+      h+='</div></div>';
+    }catch(e){}
+  }
+  if(!hasAny) h+='<div style="text-align:center;padding:20px 16px;color:#333;font-size:13px;">No previous period data found.</div>';
+  section.innerHTML=h;
+}
+// ── END PAYROLL VIEW ─────────────────────────────────────────────────────────
 
 function openDealDetail(id) {
   _dealsViewingDetail = true;
