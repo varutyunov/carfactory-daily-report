@@ -139,7 +139,7 @@
 
     // Payment history
     var payments = [];
-    var rows = doc.querySelectorAll('#payment-history-table tbody tr, table tbody tr');
+    var rows = doc.querySelectorAll('#customer-payment-history-table tbody tr, #payment-history-table tbody tr, table tbody tr');
     rows.forEach(function(tr) {
       var cells = tr.querySelectorAll('td');
       if (cells.length >= 4) {
@@ -277,6 +277,7 @@
     }
     // Fallback to known dealer IDs
     if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
+    log('   🔑 dealerId: ' + dealerId, '#888');
     var batchSize = 2; // Throttled: 2 at a time to avoid rate limiting
     for (var i = 0; i < needFetch.length; i += batchSize) {
       var batch = needFetch.slice(i, i + batchSize);
@@ -305,6 +306,10 @@
             if (pr.ok) {
               var phtml = await pr.text();
               var phPays = parseCustomerPage(phtml, cust.carpay_id).payments;
+              // Debug: log payment results for first 5 customers
+              if (customerPayments.length === 0 && i < batchSize * 5) {
+                log('    💳 ' + cust.name + ': ' + phPays.length + ' payments (html=' + phtml.length + ', hasTable=' + (phtml.indexOf('customer-payment-history-table') !== -1) + ')', '#888');
+              }
               if (phPays && phPays.length) {
                 phPays.forEach(function(p) {
                   customerPayments.push({
@@ -320,8 +325,12 @@
                   });
                 });
               }
+            } else {
+              log('    💳 ' + cust.name + ': HTTP ' + pr.status, '#ef4444');
             }
-          } catch(e) {}
+          } catch(e) {
+            log('    💳 ' + cust.name + ': ERROR ' + e.message, '#ef4444');
+          }
         } catch(e) {
           // skip
         }
@@ -334,7 +343,51 @@
     var _emCount = customers.filter(function(c){return c.email;}).length;
     var _vhCount = customers.filter(function(c){return c.vehicle;}).length;
     log('✅ Details fetched — 📞 ' + _phCount + ' phones, ✉ ' + _emCount + ' emails, 🚗 ' + _vhCount + ' vehicles', '#30d158');
-    log('   (' + customerPayments.length + ' payments from customer pages)');
+    log('   (' + customerPayments.length + ' payments from detail fetches)');
+
+    // ── Fetch payment history for ALL customers (including cached) ──────────
+    log('');
+    log('📋 Fetching payment history for all ' + customers.length + ' customers...');
+    var payBatchSize = 2;
+    for (var pi2 = 0; pi2 < customers.length; pi2 += payBatchSize) {
+      var payBatch = customers.slice(pi2, pi2 + payBatchSize);
+      await Promise.all(payBatch.map(async function(cust) {
+        if (!cust.carpay_id) return;
+        try {
+          var phUrl = '/dms/customer/' + cust.carpay_id + '?dealerId=' + dealerId + '&tabId=payment-history';
+          var pr = await fetch(phUrl, { credentials: 'include' });
+          if (pr.ok) {
+            var phtml = await pr.text();
+            var phPays = parseCustomerPage(phtml, cust.carpay_id).payments;
+            if (pi2 < payBatchSize * 3) {
+              log('    💳 ' + cust.name + ': ' + phPays.length + ' pays (hasTable=' + (phtml.indexOf('customer-payment-history-table') !== -1) + ')', '#888');
+            }
+            if (phPays && phPays.length) {
+              phPays.forEach(function(p) {
+                var key = cust.account + '|' + p.date + '|' + p.amount;
+                customerPayments.push({
+                  location: _loc,
+                  carpay_id: cust.carpay_id,
+                  name: cust.name,
+                  account: cust.account,
+                  reference: '',
+                  date: p.date,
+                  time: '',
+                  method: p.method || '',
+                  amount_sent: p.amount || '$0.00'
+                });
+              });
+            }
+          }
+        } catch(e) {}
+      }));
+      if (pi2 % 20 === 0) {
+        var ppct = Math.min(100, Math.round(((pi2 + payBatchSize) / customers.length) * 100));
+        log('   ' + ppct + '% (' + customerPayments.length + ' payments so far)');
+      }
+      await sleep(1500);
+    }
+    log('✅ Payment history: ' + customerPayments.length + ' payments from customer pages', '#30d158');
 
     // ── Step 3: Fetch recent payments ───────────────────────────────────────
     log('');
