@@ -511,7 +511,7 @@
                 log('  Candidate ' + (ci+1) + ': ' + check.reason, '#888');
               }
             } catch(ce) {}
-            await sleep(200);
+            await sleep(1000); // 1s between candidate checks
           }
           if (!pfound) { log('  No matching result found', '#888'); }
         }
@@ -612,7 +612,7 @@
         pullSkip++;
       }
 
-      await sleep(300);
+      await sleep(1500); // 1.5s between searches to avoid IP ban
     }
 
     log('');

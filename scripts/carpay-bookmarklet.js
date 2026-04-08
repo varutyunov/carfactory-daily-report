@@ -267,7 +267,7 @@
 
     log('📋 Fetching customer details (phone, vehicle, balance)...');
     if (skipped) log('   ⚡ ' + skipped + ' already cached, fetching ' + needFetch.length + ' remaining', '#60a5fa');
-    else log('   This takes ~' + Math.ceil(customers.length / 5) + ' seconds...');
+    else log('   This takes ~' + Math.ceil(needFetch.length * 1.5 / 2) + ' seconds (throttled to avoid IP ban)...');
 
     var customerPayments = []; // collect payment history from each customer's payment-history tab
     var dealerId = location.search.match(/dealerId=(\d+)/) ? location.search.match(/dealerId=(\d+)/)[1] : '';
@@ -277,7 +277,7 @@
     }
     // Fallback to known dealer IDs
     if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
-    var batchSize = 5;
+    var batchSize = 2; // Throttled: 2 at a time to avoid rate limiting
     for (var i = 0; i < needFetch.length; i += batchSize) {
       var batch = needFetch.slice(i, i + batchSize);
       await Promise.all(batch.map(async function(cust) {
@@ -328,7 +328,7 @@
       }));
       var pct = Math.min(100, Math.round(((i + batchSize) / needFetch.length) * 100));
       log('   ' + pct + '% (' + Math.min(i + batchSize, needFetch.length) + '/' + needFetch.length + ' fetched, ' + customerPayments.length + ' payments)');
-      await sleep(200);
+      await sleep(1500); // 1.5s between batches to avoid IP ban
     }
     var _phCount = customers.filter(function(c){return c.phone;}).length;
     var _emCount = customers.filter(function(c){return c.email;}).length;
