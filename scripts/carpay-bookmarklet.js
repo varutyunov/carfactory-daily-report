@@ -349,14 +349,14 @@
       prows.forEach(function(tr) {
         var cells = tr.querySelectorAll('td');
         if (cells.length < 11) return;
-        var name = cells[0] ? cells[0].innerText.trim() : '';
-        var account = cells[1] ? cells[1].innerText.trim() : '';
-        var reference = cells[2] ? cells[2].innerText.trim() : '';
-        var date = cells[3] ? cells[3].innerText.trim() : '';
-        var time = cells[4] ? cells[4].innerText.trim() : '';
-        var method = cells[5] ? cells[5].innerText.trim() : '';
-        var payType = cells[8] ? cells[8].innerText.trim() : '';
-        var amountSent = cells[11] ? cells[11].innerText.trim() : '';
+        var name = cells[0] ? (cells[0].textContent || '').trim() : '';
+        var account = cells[1] ? (cells[1].textContent || '').trim() : '';
+        var reference = cells[2] ? (cells[2].textContent || '').trim() : '';
+        var date = cells[3] ? (cells[3].textContent || '').trim() : '';
+        var time = cells[4] ? (cells[4].textContent || '').trim() : '';
+        var method = cells[5] ? (cells[5].textContent || '').trim() : '';
+        var payType = cells[8] ? (cells[8].textContent || '').trim() : '';
+        var amountSent = cells[11] ? (cells[11].textContent || '').trim() : '';
         if (name && account && amountSent) {
           var cust = customers.find(function(c) { return c.account === account; });
           var carpayId = cust ? cust.carpay_id : '';
