@@ -431,7 +431,12 @@
 
     // Clear existing for this location
     await sbDeleteByLocation('carpay_customers', _loc);
-    await sbDeleteByLocation('carpay_payments', _loc);
+    // Only delete payments if we have replacements — never wipe without new data
+    if (allPayments.length > 0) {
+      await sbDeleteByLocation('carpay_payments', _loc);
+    } else {
+      log('  ℹ Keeping existing payments (no new ones found)', '#60a5fa');
+    }
 
     var custsDone = await sbUpsert('carpay_customers', customers);
     log('  ✅ ' + custsDone + ' customers saved', '#30d158');
