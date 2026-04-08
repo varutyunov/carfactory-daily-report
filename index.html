@@ -1384,6 +1384,12 @@ body.light .cal-fab{background:#4488ff !important;}
           <input id="pay-scan-note" placeholder="Any notes about this payment..." style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;"/>
         </div>
 
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <label onclick="var cb=document.getElementById('pay-is-final');cb.checked=!cb.checked;" style="display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+            <input type="checkbox" id="pay-is-final" style="width:18px;height:18px;accent-color:#ef4444;"/>
+            <span style="font-size:13px;color:#ef4444;font-weight:700;letter-spacing:.5px;">Final Payment</span>
+          </label>
+        </div>
         <button onclick="payScanSave()" style="width:100%;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Save Payment</button>
         <button onclick="payFormSkipPhoto()" id="pay-skip-photo-btn" style="display:none;width:100%;margin-top:8px;padding:14px;background:transparent;border:1px solid #333;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Skip Photo &amp; Fill Manually</button>
       </div>
@@ -13342,7 +13348,8 @@ function _payRenderCards(){
       var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
       var delFlag=p.delete_requested?'border-left:3px solid #ef4444;':'';
       var partialBorder=isPartial?'border-left:3px solid #f59e0b;':'';
-      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+partialBorder+'">';
+      var finalStyle=p.is_final_payment?'border:2px solid #ef4444;box-shadow:0 0 12px rgba(239,68,68,.3);':'border:1px solid #1a1a1a;';
+      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;'+finalStyle+'border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+partialBorder+'">';
       if(thumb) html+=thumb;
       html+='<div style="flex:1;min-width:0;">';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
@@ -13353,6 +13360,7 @@ function _payRenderCards(){
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
       html+=methodBadge;
       if(time) html+='<span style="font-size:11px;color:#555;">'+time+'</span>';
+      if(p.is_final_payment) html+='<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25);margin-left:4px;">FINAL</span>';
       if(p.delete_requested) html+='<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25);margin-left:4px;">DELETE REQ</span>';
       html+='<span style="font-size:11px;color:#555;margin-left:auto;">'+((p.logged_by||''))+'</span>';
       html+='</div></div></div>';
@@ -13841,6 +13849,8 @@ async function payScanSave(){
 
   var weekStart=_payWeekKey(new Date(date+'T12:00:00'));
 
+  var isFinal=document.getElementById('pay-is-final')&&document.getElementById('pay-is-final').checked;
+
   var record={
     customer_name:name,
     payment_date:date,
@@ -13860,6 +13870,7 @@ async function payScanSave(){
     week_start:weekStart,
     notes:note||null,
     raw_ocr_text:document.getElementById('pay-scan-raw').textContent||null,
+    is_final_payment:isFinal||false,
     created_at:new Date().toISOString()
   };
 
@@ -13880,6 +13891,7 @@ async function payScanSave(){
 
   _paySaving=false;
   _payEditId=null;
+  if(document.getElementById('pay-is-final')) document.getElementById('pay-is-final').checked=false;
   // Go back to list
   _payViewMode='list';
   document.getElementById('pay-view-title').textContent='PAYMENTS';
