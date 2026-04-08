@@ -1506,6 +1506,12 @@ body.light .cal-fab{background:#4488ff !important;}
             <input id="cp-paid-to" placeholder="Paid to (name)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;"/>
             <input id="cp-amount" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="width:100px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;outline:none;text-align:right;"/>
           </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <label onclick="var cb=document.getElementById('cp-is-payroll');cb.checked=!cb.checked;" style="display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+              <input type="checkbox" id="cp-is-payroll" style="width:18px;height:18px;accent-color:#a78bfa;"/>
+              <span style="font-size:13px;color:#a78bfa;font-weight:700;letter-spacing:.5px;">Payroll</span>
+            </label>
+          </div>
           <button onclick="cashPayoutAdd()" style="width:100%;padding:12px;background:linear-gradient(145deg,#064e3b,#065f46);border:1px solid #10b981;border-radius:10px;color:#34d399;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payout</button>
         </div>
         <!-- Cash Out Deal (owner only) -->
@@ -15124,6 +15130,8 @@ async function cashPayoutAdd(){
   var amount=moneyVal(document.getElementById('cp-amount'));
   if(!paidTo){alert('Enter who was paid.');return;}
   if(amount<=0){alert('Enter amount.');return;}
+  var isPayroll=document.getElementById('cp-is-payroll')&&document.getElementById('cp-is-payroll').checked;
+  if(isPayroll&&paidTo.toLowerCase().indexOf('payroll')===-1) paidTo=paidTo+' — Payroll';
   var wk=_payWeekKey(_payCurrentWeekStart);
   try{
     await sbPost('cash_payouts',{
@@ -15135,6 +15143,7 @@ async function cashPayoutAdd(){
     });
     document.getElementById('cp-paid-to').value='';
     document.getElementById('cp-amount').value='';
+    if(document.getElementById('cp-is-payroll')) document.getElementById('cp-is-payroll').checked=false;
     await cashPayoutsLoad();
     cashPayoutsRender();
     _payUpdateStats();
@@ -15614,10 +15623,10 @@ var _prPayouts=[];
 var _PR_REV=399;
 var _PR_DB_EMP=['Ricky','Scott','Manny','Dennis'];
 var _PR_DL_EMP=['Jesse'];
-var _PR_ANCHOR=new Date(2025,0,5);
+var _PR_ANCHOR=new Date(2025,0,12);
 
 function _prGetWeekStart(d){var dt=new Date(d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()-dt.getDay());return dt;}
-function _prGetPeriodStart(d){var ws=_prGetWeekStart(d);var diff=Math.floor((ws-_PR_ANCHOR)/(7*86400000));var pw=diff-(((diff%2)+2)%2);var ps=new Date(_PR_ANCHOR);ps.setDate(ps.getDate()+pw*7);return ps;}
+function _prGetPeriodStart(d){var ws=_prGetWeekStart(d);var diff=Math.round((ws-_PR_ANCHOR)/(7*86400000));var pw=diff-(((diff%2)+2)%2);var ps=new Date(_PR_ANCHOR);ps.setDate(ps.getDate()+pw*7);return ps;}
 function _prGetPeriodEnd(ps){var pe=new Date(ps);pe.setDate(pe.getDate()+13);return pe;}
 function _prFmtDate(d){var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return m[d.getMonth()]+' '+d.getDate();}
 function _prDateKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
