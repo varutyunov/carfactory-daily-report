@@ -131,7 +131,10 @@
 
   // ── Supabase upsert helper ─────────────────────────────────────────────────
   async function sbUpsert(table, body) {
-    var r = await fetch(SB_URL + '/rest/v1/' + table, {
+    var conflictMap = { 'app_settings': 'key', 'repo_gps_signals': 'account' };
+    var conflict = conflictMap[table] || '';
+    var url = SB_URL + '/rest/v1/' + table + (conflict ? '?on_conflict=' + conflict : '');
+    var r = await fetch(url, {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify(body)
