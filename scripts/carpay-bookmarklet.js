@@ -270,13 +270,8 @@
     else log('   This takes ~' + Math.ceil(needFetch.length * 1.5 / 2) + ' seconds (throttled to avoid IP ban)...');
 
     var customerPayments = []; // collect payment history from each customer's payment-history tab
-    var dealerId = location.search.match(/dealerId=(\d+)/) ? location.search.match(/dealerId=(\d+)/)[1] : '';
-    if (!dealerId) {
-      var dMatch = document.body.innerHTML.match(/dealerId[=:][\s"']*(\d+)/);
-      if (dMatch) dealerId = dMatch[1];
-    }
-    // Fallback to known dealer IDs
-    if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
+    // Use known dealer IDs — detection from page HTML is unreliable (can pick up wrong dealer)
+    var dealerId = _loc === 'deland' ? '657' : '656';
     log('   🔑 dealerId: ' + dealerId, '#888');
     var batchSize = 2; // Throttled: 2 at a time to avoid rate limiting
     for (var i = 0; i < needFetch.length; i += batchSize) {
