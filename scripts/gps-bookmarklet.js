@@ -141,7 +141,7 @@
 
   // ── Scrape GPS data from a ViewDetail page doc ────────────────────────────
   function scrapeGpsDetail(doc) {
-    function txt(id) { var el = doc.getElementById('MainContent_' + id); return el ? el.innerText.trim() : ''; }
+    function txt(id) { var el = doc.getElementById('MainContent_' + id); return el ? (el.textContent || '').trim() : ''; }
     return {
       serial: txt('serialnumber'),
       battery: txt('LblEncoreBat'),
@@ -226,7 +226,7 @@
               for (var ri = 1; ri < rows.length; ri++) {
                 var cells = rows[ri].querySelectorAll('td');
                 if (cells.length > 1) {
-                  var rowName = (cells[1].innerText || '').toLowerCase();
+                  var rowName = (cells[1].textContent || '').toLowerCase();
                   if (td.first_name && rowName.includes(td.first_name.toLowerCase())) {
                     var rl = rows[ri].querySelector('a');
                     if (rl) {
@@ -398,18 +398,23 @@
   });
 
   // Second: CarPay customers not already covered by a deal
+  var dbg = { dealDup: 0, skipped: 0, noName: 0, added: 0 };
   allCarpay.forEach(function(c) {
-    if (seenAccounts[c.account]) return;
-    if (shouldSkip(c.account)) return;
+    if (seenAccounts[c.account]) { dbg.dealDup++; return; }
+    if (shouldSkip(c.account)) { dbg.skipped++; return; }
     // Parse name: "LAST, FIRST" → last name for search
     var nameParts = (c.name || '').split(',');
     var lastName = (nameParts[0] || '').trim();
     var firstName = (nameParts[1] || '').trim().split(' ')[0] || '';
-    if (!lastName) return;
+    if (!lastName) { dbg.noName++; return; }
+    dbg.added++;
     pullTargets.push({ name: c.name, account: c.account, lastName: lastName, firstName: firstName, searchBy: 'LastName' });
   });
 
-  log('Finance deals: ' + allFinance.length + ', CarPay customers: ' + allCarpay.length + ', ' + pullTargets.length + ' need GPS refresh');
+  log('Finance deals: ' + allFinance.length + ' (' + pullTargets.filter(function(t){return t.searchBy==='VinNumber';}).length + ' with VIN)', '#60a5fa');
+  log('CarPay customers: ' + allCarpay.length + ' → ' + dbg.added + ' to search', '#60a5fa');
+  log('  Skipped: ' + dbg.dealDup + ' already in deals, ' + dbg.skipped + ' fresh GPS, ' + dbg.noName + ' no name', '#888');
+  log(pullTargets.length + ' total targets need GPS refresh');
 
   if (pullTargets.length > 0) {
     var pullSuccess = 0;
@@ -477,11 +482,14 @@
           var locLong = null;
           var locState = null;
           var outOfState = false;
+          var uniqueLocations = null;
+          var locationPins = null;
           try {
             var mapFields = getAspFields(pr.doc);
             mapFields['__EVENTTARGET'] = 'ctl00$MainContent$ViewDetailMenu1$LnkBtnLocateTRAX';
             mapFields['__EVENTARGUMENT'] = '';
-            var mapPage = await postForm(pr.url, mapFields);
+            var mapUrl = pr.url.replace(/ViewDetail\.aspx/i, 'ViewMap.aspx');
+            var mapPage = await postForm(mapUrl, mapFields);
             if (mapPage.url.includes('ViewMap.aspx')) {
               var mapDoc = mapPage.doc;
               var addrEl = mapDoc.getElementById('MainContent_TabContainer1_TabPanel1_LblAddress');
@@ -498,11 +506,38 @@
                   outOfState = locState !== 'FL';
                 }
               }
+              // Scrape location history (TabPanel2) for unique addresses
+              try {
+                var histTab = mapDoc.getElementById('MainContent_TabContainer1_TabPanel2');
+                if (!histTab) {
+                  // Click the Location History tab to load it
+                  var tabFields = getAspFields(mapDoc);
+                  tabFields['__EVENTTARGET'] = 'ctl00$MainContent$TabContainer1';
+                  tabFields['__EVENTARGUMENT'] = 'activeTabChanged:1';
+                  var histPage = await postForm(mapPage.url, tabFields);
+                  histTab = histPage.doc.getElementById('MainContent_TabContainer1_TabPanel2');
+                }
+                if (histTab) {
+                  var histRows = histTab.querySelectorAll('table tr');
+                  var addrs = {};
+                  var pinCount = 0;
+                  for (var hi = 1; hi < histRows.length && pinCount < 20; hi++) {
+                    var hCells = histRows[hi].querySelectorAll('td');
+                    if (hCells.length >= 3) {
+                      var addr = (hCells[2].textContent || '').trim();
+                      if (addr) { addrs[addr] = true; pinCount++; }
+                    }
+                  }
+                  uniqueLocations = Object.keys(addrs).length;
+                  locationPins = pinCount;
+                }
+              } catch(histErr) { /* history scrape failed, no big deal */ }
             }
           } catch(mapErr) { /* location scrape failed, continue with what we have */ }
 
           var addrLog = locAddress ? ' | 📌 ' + locAddress : '';
-          log('\u2705 Serial: ' + pgd.serial + ' | Battery: ' + pgd.battery + addrLog, '#30d158');
+          var modeLog = pgd.powerMode ? ' | Mode: ' + pgd.powerMode : '';
+          log('\u2705 Serial: ' + pgd.serial + ' | Battery: ' + pgd.battery + modeLog + addrLog, '#30d158');
 
           // Parse customer name for storage
           var nameParts = (pt.name || '').trim().split(/\s+/);
@@ -514,11 +549,14 @@
             account: pt.account,
             customer_name: storedName,
             battery_status: pgd.battery || 'Unknown',
+            battery_mode: pgd.powerMode || null,
             battery_low: (pgd.battery || '').toLowerCase() === 'low' || (pgd.battery || '').toLowerCase() === 'fair',
             last_seen: pgd.lastReported && !isNaN(new Date(pgd.lastReported).getTime()) ? new Date(pgd.lastReported).toISOString() : null,
             last_address: locAddress || null,
             last_state: locState || null,
             out_of_state: outOfState,
+            unique_locations: uniqueLocations,
+            location_pins: locationPins,
             updated_at: new Date().toISOString(),
             updated_by: 'GPS Bookmarklet'
           });
@@ -579,7 +617,7 @@
   }
 
   // Check if we got a login page instead
-  var dashText = dashPage.doc.body ? dashPage.doc.body.innerText : '';
+  var dashText = dashPage.doc.body ? (dashPage.doc.body.textContent || '') : '';
   if (dashPage.url.includes('Login') || dashText.includes('Sign In') || dashText.includes('Password')) {
     log('\u274C Session expired \u2014 please log in and try again', '#ef4444');
     return;
@@ -671,7 +709,7 @@
       } else {
         // Check listing page
         var hasResults = false;
-        var bodyText = resultDoc.body ? resultDoc.body.innerText : '';
+        var bodyText = resultDoc.body ? (resultDoc.body.textContent || '') : '';
 
         if (resultUrl.includes('CustomerSearchListing')) {
           if (!bodyText.includes('No records found') && !bodyText.includes('0 records')) {

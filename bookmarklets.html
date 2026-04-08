@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Car Factory Bookmarklets</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: #fff; font-family: system-ui, -apple-system, sans-serif; padding: 40px 20px; }
+  h1 { font-size: 28px; font-weight: 800; color: #30d158; margin-bottom: 8px; }
+  .subtitle { color: #888; font-size: 15px; margin-bottom: 40px; }
+  .card { background: #1a1a1a; border: 1px solid #333; border-radius: 16px; padding: 24px; margin-bottom: 20px; max-width: 500px; }
+  .card h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .card p { color: #aaa; font-size: 14px; margin-bottom: 16px; line-height: 1.5; }
+  .bookmarklet-link {
+    display: inline-block;
+    background: #30d158;
+    color: #000;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    text-decoration: none;
+    cursor: grab;
+    transition: transform 0.1s;
+  }
+  .bookmarklet-link:hover { transform: scale(1.03); }
+  .bookmarklet-link:active { cursor: grabbing; }
+  .instructions { color: #666; font-size: 13px; margin-top: 12px; }
+  .version { color: #555; font-size: 12px; margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<h1>Car Factory Bookmarklets</h1>
+<p class="subtitle">Drag the green buttons to your Chrome bookmarks bar.</p>
+
+<div class="card">
+  <h2>GPS Sync</h2>
+  <p>Run on Passtime (secure.passtimeusa.com) while logged in. Syncs GPS data for all finance customers.</p>
+  <a class="bookmarklet-link" id="gps-link" href="#">Loading...</a>
+  <div class="instructions">Drag this to your bookmarks bar</div>
+</div>
+
+<div class="card">
+  <h2>CarPay Sync</h2>
+  <p>Run on the CarPay customer list page. Syncs customer data (phones, emails, vehicles).</p>
+  <a class="bookmarklet-link" id="carpay-link" href="#">Loading...</a>
+  <div class="instructions">Drag this to your bookmarks bar</div>
+</div>
+
+<div class="version" id="version-info">Loading scripts...</div>
+
+<script>
+(async function() {
+  // Load each bookmarklet JS file and set the href as a javascript: URL
+  async function loadBookmarklet(file, linkId, label) {
+    try {
+      var resp = await fetch('scripts/' + file + '?_=' + Date.now());
+      var code = await resp.text();
+      // Remove the leading comment block if present
+      code = code.replace(/^\/\*\*[\s\S]*?\*\/\s*/, '');
+      var el = document.getElementById(linkId);
+      el.href = 'javascript:' + encodeURIComponent(code);
+      el.textContent = label;
+      return true;
+    } catch(e) {
+      document.getElementById(linkId).textContent = 'Error loading';
+      return false;
+    }
+  }
+
+  var g = await loadBookmarklet('gps-bookmarklet.js', 'gps-link', 'GPS Sync');
+  var c = await loadBookmarklet('carpay-bookmarklet.js', 'carpay-link', 'CarPay Sync');
+
+  var info = [];
+  if (g) info.push('GPS');
+  if (c) info.push('CarPay');
+  document.getElementById('version-info').textContent =
+    info.length ? 'Loaded: ' + info.join(', ') + ' — ' + new Date().toLocaleString() : 'Failed to load scripts';
+})();
+</script>
+
+</body>
+</html>
