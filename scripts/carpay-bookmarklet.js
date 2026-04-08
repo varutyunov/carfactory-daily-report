@@ -415,22 +415,57 @@
       if (Object.keys(flaggedAccounts).length) log('  🚩 Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
     }
 
+    // Normalize all customer objects to have identical keys (PostgREST requires this for batch POST)
+    var _allKeys = ['name','account','next_payment','days_late','auto_pay','carpay_id','location','vehicle','phone','email','scheduled_amount','payment_frequency','current_amount_due','repo_flagged'];
+    customers.forEach(function(c) {
+      _allKeys.forEach(function(k) { if (!(k in c)) c[k] = (k === 'days_late' ? 0 : k === 'auto_pay' || k === 'repo_flagged' ? false : k === 'current_amount_due' ? null : ''); });
+      // Re-apply repo_flagged
+      if (flaggedAccounts[c.account]) c.repo_flagged = true;
+    });
+
     // Debug: verify data before save
     var _sample = customers.slice(0, 2).map(function(c) { return c.name + ' ph=' + (c.phone||'NULL') + ' veh=' + (c.vehicle||'NULL'); });
     log('  🔍 Pre-save sample: ' + _sample.join(' | '), '#f59e0b');
     log('  🔍 Keys: ' + Object.keys(customers[0] || {}).join(', '), '#f59e0b');
+    log('  🔍 JSON[0]: ' + JSON.stringify(customers[0]).slice(0, 300), '#f59e0b');
 
     // Clear existing for this location
     await sbDeleteByLocation('carpay_customers', _loc);
     await sbDeleteByLocation('carpay_payments', _loc);
 
-    // Re-apply repo_flagged
-    customers.forEach(function(c) {
-      if (flaggedAccounts[c.account]) c.repo_flagged = true;
-    });
-
     var custsDone = await sbUpsert('carpay_customers', customers);
     log('  ✅ ' + custsDone + ' customers saved', '#30d158');
+
+    // ── Post-save verification & fix-up ──────────────────────────────────────
+    // Check if detail fields actually persisted — if not, patch them individually
+    await sleep(500);
+    var verifyRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + _loc + '&select=id,account,vehicle,phone&limit=5&order=name.asc', {
+      headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
+    });
+    if (verifyRes.ok) {
+      var verifyData = await verifyRes.json();
+      var needsFix = verifyData.filter(function(v) { return !v.vehicle && !v.phone; });
+      if (needsFix.length > 0) {
+        log('  ⚠ Detail fields lost during batch insert — running fix-up patches...', '#f59e0b');
+        var fixCount = 0;
+        for (var fi = 0; fi < customers.length; fi++) {
+          var fc = customers[fi];
+          if (!fc.vehicle && !fc.phone) continue; // nothing to fix
+          try {
+            var patchR = await fetch(SB_URL + '/rest/v1/carpay_customers?account=eq.' + encodeURIComponent(fc.account) + '&location=eq.' + _loc, {
+              method: 'PATCH',
+              headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=minimal' }),
+              body: JSON.stringify({ vehicle: fc.vehicle || '', phone: fc.phone || '', email: fc.email || '', scheduled_amount: fc.scheduled_amount || '', payment_frequency: fc.payment_frequency || '', current_amount_due: fc.current_amount_due })
+            });
+            if (patchR.ok) fixCount++;
+          } catch(e) {}
+          if (fi % 10 === 0 && fi > 0) { log('   Patching... ' + fi + '/' + customers.length); await sleep(500); }
+        }
+        log('  ✅ Fixed ' + fixCount + ' customers via individual patches', '#30d158');
+      } else {
+        log('  ✅ Verified: detail fields persisted correctly', '#30d158');
+      }
+    }
 
     if (allPayments.length) {
       var paysDone = await sbUpsert('carpay_payments', allPayments);
