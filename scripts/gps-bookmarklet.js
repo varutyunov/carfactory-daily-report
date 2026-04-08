@@ -368,7 +368,7 @@
   // Also fetch all CarPay customers (covers old deals without deal records)
   var allCarpay = [];
   try {
-    allCarpay = await sbGet('carpay_customers', 'select=account,name,location');
+    allCarpay = await sbGet('carpay_customers', 'select=account,name,location,vehicle,vin');
   } catch(e) {
     log('\u26a0\ufe0f Could not fetch CarPay customers: ' + e.message, '#f59e0b');
   }
@@ -411,7 +411,7 @@
     var firstName = (nameParts[1] || '').trim().split(' ')[0] || '';
     if (!lastName) { dbg.noName++; return; }
     dbg.added++;
-    pullTargets.push({ name: c.name, account: c.account, lastName: lastName, firstName: firstName, searchBy: 'LastName' });
+    pullTargets.push({ name: c.name, account: c.account, lastName: lastName, firstName: firstName, vehicle: (c.vehicle || '').trim(), vin: (c.vin || '').trim(), searchBy: 'LastName' });
   });
 
   log('Finance deals: ' + allFinance.length + ' (' + pullTargets.filter(function(t){return t.searchBy==='VinNumber';}).length + ' with VIN)', '#60a5fa');
@@ -438,43 +438,82 @@
         pf['ctl00$searchCustomerCTL$searchBtn'] = 'Search';
         var pr = await postForm(SEARCH_BASE + 'CustomerRpt.aspx', pf);
 
-        var pfound = false;
-        if (pr.url.includes('ViewDetail.aspx')) {
-          pfound = true;
-        } else if (pr.url.includes('CustomerSearchListing')) {
-          // Multiple results — match by first name only, never guess
-          var rows = pr.doc.querySelectorAll('#MainContent_gvCustomers tr');
-          if (pt.firstName && rows.length > 1) {
-            for (var ri = 1; ri < rows.length; ri++) {
-              var cells = rows[ri].querySelectorAll('td');
-              if (cells.length > 1) {
-                var rowName = (cells[1].textContent || '').toLowerCase();
-                if (rowName.includes(pt.firstName.toLowerCase())) {
-                  var rl = rows[ri].querySelector('a');
-                  if (rl) {
-                    var rh = rl.getAttribute('href');
-                    if (rh) { pr = await fetchPage(BASE + rh); pfound = pr.url.includes('ViewDetail.aspx'); }
-                  }
-                  break;
-                }
-              }
-            }
+        // Helper: check if a ViewDetail page matches our customer
+        function verifyMatch(doc, target) {
+          var gd = scrapeGpsDetail(doc);
+          // 1. If we have a VIN to compare, it must match
+          if (target.vin && gd.vin) {
+            var tVin = target.vin.replace(/\s/g, '').toUpperCase();
+            var dVin = gd.vin.replace(/\s/g, '').toUpperCase();
+            if (tVin === dVin) return { match: true, gd: gd, reason: 'VIN match' };
+            // VIN mismatch — definite wrong vehicle
+            return { match: false, gd: gd, reason: 'VIN mismatch: ours=' + tVin + ' theirs=' + dVin };
           }
-          if (!pfound) { log('  Multiple results, no first name match — skipped', '#888'); }
+          // 2. If we have vehicle description, compare year/make/model
+          if (target.vehicle && (gd.year || gd.make || gd.model)) {
+            var tVeh = target.vehicle.toLowerCase();
+            var dVeh = [gd.year, gd.make, gd.model].filter(Boolean).join(' ').toLowerCase();
+            if (dVeh && tVeh.includes(gd.year) && (tVeh.includes((gd.make||'').toLowerCase()) || tVeh.includes((gd.model||'').toLowerCase()))) {
+              return { match: true, gd: gd, reason: 'Vehicle match: ' + dVeh };
+            }
+            if (dVeh) return { match: false, gd: gd, reason: 'Vehicle mismatch: ours=' + target.vehicle + ' theirs=' + dVeh };
+          }
+          // 3. No vehicle data to compare — verify first name at minimum
+          var detailFirst = (gd.firstName || '').toLowerCase();
+          var searchFirst = (target.firstName || '').toLowerCase();
+          if (searchFirst && detailFirst && !detailFirst.includes(searchFirst) && !searchFirst.includes(detailFirst)) {
+            return { match: false, gd: gd, reason: 'Name mismatch: searched ' + target.firstName + ', found ' + gd.firstName };
+          }
+          // Name matches but no vehicle to verify — accept with warning
+          if (!target.vehicle && !target.vin) {
+            return { match: true, gd: gd, reason: 'Name match (no vehicle data to verify)' };
+          }
+          return { match: true, gd: gd, reason: 'Name match, our vehicle=' + target.vehicle };
         }
 
-        if (pfound) {
-          var pgd = scrapeGpsDetail(pr.doc);
-
-          // Verify this is actually our customer (not a different dealer's customer with same last name)
-          var detailFirst = (pgd.firstName || '').toLowerCase();
-          var detailLast = (pgd.lastName || '').toLowerCase();
-          var searchFirst = (pt.firstName || '').toLowerCase();
-          var searchLast = (pt.lastName || '').toLowerCase();
-          if (searchFirst && detailFirst && !detailFirst.includes(searchFirst) && !searchFirst.includes(detailFirst)) {
-            log('  Name mismatch: searched ' + pt.firstName + ' ' + pt.lastName + ', found ' + pgd.firstName + ' ' + pgd.lastName + ' — skipped', '#f59e0b');
-            pfound = false;
+        var pfound = false;
+        var pgd = null;
+        if (pr.url.includes('ViewDetail.aspx')) {
+          // Single result — verify it matches
+          var check = verifyMatch(pr.doc, pt);
+          if (check.match) { pfound = true; pgd = check.gd; log('  ' + check.reason, '#888'); }
+          else { log('  ' + check.reason + ' — skipped', '#f59e0b'); }
+        } else if (pr.url.includes('CustomerSearchListing')) {
+          // Multiple results — collect all candidate links and check each
+          var rows = pr.doc.querySelectorAll('#MainContent_gvCustomers tr');
+          var candidates = [];
+          for (var ri = 1; ri < rows.length; ri++) {
+            var cells = rows[ri].querySelectorAll('td');
+            if (cells.length > 1) {
+              var rowName = (cells[1].textContent || '').toLowerCase();
+              var rl = rows[ri].querySelector('a');
+              if (rl) candidates.push({ name: rowName, href: rl.getAttribute('href') });
+            }
           }
+          log('  ' + candidates.length + ' results in Passtime', '#888');
+
+          // Try candidates — prefer first name + vehicle match
+          for (var ci = 0; ci < candidates.length && !pfound; ci++) {
+            var cand = candidates[ci];
+            if (!cand.href) continue;
+            // Quick first name filter if we have one
+            if (pt.firstName && !cand.name.includes(pt.firstName.toLowerCase())) continue;
+            try {
+              var candPage = await fetchPage(BASE + cand.href);
+              if (!candPage.url.includes('ViewDetail.aspx')) continue;
+              var check = verifyMatch(candPage.doc, pt);
+              if (check.match) {
+                pfound = true;
+                pgd = check.gd;
+                pr = candPage;
+                log('  ' + check.reason, '#888');
+              } else {
+                log('  Candidate ' + (ci+1) + ': ' + check.reason, '#888');
+              }
+            } catch(ce) {}
+            await sleep(200);
+          }
+          if (!pfound) { log('  No matching result found', '#888'); }
         }
 
         if (pfound) {
