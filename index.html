@@ -12655,6 +12655,7 @@ function payEditPayment(id){
   document.getElementById('pay-scan-vin').value=p.vehicle_vin||'';
   document.getElementById('pay-scan-color').value=p.vehicle_color||'';
   var noteEl=document.getElementById('pay-scan-note');if(noteEl)noteEl.value=p.notes||'';
+  var finalCb=document.getElementById('pay-is-final');if(finalCb)finalCb.checked=!!p.is_final_payment;
   document.getElementById('pay-scan-raw').textContent=p.raw_ocr_text||'';
   payMethodSelect(_payMethod);
   var feeToggle=document.getElementById('pay-card-fee-toggle');
@@ -13496,6 +13497,14 @@ function payViewDetail(id){
   }
   html+='</div>';
 
+  // Final payment toggle (owners only)
+  if(_payIsOwner()){
+    var finalLabel=p.is_final_payment?'✅ FINAL PAYMENT':'Mark as Final Payment';
+    var finalBg=p.is_final_payment?'rgba(239,68,68,.12)':'rgba(239,68,68,.05)';
+    var finalBorder=p.is_final_payment?'rgba(239,68,68,.4)':'rgba(239,68,68,.15)';
+    html+='<button onclick="payToggleFinal('+p.id+','+(!p.is_final_payment)+')" style="width:100%;margin-top:8px;padding:14px;background:'+finalBg+';border:1px solid '+finalBorder+';border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">'+finalLabel+'</button>';
+  }
+
   // Edit button (owners only)
   if(_payIsOwner()){
     html+='<button onclick="payEditPayment('+p.id+')" style="width:100%;margin-top:8px;padding:14px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:14px;color:#4ade80;font-size:15px;font-weight:600;cursor:pointer;">✏️ Edit Payment</button>';
@@ -13532,6 +13541,20 @@ function payViewDetail(id){
   }
 
   document.getElementById('pay-detail-content').innerHTML=html;
+}
+
+// === Owner: toggle final payment ===
+async function payToggleFinal(id,val){
+  showLoading(val?'Marking as final...':'Removing final...');
+  try{
+    await sbPatch('payments',id,{is_final_payment:val});
+    // Update local data
+    var p=_payWeekData.find(function(x){return x.id===id;});
+    if(p) p.is_final_payment=val;
+    hideLoading();
+    payViewDetail(id);
+    _payRenderCards();
+  }catch(e){hideLoading();alert('Error: '+e.message);}
 }
 
 // === Owner: move payment between locations ===
