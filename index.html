@@ -14275,6 +14275,14 @@ async function dealSubmit() {
 
     await sbPost('deals', record);
 
+    // Push notification to managers on new deal
+    try{
+      var mgrNames=S.employees.filter(function(e){return e.role==='manager';}).map(function(e){return e.name;});
+      var dealLoc=record.location||'DeBary';
+      var totalStr='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      await sendPushNotification(mgrNames,'🤝 New Deal',_dealData.customer+' — '+(car.name||'')+' — '+totalStr+' '+dealLoc);
+    }catch(ex){console.warn('Deal push notify failed:',ex);}
+
     // Sync pickup payment to calendar if applicable
     if(record.pickup_payment && record.pickup_payment_due){
       try{ await calSyncPickupPayments(); }catch(e){}
