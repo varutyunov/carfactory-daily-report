@@ -11476,7 +11476,6 @@ async function depositSave() {
       vin: d.vin || '',
       stock: d.stock || '',
       deposit_amount: parseFloat(d.amount) || 0,
-      payment_breakdown: d.payments && d.payments.length ? JSON.stringify(d.payments) : null,
       balance: d.balance || '',
       deposit_date: d.dateDisp || '',
       withdraw_until: d.withdrawDisp || '',
