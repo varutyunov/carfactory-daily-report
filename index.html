@@ -10535,30 +10535,24 @@ function _txInit() {
       </div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">TRANSACTION</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deposit Amount ($)</div>
-          <input id="dep-amount" type="text" inputmode="decimal" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="$500" oninput="moneyInput(this)"/>
-        </div>
-        <div>
-          <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date</div>
-          <input id="dep-date" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
-        </div>
-      </div>
-      <!-- Payment Method -->
       <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="dep-pm-cash"        onclick="depSetPayMethod('cash')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#1d4ed8;color:#fff;border:none;">Cash</button>
-          <button id="dep-pm-card"        onclick="depSetPayMethod('card')"        style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Card</button>
-          <button id="dep-pm-zelle"       onclick="depSetPayMethod('zelle')"       style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Zelle</button>
-          <button id="dep-pm-money_order" onclick="depSetPayMethod('money_order')" style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Money Order</button>
-          <button id="dep-pm-other"       onclick="depSetPayMethod('other')"       style="padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;background:#0d0d0d;color:#888;border:1px solid #1e1e1e;">Other</button>
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Date</div>
+        <input id="dep-date" type="date" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+      </div>
+      <!-- Payment rows (split payments) -->
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payments</div>
+          <button onclick="depAddPayment()" style="background:none;border:1px solid #1d4ed8;border-radius:8px;color:#60a5fa;font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer;">+ Add Payment</button>
         </div>
-        <div id="dep-pm-notes-wrap" style="display:none;margin-top:8px;">
-          <input id="dep-pm-notes" placeholder="Describe payment method..." oninput="_depPayNotes=this.value" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;"/>
+        <div id="dep-payments" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="text-align:right;margin-top:8px;">
+          <span style="font-size:12px;color:#555;">Total:</span>
+          <span id="dep-total" style="font-size:18px;font-weight:800;color:#4ade80;margin-left:6px;">$0.00</span>
         </div>
       </div>
+      <!-- Hidden input to carry total for preview/save compatibility -->
+      <input type="hidden" id="dep-amount" value=""/>
       <div style="margin-bottom:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Deal Type</div>
         <div style="display:flex;gap:10px;margin-bottom:10px;">
@@ -11327,19 +11321,21 @@ var _depData = {};  // stores customer + car + photo data
 var _depAddToWeek = false;
 var _depPayMethod = 'cash';
 var _depPayNotes = '';
+var _depPayments = [];
 
 function openDepositForm() {
   _depData = { dealType: 'cash' };
   _depAddToWeek = false;
   _depPayMethod = 'cash';
   _depPayNotes = '';
+  _depPayments = [{ amount: '', method: 'cash' }];
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
   depShowStep(1);
   // Reset deal type + payment method buttons to defaults
   depSetDealType('cash');
-  depSetPayMethod('cash');
+  depRenderPayments();
   var notesInput = document.getElementById('dep-pm-notes');
   if(notesInput) notesInput.value = '';
   var weekAmtInput = document.getElementById('dep-week-amount');
@@ -11480,6 +11476,7 @@ async function depositSave() {
       vin: d.vin || '',
       stock: d.stock || '',
       deposit_amount: parseFloat(d.amount) || 0,
+      payment_breakdown: d.payments && d.payments.length ? JSON.stringify(d.payments) : null,
       balance: d.balance || '',
       deposit_date: d.dateDisp || '',
       withdraw_until: d.withdrawDisp || '',
@@ -11493,39 +11490,42 @@ async function depositSave() {
 
     await sbPost('deposits', record);
 
-    // If cash payment method + "Add to this week's cash" toggled on, post to payments table
-    if(_depAddToWeek && _depPayMethod === 'cash') {
+    // Post each payment to the weekly payments table if "Add to week" is on
+    if(_depAddToWeek) {
       var today = new Date();
       var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
       var weekKey = _payWeekKey(today);
-      var weekAmtInput = document.getElementById('dep-week-amount');
-      var weekAmtRaw = weekAmtInput ? weekAmtInput.value.replace(/[^0-9.]/g,'') : '';
-      var depAmt = parseFloat(weekAmtRaw) || parseFloat(d.amount) || 0;
-      var amtStr = '$' + depAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
       var depLoc = record.location;
-      try {
-        await sbPost('payments', {
-          customer_name: d.fullName || '',
-          payment_date: todayStr,
-          payment_time: null,
-          amount: amtStr,
-          payment_method: _depPayMethod,
-          card_fee_added: false,
-          original_amount: null,
-          vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
-          vehicle_make: document.getElementById('dep-make') ? document.getElementById('dep-make').value.trim() : '',
-          vehicle_model: document.getElementById('dep-model') ? document.getElementById('dep-model').value.trim() : '',
-          vehicle_vin: d.vin || '',
-          vehicle_color: document.getElementById('dep-color') ? document.getElementById('dep-color').value.trim() : '',
-          receipt_photo_url: null,
-          location: depLoc,
-          logged_by: record.created_by,
-          week_start: weekKey,
-          raw_ocr_text: (_depPayNotes ? _depPayNotes + ' — ' : '') + 'Deposit — ' + (d.vehicleStr || ''),
-          created_at: new Date().toISOString()
-        });
-      } catch(payErr) {
-        console.error('Failed to post deposit to week cash:', payErr);
+      var depPayments = (d.payments && d.payments.length) ? d.payments : _depPayments.filter(function(p){return parseFloat(p.amount)>0;});
+      for(var dpi=0; dpi<depPayments.length; dpi++){
+        var dp = depPayments[dpi];
+        var dpAmt = parseFloat(dp.amount) || 0;
+        if(dpAmt <= 0) continue;
+        var amtStr = '$' + dpAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+        try {
+          await sbPost('payments', {
+            customer_name: d.fullName || '',
+            payment_date: todayStr,
+            payment_time: null,
+            amount: amtStr,
+            payment_method: dp.method || 'cash',
+            card_fee_added: false,
+            original_amount: null,
+            vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
+            vehicle_make: document.getElementById('dep-make') ? document.getElementById('dep-make').value.trim() : '',
+            vehicle_model: document.getElementById('dep-model') ? document.getElementById('dep-model').value.trim() : '',
+            vehicle_vin: d.vin || '',
+            vehicle_color: document.getElementById('dep-color') ? document.getElementById('dep-color').value.trim() : '',
+            receipt_photo_url: null,
+            location: depLoc,
+            logged_by: record.created_by,
+            week_start: weekKey,
+            raw_ocr_text: 'Deposit — ' + (dp.method||'cash') + ' — ' + (d.vehicleStr || ''),
+            created_at: new Date().toISOString()
+          });
+        } catch(payErr) {
+          console.error('Failed to post deposit payment to week:', payErr);
+        }
       }
     }
 
@@ -11638,30 +11638,55 @@ function depSetDealType(type) {
 
 function depSetPayMethod(method) {
   _depPayMethod = method;
-  var methods = ['cash','card','zelle','money_order','other'];
-  methods.forEach(function(m) {
-    var btn = document.getElementById('dep-pm-'+m);
-    if(!btn) return;
-    if(m === method) {
-      btn.style.background = '#1d4ed8'; btn.style.color = '#fff'; btn.style.border = 'none';
-    } else {
-      btn.style.background = '#0d0d0d'; btn.style.color = '#888'; btn.style.border = '1px solid #1e1e1e';
-    }
-  });
-  // Notes field — only for Other
-  var notesWrap = document.getElementById('dep-pm-notes-wrap');
-  var notesInput = document.getElementById('dep-pm-notes');
-  if(notesWrap) notesWrap.style.display = method === 'other' ? 'block' : 'none';
-  if(method !== 'other') { _depPayNotes = ''; if(notesInput) notesInput.value = ''; }
-  // Add-to-week toggle — only for Cash
+}
+
+function depAddPayment() {
+  _depPayments.push({ amount: '', method: 'cash' });
+  depRenderPayments();
+}
+function depRemovePayment(idx) {
+  _depPayments.splice(idx, 1);
+  if(!_depPayments.length) depAddPayment();
+  else depRenderPayments();
+}
+function depUpdatePayment(idx, field, val) {
+  if(_depPayments[idx]) _depPayments[idx][field] = val;
+  depUpdateTotal();
+  depUpdateWeekToggle();
+}
+function depRenderPayments() {
+  var el = document.getElementById('dep-payments');
+  if(!el) return;
+  el.innerHTML = _depPayments.map(function(p, i) {
+    return '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<input type="text" inputmode="decimal" placeholder="$0.00" value="'+(p.amount?'$'+p.amount:'')+'" oninput="moneyInput(this);depUpdatePayment('+i+',\'amount\',this.value.replace(/[^0-9.]/g,\'\'))" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>' +
+      '<select onchange="depUpdatePayment('+i+',\'method\',this.value)" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 8px;font-size:14px;outline:none;appearance:auto;">' +
+        '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>' +
+        '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>' +
+        '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>' +
+        '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>' +
+        '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>' +
+      '</select>' +
+      (_depPayments.length > 1 ? '<button onclick="depRemovePayment('+i+')" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>' : '') +
+    '</div>';
+  }).join('');
+  depUpdateTotal();
+  depUpdateWeekToggle();
+}
+function depUpdateTotal() {
+  var total = _depPayments.reduce(function(sum, p) { return sum + (parseFloat(p.amount) || 0); }, 0);
+  var el = document.getElementById('dep-total');
+  if(el) el.textContent = '$' + total.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  // Keep hidden input in sync for preview/save
+  var hiddenAmt = document.getElementById('dep-amount');
+  if(hiddenAmt) hiddenAmt.value = total > 0 ? total.toFixed(2) : '';
+}
+function depUpdateWeekToggle() {
+  // Show "add to week" only if at least one payment is cash
+  var hasCash = _depPayments.some(function(p){ return p.method==='cash' && parseFloat(p.amount)>0; });
   var weekWrap = document.getElementById('dep-add-week-wrap');
-  if(method === 'cash') {
-    if(weekWrap) weekWrap.style.display = 'block';
-  } else {
-    if(weekWrap) weekWrap.style.display = 'none';
-    _depAddToWeek = false;
-    depSetAddToWeek(false);
-  }
+  if(weekWrap) weekWrap.style.display = hasCash ? 'block' : 'none';
+  if(!hasCash) { _depAddToWeek = false; depSetAddToWeek(false); }
 }
 
 function depSetAddToWeek(on) {
@@ -11757,7 +11782,7 @@ function depositGoPreview() {
     }
   }
 
-  _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp,dealType:isFinance?'finance':'cash'};
+  _depData.preview = {fullName:fullName,vehicleStr:vehicleStr,vin:vin,stock:stock,amount:amount,balance:balance,dateDisp:dateDisp,withdrawDisp:withdrawDisp,dealType:isFinance?'finance':'cash',payments:_depPayments.filter(function(p){return parseFloat(p.amount)>0;})};
 
   depShowStep(4);
 }
