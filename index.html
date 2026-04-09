@@ -1153,16 +1153,8 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
 </div>
 
-<!-- PAYROLL OVERLAY -->
-<div id="payroll-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;">
-  <div id="payroll-hdr" style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span>
-  </div>
-  <div id="payroll-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div id="payroll-view-content" style="padding:0 0 80px;"></div>
-  </div>
-</div>
+<!-- PAYROLL OVERLAY — JS rebuilds this on every open, HTML is just a placeholder -->
+<div id="payroll-overlay" style="display:none;"></div>
 
 <!-- PAYMENT TILE OVERLAY -->
 <div id="pay-scan-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
@@ -15728,12 +15720,13 @@ function openPayrollView(){
     document.body.appendChild(o);
   }
   // Rebuild entire overlay every time — cache-proof
-  o.style.cssText='display:block;position:fixed;inset:0;z-index:9100;background:#000;';
+  // Use flex column layout instead of nested position:fixed (broken on iOS PWA)
+  o.style.cssText='display:flex;flex-direction:column;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9100;background:#000;';
   o.innerHTML=
-    '<div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">'+
+    '<div style="flex-shrink:0;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">'+
     '<button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>'+
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span></div>'+
-    '<div id="payroll-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+
+    '<div id="payroll-view-body" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+
     '<div id="payroll-view-content" style="padding:0 0 80px;"></div></div>';
   document.getElementById('payroll-view-body').scrollTop=0;
   renderPayrollView();
