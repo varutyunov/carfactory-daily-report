@@ -13753,17 +13753,26 @@ async function runPayScanOCR(imgSrc){
 
     var aiText = '';
     if(data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts){
-      aiText = data.candidates[0].content.parts[0].text || '';
+      // Gemini 2.5 thinking models return thinking in parts[0] (thought:true) and answer in later parts
+      var parts = data.candidates[0].content.parts;
+      for(var pi=parts.length-1; pi>=0; pi--){
+        if(!parts[pi].thought && parts[pi].text){ aiText = parts[pi].text; break; }
+      }
+      if(!aiText) aiText = parts[parts.length-1].text || '';
     }
     console.log('[PayScan] Gemini AI text:', aiText);
 
     var parsed = {};
     var rawText = '';
-    var jsonMatch = aiText.match(/\{[\s\S]*\}/);
+    // Strip markdown code fences if present
+    var cleanText = aiText.replace(/```json\s*/gi,'').replace(/```\s*/g,'');
+    var jsonMatch = cleanText.match(/\{[\s\S]*\}/);
     if(jsonMatch){
-      parsed = JSON.parse(jsonMatch[0]);
-      console.log('[PayScan] AI parsed result:', JSON.stringify(parsed));
-      rawText = parsed.rawText || '';
+      try{
+        parsed = JSON.parse(jsonMatch[0]);
+        console.log('[PayScan] AI parsed result:', JSON.stringify(parsed));
+        rawText = parsed.rawText || '';
+      }catch(je){ console.warn('[PayScan] JSON parse failed:', je, jsonMatch[0].substring(0,200)); }
     }
 
     bar.style.width='100%';
