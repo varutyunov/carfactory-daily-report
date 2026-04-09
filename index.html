@@ -13727,7 +13727,7 @@ async function runPayScanOCR(imgSrc){
       '- Use empty string "" for any field you cannot find\n' +
       '- The image may be a photo of a receipt — use context to figure out correct values';
 
-    var models = ['gemini-2.5-flash','gemini-2.0-flash'];
+    var models = ['gemini-2.5-flash','gemini-2.5-flash-lite'];
     var data = null;
     for(var mi=0; mi<models.length; mi++){
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/'+models[mi]+':generateContent?key=' + _gvisionKey;
