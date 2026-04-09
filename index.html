@@ -2207,8 +2207,12 @@ function initOneSignalUser(name){
   window._osExternalId = name.toLowerCase().replace(/\s+/g,'_');
   var perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
   var dismissed = localStorage.getItem('cf_notif_dismissed');
-  // Show enable bar if notifications not yet granted AND user hasn't dismissed
-  if(perm !== 'granted' && !dismissed){ showNotifEnableBar(); }
+  var isOwner = ['vlad','tommy'].indexOf(name.toLowerCase()) !== -1;
+  // Owners ALWAYS see the prompt if not granted (ignore dismissed)
+  if(perm !== 'granted' && (isOwner || !dismissed)){
+    if(isOwner) localStorage.removeItem('cf_notif_dismissed');
+    showNotifEnableBar();
+  }
   // Link user to OneSignal whenever SDK is ready
   function linkUser(OS){
     try{
