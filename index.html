@@ -10445,7 +10445,7 @@ function _txInit() {
 
   <!-- Back bar -->
   <div id="deposit-back-bar" style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="closeDepositForm()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <button onclick="depGoBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
     <span id="deposit-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">DEPOSIT FORM</span>
   </div>
 
@@ -11381,7 +11381,9 @@ function closeDepositForm() {
   var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
 }
 
+var _depCurrentStep = 1;
 function depShowStep(n) {
+  _depCurrentStep = n;
   [1,2,3,4].forEach(function(i){
     var el = document.getElementById('dep-step'+i);
     if(el) el.style.display = (i===n) ? 'block' : 'none';
@@ -11389,6 +11391,10 @@ function depShowStep(n) {
   var titles = {1:'CUSTOMER ID',2:'SELECT VEHICLE',3:'COMPLETE FORM',4:'PREVIEW & SEND'};
   var titleEl = document.getElementById('deposit-bar-title');
   if(titleEl) titleEl.textContent = titles[n] || 'DEPOSIT FORM';
+}
+function depGoBack() {
+  if(_depCurrentStep > 1) depShowStep(_depCurrentStep - 1);
+  else closeDepositForm();
 }
 
 // ── STEP 1: ID PHOTO ──────────────────────────────────────────
