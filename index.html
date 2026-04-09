@@ -5635,7 +5635,7 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('controllerchange',_swSafeReload);
     // Listen for messages from SW
     navigator.serviceWorker.addEventListener('message', e=>{
-      if(e.data==='UPDATED') _swSafeReload();
+      if(e.data==='UPDATED'||(e.data&&e.data.type==='SW_UPDATED')) _swSafeReload();
       else if(e.data==='SYNC_FAILED'){
         const btn=document.getElementById('sync-btn');
         if(btn){btn.style.color='#ff453a';setTimeout(()=>{btn.style.color='#555';btn.style.pointerEvents='auto';},2000);}
@@ -15716,7 +15716,8 @@ function _prFmt$(v){return'$'+Math.abs(v).toLocaleString('en-US',{minimumFractio
 
 function openPayrollView(){
   var o=document.getElementById('payroll-overlay');if(!o)return;
-  o.style.display='flex';
+  o.style.display='block';
+  o.scrollTop=0;
   renderPayrollView();
 }
 function payrollViewBack(){
