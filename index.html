@@ -2288,9 +2288,7 @@ async function enableOSNotifications(){
       await window.OneSignal.login(window._osExternalId);
       status.push('Logged in as: '+window._osExternalId);
     }
-  }catch(e){ status.push('ERROR: '+e.message); }
-  // Show status to user for debugging
-  alert('Push Status:\\n\\n'+status.join('\\n'));
+  }catch(e){ console.log('Push enable error:',e); }
 }
 function dismissNotifBarPermanent(){
   dismissNotifBar();
@@ -2300,9 +2298,9 @@ function dismissNotifBarPermanent(){
 async function sendPushNotification(targetNames, title, body){
   if(!targetNames||targetNames.length===0) return;
   try{
-    await fetch(SB_URL+'/rest/v1/rpc/push_notify',{
+    await fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
-      headers:SB_HEADERS,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
       body:JSON.stringify({target_names:targetNames, title:title, body:body})
     });
   }catch(e){ console.log('Push failed:',e); }
