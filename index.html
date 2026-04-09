@@ -13727,25 +13727,34 @@ async function runPayScanOCR(imgSrc){
       '- Use empty string "" for any field you cannot find\n' +
       '- The image may be a photo of a receipt — use context to figure out correct values';
 
-    var resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + _gvisionKey, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
-      })
-    });
+    var models = ['gemini-2.5-flash','gemini-2.0-flash'];
+    var data = null;
+    for(var mi=0; mi<models.length; mi++){
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/'+models[mi]+':generateContent?key=' + _gvisionKey;
+      var resp = await fetch(modelUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+        })
+      });
+      data = await resp.json();
+      console.log('[PayScan] '+models[mi]+' response:', JSON.stringify(data).substring(0,500));
+      if(!data.error) break;
+      if(mi < models.length-1){
+        console.warn('[PayScan] '+models[mi]+' failed, trying '+models[mi+1]);
+        status.textContent='Retrying with backup model...';
+      }
+    }
 
     bar.style.width='80%';
     status.textContent='Processing results...';
-
-    var data = await resp.json();
-    console.log('[PayScan] Gemini response:', JSON.stringify(data).substring(0,500));
 
     if(data.error){
       throw new Error(data.error.message || 'Gemini API error');
