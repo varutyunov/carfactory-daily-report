@@ -11490,25 +11490,24 @@ async function depositSave() {
 
     await sbPost('deposits', record);
 
-    // Post each payment to the weekly payments table if "Add to week" is on
+    // Post deposit cash to the weekly payments if "Add to week" is toggled on
     if(_depAddToWeek) {
       var today = new Date();
       var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
       var weekKey = _payWeekKey(today);
       var depLoc = record.location;
-      var depPayments = (d.payments && d.payments.length) ? d.payments : _depPayments.filter(function(p){return parseFloat(p.amount)>0;});
-      for(var dpi=0; dpi<depPayments.length; dpi++){
-        var dp = depPayments[dpi];
-        var dpAmt = parseFloat(dp.amount) || 0;
-        if(dpAmt <= 0) continue;
-        var amtStr = '$' + dpAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      var weekAmtInput = document.getElementById('dep-week-amount');
+      var weekAmtRaw = weekAmtInput ? weekAmtInput.value.replace(/[^0-9.]/g,'') : '';
+      var depAmt = parseFloat(weekAmtRaw) || 0;
+      if(depAmt > 0) {
+        var amtStr = '$' + depAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
         try {
           await sbPost('payments', {
             customer_name: d.fullName || '',
             payment_date: todayStr,
             payment_time: null,
             amount: amtStr,
-            payment_method: dp.method || 'cash',
+            payment_method: 'cash',
             card_fee_added: false,
             original_amount: null,
             vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
@@ -11520,11 +11519,11 @@ async function depositSave() {
             location: depLoc,
             logged_by: record.created_by,
             week_start: weekKey,
-            raw_ocr_text: 'Deposit — ' + (dp.method||'cash') + ' — ' + (d.vehicleStr || ''),
+            raw_ocr_text: 'Deposit — ' + (d.vehicleStr || ''),
             created_at: new Date().toISOString()
           });
         } catch(payErr) {
-          console.error('Failed to post deposit payment to week:', payErr);
+          console.error('Failed to post deposit to week cash:', payErr);
         }
       }
     }
@@ -11701,10 +11700,10 @@ function depSetAddToWeek(on) {
   var amtInput = document.getElementById('dep-week-amount');
   if(amtWrap) amtWrap.style.display = on ? 'block' : 'none';
   if(on && amtInput) {
-    // Pre-fill with the deposit amount
-    var depAmt = document.getElementById('dep-amount');
-    var val = depAmt ? depAmt.value.trim() : '';
-    amtInput.value = val || '';
+    // Pre-fill with just the cash portion of payments
+    var cashTotal = _depPayments.reduce(function(sum,p){ return p.method==='cash' ? sum+(parseFloat(p.amount)||0) : sum; }, 0);
+    amtInput.value = cashTotal > 0 ? cashTotal.toFixed(2) : '';
+    moneyInput(amtInput);
     amtInput.focus();
     amtInput.select();
   }
