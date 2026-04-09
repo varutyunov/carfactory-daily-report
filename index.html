@@ -2260,27 +2260,37 @@ function dismissNotifBar(){
 async function enableOSNotifications(){
   // Always dismiss the modal first so it never gets stuck
   dismissNotifBar();
+  var status=[];
   try{
+    status.push('OS SDK: '+(window.OneSignal?'loaded':'NOT loaded'));
     // Request via OneSignal if ready, fallback to native API
     if(window.OneSignal && window.OneSignal.Notifications){
-      console.log('[OS] Requesting permission via OneSignal...');
       await window.OneSignal.Notifications.requestPermission();
-      console.log('[OS] Permission result:', Notification.permission);
+      status.push('Permission: '+Notification.permission);
     } else if(typeof Notification !== 'undefined'){
-      console.log('[OS] Requesting permission via native API...');
       await Notification.requestPermission();
+      status.push('Permission (native): '+Notification.permission);
+    } else {
+      status.push('Notification API: NOT available');
     }
     // Explicitly opt in to push via OneSignal
     if(window.OneSignal && window.OneSignal.User && window.OneSignal.User.PushSubscription){
       await window.OneSignal.User.PushSubscription.optIn();
-      console.log('[OS] Opted in, token:', window.OneSignal.User.PushSubscription.token);
+      var sub=window.OneSignal.User.PushSubscription;
+      status.push('OptedIn: '+sub.optedIn);
+      status.push('Token: '+(sub.token?sub.token.substring(0,20)+'...':'NONE'));
+      status.push('SubID: '+(sub.id||'NONE'));
+    } else {
+      status.push('PushSubscription: NOT available');
     }
     // Link user after granting
     if(window._osExternalId && window.OneSignal && window.OneSignal.login){
       await window.OneSignal.login(window._osExternalId);
-      console.log('[OS] Logged in as:', window._osExternalId);
+      status.push('Logged in as: '+window._osExternalId);
     }
-  }catch(e){ console.log('Enable notif err:',e); }
+  }catch(e){ status.push('ERROR: '+e.message); }
+  // Show status to user for debugging
+  alert('Push Status:\\n\\n'+status.join('\\n'));
 }
 function dismissNotifBarPermanent(){
   dismissNotifBar();
