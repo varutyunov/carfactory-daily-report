@@ -2286,13 +2286,11 @@ function dismissNotifBarPermanent(){
 async function sendPushNotification(targetNames, title, body){
   if(!targetNames||targetNames.length===0) return;
   try{
-    var r=await fetch('https://carfactory-daily-report.netlify.app/.netlify/functions/push-notify',{
+    await fetch(SB_URL+'/rest/v1/rpc/push_notify',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({app_id:OS_APP_ID, api_key:OS_API_KEY, target_names:targetNames, title:title, body:body})
+      headers:SB_HEADERS,
+      body:JSON.stringify({target_names:targetNames, title:title, body:body})
     });
-    var result=await r.json();
-    console.log('[Push]',r.status,result);
   }catch(e){ console.log('Push failed:',e); }
 }
 
