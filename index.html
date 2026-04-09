@@ -1154,8 +1154,14 @@ body.light .cal-fab{background:#4488ff !important;}
 </div>
 
 <!-- PAYROLL OVERLAY -->
-<div id="payroll-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div id="payroll-view-content" style="padding:0 0 80px;"></div>
+<div id="payroll-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;">
+  <div id="payroll-hdr" style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span>
+  </div>
+  <div id="payroll-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div id="payroll-view-content" style="padding:0 0 80px;"></div>
+  </div>
 </div>
 
 <!-- PAYMENT TILE OVERLAY -->
@@ -15715,9 +15721,21 @@ function _prWeekKeys(ps){var w1=_prDateKey(ps);var w2d=new Date(ps);w2d.setDate(
 function _prFmt$(v){return'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 function openPayrollView(){
-  var o=document.getElementById('payroll-overlay');if(!o)return;
-  o.style.display='block';
-  o.scrollTop=0;
+  var o=document.getElementById('payroll-overlay');
+  if(!o){
+    o=document.createElement('div');
+    o.id='payroll-overlay';
+    document.body.appendChild(o);
+  }
+  // Rebuild entire overlay every time — cache-proof
+  o.style.cssText='display:block;position:fixed;inset:0;z-index:9100;background:#000;';
+  o.innerHTML=
+    '<div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">'+
+    '<button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span></div>'+
+    '<div id="payroll-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+
+    '<div id="payroll-view-content" style="padding:0 0 80px;"></div></div>';
+  document.getElementById('payroll-view-body').scrollTop=0;
   renderPayrollView();
 }
 function payrollViewBack(){
@@ -15729,9 +15747,6 @@ function renderPayrollView(){
   var el=document.getElementById('payroll-view-content');
   if(!el)return;
   el.innerHTML=
-  '<div style="display:flex;align-items:center;padding:env(safe-area-inset-top,0) 16px 0;gap:14px;background:#000;border-bottom:1px solid #1a1a1a;position:sticky;top:0;z-index:10;">'+
-  '<button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>'+
-  '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span></div>'+
   '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">'+
   '<button onclick="_prNav(-1)" style="background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:18px;width:40px;height:40px;cursor:pointer;">&#9664;</button>'+
   '<div id="pr-period-label" style="font-size:15px;font-weight:700;color:#ccc;text-align:center;line-height:1.4;font-family:\'Barlow Condensed\',sans-serif;"></div>'+
