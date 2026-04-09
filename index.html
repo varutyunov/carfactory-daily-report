@@ -11729,7 +11729,7 @@ function depositGoPreview() {
   if(!fname || !lname) { alert('Please enter the customer\'s first and last name.'); return; }
   if(!amount) { alert('Please enter the deposit amount.'); return; }
   if(!date) { alert('Please enter the date.'); return; }
-  if(!balance) { alert('Please enter the remaining balance.'); return; }
+  if(balance === '') { alert('Please enter the remaining balance (enter $0 if paid in full).'); return; }
   if(!withdraw) { alert('Please enter the vehicle held until date.'); return; }
 
   function fmtDate(d){if(!d)return'';var p=d.split('-');return p.length===3?p[1]+'/'+p[2]+'/'+p[0]:d;}
