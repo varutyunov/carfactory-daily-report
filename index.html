@@ -15431,11 +15431,11 @@ function payrollOpen(who){
   _payrollExtraSign=1;
   // Hide original cash payouts sheet
   document.getElementById('cash-payouts-sheet').style.display='none';
-  // Show payroll as its own full-screen overlay — reliable iOS scroll
-  var ov=document.getElementById('payroll-overlay');
+  // Show payroll calc as its own full-screen overlay — reliable iOS scroll
+  var ov=document.getElementById('payroll-calc-overlay');
   if(!ov){
     ov=document.createElement('div');
-    ov.id='payroll-overlay';
+    ov.id='payroll-calc-overlay';
     ov.style.cssText='position:fixed;inset:0;z-index:9500;background:#0d0d0d;overflow-y:scroll;-webkit-overflow-scrolling:touch;';
     ov.innerHTML='<div style="padding:16px 16px 100px;"><div id="cp-payroll-content"></div></div>';
     document.body.appendChild(ov);
@@ -15448,7 +15448,7 @@ function payrollOpen(who){
 }
 
 function payrollBack(){
-  var ov=document.getElementById('payroll-overlay');
+  var ov=document.getElementById('payroll-calc-overlay');
   if(ov) ov.style.display='none';
   // Re-show cash payouts sheet
   document.getElementById('cash-payouts-sheet').style.display='block';
