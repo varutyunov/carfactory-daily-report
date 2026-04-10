@@ -11391,6 +11391,12 @@ async function openFormDetail(id) {
   }catch(e){}
   if(!dep) return;
 
+  // Sign esign signature URLs for private bucket
+  if(dep.esign_signature_url) dep.esign_signature_url = await sbSignPhotoUrl(dep.esign_signature_url);
+  if(dep.seller_signature_url) dep.seller_signature_url = await sbSignPhotoUrl(dep.seller_signature_url);
+  if(dep.id_photo_url) dep.id_photo_url = await sbSignPhotoUrl(dep.id_photo_url);
+  if(dep.signed_form_url) dep.signed_form_url = await sbSignPhotoUrl(dep.signed_form_url);
+
   document.getElementById('forms-header-title').textContent = dep.customer_name || 'Detail';
 
   var isFinance = dep.deal_type === 'finance';
@@ -11779,7 +11785,10 @@ async function _submitCounterSign(tableName, recordId) {
   }
 }
 
-function _showCompletedReview(record, tableName) {
+async function _showCompletedReview(record, tableName) {
+  // Sign signature URLs
+  if(record.esign_signature_url) record.esign_signature_url = await sbSignPhotoUrl(_resolveEsignSigUrl(record.esign_signature_url));
+  if(record.seller_signature_url) record.seller_signature_url = await sbSignPhotoUrl(record.seller_signature_url);
   var typeLabels = { deposits: 'Deposit Agreement', invoices: 'Mechanic Invoice', void_releases: 'Void / Release' };
   var typeLabel = typeLabels[tableName] || 'Form';
 
@@ -11871,8 +11880,8 @@ async function _viewSignedForm(formType, recordId) {
     var record = null;
     try { var recs = await sbGet(tableName, 'id=eq.' + recordId); if(recs&&recs.length) record=recs[0]; } catch(e){}
 
-    var custSigUrl = record ? _resolveEsignSigUrl(record.esign_signature_url) : '';
-    var sellerSigUrl = record ? (record.seller_signature_url || '') : '';
+    var custSigUrl = record && record.esign_signature_url ? await sbSignPhotoUrl(_resolveEsignSigUrl(record.esign_signature_url)) : '';
+    var sellerSigUrl = record && record.seller_signature_url ? await sbSignPhotoUrl(record.seller_signature_url) : '';
 
     // Build a full-screen overlay with the form
     var overlay = document.getElementById('signed-form-viewer');
@@ -12009,6 +12018,12 @@ async function openInvoiceDetail(id) {
     }
   } catch(e) {}
   if (!inv) return;
+
+  // Sign esign signature URLs for private bucket
+  if(inv.esign_signature_url) inv.esign_signature_url = await sbSignPhotoUrl(inv.esign_signature_url);
+  if(inv.seller_signature_url) inv.seller_signature_url = await sbSignPhotoUrl(inv.seller_signature_url);
+  if(inv.id_photo_url) inv.id_photo_url = await sbSignPhotoUrl(inv.id_photo_url);
+  if(inv.signed_form_url) inv.signed_form_url = await sbSignPhotoUrl(inv.signed_form_url);
 
   document.getElementById('forms-header-title').textContent = inv.customer_name || 'Invoice';
 
@@ -12184,6 +12199,12 @@ async function openVRDetail(id) {
     }
   } catch(e) {}
   if (!vr) return;
+
+  // Sign esign signature URLs for private bucket
+  if(vr.esign_signature_url) vr.esign_signature_url = await sbSignPhotoUrl(vr.esign_signature_url);
+  if(vr.seller_signature_url) vr.seller_signature_url = await sbSignPhotoUrl(vr.seller_signature_url);
+  if(vr.id_photo_url) vr.id_photo_url = await sbSignPhotoUrl(vr.id_photo_url);
+  if(vr.signed_form_url) vr.signed_form_url = await sbSignPhotoUrl(vr.signed_form_url);
 
   document.getElementById('forms-header-title').textContent = vr.customer_name || 'Void/Release';
 
