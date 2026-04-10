@@ -1317,7 +1317,7 @@ body.light .cal-fab{background:#4488ff !important;}
         <div id="pay-card-fee-section" style="display:none;margin-bottom:12px;">
           <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:14px;">
             <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <input type="checkbox" id="pay-card-fee-toggle" onchange="payCalcCardFee()" style="width:18px;height:18px;accent-color:#60a5fa;"/>
+              <input type="checkbox" id="pay-card-fee-toggle" onchange="payCalcCardFee(true)" style="width:18px;height:18px;accent-color:#60a5fa;"/>
               <span style="font-size:14px;color:#fff;font-weight:600;">4% processing fee added?</span>
             </label>
             <div id="pay-fee-breakdown" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #1e1e1e;">
@@ -12918,6 +12918,7 @@ function openPayScanForm(){
   document.getElementById('pay-card-fee-toggle').checked=false;
   document.getElementById('pay-fee-breakdown').style.display='none';
   document.getElementById('pay-card-fee-section').style.display='none';
+  _payOriginalAmt=0;_payCardFeeAdded=false;
 }
 
 function payEditPayment(id){
@@ -12941,7 +12942,8 @@ function payEditPayment(id){
   document.getElementById('pay-scan-name').value=p.customer_name||'';
   document.getElementById('pay-scan-date').value=p.payment_date||'';
   document.getElementById('pay-scan-time').value=p.payment_time||'';
-  document.getElementById('pay-scan-amount').value=p.amount||'';
+  // If card fee was added, load the original (base) amount so fee recalculates correctly
+  document.getElementById('pay-scan-amount').value=(p.card_fee_added&&p.original_amount)?p.original_amount:(p.amount||'');
   document.getElementById('pay-scan-year').value=p.vehicle_year||'';
   document.getElementById('pay-scan-make').value=p.vehicle_make||'';
   document.getElementById('pay-scan-model').value=p.vehicle_model||'';
@@ -12949,11 +12951,12 @@ function payEditPayment(id){
   document.getElementById('pay-scan-color').value=p.vehicle_color||'';
   var noteEl=document.getElementById('pay-scan-note');if(noteEl)noteEl.value=p.notes||'';
   document.getElementById('pay-scan-raw').textContent=p.raw_ocr_text||'';
+  _payOriginalAmt=0;
   payMethodSelect(_payMethod);
   var feeToggle=document.getElementById('pay-card-fee-toggle');
   if(feeToggle)feeToggle.checked=_payCardFeeAdded;
   document.getElementById('pay-card-fee-section').style.display=_payMethod==='card'?'block':'none';
-  if(_payCardFeeAdded) payCalcCardFee();
+  if(_payCardFeeAdded) payCalcCardFee(true);
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn) saveBtn.textContent='Save Changes';
   history.pushState({payEdit:true},'');
@@ -13059,17 +13062,29 @@ function payMethodSelect(method){
   }
 }
 
-function payCalcCardFee(){
+var _payOriginalAmt=0;
+function payCalcCardFee(fromToggle){
   var toggle=document.getElementById('pay-card-fee-toggle');
-  _payCardFeeAdded=toggle.checked;
+  var amtEl=document.getElementById('pay-scan-amount');
   var breakdown=document.getElementById('pay-fee-breakdown');
-  if(!_payCardFeeAdded){breakdown.style.display='none';return;}
+  _payCardFeeAdded=toggle.checked;
+  if(!_payCardFeeAdded){
+    // Restore original amount if we had bumped it
+    if(_payOriginalAmt>0){amtEl.value='$'+_payOriginalAmt.toFixed(2);_payOriginalAmt=0;}
+    breakdown.style.display='none';return;
+  }
+  // When called from amount input while checkbox is on, the user is typing a new base amount
+  // When called from the toggle checkbox, the current field value IS the base amount
+  var amtStr=(amtEl.value||'').replace(/[^0-9.]/g,'');
+  var base=parseFloat(amtStr)||0;
+  if(base<=0){breakdown.style.display='none';return;}
+  _payOriginalAmt=base;
+  var fee=Math.round(base*4)/100;
+  var total=base+fee;
+  // Only update the amount field when the toggle is clicked, not on every keystroke
+  if(fromToggle) amtEl.value='$'+total.toFixed(2);
   breakdown.style.display='block';
-  var amtStr=(document.getElementById('pay-scan-amount').value||'').replace(/[^0-9.]/g,'');
-  var total=parseFloat(amtStr)||0;
-  var original=total/1.04;
-  var fee=total-original;
-  document.getElementById('pay-fee-original').textContent='$'+original.toFixed(2);
+  document.getElementById('pay-fee-original').textContent='$'+base.toFixed(2);
   document.getElementById('pay-fee-amount').textContent='$'+fee.toFixed(2);
   document.getElementById('pay-fee-total').textContent='$'+total.toFixed(2);
 }
@@ -13777,8 +13792,13 @@ function payViewDetail(id){
   html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">Logged by</span><div style="font-size:14px;color:#fff;">'+((p.logged_by||''))+'</div></div>';
   html+='</div>';
   if(p.card_fee_added&&p.original_amount){
-    html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e1e1e;font-size:13px;color:#888;">';
-    html+='Original: '+p.original_amount+' + 4% fee = '+p.amount;
+    var _origNum=parseFloat((p.original_amount||'').replace(/[^0-9.]/g,''))||0;
+    var _totalNum=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+    var _feeNum=Math.round((_totalNum-_origNum)*100)/100;
+    html+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e1e1e;font-size:13px;">';
+    html+='<div style="display:flex;justify-content:space-between;color:#888;margin-bottom:2px;"><span>Payment</span><span style="color:#fff;">'+p.original_amount+'</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;color:#888;margin-bottom:2px;"><span>4% card fee</span><span style="color:#fbbf24;">+$'+_feeNum.toFixed(2)+'</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;color:#888;font-weight:700;"><span>Total charged</span><span style="color:#4ade80;">'+p.amount+'</span></div>';
     html+='</div>';
   }
   if(p.notes){
@@ -14149,12 +14169,15 @@ async function payScanSave(){
     }
   }
 
-  // Card fee calculation
+  // Card fee calculation — always compute total from base amount
   var originalAmt='';
   if(_payMethod==='card'&&_payCardFeeAdded){
-    var total=parseFloat(amount.replace(/[^0-9.]/g,''))||0;
-    var orig=total/1.04;
-    originalAmt='$'+orig.toFixed(2);
+    var baseNum=_payOriginalAmt>0?_payOriginalAmt:(parseFloat(amount.replace(/[^0-9.]/g,''))||0);
+    if(baseNum>0){
+      var feeNum=Math.round(baseNum*4)/100;
+      originalAmt='$'+baseNum.toFixed(2);
+      amount='$'+(baseNum+feeNum).toFixed(2);
+    }
   }
 
   var weekStart=_payWeekKey(new Date(date+'T12:00:00'));
