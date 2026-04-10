@@ -10655,6 +10655,7 @@ function _txInit() {
       <!-- Action buttons -->
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Form</button>
+        <button onclick="esignOpen('deposit')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
 
         <!-- AGGRESSIVE signed form prompt -->
         <div id="dep-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
@@ -10864,6 +10865,7 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="invPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Invoice</button>
+        <button onclick="esignOpen('invoice')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
 
         <!-- AGGRESSIVE signed form prompt -->
         <div id="inv-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
@@ -11054,6 +11056,7 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="vrPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Forms</button>
+        <button onclick="esignOpen('void_release')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
 
         <!-- AGGRESSIVE signed form prompt -->
         <div id="vr-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
@@ -11081,6 +11084,86 @@ function _txInit() {
 
   </div>
 </div><!-- /vr-overlay -->
+
+<!-- E-SIGN SEND OVERLAY -->
+<div id="esign-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="esignClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">SEND FOR E-SIGN</span>
+  </div>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:20px 16px 100px;max-width:500px;margin:0 auto;">
+
+      <!-- Status: Preparing -->
+      <div id="esign-status-preparing" style="text-align:center;padding:30px 0;">
+        <div class="dep-spinner" style="margin:0 auto 12px;"></div>
+        <div style="font-size:15px;color:#888;">Preparing document for signing...</div>
+      </div>
+
+      <!-- Status: Ready to send -->
+      <div id="esign-status-ready" style="display:none;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:48px;margin-bottom:8px;">✍️</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;" id="esign-doc-label">Deposit Agreement</div>
+          <div style="font-size:14px;color:#888;margin-top:4px;" id="esign-customer-label">Customer Name</div>
+        </div>
+
+        <!-- Link section -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Signing Link</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-link" readonly style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:13px;outline:none;"/>
+            <button onclick="esignCopyLink()" id="esign-copy-btn" style="padding:12px 18px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Copy</button>
+          </div>
+        </div>
+
+        <!-- Send via SMS -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Send via Text Message</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-phone" type="tel" placeholder="(555) 123-4567" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;"/>
+            <button onclick="esignSendSMS()" id="esign-sms-btn" style="padding:12px 18px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send</button>
+          </div>
+          <div id="esign-sms-status" style="font-size:12px;color:#888;margin-top:6px;display:none;"></div>
+        </div>
+
+        <!-- Send via Email -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Send via Email</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-email" type="email" placeholder="customer@email.com" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;"/>
+            <button onclick="esignSendEmail()" id="esign-email-btn" style="padding:12px 18px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send</button>
+          </div>
+          <div id="esign-email-status" style="font-size:12px;color:#888;margin-top:6px;display:none;"></div>
+        </div>
+
+        <!-- Share button (mobile) -->
+        <button onclick="esignShare()" id="esign-share-btn" style="width:100%;padding:15px;background:#111;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">📤 Share Link</button>
+
+        <!-- Info -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">How It Works</div>
+          <div style="font-size:13px;color:#888;line-height:1.6;">
+            1. Customer opens the link on their phone<br>
+            2. They review the document<br>
+            3. They draw their signature<br>
+            4. IP address, timestamp & device are recorded<br>
+            5. You'll see the signed status in Forms
+          </div>
+          <div style="font-size:11px;color:#444;margin-top:10px;">Link expires in 72 hours. Legally binding under ESIGN Act & UETA.</div>
+        </div>
+      </div>
+
+      <!-- Status: Already sent -->
+      <div id="esign-status-sent" style="display:none;text-align:center;padding:30px 0;">
+        <div style="font-size:48px;margin-bottom:8px;">✅</div>
+        <div style="font-size:18px;font-weight:700;color:#4ade80;margin-bottom:4px;">E-Sign Request Sent</div>
+        <div style="font-size:14px;color:#888;">The customer will receive the signing link shortly.</div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /esign-overlay -->
 
 <style>
 @media print {
@@ -11276,6 +11359,8 @@ function renderForms() {
     html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#555;">';
     html += '<span>' + dateStr + '</span>';
     if(hasID || hasSigned) html += '<span>' + (hasID ? '🪪' : '') + (hasSigned ? ' 📄' : '') + '</span>';
+    if(first.esign_status==='signed') html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span>';
+    else if(first.esign_status==='pending'||first.esign_status==='sent') html += '<span style="background:#422006;color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGN PENDING</span>';
     html += '</div>';
     html += '</div>';
     html += '</div>';
@@ -11348,6 +11433,19 @@ function openFormDetail(id) {
       html += '<img src="' + dep.signed_form_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
       html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Signed Form</div>';
       html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // E-Sign status
+  if(dep.esign_status) {
+    html += '<div style="margin-top:16px;background:#111;border-radius:14px;padding:16px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">E-Signature</div>';
+    if(dep.esign_status==='signed') {
+      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">✅</span><span style="color:#4ade80;font-weight:700;">Electronically Signed</span></div>';
+      if(dep.esign_signature_url) html += '<img src="https://hphlouzqlimainczuqyc.supabase.co/storage/v1/object/public/car-photos/' + dep.esign_signature_url + '" style="max-width:180px;margin-top:10px;border:1px solid #333;border-radius:8px;background:#fff;padding:8px;"/>';
+    } else {
+      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">⏳</span><span style="color:#f59e0b;font-weight:600;">Pending — Awaiting signature</span></div>';
     }
     html += '</div>';
   }
@@ -12672,6 +12770,229 @@ async function vrSave(){
     console.error('Void/Release save error:',e);
     if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
     if(btn){btn.textContent='Save Record';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// E-SIGN LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _esignFormType = '';
+var _esignToken = '';
+var _esignRecordId = null;
+
+function esignOpen(formType) {
+  _esignFormType = formType;
+  _esignToken = '';
+  _esignRecordId = null;
+  document.getElementById('esign-overlay').style.display = 'flex';
+  document.getElementById('esign-status-preparing').style.display = '';
+  document.getElementById('esign-status-ready').style.display = 'none';
+  document.getElementById('esign-status-sent').style.display = 'none';
+  // Reset inputs
+  document.getElementById('esign-phone').value = '';
+  document.getElementById('esign-email').value = '';
+  document.getElementById('esign-sms-status').style.display = 'none';
+  document.getElementById('esign-email-status').style.display = 'none';
+  // Hide share button if Web Share API not available
+  if (!navigator.share) document.getElementById('esign-share-btn').style.display = 'none';
+  else document.getElementById('esign-share-btn').style.display = '';
+  // Create the e-sign request
+  esignCreateRequest(formType);
+}
+
+function esignClose() {
+  document.getElementById('esign-overlay').style.display = 'none';
+}
+
+async function esignCreateRequest(formType) {
+  try {
+    // Generate unique token
+    var token = crypto.randomUUID();
+    _esignToken = token;
+
+    // Get form HTML and customer name based on form type
+    var formHtml = '';
+    var customerName = '';
+    var formRecordId = null;
+
+    if (formType === 'deposit') {
+      formHtml = document.getElementById('dep-print-form').outerHTML;
+      var fn = (document.getElementById('dep-fname') || {}).value || '';
+      var ln = (document.getElementById('dep-lname') || {}).value || '';
+      customerName = (fn + ' ' + ln).trim();
+    } else if (formType === 'invoice') {
+      formHtml = document.getElementById('inv-print-form').outerHTML;
+      var cfn = (document.getElementById('inv-fname') || {}).value || '';
+      var cln = (document.getElementById('inv-lname') || {}).value || '';
+      customerName = (cfn + ' ' + cln).trim();
+    } else if (formType === 'void_release') {
+      // Combine both void and release forms
+      var voidHtml = document.getElementById('vr-void-form').outerHTML;
+      var releaseHtml = document.getElementById('vr-release-form').outerHTML;
+      formHtml = voidHtml + '<div style="margin:20px 0;"></div>' + releaseHtml;
+      var vrfn = (document.getElementById('vr-fname') || {}).value || '';
+      var vrln = (document.getElementById('vr-lname') || {}).value || '';
+      customerName = (vrfn + ' ' + vrln).trim();
+    }
+
+    // Create the esign_request record in Supabase
+    var record = {
+      token: token,
+      form_type: formType,
+      form_html: formHtml,
+      customer_name: customerName || 'Customer',
+      status: 'pending',
+      created_by: me ? me.name : 'unknown',
+      location: (me && me.location) ? me.location : 'DeBary'
+    };
+
+    var result = await sbPost('esign_requests', record);
+    if (result && result.length) _esignRecordId = result[0].id;
+
+    // Build signing URL
+    var signingUrl = 'https://carfactory.work/sign.html?token=' + token;
+
+    // Update UI
+    document.getElementById('esign-status-preparing').style.display = 'none';
+    document.getElementById('esign-status-ready').style.display = '';
+    document.getElementById('esign-link').value = signingUrl;
+
+    var typeLabels = { deposit: 'Deposit Agreement', invoice: 'Mechanic Invoice', void_release: 'Void / Release' };
+    document.getElementById('esign-doc-label').textContent = typeLabels[formType] || formType;
+    document.getElementById('esign-customer-label').textContent = customerName || 'Customer';
+
+  } catch (e) {
+    console.error('E-sign create error:', e);
+    document.getElementById('esign-status-preparing').innerHTML = '<div style="color:#ef4444;font-size:15px;">Error: ' + (e.message || e) + '</div>';
+  }
+}
+
+function esignCopyLink() {
+  var input = document.getElementById('esign-link');
+  navigator.clipboard.writeText(input.value).then(function() {
+    var btn = document.getElementById('esign-copy-btn');
+    btn.textContent = 'Copied!';
+    btn.style.background = '#22c55e';
+    setTimeout(function() { btn.textContent = 'Copy'; btn.style.background = '#1d4ed8'; }, 2000);
+  }).catch(function() {
+    // Fallback
+    input.select();
+    document.execCommand('copy');
+    var btn = document.getElementById('esign-copy-btn');
+    btn.textContent = 'Copied!';
+    btn.style.background = '#22c55e';
+    setTimeout(function() { btn.textContent = 'Copy'; btn.style.background = '#1d4ed8'; }, 2000);
+  });
+}
+
+async function esignSendSMS() {
+  var phone = document.getElementById('esign-phone').value.replace(/[^0-9]/g, '');
+  if (phone.length < 10) { alert('Please enter a valid phone number.'); return; }
+  if (phone.length === 10) phone = '1' + phone;
+
+  var btn = document.getElementById('esign-sms-btn');
+  var status = document.getElementById('esign-sms-status');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  status.style.display = 'block';
+  status.style.color = '#888';
+  status.textContent = 'Sending text message...';
+
+  try {
+    var signingUrl = document.getElementById('esign-link').value;
+    var customerName = document.getElementById('esign-customer-label').textContent;
+    var resp = await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo' },
+      body: JSON.stringify({
+        method: 'sms',
+        to: '+' + phone,
+        signing_url: signingUrl,
+        customer_name: customerName,
+        token: _esignToken
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'SMS send failed');
+
+    // Update esign record with contact info
+    if (_esignRecordId) {
+      await sbPatch('esign_requests', _esignRecordId, { customer_contact: '+' + phone, delivery_method: 'sms' });
+    }
+
+    status.style.color = '#4ade80';
+    status.textContent = 'Text message sent!';
+    btn.textContent = 'Sent!';
+    btn.style.background = '#166534';
+  } catch (e) {
+    console.error('SMS send error:', e);
+    status.style.color = '#ef4444';
+    status.textContent = 'Failed: ' + (e.message || e) + '. Use Copy Link instead.';
+    btn.disabled = false;
+    btn.textContent = 'Send';
+  }
+}
+
+async function esignSendEmail() {
+  var email = document.getElementById('esign-email').value.trim();
+  if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return; }
+
+  var btn = document.getElementById('esign-email-btn');
+  var status = document.getElementById('esign-email-status');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  status.style.display = 'block';
+  status.style.color = '#888';
+  status.textContent = 'Sending email...';
+
+  try {
+    var signingUrl = document.getElementById('esign-link').value;
+    var customerName = document.getElementById('esign-customer-label').textContent;
+    var docLabel = document.getElementById('esign-doc-label').textContent;
+    var resp = await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo' },
+      body: JSON.stringify({
+        method: 'email',
+        to: email,
+        signing_url: signingUrl,
+        customer_name: customerName,
+        doc_type: docLabel,
+        token: _esignToken
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Email send failed');
+
+    // Update esign record with contact info
+    if (_esignRecordId) {
+      await sbPatch('esign_requests', _esignRecordId, { customer_contact: email, delivery_method: 'email' });
+    }
+
+    status.style.color = '#4ade80';
+    status.textContent = 'Email sent!';
+    btn.textContent = 'Sent!';
+    btn.style.background = '#166534';
+  } catch (e) {
+    console.error('Email send error:', e);
+    status.style.color = '#ef4444';
+    status.textContent = 'Failed: ' + (e.message || e) + '. Use Copy Link instead.';
+    btn.disabled = false;
+    btn.textContent = 'Send';
+  }
+}
+
+function esignShare() {
+  var signingUrl = document.getElementById('esign-link').value;
+  var customerName = document.getElementById('esign-customer-label').textContent;
+  var docLabel = document.getElementById('esign-doc-label').textContent;
+  if (navigator.share) {
+    navigator.share({
+      title: 'Car Factory — Sign ' + docLabel,
+      text: 'Hi ' + customerName + ', please sign your ' + docLabel + ' from Car Factory:',
+      url: signingUrl
+    }).catch(function() {});
   }
 }
 

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Car Factory — E-Sign</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#111;min-height:100vh;display:flex;flex-direction:column;}
+.header{background:#000;padding:16px 20px;display:flex;align-items:center;gap:12px;}
+.header img{height:28px;}
+.header span{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:2px;text-transform:uppercase;}
+.container{flex:1;padding:16px;max-width:600px;margin:0 auto;width:100%;}
+.status-box{padding:20px;border-radius:14px;text-align:center;margin-bottom:16px;}
+.status-loading{background:#fff;border:1px solid #e5e5e5;}
+.status-error{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;}
+.status-success{background:#f0fdf4;border:1px solid #86efac;color:#166534;}
+.form-preview{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:20px;margin-bottom:16px;overflow-x:auto;}
+.form-preview *{color:#111 !important;}
+.form-preview table{width:100%;border-collapse:collapse;font-size:13px;}
+.form-preview td,.form-preview th{border:1px solid #ccc;padding:6px 8px;}
+.sign-section{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:20px;margin-bottom:16px;}
+.sign-section h3{font-size:16px;font-weight:700;margin-bottom:4px;}
+.sign-section p{font-size:13px;color:#666;margin-bottom:12px;}
+.agree-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;padding:12px;background:#f8f8f8;border-radius:10px;}
+.agree-row input[type="checkbox"]{width:20px;height:20px;margin-top:2px;flex-shrink:0;accent-color:#1d4ed8;}
+.agree-row label{font-size:13px;color:#333;line-height:1.4;}
+.canvas-wrap{position:relative;border:2px solid #ccc;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:8px;touch-action:none;}
+.canvas-wrap canvas{display:block;width:100%;height:200px;}
+.canvas-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;color:#bbb;font-size:15px;font-weight:500;}
+.btn-row{display:flex;gap:10px;margin-bottom:12px;}
+.btn-clear{flex:1;padding:12px;background:#f3f4f6;color:#666;border:1px solid #d1d5db;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;}
+.btn-submit{flex:2;padding:14px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;}
+.btn-submit:disabled{background:#93c5fd;cursor:not-allowed;}
+.legal-note{font-size:11px;color:#999;text-align:center;line-height:1.5;margin-top:12px;}
+.cert-box{background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:20px;margin-bottom:16px;}
+.cert-box h3{color:#166534;font-size:16px;margin-bottom:12px;}
+.cert-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #dcfce7;}
+.cert-row span:first-child{color:#666;font-weight:500;}
+.cert-row span:last-child{color:#111;font-weight:600;text-align:right;max-width:60%;word-break:break-all;}
+.sig-preview{max-width:200px;border:1px solid #86efac;border-radius:8px;margin-top:12px;}
+.spinner{width:32px;height:32px;border:3px solid #e5e5e5;border-top-color:#1d4ed8;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="header">
+  <span style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:3px;">CAR FACTORY</span>
+</div>
+
+<!-- LOADING STATE -->
+<div class="container" id="loading-view">
+  <div class="status-box status-loading">
+    <div class="spinner"></div>
+    <div style="font-size:15px;font-weight:600;">Loading document...</div>
+  </div>
+</div>
+
+<!-- ERROR STATE -->
+<div class="container" id="error-view" style="display:none;">
+  <div class="status-box status-error">
+    <div style="font-size:36px;margin-bottom:8px;">⚠️</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;" id="error-title">Link Expired</div>
+    <div style="font-size:13px;" id="error-msg">This signing link is no longer valid. Please contact the dealership for a new link.</div>
+  </div>
+</div>
+
+<!-- SIGNING STATE -->
+<div class="container" id="sign-view" style="display:none;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:600;" id="sign-form-type">DEPOSIT AGREEMENT</div>
+    <div style="font-size:20px;font-weight:700;margin-top:4px;" id="sign-customer-name">Customer Name</div>
+  </div>
+
+  <div class="form-preview" id="sign-form-content">
+    <!-- Form HTML injected here -->
+  </div>
+
+  <div class="sign-section">
+    <h3>Your Signature</h3>
+    <p>Draw your signature below using your finger or stylus.</p>
+
+    <div class="agree-row">
+      <input type="checkbox" id="agree-check" onchange="updateSubmitBtn()">
+      <label for="agree-check">I have reviewed the document above and agree to sign it electronically. I understand this electronic signature is legally binding.</label>
+    </div>
+
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="sig-canvas"></canvas>
+      <div class="canvas-placeholder" id="canvas-placeholder">Sign here</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-clear" onclick="clearSig()">Clear</button>
+      <button class="btn-submit" id="submit-btn" disabled onclick="submitSignature()">Submit Signature</button>
+    </div>
+
+    <div class="legal-note">
+      By signing, you consent to conduct this transaction electronically under the ESIGN Act and UETA.
+      Your IP address, timestamp, and device information will be recorded for verification.
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS STATE -->
+<div class="container" id="success-view" style="display:none;">
+  <div class="status-box status-success">
+    <div style="font-size:48px;margin-bottom:8px;">✅</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px;">Document Signed</div>
+    <div style="font-size:13px;color:#166534;">Your signature has been recorded successfully.</div>
+  </div>
+
+  <div class="cert-box" id="cert-box">
+    <h3>🔒 Authorization Certificate</h3>
+    <div id="cert-details"></div>
+    <img id="cert-sig-img" class="sig-preview" style="display:none;">
+  </div>
+
+  <div style="text-align:center;font-size:13px;color:#888;padding:20px 0;">
+    You may close this page. A copy has been sent to the dealership.
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
+<script>
+const SB_URL='https://hphlouzqlimainczuqyc.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
+const SB_HEADERS={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+
+var _token=null;
+var _esignData=null;
+var _sigPad=null;
+var _signerIP='unknown';
+
+// ── Init ──
+(async function(){
+  var params=new URLSearchParams(window.location.search);
+  _token=params.get('token');
+  if(!_token){showError('Invalid Link','No signing token found in the URL.');return;}
+
+  // Fetch IP in background
+  fetchIP();
+
+  // Fetch the e-sign request
+  try{
+    var resp=await fetch(SB_URL+'/rest/v1/esign_requests?token=eq.'+_token+'&select=*',{headers:SB_HEADERS});
+    var rows=await resp.json();
+    if(!rows||!rows.length){showError('Link Not Found','This signing link does not exist or has been removed.');return;}
+    var req=rows[0];
+    if(req.status==='signed'){showError('Already Signed','This document has already been signed.');return;}
+    if(req.status==='expired'||new Date(req.expires_at)<new Date()){showError('Link Expired','This signing link has expired. Please contact the dealership for a new link.');return;}
+    _esignData=req;
+    showSigningView(req);
+  }catch(e){
+    showError('Connection Error','Could not load the document. Please check your internet connection and try again.');
+  }
+})();
+
+async function fetchIP(){
+  try{
+    var r=await fetch('https://api.ipify.org?format=json');
+    var d=await r.json();
+    _signerIP=d.ip||'unknown';
+  }catch(e){_signerIP='unavailable';}
+}
+
+function showError(title,msg){
+  document.getElementById('loading-view').style.display='none';
+  document.getElementById('error-view').style.display='';
+  document.getElementById('error-title').textContent=title;
+  document.getElementById('error-msg').textContent=msg;
+}
+
+function showSigningView(req){
+  document.getElementById('loading-view').style.display='none';
+  document.getElementById('sign-view').style.display='';
+  // Set form type label
+  var typeLabels={'deposit':'DEPOSIT AGREEMENT','invoice':'MECHANIC INVOICE','void_release':'VOID / RELEASE'};
+  document.getElementById('sign-form-type').textContent=typeLabels[req.form_type]||req.form_type.toUpperCase();
+  document.getElementById('sign-customer-name').textContent=req.customer_name||'Customer';
+  // Inject form preview HTML
+  document.getElementById('sign-form-content').innerHTML=req.form_html||'<p>Document preview unavailable</p>';
+  // Init signature pad
+  initSigPad();
+}
+
+function initSigPad(){
+  var canvas=document.getElementById('sig-canvas');
+  var wrap=document.getElementById('canvas-wrap');
+  // Size canvas to container
+  canvas.width=wrap.offsetWidth-4;
+  canvas.height=200;
+  _sigPad=new SignaturePad(canvas,{
+    minWidth:1,
+    maxWidth:3,
+    penColor:'#000',
+    backgroundColor:'rgba(255,255,255,0)'
+  });
+  _sigPad.addEventListener('beginStroke',function(){
+    document.getElementById('canvas-placeholder').style.display='none';
+    updateSubmitBtn();
+  });
+  _sigPad.addEventListener('endStroke',function(){
+    updateSubmitBtn();
+  });
+  // Handle resize
+  window.addEventListener('resize',function(){
+    var data=_sigPad.toData();
+    canvas.width=wrap.offsetWidth-4;
+    canvas.height=200;
+    _sigPad.clear();
+    _sigPad.fromData(data);
+  });
+}
+
+function clearSig(){
+  if(_sigPad)_sigPad.clear();
+  document.getElementById('canvas-placeholder').style.display='flex';
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn(){
+  var agreed=document.getElementById('agree-check').checked;
+  var hasSig=_sigPad&&!_sigPad.isEmpty();
+  var btn=document.getElementById('submit-btn');
+  btn.disabled=!(agreed&&hasSig);
+}
+
+async function submitSignature(){
+  var btn=document.getElementById('submit-btn');
+  btn.disabled=true;
+  btn.textContent='Submitting...';
+
+  try{
+    // Get signature as PNG data URL
+    var sigDataUrl=_sigPad.toDataURL('image/png');
+
+    // Upload signature image to Supabase Storage
+    var sigBlob=await(await fetch(sigDataUrl)).blob();
+    var sigPath='esign/'+_token+'.png';
+    var uploadResp=await fetch(SB_URL+'/storage/v1/object/car-photos/'+sigPath,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'image/png','x-upsert':'true'},
+      body:sigBlob
+    });
+    if(!uploadResp.ok) throw new Error('Signature upload failed');
+
+    // Build authorization certificate
+    var now=new Date();
+    var authCert={
+      signing_id:crypto.randomUUID(),
+      token:_token,
+      signed_at:now.toISOString(),
+      ip_address:_signerIP,
+      user_agent:navigator.userAgent,
+      form_type:_esignData.form_type,
+      form_record_id:_esignData.form_record_id,
+      customer_name:_esignData.customer_name,
+      platform:navigator.platform||'unknown'
+    };
+
+    // Update the esign_requests record
+    var sigUrl=sigPath;
+    var updateResp=await fetch(SB_URL+'/rest/v1/esign_requests?token=eq.'+_token,{
+      method:'PATCH',
+      headers:{...SB_HEADERS,'Prefer':'return=representation'},
+      body:JSON.stringify({
+        status:'signed',
+        signed_at:now.toISOString(),
+        signature_url:sigUrl,
+        signer_ip:_signerIP,
+        signer_user_agent:navigator.userAgent,
+        auth_certificate:authCert
+      })
+    });
+    if(!updateResp.ok) throw new Error('Failed to save signature');
+
+    // Also update the source form record with esign status
+    var table={deposit:'deposits',invoice:'invoices',void_release:'void_releases'}[_esignData.form_type];
+    if(table&&_esignData.form_record_id){
+      await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+_esignData.form_record_id,{
+        method:'PATCH',
+        headers:SB_HEADERS,
+        body:JSON.stringify({esign_status:'signed',esign_signature_url:sigUrl})
+      });
+    }
+
+    // Show success + certificate
+    showSuccess(authCert,sigDataUrl);
+
+  }catch(e){
+    btn.disabled=false;
+    btn.textContent='Submit Signature';
+    alert('Error: '+e.message+'. Please try again.');
+  }
+}
+
+function showSuccess(cert,sigDataUrl){
+  document.getElementById('sign-view').style.display='none';
+  document.getElementById('success-view').style.display='';
+
+  // Render certificate details
+  var details='';
+  var rows=[
+    ['Signing ID',cert.signing_id],
+    ['Document Type',{deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'}[cert.form_type]||cert.form_type],
+    ['Customer',cert.customer_name],
+    ['Signed At',new Date(cert.signed_at).toLocaleString()],
+    ['IP Address',cert.ip_address],
+    ['Device',cert.platform]
+  ];
+  rows.forEach(function(r){
+    details+='<div class="cert-row"><span>'+r[0]+'</span><span>'+r[1]+'</span></div>';
+  });
+  document.getElementById('cert-details').innerHTML=details;
+
+  // Show signature preview
+  var sigImg=document.getElementById('cert-sig-img');
+  sigImg.src=sigDataUrl;
+  sigImg.style.display='block';
+}
+</script>
+</body>
+</html>
