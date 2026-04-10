@@ -11501,10 +11501,21 @@ function depDeleteConfirm1(id) {
 
 async function depDeleteFinal(id) {
   var btn = document.getElementById('dep-delete-btn');
-  btn.textContent = 'Deleting...';
+  btn.textContent = 'Backing up & deleting...';
   btn.disabled = true;
   btn.style.opacity = '0.5';
   try {
+    // Backup before delete
+    var rows = await sbGet('deposits', 'id=eq.' + id);
+    if (rows && rows.length) {
+      var row = rows[0];
+      var backup = Object.assign({}, row);
+      backup.original_id = backup.id;
+      delete backup.id;
+      backup.deleted_at = new Date().toISOString();
+      backup.deleted_by = (typeof me !== 'undefined' && me && me.name) ? me.name : 'unknown';
+      await sbPost('deposits_backup', backup);
+    }
     await sbDelete('deposits', id);
     _formsData = _formsData.filter(function(d){ return d.id !== id; });
     _formsFiltered = _formsFiltered.filter(function(d){ return d.id !== id; });
@@ -12149,10 +12160,25 @@ function formDeleteConfirm(tableName, id) {
 
 async function formDeleteFinal(tableName, id) {
   var btn = document.getElementById('form-delete-btn');
-  btn.textContent = 'Deleting...';
+  btn.textContent = 'Backing up & deleting...';
   btn.disabled = true;
   btn.style.opacity = '0.5';
   try {
+    // Backup before delete (deposits)
+    if (tableName === 'deposits') {
+      try {
+        var rows = await sbGet('deposits', 'id=eq.' + id);
+        if (rows && rows.length) {
+          var backup = Object.assign({}, rows[0]);
+          backup.original_id = backup.id;
+          delete backup.id;
+          backup.deleted_at = new Date().toISOString();
+          backup.deleted_by = (typeof me !== 'undefined' && me && me.name) ? me.name : 'unknown';
+          await sbPost('deposits_backup', backup);
+        }
+      } catch(eb) { console.error('Backup error:', eb); }
+    }
+
     // Delete any linked esign_requests
     var formTypeMap = { deposits: 'deposit', invoices: 'invoice', void_releases: 'void_release' };
     try {
