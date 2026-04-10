@@ -15720,9 +15720,10 @@ function openPayrollView(){
     document.body.appendChild(o);
   }
   // Rebuild entire overlay every time — cache-proof
-  // Simple scrollable div, no fixed/flex header — iOS PWA breaks those
-  o.style.cssText='display:block;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9100;background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;';
-  o.innerHTML='<div id="payroll-view-content" style="padding:0 0 80px;"></div>';
+  o.style.cssText='display:block;position:fixed;inset:0;z-index:9100;background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  o.innerHTML='<div id="payroll-view-content" style="padding:0 0 80px;"></div>'+
+    '<div onclick="payrollViewBack()" style="position:fixed;bottom:24px;right:16px;z-index:9120;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.2);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">'+
+    '<span style="color:#fff;font-size:24px;font-weight:700;line-height:1;">✕</span></div>';
   o.scrollTop=0;
   renderPayrollView();
 }
@@ -15735,7 +15736,7 @@ function renderPayrollView(){
   var el=document.getElementById('payroll-view-content');
   if(!el)return;
   el.innerHTML=
-  '<div style="background:#000;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;padding:0 16px;gap:14px;height:54px;">'+
+  '<div style="background:#000;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;padding:0 16px;gap:14px;height:54px;margin-top:env(safe-area-inset-top,0px);">'+
   '<button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>'+
   '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">PAYROLL</span></div>'+
   '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">'+
