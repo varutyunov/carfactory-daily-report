@@ -22,6 +22,7 @@
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;overflow:hidden;}
@@ -10435,6 +10436,7 @@ function _txInit() {
 <style>
 .dep-spinner{width:20px;height:20px;border:3px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:dep-spin .8s linear infinite;flex-shrink:0;}
 @keyframes dep-spin{to{transform:rotate(360deg);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
 </style>
 <div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
 
@@ -11359,7 +11361,8 @@ function renderForms() {
     html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#555;">';
     html += '<span>' + dateStr + '</span>';
     if(hasID || hasSigned) html += '<span>' + (hasID ? '🪪' : '') + (hasSigned ? ' 📄' : '') + '</span>';
-    if(first.esign_status==='signed') html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span>';
+    if(first.esign_status==='completed'||(first.esign_status==='signed'&&first.seller_signature_url)) html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">COMPLETED</span>';
+    else if(first.esign_status==='signed') html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span>';
     else if(first.esign_status==='pending'||first.esign_status==='sent') html += '<span style="background:#422006;color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGN PENDING</span>';
     html += '</div>';
     html += '</div>';
@@ -11369,11 +11372,17 @@ function renderForms() {
   list.innerHTML = html;
 }
 
-function openFormDetail(id) {
+async function openFormDetail(id) {
   _formsViewingDetail = true;
   var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
+
+  // Live refresh from Supabase to get latest esign status
+  try{
+    var fresh = await sbGet('deposits','id=eq.'+id);
+    if(fresh && fresh.length) { dep = fresh[0]; var idx = _formsData.findIndex(function(d){return d.id===id;}); if(idx>=0) _formsData[idx]=dep; }
+  }catch(e){}
 
   document.getElementById('forms-header-title').textContent = dep.customer_name || 'Detail';
 
@@ -11437,25 +11446,8 @@ function openFormDetail(id) {
     html += '</div>';
   }
 
-  // E-Sign status
-  if(dep.esign_status) {
-    html += '<div style="margin-top:16px;background:#111;border-radius:14px;padding:16px;">';
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">E-Signature</div>';
-    if(dep.esign_status==='signed') {
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span style="font-size:20px;">✅</span><span style="color:#4ade80;font-weight:700;font-size:16px;">Electronically Signed</span></div>';
-      if(dep.esign_signature_url) {
-        var sigSrc = dep.esign_signature_url.startsWith('http') ? dep.esign_signature_url : 'https://hphlouzqlimainczuqyc.supabase.co/storage/v1/object/public/car-photos/' + dep.esign_signature_url;
-        html += '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;cursor:pointer;" onclick="window.open(\'' + sigSrc + '\',\'_blank\')">';
-        html += '<img src="' + sigSrc + '" style="max-width:200px;max-height:100px;"/>';
-        html += '<div style="font-size:11px;color:#888;margin-top:6px;">Tap to view full signature</div>';
-        html += '</div>';
-      }
-    } else {
-      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">⏳</span><span style="color:#f59e0b;font-weight:600;">Pending — Awaiting customer signature</span></div>';
-      html += '<div style="font-size:12px;color:#555;margin-top:8px;">The signing link has been sent. You\'ll be notified when the customer signs.</div>';
-    }
-    html += '</div>';
-  }
+  // E-Sign section
+  html += _buildEsignSection(dep, 'deposits');
 
   // Meta
   html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
@@ -11464,12 +11456,17 @@ function openFormDetail(id) {
   html += '</div>';
 
   // Delete button
-  html += '<button id="dep-delete-btn" onclick="depDeleteConfirm1(' + dep.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+  html += '<button id="form-delete-btn" onclick="formDeleteConfirm(\'deposits\',' + dep.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
 
   html += '</div>';
 
   var body = document.getElementById('forms-body');
   body.innerHTML = html;
+
+  // Init counter-sign pad if customer has signed but seller hasn't
+  if(dep.esign_status==='signed' && !dep.seller_signature_url) {
+    _initCounterSignPad();
+  }
 }
 
 function depDeleteConfirm1(id) {
@@ -11496,6 +11493,469 @@ async function depDeleteFinal(id) {
     btn.style.background = '#1a0505';
     btn.disabled = false;
     btn.style.opacity = '1';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SHARED E-SIGN & FORM DETAIL FUNCTIONS
+// ══════════════════════════════════════════════════════════════
+
+var _counterSignPad = null;
+var _counterSignTable = '';
+var _counterSignRecordId = null;
+
+function _buildEsignSection(record, tableName) {
+  var html = '';
+  if (!record.esign_status) return html;
+
+  html += '<div style="margin-top:16px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">E-Sign Status</div>';
+
+  if (record.esign_status === 'pending') {
+    html += '<div style="background:#1a1500;border:1px solid #422006;border-radius:14px;padding:16px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+    html += '<div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;animation:pulse 2s infinite;"></div>';
+    html += '<span style="font-size:15px;font-weight:700;color:#f59e0b;">Waiting for Customer Signature</span>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:#888;">The signing link has been sent. Tap refresh to check for updates.</div>';
+    var refreshFn = tableName === 'invoices' ? 'openInvoiceDetail' : tableName === 'void_releases' ? 'openVRDetail' : 'openFormDetail';
+    html += '<button onclick="' + refreshFn + '(' + record.id + ')" style="margin-top:10px;padding:10px 20px;background:#f59e0b;color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">🔄 Refresh Status</button>';
+    html += '</div>';
+
+  } else if (record.esign_status === 'signed' && !record.seller_signature_url) {
+    html += '<div style="background:#002211;border:1px solid #166534;border-radius:14px;padding:16px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+    html += '<span style="font-size:20px;">✅</span>';
+    html += '<span style="font-size:15px;font-weight:700;color:#4ade80;">Customer Has Signed</span>';
+    html += '</div>';
+    // Show customer signature
+    if (record.esign_signature_url) {
+      html += '<div style="background:#000;border-radius:10px;padding:8px;margin-bottom:12px;">';
+      html += '<img src="' + record.esign_signature_url + '" style="width:100%;max-height:80px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      html += '<div style="font-size:11px;color:#555;text-align:center;margin-top:4px;">Customer Signature</div>';
+      html += '</div>';
+    }
+    // Counter-sign section
+    html += '<div style="border-top:1px solid #1a3a2a;padding-top:12px;margin-top:8px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Your Counter-Signature Required</div>';
+    html += '<div style="font-size:12px;color:#888;margin-bottom:10px;">' + (tableName === 'void_releases' ? 'Sign as representative to complete this form.' : 'Sign as seller/dealer to complete this form.') + '</div>';
+    html += '<div style="background:#000;border-radius:10px;border:1px solid #333;height:140px;position:relative;">';
+    html += '<canvas id="counter-sign-canvas" style="display:block;width:100%;height:140px;touch-action:none;"></canvas>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:8px;">';
+    html += '<button onclick="_clearCounterSign()" style="flex:1;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#888;font-size:13px;cursor:pointer;">Clear</button>';
+    html += '<button id="counter-sign-submit" onclick="_submitCounterSign(\'' + tableName + '\',' + record.id + ')" style="flex:2;padding:10px;background:#1d4ed8;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Sign & Complete</button>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+
+  } else if (record.esign_status === 'completed' || (record.esign_status === 'signed' && record.seller_signature_url)) {
+    html += '<div style="background:#002211;border:1px solid #166534;border-radius:14px;padding:16px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+    html += '<span style="font-size:20px;">✅</span>';
+    html += '<span style="font-size:15px;font-weight:700;color:#4ade80;">Fully Signed</span>';
+    html += '</div>';
+    // Show both signatures
+    var sigGrid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+    if (record.esign_signature_url) {
+      sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
+      sigGrid += '<img src="' + record.esign_signature_url + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Customer</div>';
+      sigGrid += '</div>';
+    }
+    if (record.seller_signature_url) {
+      sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
+      sigGrid += '<img src="' + record.seller_signature_url + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Dealer/Rep</div>';
+      sigGrid += '</div>';
+    }
+    sigGrid += '</div>';
+    html += sigGrid;
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function _initCounterSignPad() {
+  setTimeout(function() {
+    var canvas = document.getElementById('counter-sign-canvas');
+    if (!canvas) return;
+    // Set actual pixel dimensions based on displayed size
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width || 300;
+    var h = rect.height || 140;
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    _counterSignPad = new SignaturePad(canvas, {
+      backgroundColor: 'rgba(0,0,0,0)',
+      penColor: '#fff',
+      minWidth: 1.5,
+      maxWidth: 3
+    });
+  }, 100);
+}
+
+function _clearCounterSign() {
+  if (_counterSignPad) _counterSignPad.clear();
+}
+
+async function _submitCounterSign(tableName, recordId) {
+  if (!_counterSignPad || _counterSignPad.isEmpty()) {
+    alert('Please sign above before submitting.');
+    return;
+  }
+
+  var btn = document.getElementById('counter-sign-submit');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  btn.style.opacity = '0.5';
+
+  try {
+    // Convert signature to blob
+    var dataUrl = _counterSignPad.toDataURL('image/png');
+    var resp = await fetch(dataUrl);
+    var blob = await resp.blob();
+
+    // Upload to Supabase storage
+    var ts = Date.now();
+    var path = tableName + '/' + ts + '_seller_sig.png';
+    await sbUpload(path, new File([blob], 'seller_sig.png', { type: 'image/png' }));
+    var sigUrl = SB_URL + '/storage/v1/object/public/car-photos/' + path;
+
+    // Update the record
+    await sbPatch(tableName, recordId, {
+      seller_signature_url: sigUrl,
+      esign_status: 'completed'
+    });
+
+    // Also update esign_requests record to completed
+    try {
+      var esReqs = await sbGet('esign_requests', 'form_type=eq.' + (tableName === 'deposits' ? 'deposit' : tableName === 'invoices' ? 'invoice' : 'void_release') + '&form_record_id=eq.' + recordId + '&order=created_at.desc&limit=1');
+      if (esReqs && esReqs.length) {
+        await sbPatch('esign_requests', esReqs[0].id, { status: 'completed' });
+      }
+    } catch(e2) {}
+
+    // Refresh the detail view
+    if (tableName === 'deposits') {
+      openFormDetail(recordId);
+    } else if (tableName === 'invoices') {
+      openInvoiceDetail(recordId);
+    } else if (tableName === 'void_releases') {
+      openVRDetail(recordId);
+    }
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Sign & Complete';
+    btn.style.opacity = '1';
+    alert('Error saving signature: ' + (e.message || e));
+  }
+}
+
+function formDeleteConfirm(tableName, id) {
+  var btn = document.getElementById('form-delete-btn');
+  btn.textContent = 'Tap again to permanently delete';
+  btn.style.background = '#ef4444';
+  btn.style.color = '#fff';
+  btn.style.borderColor = '#ef4444';
+  btn.onclick = function() { formDeleteFinal(tableName, id); };
+}
+
+async function formDeleteFinal(tableName, id) {
+  var btn = document.getElementById('form-delete-btn');
+  btn.textContent = 'Deleting...';
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  try {
+    // Delete any linked esign_requests
+    var formTypeMap = { deposits: 'deposit', invoices: 'invoice', void_releases: 'void_release' };
+    try {
+      var esReqs = await sbGet('esign_requests', 'form_type=eq.' + formTypeMap[tableName] + '&form_record_id=eq.' + id);
+      for (var i = 0; i < esReqs.length; i++) {
+        await sbDelete('esign_requests', esReqs[i].id);
+      }
+    } catch(e2) {}
+
+    await sbDelete(tableName, id);
+
+    // Remove from local data arrays
+    if (tableName === 'deposits') {
+      _formsData = _formsData.filter(function(d) { return d.id !== id; });
+      _formsFiltered = _formsFiltered.filter(function(d) { return d.id !== id; });
+    } else if (tableName === 'invoices') {
+      _invData_list = _invData_list.filter(function(d) { return d.id !== id; });
+      _invFiltered = _invFiltered.filter(function(d) { return d.id !== id; });
+    } else if (tableName === 'void_releases') {
+      _vrData_list = _vrData_list.filter(function(d) { return d.id !== id; });
+      _vrFiltered = _vrFiltered.filter(function(d) { return d.id !== id; });
+    }
+    formsBack();
+  } catch(e) {
+    btn.textContent = 'Error: ' + (e.message || e);
+    btn.style.background = '#1a0505';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+// ── INVOICE DETAIL VIEW ─────────────────────────────────────────
+
+async function openInvoiceDetail(id) {
+  _formsViewingDetail = true;
+  var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
+  var inv = _invData_list.find(function(d) { return d.id === id; });
+  if (!inv) return;
+
+  // Live refresh
+  try {
+    var fresh = await sbGet('invoices', 'id=eq.' + id);
+    if (fresh && fresh.length) { inv = fresh[0]; var idx = _invData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _invData_list[idx] = inv; }
+  } catch(e) {}
+
+  document.getElementById('forms-header-title').textContent = inv.customer_name || 'Invoice';
+
+  var total = inv.total ? '$' + parseFloat(inv.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) : 'N/A';
+
+  var html = '<div style="padding:16px 12px 40px;">';
+
+  // Date + invoice number
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
+  html += '<span style="background:#f59e0b;color:#000;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">INVOICE</span>';
+  if (inv.invoice_num) html += '<span style="font-size:13px;color:#666;">#' + inv.invoice_num + '</span>';
+  var dt = inv.created_at ? new Date(inv.created_at) : null;
+  if (dt) html += '<span style="font-size:13px;color:#666;">' + dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span>';
+  html += '</div>';
+
+  // Vehicle
+  if (inv.vehicle_desc) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
+    html += '<div style="font-size:16px;font-weight:600;color:#fff;">' + inv.vehicle_desc + '</div>';
+    if (inv.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: ' + inv.vin + '</div>';
+    html += '</div>';
+  }
+
+  // Total
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Total</div>';
+  html += '<div style="font-size:24px;font-weight:700;color:#f59e0b;margin-top:6px;">' + total + '</div>';
+  if (inv.payment_method) html += '<div style="font-size:12px;color:#666;margin-top:4px;">Payment: ' + inv.payment_method + '</div>';
+  html += '</div>';
+
+  // Line items
+  if (inv.lines) {
+    try {
+      var lines = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+      if (lines && lines.length) {
+        html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Line Items</div>';
+        lines.forEach(function(l) {
+          html += '<div style="background:#111;border-radius:10px;padding:12px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">';
+          html += '<div style="font-size:14px;color:#fff;">' + (l.desc || l.description || 'Item') + '</div>';
+          html += '<div style="font-size:14px;font-weight:700;color:#f59e0b;">$' + parseFloat(l.amount || l.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</div>';
+          html += '</div>';
+        });
+      }
+    } catch(e) {}
+  }
+
+  // Notes
+  if (inv.notes) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-top:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Notes</div>';
+    html += '<div style="font-size:14px;color:#ccc;white-space:pre-wrap;">' + inv.notes + '</div>';
+    html += '</div>';
+  }
+
+  // Documents
+  if (inv.id_photo_url || inv.signed_form_url) {
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    if (inv.id_photo_url) {
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + inv.id_photo_url + '\',\'_blank\')">';
+      html += '<img src="' + inv.id_photo_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Customer ID</div>';
+      html += '</div>';
+    }
+    if (inv.signed_form_url) {
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + inv.signed_form_url + '\',\'_blank\')">';
+      html += '<img src="' + inv.signed_form_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Signed Form</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // E-Sign section
+  html += _buildEsignSection(inv, 'invoices');
+
+  // Meta
+  html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
+  if (inv.created_by) html += 'Created by: ' + inv.created_by + '<br>';
+  if (inv.location) html += 'Location: ' + inv.location;
+  html += '</div>';
+
+  // Delete button
+  html += '<button id="form-delete-btn" onclick="formDeleteConfirm(\'invoices\',' + inv.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+
+  html += '</div>';
+
+  var body = document.getElementById('forms-body');
+  body.innerHTML = html;
+
+  if (inv.esign_status === 'signed' && !inv.seller_signature_url) {
+    _initCounterSignPad();
+  }
+}
+
+// ── VOID RELEASE DETAIL VIEW ────────────────────────────────────
+
+var _vrData_list = [];
+var _vrFiltered = [];
+
+async function loadVRList() {
+  var list = document.getElementById('forms-list');
+  list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  try {
+    _vrData_list = await sbGet('void_releases', 'order=created_at.desc');
+    _vrFiltered = _vrData_list;
+    renderVRList();
+  } catch(e) {
+    list.innerHTML = '<button onclick="openVoidRelease()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Void / Release</button><div style="text-align:center;color:#ef4444;padding:30px 0;">Error: ' + (e.message || e) + '</div>';
+  }
+}
+
+function vrFilterList(q) {
+  q = (q || '').toLowerCase().trim();
+  if (!q) { _vrFiltered = _vrData_list; }
+  else { _vrFiltered = _vrData_list.filter(function(d) { return fuzzyMatch([d.customer_name || '', d.vehicle_desc || '', d.vin || ''], q); }); }
+  renderVRList();
+}
+
+function renderVRList() {
+  var list = document.getElementById('forms-list');
+  var newBtn = '<button onclick="openVoidRelease()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Void / Release</button>';
+
+  if (!_vrFiltered.length) {
+    list.innerHTML = newBtn + '<div style="text-align:center;color:#555;padding:30px 0;">No void/release forms yet</div>';
+    return;
+  }
+
+  var html = newBtn;
+  _vrFiltered.forEach(function(vr) {
+    var dt = vr.created_at ? new Date(vr.created_at) : null;
+    var dateStr = dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    var typeLabel = vr.form_type === 'void' ? 'VOID' : vr.form_type === 'release' ? 'RELEASE' : 'VOID & RELEASE';
+    var typeColor = vr.form_type === 'release' ? '#f59e0b' : '#ef4444';
+
+    html += '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);" onclick="openVRDetail(' + vr.id + ')">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+    html += '<div style="font-size:17px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (vr.customer_name || 'Unknown') + '</div>';
+    html += '<span style="background:' + typeColor + ';color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">' + typeLabel + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:13px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (vr.vehicle_desc || '') + (vr.vin ? ' &middot; ' + vr.vin : '') + '</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">';
+    html += '<span style="font-size:12px;color:#555;">' + dateStr + '</span>';
+    html += '<div style="display:flex;gap:6px;">';
+    if (vr.esign_status === 'completed' || (vr.esign_status === 'signed' && vr.seller_signature_url)) {
+      html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">COMPLETED</span>';
+    } else if (vr.esign_status === 'signed') {
+      html += '<span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span>';
+    } else if (vr.esign_status === 'pending') {
+      html += '<span style="background:#422006;color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGN PENDING</span>';
+    }
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  list.innerHTML = html;
+}
+
+async function openVRDetail(id) {
+  _formsViewingDetail = true;
+  var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
+  var vr = _vrData_list.find(function(d) { return d.id === id; });
+  if (!vr) return;
+
+  // Live refresh
+  try {
+    var fresh = await sbGet('void_releases', 'id=eq.' + id);
+    if (fresh && fresh.length) { vr = fresh[0]; var idx = _vrData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _vrData_list[idx] = vr; }
+  } catch(e) {}
+
+  document.getElementById('forms-header-title').textContent = vr.customer_name || 'Void/Release';
+
+  var typeLabel = vr.form_type === 'void' ? 'Deal Void' : vr.form_type === 'release' ? 'Vehicle Release' : 'Deal Void & Vehicle Release';
+
+  var html = '<div style="padding:16px 12px 40px;">';
+
+  // Type badge + date
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">';
+  html += '<span style="background:#ef4444;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:8px;">' + typeLabel.toUpperCase() + '</span>';
+  var dt = vr.created_at ? new Date(vr.created_at) : null;
+  if (dt) html += '<span style="font-size:13px;color:#666;">' + dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span>';
+  html += '</div>';
+
+  // Customer
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Customer</div>';
+  html += '<div style="font-size:16px;font-weight:600;color:#fff;">' + (vr.customer_name || 'N/A') + '</div>';
+  if (vr.co_customer) html += '<div style="font-size:13px;color:#888;margin-top:4px;">Co-Customer: ' + vr.co_customer + '</div>';
+  html += '</div>';
+
+  // Vehicle
+  if (vr.vehicle_desc) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
+    html += '<div style="font-size:16px;font-weight:600;color:#fff;">' + vr.vehicle_desc + '</div>';
+    if (vr.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: ' + vr.vin + '</div>';
+    if (vr.account) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Account: ' + vr.account + '</div>';
+    html += '</div>';
+  }
+
+  // Documents
+  if (vr.id_photo_url || vr.signed_form_url) {
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;">Documents</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    if (vr.id_photo_url) {
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + vr.id_photo_url + '\',\'_blank\')">';
+      html += '<img src="' + vr.id_photo_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Customer ID</div>';
+      html += '</div>';
+    }
+    if (vr.signed_form_url) {
+      html += '<div style="background:#111;border-radius:14px;overflow:hidden;cursor:pointer;" onclick="window.open(\'' + vr.signed_form_url + '\',\'_blank\')">';
+      html += '<img src="' + vr.signed_form_url + '" style="width:100%;height:140px;object-fit:cover;"/>';
+      html += '<div style="padding:10px;font-size:12px;color:#888;text-align:center;">Signed Form</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // E-Sign section
+  html += _buildEsignSection(vr, 'void_releases');
+
+  // Meta
+  html += '<div style="margin-top:20px;font-size:12px;color:#444;">';
+  if (vr.created_by) html += 'Created by: ' + vr.created_by + '<br>';
+  if (vr.location) html += 'Location: ' + vr.location;
+  html += '</div>';
+
+  // Delete button
+  html += '<button id="form-delete-btn" onclick="formDeleteConfirm(\'void_releases\',' + vr.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+
+  html += '</div>';
+
+  var body = document.getElementById('forms-body');
+  body.innerHTML = html;
+
+  if (vr.esign_status === 'signed' && !vr.seller_signature_url) {
+    _initCounterSignPad();
   }
 }
 
@@ -12147,7 +12607,10 @@ function formsInnerTab(tab){
     document.getElementById('forms-search').style.display='';
     loadInvoices();
   } else if(tab==='void'){
-    document.getElementById('forms-search').style.display='none';
+    document.getElementById('forms-search').placeholder='Search void/release forms...';
+    document.getElementById('forms-search').oninput=function(){vrFilterList(this.value);};
+    document.getElementById('forms-search').value='';
+    document.getElementById('forms-search').style.display='';
     loadVoidRelease();
   }
 }
@@ -12184,7 +12647,7 @@ function renderInvoicesList(){
     var dt=inv.created_at?new Date(inv.created_at):null;
     var dateStr=dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
     var total=inv.total?'$'+parseFloat(inv.total).toLocaleString('en-US',{minimumFractionDigits:2}):'';
-    html+='<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;">'+
+    html+='<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);" onclick="openInvoiceDetail('+inv.id+')">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
         '<div style="flex:1;min-width:0;">'+
           '<div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(inv.customer_name||'Unknown')+'</div>'+
@@ -12196,7 +12659,8 @@ function renderInvoicesList(){
         '</div>'+
       '</div>'+
       (inv.invoice_num?'<div style="font-size:11px;color:#333;margin-top:4px;">#'+inv.invoice_num+'</div>':'')+
-      (inv.esign_status==='signed'?'<div style="margin-top:6px;"><span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span></div>':'')+
+      (inv.esign_status==='completed'||(inv.esign_status==='signed'&&inv.seller_signature_url)?'<div style="margin-top:6px;"><span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">COMPLETED</span></div>':'')+
+      (inv.esign_status==='signed'&&!inv.seller_signature_url?'<div style="margin-top:6px;"><span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span></div>':'')+
       (inv.esign_status==='pending'?'<div style="margin-top:6px;"><span style="background:#422006;color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGN PENDING</span></div>':'')+
     '</div>';
   });
@@ -12545,8 +13009,7 @@ var _vrVehicles = [];
 var _vrCurrentStep = 1;
 
 function loadVoidRelease(){
-  var list=document.getElementById('forms-list');
-  list.innerHTML='<button onclick="openVoidRelease()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;">+ New Void / Release</button><div style="text-align:center;color:#555;padding:30px 0;font-size:13px;">Generate Deal Void and Vehicle Surrender forms</div>';
+  loadVRList();
 }
 
 function openVoidRelease(){
