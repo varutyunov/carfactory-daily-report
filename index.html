@@ -2604,6 +2604,8 @@ async function syncFromSupabase(showUI){
       _signInventoryPhotos();
       // Sync pickup payments to calendar in background
       calSyncPickupPayments().catch(function(){});
+      // Check for pending e-sign requests and start polling
+      _esignResumePolling();
       return; // success — resolve promise only after data is loaded
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
@@ -10437,6 +10439,7 @@ function _txInit() {
 .dep-spinner{width:20px;height:20px;border:3px solid #333;border-top-color:#60a5fa;border-radius:50%;animation:dep-spin .8s linear infinite;flex-shrink:0;}
 @keyframes dep-spin{to{transform:rotate(360deg);}}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+@keyframes slideDown{from{transform:translateY(-100%);opacity:0;}to{transform:translateY(0);opacity:1;}}
 </style>
 <div id="deposit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
 
@@ -11507,6 +11510,101 @@ async function depDeleteFinal(id) {
 var _counterSignPad = null;
 var _counterSignTable = '';
 var _counterSignRecordId = null;
+
+// ── E-SIGN POLLING — auto-detect when customer signs ────────────
+var _esignPollTimer = null;
+var _esignPendingChecks = []; // [{table, id, formType}]
+
+function _esignStartPolling(table, recordId, formType) {
+  _esignPendingChecks.push({ table: table, id: recordId, formType: formType });
+  // Only start one timer
+  if (_esignPollTimer) return;
+  _esignPollTimer = setInterval(_esignPollCheck, 10000); // every 10 seconds
+}
+
+function _esignStopPolling(recordId) {
+  _esignPendingChecks = _esignPendingChecks.filter(function(p) { return p.id !== recordId; });
+  if (!_esignPendingChecks.length && _esignPollTimer) {
+    clearInterval(_esignPollTimer);
+    _esignPollTimer = null;
+  }
+}
+
+async function _esignPollCheck() {
+  if (!_esignPendingChecks.length) return;
+  for (var i = _esignPendingChecks.length - 1; i >= 0; i--) {
+    var chk = _esignPendingChecks[i];
+    try {
+      var rows = await sbGet(chk.table, 'id=eq.' + chk.id + '&select=id,esign_status,esign_signature_url,customer_name,vehicle_desc');
+      if (rows && rows.length && rows[0].esign_status === 'signed') {
+        // Customer has signed! Stop polling this one
+        _esignStopPolling(chk.id);
+        _esignShowSignedAlert(rows[0], chk.table, chk.formType);
+      }
+    } catch(e) {}
+  }
+}
+
+function _esignShowSignedAlert(record, table, formType) {
+  // Show an in-app banner notification
+  var existing = document.getElementById('esign-signed-banner');
+  if (existing) existing.remove();
+
+  var typeLabels = { deposit: 'Deposit', invoice: 'Invoice', void_release: 'Void/Release' };
+  var detailFn = table === 'invoices' ? 'openInvoiceDetail' : table === 'void_releases' ? 'openVRDetail' : 'openFormDetail';
+
+  var banner = document.createElement('div');
+  banner.id = 'esign-signed-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#166534;border-bottom:2px solid #4ade80;padding:16px 16px;animation:slideDown .3s ease;';
+  banner.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
+    '<span style="font-size:24px;">✍️</span>' +
+    '<div style="flex:1;">' +
+      '<div style="font-size:15px;font-weight:800;color:#fff;">Customer Signed!</div>' +
+      '<div style="font-size:13px;color:#bbf7d0;">' + (record.customer_name || 'Customer') + ' signed their ' + (typeLabels[formType] || 'form') + '</div>' +
+    '</div>' +
+  '</div>' +
+  '<div style="display:flex;gap:8px;margin-top:10px;">' +
+    '<button onclick="document.getElementById(\'esign-signed-banner\').remove()" style="flex:1;padding:10px;background:rgba(0,0,0,0.3);border:none;border-radius:10px;color:#fff;font-size:13px;cursor:pointer;">Dismiss</button>' +
+    '<button onclick="document.getElementById(\'esign-signed-banner\').remove();_esignOpenCounterSign(\'' + table + '\',' + record.id + ')" style="flex:2;padding:10px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;">Counter-Sign Now →</button>' +
+  '</div>';
+  document.body.appendChild(banner);
+
+  // Also vibrate if available
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
+async function _esignResumePolling() {
+  // On app load, check if there are any pending esign requests and resume polling
+  try {
+    var pending = await sbGet('esign_requests', 'status=eq.pending&order=created_at.desc&limit=20');
+    if (pending && pending.length) {
+      var tableMap = { deposit: 'deposits', invoice: 'invoices', void_release: 'void_releases' };
+      pending.forEach(function(req) {
+        if (req.form_record_id && req.form_type && tableMap[req.form_type]) {
+          _esignStartPolling(tableMap[req.form_type], req.form_record_id, req.form_type);
+        }
+      });
+    }
+  } catch(e) {}
+}
+
+function _esignOpenCounterSign(table, recordId) {
+  // Open the forms view and navigate to the detail
+  var formsOverlay = document.getElementById('forms-overlay');
+  if (formsOverlay) formsOverlay.style.display = 'flex';
+  var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
+
+  if (table === 'invoices') {
+    _formsActiveTab = 'invoices';
+    openInvoiceDetail(recordId);
+  } else if (table === 'void_releases') {
+    _formsActiveTab = 'void';
+    openVRDetail(recordId);
+  } else {
+    _formsActiveTab = 'deposits';
+    openFormDetail(recordId);
+  }
+}
 
 function _resolveEsignSigUrl(url) {
   if (!url) return '';
@@ -13588,6 +13686,12 @@ async function esignCreateRequest(formType) {
 
     // Build signing URL
     var signingUrl = 'https://carfactory.work/sign.html?token=' + token;
+
+    // Start polling for customer signature
+    var tableMap = { deposit: 'deposits', invoice: 'invoices', void_release: 'void_releases' };
+    if (formRecordId) {
+      _esignStartPolling(tableMap[formType], formRecordId, formType);
+    }
 
     // Update UI
     document.getElementById('esign-status-preparing').style.display = 'none';
