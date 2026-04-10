@@ -278,12 +278,13 @@ async function submitSignature(){
     if(!updateResp.ok) throw new Error('Failed to save signature');
 
     // Also update the source form record with esign status
+    var fullSigUrl=SB_URL+'/storage/v1/object/public/car-photos/'+sigPath;
     var table={deposit:'deposits',invoice:'invoices',void_release:'void_releases'}[_esignData.form_type];
     if(table&&_esignData.form_record_id){
       await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+_esignData.form_record_id,{
         method:'PATCH',
         headers:SB_HEADERS,
-        body:JSON.stringify({esign_status:'signed',esign_signature_url:sigUrl})
+        body:JSON.stringify({esign_status:'signed',esign_signature_url:fullSigUrl})
       });
     }
 
@@ -327,18 +328,10 @@ function showSuccess(cert,sigDataUrl){
 
 function esignNotifyOwners(cert){
   try{
-    var typeLabel={deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'}[cert.form_type]||cert.form_type;
-    var payload={
-      app_id:'ff6238d8-1a7b-4415-a589-229cd4059233',
-      headings:{en:'E-Sign Complete: '+typeLabel},
-      contents:{en:(cert.customer_name||'Customer')+' has signed their '+typeLabel+'. Open the app to view.'},
-      included_segments:['All'],
-      data:{type:'esign_signed',form_type:cert.form_type,token:cert.token}
-    };
-    fetch('https://onesignal.com/api/v1/notifications',{
+    fetch(SB_URL+'/functions/v1/esign-notify',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Key os_v2_app_75rdrwa2pncbljmjekonibmsgockubkbqhye6s4z4gqacioqkjnikx3h2c4kmvnegu7lrveqk22en7uzkrhw56fqc3cms2jduc2aojq'},
-      body:JSON.stringify(payload)
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({form_type:cert.form_type,customer_name:cert.customer_name,token:cert.token})
     }).catch(function(){});
   }catch(e){console.warn('Notification error',e);}
 }
