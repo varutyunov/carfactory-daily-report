@@ -11654,10 +11654,10 @@ function _buildEsignSection(record, tableName) {
     html += '<span style="font-size:20px;">✅</span>';
     html += '<span style="font-size:15px;font-weight:700;color:#4ade80;">Customer Has Signed</span>';
     html += '</div>';
-    // Show customer signature
+    // Show customer signature (black pen on transparent — invert to white for dark bg)
     if (custSigUrl) {
       html += '<div style="background:#000;border-radius:10px;padding:8px;margin-bottom:12px;">';
-      html += '<img src="' + custSigUrl + '" style="width:100%;max-height:80px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      html += '<img src="' + custSigUrl + '" style="width:100%;max-height:80px;object-fit:contain;filter:invert(1);" onerror="this.style.display=\'none\'" />';
       html += '<div style="font-size:11px;color:#555;text-align:center;margin-top:4px;">Customer Signature</div>';
       html += '</div>';
     }
@@ -11685,7 +11685,7 @@ function _buildEsignSection(record, tableName) {
     var sigGrid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     if (custSigUrl) {
       sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
-      sigGrid += '<img src="' + custSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
+      sigGrid += '<img src="' + custSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Customer</div>';
       sigGrid += '</div>';
     }
@@ -11836,7 +11836,7 @@ async function _showCompletedReview(record, tableName) {
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">';
   if (reviewCustSig) {
     html += '<div style="background:#111;border-radius:14px;padding:12px;">';
-    html += '<img src="' + reviewCustSig + '" style="width:100%;height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;text-align:center;color:#555;>Signed</div>\'" />';
+    html += '<img src="' + reviewCustSig + '" style="width:100%;height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;text-align:center;color:#555;>Signed</div>\'" />';
     html += '<div style="font-size:11px;color:#4ade80;text-align:center;margin-top:6px;font-weight:600;">Customer ✓</div>';
     html += '</div>';
   }
@@ -11907,7 +11907,7 @@ async function _viewSignedForm(formType, recordId) {
     html += '<div style="display:flex;gap:16px;">';
     if (custSigUrl) {
       html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
-      html += '<img src="' + custSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
+      html += '<img src="' + custSigUrl + '" style="width:100%;height:50px;object-fit:contain;" />';
       html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Customer Signature</div>';
       if (req.signed_at) html += '<div style="font-size:9px;color:#999;">' + new Date(req.signed_at).toLocaleString() + '</div>';
       html += '</div>';
@@ -11938,8 +11938,76 @@ async function _viewSignedForm(formType, recordId) {
     overlay.innerHTML = html;
     overlay.style.display = 'flex';
 
+    // Inject signatures INTO the form's actual signature lines
+    _injectFormSignatures(overlay, custSigUrl, sellerSigUrl);
+
   } catch(e) {
     alert('Error loading form: ' + (e.message || e));
+  }
+}
+
+// Inject customer & seller signature images into the empty signature lines within the rendered form HTML
+function _injectFormSignatures(container, custSigUrl, sellerSigUrl) {
+  var formArea = container.querySelector('div[style*="transform-origin"]');
+  if (!formArea) return;
+
+  // Walk all text nodes to find signature-related labels
+  var walker = document.createTreeWalker(formArea, NodeFilter.SHOW_TEXT, null, false);
+  var nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+
+  for (var i = 0; i < nodes.length; i++) {
+    var txt = nodes[i].textContent.trim();
+
+    // Deposit/Invoice: "Signature" label — previous sibling is the empty signature line
+    if (txt === 'Signature') {
+      var labelEl = nodes[i].parentElement;
+      var sigLine = labelEl ? labelEl.previousElementSibling : null;
+      if (sigLine && !sigLine.textContent.trim() && sigLine.style.borderBottom) {
+        // Determine buyer vs seller from parent column text
+        var col = labelEl.parentElement;
+        var colText = col ? col.textContent.toLowerCase() : '';
+        var url = (colText.indexOf('seller') !== -1 || colText.indexOf('authorized') !== -1) ? sellerSigUrl : custSigUrl;
+        // Customer sig is black pen (no filter needed on white bg); seller sig is white pen (invert)
+        var filter = (colText.indexOf('seller') !== -1 || colText.indexOf('authorized') !== -1) ? 'filter:invert(1);' : '';
+        if (url) {
+          sigLine.innerHTML = '<img src="' + url + '" style="height:36px;max-width:100%;object-fit:contain;' + filter + '" />';
+          sigLine.style.height = 'auto';
+          sigLine.style.minHeight = '36px';
+          sigLine.style.borderBottom = 'none';
+        }
+      }
+    }
+
+    // VR Void form: "Sign" label
+    if (txt === 'Sign') {
+      var labelEl2 = nodes[i].parentElement;
+      var sigLine2 = labelEl2 ? labelEl2.previousElementSibling : null;
+      if (sigLine2 && !sigLine2.textContent.trim() && custSigUrl) {
+        sigLine2.innerHTML = '<img src="' + custSigUrl + '" style="height:30px;max-width:100%;object-fit:contain;" />';
+        sigLine2.style.height = 'auto';
+        sigLine2.style.borderBottom = 'none';
+      }
+    }
+
+    // VR Release: "Customer" text node after <br> — find span with border-bottom in same parent
+    if (txt === 'Customer' && nodes[i].parentElement && nodes[i].parentElement.querySelector('span[style*="border-bottom"]')) {
+      var span = nodes[i].parentElement.querySelector('span[style*="border-bottom"]');
+      if (span && !span.textContent.trim() && custSigUrl) {
+        span.innerHTML = '<img src="' + custSigUrl + '" style="height:16px;object-fit:contain;" />';
+      }
+    }
+
+    // VR Release: "Secured Party Representative"
+    if (txt === 'Secured Party Representative' || txt.indexOf('Secured Party') !== -1) {
+      var parentDiv = nodes[i].parentElement;
+      if (parentDiv) {
+        var repSpan = parentDiv.querySelector('span[style*="border-bottom"]');
+        if (repSpan && !repSpan.textContent.trim() && sellerSigUrl) {
+          repSpan.innerHTML = '<img src="' + sellerSigUrl + '" style="height:16px;object-fit:contain;filter:invert(1);" />';
+        }
+      }
+    }
   }
 }
 
