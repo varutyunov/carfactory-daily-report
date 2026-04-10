@@ -3230,13 +3230,14 @@ function saveNote(aid,idx,val){
   sbPatch('assignments',aid,{tasks:a.tasks}).catch(e=>console.warn('Sync warn:',e));
 }
 function updateProg(a){const done=a.tasks.filter(t=>t.done).length;const pct=a.tasks.length?Math.round(done/a.tasks.length*100):0;document.getElementById('th-pf').style.width=pct+'%';}
-function updateSubBtn(a){const btn=document.getElementById('sub-btn');const all=a.tasks.every(t=>t.done);btn.disabled=!all||a.submitted;btn.textContent=a.submitted?'Submitted for Review \u2713':'Submit for Review';}
+function updateSubBtn(a){const btn=document.getElementById('sub-btn');const all=a.tasks.every(t=>t.done);const hasPhotos=uploadedPhotos.length>0;btn.disabled=!all||!hasPhotos||a.submitted;btn.textContent=a.submitted?'Submitted for Review \u2713':(!hasPhotos&&all?'Add Photos to Submit':'Submit for Review');}
 
 function handlePhotos(e){Array.from(e.target.files).forEach(file=>{enhancePhoto(file,url=>{uploadedPhotos.push(url);const g=document.getElementById('photo-grid');const img=document.createElement('img');img.className='photo-thumb';img.src=url;g.appendChild(img);const a=S.assignments.find(x=>x.id===curTaskId);if(a&&a.tasks.every(t=>t.done))updateSubBtn(a);});});}
 
 async function submitReview(){
   const a=S.assignments.find(x=>x.id===curTaskId);
   if(!a.tasks.every(t=>t.done)){alert('Complete all tasks first');return;}
+  if(!uploadedPhotos.length){alert('Add at least one photo before submitting');return;}
   showLoading('Submitting for review...');
   try {
     const now = new Date().toISOString();
@@ -4644,13 +4645,13 @@ function renderRepairDetail(){
   if(!ov){
     ov=document.createElement('div');
     ov.id='repair-detail-overlay';
-    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;';
     document.body.appendChild(ov);
   }
 
   var o='';
-  // Header
-  o+='<div style="position:sticky;top:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">';
+  // Header (flex-shrink:0, stays pinned at top)
+  o+='<div style="flex-shrink:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">';
   o+='<div style="display:flex;align-items:center;gap:14px;">';
   o+='<button onclick="closeRepairDetail()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:20px;cursor:pointer;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">←</button>';
   o+=thumbHTML;
@@ -4661,8 +4662,8 @@ function renderRepairDetail(){
   o+='</div>';
   o+='</div>';
 
-  // Repairs list
-  o+='<div style="padding:20px 16px 16px;">';
+  // Repairs list (scrollable area)
+  o+='<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 16px;">';
   o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:14px;">REPAIRS</div>';
 
   // Check which repairs already have linked parts
@@ -4717,6 +4718,7 @@ function renderRepairDetail(){
   }
   o+='<button onclick="closeRepairDetail();removeFromRepairQueue('+car.id+')" style="width:100%;padding:14px;background:rgba(255,69,58,0.06);border:1px solid rgba(255,69,58,0.18);border-radius:14px;color:#ff453a;font-size:14px;font-weight:600;cursor:pointer;">Remove from Repairs</button>';
   o+='</div>';
+  o+='</div>'; // close scrollable area
 
   ov.innerHTML=o;
 }
@@ -5087,13 +5089,13 @@ function renderPartsDetail(){
   if(!ov){
     ov=document.createElement('div');
     ov.id='parts-detail-overlay';
-    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;';
     document.body.appendChild(ov);
   }
 
   var o='';
-  // Header
-  o+='<div style="position:sticky;top:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">';
+  // Header (flex-shrink:0, stays pinned at top)
+  o+='<div style="flex-shrink:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">';
   o+='<div style="display:flex;align-items:center;gap:14px;">';
   o+='<button onclick="closePartsDetail()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:20px;cursor:pointer;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">←</button>';
   o+=thumbHTML;
@@ -5104,8 +5106,8 @@ function renderPartsDetail(){
   o+='</div>';
   o+='</div>';
 
-  // Parts list
-  o+='<div style="padding:20px 16px 16px;">';
+  // Parts list (scrollable area)
+  o+='<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 16px;">';
   o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:0.12em;margin-bottom:14px;">PARTS TO ORDER</div>';
 
   if(!repairs.length){
@@ -5139,6 +5141,7 @@ function renderPartsDetail(){
   }
   o+='<button onclick="closePartsDetail();removeCatFromProgress('+car.id+',\'parts\')" style="width:100%;padding:14px;background:rgba(255,69,58,0.06);border:1px solid rgba(255,69,58,0.18);border-radius:14px;color:#ff453a;font-size:14px;font-weight:600;cursor:pointer;">Remove from Parts</button>';
   o+='</div>';
+  o+='</div>'; // close scrollable area
 
   ov.innerHTML=o;
 }
@@ -5450,7 +5453,7 @@ async function syncLocation(loc){
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock) return true;
-      if((c.location||'DeBary')!==loc) return true; // don't touch other location
+      if((c.location||'DeBary').toLowerCase()!==loc.toLowerCase()) return true; // don't touch other location
       if(csvStocks.has(c.stock)) return true;
       if(activeIds.has(c.id)) return true;
       if(c.vin&&locCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
@@ -5539,7 +5542,7 @@ async function syncNow(){
       if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
       if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
       // Don't remove DeLand cars if DeLand CSV wasn't loaded
-      if(!hasDeland&&(c.location||'DeBary')==='DeLand') return true;
+      if(!hasDeland&&(c.location||'DeBary').toLowerCase()==='deland') return true;
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
@@ -11551,7 +11554,7 @@ function depLoadCarList() {
     _depAllCars = inv.slice(); // owner sees ALL inventory
   } else {
     var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
-    _depAllCars = inv.filter(function(c){ return (c.location||'DeBary') === myEmpLoc; });
+    _depAllCars = inv.filter(function(c){ return (c.location||'DeBary').toLowerCase() === myEmpLoc.toLowerCase(); });
   }
   console.log('depLoadCarList: inventory total=' + inv.length + ', showing=' + _depAllCars.length);
   depRenderCarList(_depAllCars);
@@ -14548,7 +14551,7 @@ async function loadDeals() {
     var allDeals = await sbGet('deals', 'order=created_at.desc');
     await _signStorageUrls(allDeals, ['photo_urls']);
     // Filter by location
-    var locDeals = allDeals.filter(function(d){ return (d.location||'DeBary') === _dealsLocation; });
+    var locDeals = allDeals.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _dealsLocation.toLowerCase(); });
     _dealsAllData = locDeals;
     // Filter by current week
     var ws = _dealsCurrentWeekStart;
@@ -15244,7 +15247,7 @@ function cashOutDealOpen(){
   var locDeals=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).filter(function(d){
     var dt=d.created_at?new Date(d.created_at):null;
     if(!dt)return false;
-    return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary')===_payLocation;
+    return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary').toLowerCase()===_payLocation.toLowerCase();
   });
   // Also pull from _dealsData if _dealsAllData not populated
   if(!locDeals.length&&typeof _dealsData!=='undefined') locDeals=_dealsData.slice();
