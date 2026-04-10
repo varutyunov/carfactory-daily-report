@@ -10688,14 +10688,37 @@ function _txInit() {
 <!-- MECHANIC INVOICE OVERLAY -->
 <div id="inv-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="closeInvoiceForm()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <button onclick="invGoBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
     <span id="inv-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">MECHANIC INVOICE</span>
   </div>
   <div id="inv-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
-    <!-- STEP 1: CUSTOMER INFO -->
+    <!-- ── STEP 1: CUSTOMER ID ── -->
     <div id="inv-step1" style="padding:20px 16px 100px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 3 — Customer & Vehicle</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 4 — Customer ID</div>
+      <div style="font-size:14px;color:#666;margin-bottom:24px;">Photograph the customer's driver license or state ID</div>
+      <div id="inv-id-choose" style="max-width:420px;margin:0 auto;">
+        <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;padding:40px 20px;background:#0d0d0d;border:2px dashed #b45309;border-radius:18px;cursor:pointer;gap:14px;box-sizing:border-box;">
+          <div style="font-size:60px;line-height:1;">📷</div>
+          <div style="font-size:20px;font-weight:800;color:#fff;text-align:center;letter-spacing:.3px;">Take Photo of Customer ID</div>
+          <div style="font-size:13px;color:#555;text-align:center;">Driver license, state ID, or passport</div>
+          <input type="file" accept="image/*" capture="environment" onchange="invIDPhotoTaken(this)" style="display:none;"/>
+        </label>
+      </div>
+      <div id="inv-id-preview-wrap" style="display:none;width:100%;max-width:420px;margin:20px auto 0;">
+        <img id="inv-id-preview" style="width:100%;border-radius:10px;margin-bottom:12px;"/>
+        <div style="text-align:center;color:#4ade80;font-weight:600;margin-bottom:12px;">✓ ID photo captured</div>
+        <button onclick="invIDPhotoDone()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Customer & Vehicle</button>
+        <label style="display:block;text-align:center;margin-top:12px;cursor:pointer;color:#666;font-size:13px;">
+          Retake Photo
+          <input type="file" accept="image/*" capture="environment" onchange="invIDPhotoTaken(this)" style="display:none;"/>
+        </label>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: CUSTOMER & VEHICLE ── -->
+    <div id="inv-step2" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 2 of 4 — Customer & Vehicle</div>
       <div style="font-size:14px;color:#666;margin-bottom:20px;">Enter customer and vehicle information</div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER</div>
@@ -10760,12 +10783,12 @@ function _txInit() {
         </div>
       </div>
 
-      <button onclick="invGoStep2()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Add Services</button>
+      <button onclick="invGoStep3()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Add Services</button>
     </div>
 
-    <!-- STEP 2: SERVICES / LINE ITEMS -->
-    <div id="inv-step2" style="display:none;padding:20px 16px 100px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 2 of 3 — Services & Parts</div>
+    <!-- ── STEP 3: SERVICES / LINE ITEMS ── -->
+    <div id="inv-step3" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 3 of 4 — Services & Parts</div>
       <div style="font-size:14px;color:#666;margin-bottom:16px;">Add each service or part as a line item</div>
 
       <div id="inv-lines" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
@@ -10797,9 +10820,9 @@ function _txInit() {
       <button onclick="invGoPreview()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Preview Invoice</button>
     </div>
 
-    <!-- STEP 3: PREVIEW & SAVE -->
-    <div id="inv-step3" style="display:none;padding:20px 16px 100px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 3 — Preview & Save</div>
+    <!-- ── STEP 4: PREVIEW & SAVE ── -->
+    <div id="inv-step4" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 4 of 4 — Preview & Save</div>
 
       <div id="inv-print-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:14px;line-height:1.28;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
         <div style="padding:0.18in 0.42in 0.15in;">
@@ -10841,7 +10864,26 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="invPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Invoice</button>
-        <button id="inv-save-btn" onclick="invSave()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Save Invoice</button>
+
+        <!-- AGGRESSIVE signed form prompt -->
+        <div id="inv-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
+          <div style="color:#ea580c;font-size:19px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">⚠️ Required: Signed Invoice</div>
+          <div style="color:#aaa;font-size:13px;text-align:center;margin-bottom:16px;line-height:1.5;">Print the invoice above, have the customer sign it, then photograph the signed copy. <strong style="color:#fff;">You cannot save without this.</strong></div>
+          <label id="inv-signed-label" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px;background:#7c2d12;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;text-align:center;color:#fff;box-sizing:border-box;">
+            📸 Take Photo of Signed Invoice
+            <input type="file" accept="image/*" capture="environment" onchange="invSignedFormTaken(this)" style="display:none;"/>
+          </label>
+          <div id="inv-signed-preview-wrap" style="display:none;margin-top:14px;">
+            <img id="inv-signed-preview" style="width:100%;border-radius:10px;margin-bottom:10px;"/>
+            <div style="text-align:center;color:#4ade80;font-weight:700;font-size:15px;">✓ Signed invoice captured</div>
+            <label style="display:block;text-align:center;margin-top:8px;cursor:pointer;color:#666;font-size:12px;">
+              Retake
+              <input type="file" accept="image/*" capture="environment" onchange="invSignedFormTaken(this)" style="display:none;"/>
+            </label>
+          </div>
+        </div>
+
+        <button id="inv-save-btn" onclick="invSave()" disabled style="width:100%;padding:16px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:not-allowed;margin-top:4px;opacity:0.4;">Save Invoice</button>
         <div id="inv-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
         <button onclick="closeInvoiceForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
       </div>
@@ -10853,14 +10895,37 @@ function _txInit() {
 <!-- VOID / RELEASE OVERLAY -->
 <div id="vr-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="vrBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">VOID / RELEASE</span>
+    <button onclick="vrGoBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span id="vr-bar-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">VOID / RELEASE</span>
   </div>
   <div id="vr-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
-    <!-- STEP 1: CUSTOMER & VEHICLE -->
+    <!-- ── STEP 1: CUSTOMER ID ── -->
     <div id="vr-step1" style="padding:20px 16px 100px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 2 — Customer & Vehicle</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 1 of 3 — Customer ID</div>
+      <div style="font-size:14px;color:#666;margin-bottom:24px;">Photograph the customer's driver license or state ID</div>
+      <div id="vr-id-choose" style="max-width:420px;margin:0 auto;">
+        <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;padding:40px 20px;background:#0d0d0d;border:2px dashed #991b1b;border-radius:18px;cursor:pointer;gap:14px;box-sizing:border-box;">
+          <div style="font-size:60px;line-height:1;">📷</div>
+          <div style="font-size:20px;font-weight:800;color:#fff;text-align:center;letter-spacing:.3px;">Take Photo of Customer ID</div>
+          <div style="font-size:13px;color:#555;text-align:center;">Driver license, state ID, or passport</div>
+          <input type="file" accept="image/*" capture="environment" onchange="vrIDPhotoTaken(this)" style="display:none;"/>
+        </label>
+      </div>
+      <div id="vr-id-preview-wrap" style="display:none;width:100%;max-width:420px;margin:20px auto 0;">
+        <img id="vr-id-preview" style="width:100%;border-radius:10px;margin-bottom:12px;"/>
+        <div style="text-align:center;color:#4ade80;font-weight:600;margin-bottom:12px;">✓ ID photo captured</div>
+        <button onclick="vrIDPhotoDone()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Next — Customer & Vehicle</button>
+        <label style="display:block;text-align:center;margin-top:12px;cursor:pointer;color:#666;font-size:13px;">
+          Retake Photo
+          <input type="file" accept="image/*" capture="environment" onchange="vrIDPhotoTaken(this)" style="display:none;"/>
+        </label>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: CUSTOMER & VEHICLE ── -->
+    <div id="vr-step2" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase;">Step 2 of 3 — Customer & Vehicle</div>
       <div style="font-size:14px;color:#666;margin-bottom:16px;">Enter customer and vehicle information</div>
 
       <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Customer</div>
@@ -10914,9 +10979,9 @@ function _txInit() {
       <button onclick="vrGoPreview()" style="width:100%;padding:16px;background:#ef4444;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Preview Forms</button>
     </div>
 
-    <!-- STEP 2: PREVIEW & PRINT -->
-    <div id="vr-step2" style="display:none;padding:20px 16px 100px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 2 of 2 — Preview & Print</div>
+    <!-- ── STEP 3: PREVIEW & SAVE ── -->
+    <div id="vr-step3" style="display:none;padding:20px 16px 100px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ef4444;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 3 — Preview & Save</div>
 
       <!-- DEAL VOID FORM -->
       <div id="vr-void-form" style="background:#fff;color:#000;border-radius:8px;padding:0;max-width:8.5in;margin:0 auto 20px;font-family:'Times New Roman',Times,Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 2px 16px rgba(0,0,0,0.3);">
@@ -10989,6 +11054,27 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="vrPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Forms</button>
+
+        <!-- AGGRESSIVE signed form prompt -->
+        <div id="vr-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
+          <div style="color:#ea580c;font-size:19px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">⚠️ Required: Signed Forms</div>
+          <div style="color:#aaa;font-size:13px;text-align:center;margin-bottom:16px;line-height:1.5;">Print the forms above, have the customer sign them, then photograph the signed copies. <strong style="color:#fff;">You cannot save without this.</strong></div>
+          <label id="vr-signed-label" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px;background:#7c2d12;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;text-align:center;color:#fff;box-sizing:border-box;">
+            📸 Take Photo of Signed Forms
+            <input type="file" accept="image/*" capture="environment" onchange="vrSignedFormTaken(this)" style="display:none;"/>
+          </label>
+          <div id="vr-signed-preview-wrap" style="display:none;margin-top:14px;">
+            <img id="vr-signed-preview" style="width:100%;border-radius:10px;margin-bottom:10px;"/>
+            <div style="text-align:center;color:#4ade80;font-weight:700;font-size:15px;">✓ Signed forms captured</div>
+            <label style="display:block;text-align:center;margin-top:8px;cursor:pointer;color:#666;font-size:12px;">
+              Retake
+              <input type="file" accept="image/*" capture="environment" onchange="vrSignedFormTaken(this)" style="display:none;"/>
+            </label>
+          </div>
+        </div>
+
+        <button id="vr-save-btn" onclick="vrSave()" disabled style="width:100%;padding:16px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:not-allowed;margin-top:4px;opacity:0.4;">Save Record</button>
+        <div id="vr-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
         <button onclick="vrClose()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
       </div>
     </div>
@@ -11021,14 +11107,14 @@ function _txInit() {
   #inv-overlay.print-active > div:first-child { display: none !important; }
   body.printing-invoice #inv-body,
   #inv-overlay.print-active #inv-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
-  body.printing-invoice #inv-step1, body.printing-invoice #inv-step2,
-  #inv-overlay.print-active #inv-step1, #inv-overlay.print-active #inv-step2 { display: none !important; }
-  body.printing-invoice #inv-step3,
-  #inv-overlay.print-active #inv-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
-  body.printing-invoice #inv-step3 > div:first-child,
-  #inv-overlay.print-active #inv-step3 > div:first-child { display: none !important; }
-  body.printing-invoice #inv-step3 > div:last-child,
-  #inv-overlay.print-active #inv-step3 > div:last-child { display: none !important; }
+  body.printing-invoice #inv-step1, body.printing-invoice #inv-step2, body.printing-invoice #inv-step3,
+  #inv-overlay.print-active #inv-step1, #inv-overlay.print-active #inv-step2, #inv-overlay.print-active #inv-step3 { display: none !important; }
+  body.printing-invoice #inv-step4,
+  #inv-overlay.print-active #inv-step4 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  body.printing-invoice #inv-step4 > div:first-child,
+  #inv-overlay.print-active #inv-step4 > div:first-child { display: none !important; }
+  body.printing-invoice #inv-step4 > div:last-child,
+  #inv-overlay.print-active #inv-step4 > div:last-child { display: none !important; }
   body.printing-invoice #inv-print-form,
   #inv-overlay.print-active #inv-print-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; }
   body.printing-invoice #inv-print-form > div,
@@ -11041,14 +11127,14 @@ function _txInit() {
   #vr-overlay.print-active > div:first-child { display: none !important; }
   body.printing-vr #vr-body,
   #vr-overlay.print-active #vr-body { padding-top: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
-  body.printing-vr #vr-step1,
-  #vr-overlay.print-active #vr-step1 { display: none !important; }
-  body.printing-vr #vr-step2,
-  #vr-overlay.print-active #vr-step2 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
-  body.printing-vr #vr-step2 > div:first-child,
-  #vr-overlay.print-active #vr-step2 > div:first-child { display: none !important; }
-  body.printing-vr #vr-step2 > div:last-child,
-  #vr-overlay.print-active #vr-step2 > div:last-child { display: none !important; }
+  body.printing-vr #vr-step1, body.printing-vr #vr-step2,
+  #vr-overlay.print-active #vr-step1, #vr-overlay.print-active #vr-step2 { display: none !important; }
+  body.printing-vr #vr-step3,
+  #vr-overlay.print-active #vr-step3 { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
+  body.printing-vr #vr-step3 > div:first-child,
+  #vr-overlay.print-active #vr-step3 > div:first-child { display: none !important; }
+  body.printing-vr #vr-step3 > div:last-child,
+  #vr-overlay.print-active #vr-step3 > div:last-child { display: none !important; }
   body.printing-vr #vr-void-form,
   #vr-overlay.print-active #vr-void-form,
   body.printing-vr #vr-release-form,
@@ -11907,6 +11993,7 @@ function depositEmail() {
 var _invData = {};
 var _invLines = [];
 var _invPayMethod = 'cash';
+var _invCurrentStep = 1;
 var _formsActiveTab = 'deposits';
 var _invData_list = [];
 var _invFiltered = [];
@@ -11987,7 +12074,7 @@ function renderInvoicesList(){
 var _invVehicles=[];
 
 function openInvoiceForm(){
-  _invData={};_invLines=[];_invPayMethod='cash';
+  _invData={};_invLines=[];_invPayMethod='cash';_invCurrentStep=1;
   document.getElementById('inv-overlay').style.display='flex';
   document.getElementById('inv-overlay').classList.add('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
@@ -12004,6 +12091,16 @@ function openInvoiceForm(){
   var sel=document.getElementById('inv-car-selected');if(sel)sel.style.display='none';
   var mt=document.getElementById('inv-car-manual-toggle');if(mt)mt.style.display='';
   var man=document.getElementById('inv-car-manual');if(man)man.style.display='none';
+  // Reset ID photo
+  var idChoose=document.getElementById('inv-id-choose');if(idChoose)idChoose.style.display='block';
+  var idPrev=document.getElementById('inv-id-preview-wrap');if(idPrev)idPrev.style.display='none';
+  _invData.idPhotoFile=null;_invData.idPhotoDataUrl=null;
+  // Reset signed form photo
+  var signedPrev=document.getElementById('inv-signed-preview-wrap');if(signedPrev)signedPrev.style.display='none';
+  var signedLabel=document.getElementById('inv-signed-label');if(signedLabel)signedLabel.style.display='flex';
+  _invData.signedFormFile=null;_invData.signedFormDataUrl=null;
+  var saveBtn=document.getElementById('inv-save-btn');if(saveBtn){saveBtn.disabled=true;saveBtn.style.opacity='0.4';saveBtn.style.cursor='not-allowed';saveBtn.textContent='Save Invoice';}
+  var saveStatus=document.getElementById('inv-save-status');if(saveStatus)saveStatus.innerHTML='';
   invLoadVehicles();
 }
 
@@ -12106,9 +12203,9 @@ function invShowManualVehicle(){
 }
 
 function closeInvoiceForm(){
-  var step3=document.getElementById('inv-step3');
+  var step4=document.getElementById('inv-step4');
   var btn=document.getElementById('inv-save-btn');
-  if(step3&&step3.style.display!=='none'&&btn&&btn.textContent!=='Saved'){
+  if(step4&&step4.style.display!=='none'&&btn&&btn.textContent!=='Saved'){
     if(!confirm('Invoice not saved. Exit anyway?'))return;
   }
   document.getElementById('inv-overlay').style.display='none';
@@ -12116,13 +12213,54 @@ function closeInvoiceForm(){
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
-function invShowStep(n){
-  [1,2,3].forEach(function(i){var el=document.getElementById('inv-step'+i);if(el)el.style.display=i===n?'block':'none';});
-  var titles={1:'CUSTOMER & VEHICLE',2:'SERVICES & PARTS',3:'PREVIEW & SAVE'};
-  var t=document.getElementById('inv-bar-title');if(t)t.textContent=titles[n]||'MECHANIC INVOICE';
+function invGoBack(){
+  if(_invCurrentStep>1) invShowStep(_invCurrentStep-1);
+  else closeInvoiceForm();
 }
 
-function invGoStep2(){
+function invShowStep(n){
+  _invCurrentStep=n;
+  [1,2,3,4].forEach(function(i){var el=document.getElementById('inv-step'+i);if(el)el.style.display=i===n?'block':'none';});
+  var titles={1:'CUSTOMER ID',2:'CUSTOMER & VEHICLE',3:'SERVICES & PARTS',4:'PREVIEW & SAVE'};
+  var t=document.getElementById('inv-bar-title');if(t)t.textContent=titles[n]||'MECHANIC INVOICE';
+  var body=document.getElementById('inv-body');if(body)body.scrollTop=0;
+}
+
+function invIDPhotoTaken(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  _invData.idPhotoFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _invData.idPhotoDataUrl=e.target.result;
+    var prev=document.getElementById('inv-id-preview');if(prev)prev.src=e.target.result;
+    document.getElementById('inv-id-choose').style.display='none';
+    document.getElementById('inv-id-preview-wrap').style.display='block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function invIDPhotoDone(){
+  invShowStep(2);
+}
+
+function invSignedFormTaken(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  _invData.signedFormFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _invData.signedFormDataUrl=e.target.result;
+    var prev=document.getElementById('inv-signed-preview');if(prev)prev.src=e.target.result;
+    document.getElementById('inv-signed-label').style.display='none';
+    document.getElementById('inv-signed-preview-wrap').style.display='block';
+    var btn=document.getElementById('inv-save-btn');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  };
+  reader.readAsDataURL(file);
+}
+
+function invGoStep3(){
   var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
   if(!g('inv-fname')||!g('inv-lname')){alert('Please enter customer name.');return;}
   if(!g('inv-year')||!g('inv-make')||!g('inv-model')){alert('Please enter vehicle info.');return;}
@@ -12132,7 +12270,7 @@ function invGoStep2(){
   _invData.year=g('inv-year');_invData.make=g('inv-make');_invData.model=g('inv-model');
   _invData.vin=g('inv-vin');_invData.mileage=g('inv-mileage');
   if(!_invLines.length) invAddLine();
-  invShowStep(2);
+  invShowStep(3);
 }
 
 function invAddLine(){
@@ -12208,7 +12346,7 @@ function invGoPreview(){
   el=document.getElementById('inv-pf-total');if(el)el.textContent='$'+sum.toLocaleString('en-US',{minimumFractionDigits:2});
 
   _invData.preview={fullName:fullName,vehicle:vehicle,vin:_invData.vin,mileage:_invData.mileage,lines:validLines,total:sum,method:_invPayMethod,notes:notesVal,invoiceNum:invNum,date:dateStr};
-  invShowStep(3);
+  invShowStep(4);
 }
 
 function invPrint(){
@@ -12220,11 +12358,28 @@ function invPrint(){
 }
 
 async function invSave(){
+  if(!_invData.signedFormFile){alert('Please photograph the signed invoice first.');return;}
   var btn=document.getElementById('inv-save-btn');
   var status=document.getElementById('inv-save-status');
   if(btn){btn.textContent='Saving...';btn.disabled=true;}
   try{
     var p=_invData.preview||{};
+    var ts=Date.now();
+    // Upload ID photo
+    var idPhotoUrl='';
+    if(_invData.idPhotoFile){
+      var ext1=_invData.idPhotoFile.name.split('.').pop()||'jpg';
+      var idPath='invoices/'+ts+'_id.'+ext1;
+      await sbUpload(idPath,_invData.idPhotoFile);
+      idPhotoUrl=await sbSignUrl(idPath);
+    }
+    // Upload signed form photo
+    var signedUrl='';
+    var ext2=_invData.signedFormFile.name.split('.').pop()||'jpg';
+    var signedPath='invoices/'+ts+'_signed.'+ext2;
+    await sbUpload(signedPath,_invData.signedFormFile);
+    signedUrl=await sbSignUrl(signedPath);
+
     var record={
       customer_name:p.fullName||'',
       vehicle_desc:p.vehicle||'',
@@ -12234,17 +12389,19 @@ async function invSave(){
       notes:p.notes||'',
       invoice_num:p.invoiceNum||'',
       lines:JSON.stringify(p.lines||[]),
+      id_photo_url:idPhotoUrl||null,
+      signed_form_url:signedUrl||null,
       created_by:(me&&me.name)||'',
       location:(me&&me.location)||'DeBary',
       created_at:new Date().toISOString()
     };
     await sbPost('invoices',record);
     if(status)status.innerHTML='<span style="color:#4ade80;font-weight:600;">Invoice saved!</span>';
-    if(btn){btn.textContent='Saved';btn.style.background='#166534';btn.style.color='#fff';}
+    if(btn){btn.textContent='Saved';btn.style.background='#166534';btn.style.opacity='1';}
   }catch(e){
     console.error('Invoice save error:',e);
     if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
-    if(btn){btn.textContent='Save Invoice';btn.disabled=false;}
+    if(btn){btn.textContent='Save Invoice';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
   }
 }
 
@@ -12255,6 +12412,7 @@ async function invSave(){
 var _vrFormType = 'both'; // 'both','void','release'
 var _vrData = {};
 var _vrVehicles = [];
+var _vrCurrentStep = 1;
 
 function loadVoidRelease(){
   var list=document.getElementById('forms-list');
@@ -12262,7 +12420,7 @@ function loadVoidRelease(){
 }
 
 function openVoidRelease(){
-  _vrData={};_vrFormType='both';
+  _vrData={};_vrFormType='both';_vrCurrentStep=1;
   document.getElementById('vr-overlay').style.display='flex';
   document.getElementById('vr-overlay').classList.add('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
@@ -12272,23 +12430,75 @@ function openVoidRelease(){
   document.getElementById('vr-car-selected').style.display='none';
   document.getElementById('vr-car-list').innerHTML='';
   document.getElementById('vr-car-manual').style.display='block';
+  // Reset ID photo
+  var idChoose=document.getElementById('vr-id-choose');if(idChoose)idChoose.style.display='block';
+  var idPrev=document.getElementById('vr-id-preview-wrap');if(idPrev)idPrev.style.display='none';
+  _vrData.idPhotoFile=null;_vrData.idPhotoDataUrl=null;
+  // Reset signed form photo
+  var signedPrev=document.getElementById('vr-signed-preview-wrap');if(signedPrev)signedPrev.style.display='none';
+  var signedLabel=document.getElementById('vr-signed-label');if(signedLabel)signedLabel.style.display='flex';
+  _vrData.signedFormFile=null;_vrData.signedFormDataUrl=null;
+  var saveBtn=document.getElementById('vr-save-btn');if(saveBtn){saveBtn.disabled=true;saveBtn.style.opacity='0.4';saveBtn.style.cursor='not-allowed';saveBtn.textContent='Save Record';}
+  var saveStatus=document.getElementById('vr-save-status');if(saveStatus)saveStatus.innerHTML='';
   vrLoadVehicles();
 }
 
 function vrClose(){
+  var step3=document.getElementById('vr-step3');
+  var btn=document.getElementById('vr-save-btn');
+  if(step3&&step3.style.display!=='none'&&btn&&btn.textContent!=='Saved'){
+    if(!confirm('Record not saved. Exit anyway?'))return;
+  }
   document.getElementById('vr-overlay').style.display='none';
   document.getElementById('vr-overlay').classList.remove('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
-function vrBack(){
-  var s2=document.getElementById('vr-step2');
-  if(s2&&s2.style.display!=='none'){vrShowStep(1);return;}
-  vrClose();
+function vrGoBack(){
+  if(_vrCurrentStep>1) vrShowStep(_vrCurrentStep-1);
+  else vrClose();
 }
 
 function vrShowStep(n){
-  [1,2].forEach(function(s){var el=document.getElementById('vr-step'+s);if(el)el.style.display=s===n?'block':'none';});
+  _vrCurrentStep=n;
+  [1,2,3].forEach(function(s){var el=document.getElementById('vr-step'+s);if(el)el.style.display=s===n?'block':'none';});
+  var titles={1:'CUSTOMER ID',2:'CUSTOMER & VEHICLE',3:'PREVIEW & SAVE'};
+  var t=document.getElementById('vr-bar-title');if(t)t.textContent=titles[n]||'VOID / RELEASE';
+  var body=document.getElementById('vr-body');if(body)body.scrollTop=0;
+}
+
+function vrIDPhotoTaken(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  _vrData.idPhotoFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _vrData.idPhotoDataUrl=e.target.result;
+    var prev=document.getElementById('vr-id-preview');if(prev)prev.src=e.target.result;
+    document.getElementById('vr-id-choose').style.display='none';
+    document.getElementById('vr-id-preview-wrap').style.display='block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function vrIDPhotoDone(){
+  vrShowStep(2);
+}
+
+function vrSignedFormTaken(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  _vrData.signedFormFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _vrData.signedFormDataUrl=e.target.result;
+    var prev=document.getElementById('vr-signed-preview');if(prev)prev.src=e.target.result;
+    document.getElementById('vr-signed-label').style.display='none';
+    document.getElementById('vr-signed-preview-wrap').style.display='block';
+    var btn=document.getElementById('vr-save-btn');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  };
+  reader.readAsDataURL(file);
 }
 
 function vrSetFormType(t){
@@ -12407,7 +12617,7 @@ function vrGoPreview(){
     document.getElementById('vr-rel-yr2').textContent=String(now.getFullYear()).slice(2);
   }
 
-  vrShowStep(2);
+  vrShowStep(3);
 }
 
 function vrPrint(){
@@ -12416,6 +12626,59 @@ function vrPrint(){
   window.onafterprint=cleanup;
   window.print();
   setTimeout(cleanup,3000);
+}
+
+async function vrSave(){
+  if(!_vrData.signedFormFile){alert('Please photograph the signed forms first.');return;}
+  var btn=document.getElementById('vr-save-btn');
+  var status=document.getElementById('vr-save-status');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;}
+  try{
+    var ts=Date.now();
+    // Upload ID photo
+    var idPhotoUrl='';
+    if(_vrData.idPhotoFile){
+      var ext1=_vrData.idPhotoFile.name.split('.').pop()||'jpg';
+      var idPath='void_release/'+ts+'_id.'+ext1;
+      await sbUpload(idPath,_vrData.idPhotoFile);
+      idPhotoUrl=await sbSignUrl(idPath);
+    }
+    // Upload signed form photo
+    var signedUrl='';
+    var ext2=_vrData.signedFormFile.name.split('.').pop()||'jpg';
+    var signedPath='void_release/'+ts+'_signed.'+ext2;
+    await sbUpload(signedPath,_vrData.signedFormFile);
+    signedUrl=await sbSignUrl(signedPath);
+
+    var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+    var fullName=[g('vr-fname'),g('vr-lname')].filter(Boolean).join(' ');
+    var yr=_vrData.year||g('vr-year');
+    var mk=_vrData.make||g('vr-make');
+    var md=_vrData.model||g('vr-model');
+    var vin=_vrData.vin||g('vr-vin');
+    var vehicleDesc=[yr,mk,md].filter(Boolean).join(' ');
+
+    var record={
+      customer_name:fullName,
+      co_customer:g('vr-cocustomer')||null,
+      vehicle_desc:vehicleDesc,
+      vin:vin||'',
+      account:g('vr-acct')||null,
+      form_type:_vrFormType,
+      id_photo_url:idPhotoUrl||null,
+      signed_form_url:signedUrl||null,
+      created_by:(me&&me.name)||'',
+      location:(me&&me.location)||'DeBary',
+      created_at:new Date().toISOString()
+    };
+    await sbPost('void_releases',record);
+    if(status)status.innerHTML='<span style="color:#4ade80;font-weight:600;">Record saved!</span>';
+    if(btn){btn.textContent='Saved';btn.style.background='#166534';btn.style.opacity='1';}
+  }catch(e){
+    console.error('Void/Release save error:',e);
+    if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
+    if(btn){btn.textContent='Save Record';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
