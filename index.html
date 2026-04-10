@@ -11736,24 +11736,48 @@ function depositManualEntry() {
 
 var _depAllCars = [];
 
-function depLoadCarList() {
+var _depAllVehicles = []; // combined inventory + deals + deposits
+async function depLoadCarList() {
+  _depAllCars = [];
+  _depAllVehicles = [];
   var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
   var isOwner = (typeof me !== 'undefined' && me && me.role === 'owner');
-  if(isOwner) {
-    _depAllCars = inv.slice(); // owner sees ALL inventory
-  } else {
-    var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
-    _depAllCars = inv.filter(function(c){ return (c.location||'DeBary').toLowerCase() === myEmpLoc.toLowerCase(); });
-  }
-  console.log('depLoadCarList: inventory total=' + inv.length + ', showing=' + _depAllCars.length);
-  depRenderCarList(_depAllCars);
+  var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+  var locInv = isOwner ? inv.slice() : inv.filter(function(c){ return (c.location||'DeBary').toLowerCase() === myEmpLoc.toLowerCase(); });
+  _depAllCars = locInv;
+  // Build combined list with source tags
+  locInv.forEach(function(c){
+    var label = c.name || [c.year, c.make, c.model].filter(Boolean).join(' ') || 'Unknown';
+    var parts = (c.name||'').split(' ');
+    _depAllVehicles.push({id:c.id, label:label, year:parts[0]||'', make:parts[1]||'', model:parts.slice(2).join(' ')||'', vin:c.vin||'', stock:c.stock||'', color:c.color||'', location:c.location||'', source:'inventory', customer:''});
+  });
+  // Fetch past deals
+  try{
+    var deals = await sbGet('deals','select=customer_name,vehicle_desc,vin,stock,color,created_at&order=created_at.desc&limit=200');
+    deals.forEach(function(d){
+      if(!d.vehicle_desc) return;
+      if(d.vin && _depAllVehicles.some(function(v){return v.vin && v.vin===d.vin;})) return;
+      var parts = (d.vehicle_desc||'').split(' ');
+      _depAllVehicles.push({id:'deal_'+d.vin, label:d.vehicle_desc, year:parts[0]||'', make:parts[1]||'', model:parts.slice(2).join(' ')||'', vin:d.vin||'', stock:d.stock||'', color:d.color||'', location:'', source:'deal', customer:d.customer_name||''});
+    });
+  }catch(e){}
+  // Fetch past deposits
+  try{
+    var deps = await sbGet('deposits','select=customer_name,vehicle_desc,vin,stock&order=created_at.desc&limit=200');
+    deps.forEach(function(d){
+      if(!d.vehicle_desc) return;
+      if(d.vin && _depAllVehicles.some(function(v){return v.vin && v.vin===d.vin;})) return;
+      var parts = (d.vehicle_desc||'').split(' ');
+      _depAllVehicles.push({id:'dep_'+d.vin, label:d.vehicle_desc, year:parts[0]||'', make:parts[1]||'', model:parts.slice(2).join(' ')||'', vin:d.vin||'', stock:d.stock||'', color:'', location:'', source:'deposit', customer:d.customer_name||''});
+    });
+  }catch(e){}
+  depRenderCarList(_depAllVehicles);
 }
 
 function depFilterCars(q) {
-  if(!q) { depRenderCarList(_depAllCars); return; }
-  var ql = q.toLowerCase();
-  var filtered = _depAllCars.filter(function(c){
-    return [c.name,c.stock,c.vin,c.color,c.location].join(' ').toLowerCase().indexOf(ql) !== -1;
+  if(!q) { depRenderCarList(_depAllVehicles); return; }
+  var filtered = _depAllVehicles.filter(function(c){
+    return fuzzyMatch([c.label, c.vin, c.stock, c.color, c.customer, c.location], q);
   });
   depRenderCarList(filtered);
 }
@@ -11762,38 +11786,41 @@ function depRenderCarList(cars) {
   var el = document.getElementById('dep-car-list');
   if(!el) return;
   if(!cars.length) {
-    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:14px;">No vehicles found at your location.</div>';
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:14px;">No vehicles found.</div>';
     return;
   }
-  el.innerHTML = cars.map(function(c){
-    var label = c.name || [c.year, c.make, c.model].filter(Boolean).join(' ') || 'Unknown';
-    var sub   = [c.stock ? 'Stock: '+c.stock : '', c.color||'', c.location||''].filter(Boolean).join(' · ');
-    return '<div onclick="depSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
-      '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
-      '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
+  el.innerHTML = cars.slice(0, 20).map(function(c, i){
+    var srcBadge = c.source==='inventory' ? '<span style="background:#1d4ed8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">INVENTORY</span>'
+      : c.source==='deal' ? '<span style="background:#f59e0b;color:#000;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">PAST DEAL</span>'
+      : '<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">DEPOSIT</span>';
+    var sub = [c.stock ? '#'+c.stock : '', c.color||'', c.customer ? c.customer : ''].filter(Boolean).join(' · ');
+    return '<div onclick="depSelectVehicle('+i+')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><span style="font-size:16px;font-weight:700;color:#fff;">'+c.label+'</span>'+srcBadge+'</div>' +
+      (sub ? '<div style="font-size:13px;color:#555;">'+sub+'</div>' : '') +
       (c.vin ? '<div style="font-size:11px;color:#333;margin-top:2px;">VIN: '+c.vin+'</div>' : '') +
     '</div>';
   }).join('');
+  // Store rendered list for selection
+  el._depRendered = cars.slice(0, 20);
 }
 
-function depSelectCar(carId) {
-  var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
-  var car = inv.filter(function(c){ return c.id == carId; })[0];
-  if(!car) return;
-  _depData.car = car;
-  // Fill vehicle fields
+function depSelectVehicle(idx) {
+  var el = document.getElementById('dep-car-list');
+  var cars = el._depRendered || [];
+  var c = cars[idx]; if(!c) return;
   var set = function(id, val) { var el=document.getElementById(id); if(el) el.value = val||''; };
-  // Parse year/make/model from name field (e.g. "2024 Toyota Camry")
-  var nameParts = (car.name||'').split(' ');
-  var carYear = nameParts[0] || '';
-  var carMake = nameParts[1] || '';
-  var carModel = nameParts.slice(2).join(' ') || '';
-  set('dep-year',  carYear);
-  set('dep-make',  carMake);
-  set('dep-model', carModel);
-  set('dep-stock', car.stock);
-  set('dep-vin',   car.vin);
-  set('dep-color', car.color);
+  set('dep-year',  c.year);
+  set('dep-make',  c.make);
+  set('dep-model', c.model);
+  set('dep-stock', c.stock);
+  set('dep-vin',   c.vin);
+  set('dep-color', c.color);
+  // Auto-fill customer name from past deal/deposit
+  if(c.customer && !document.getElementById('dep-fname').value) {
+    var cp = c.customer.split(' ');
+    set('dep-fname', cp[0]||'');
+    set('dep-lname', cp.slice(1).join(' ')||'');
+  }
   // Default date to today
   var today = new Date();
   var yyyy = today.getFullYear();
@@ -12618,8 +12645,19 @@ async function vrLoadVehicles(){
       _vrVehicles.push({label:c.name||'',year:(c.name||'').split(' ')[0]||'',make:(c.name||'').split(' ')[1]||'',model:(c.name||'').split(' ').slice(2).join(' ')||'',vin:c.vin||'',stock:c.stock_number||'',color:c.color||'',source:'inventory'});
     });
   }catch(e){}
+  // Pull from past deals — most important for void/release
   try{
-    var deps=await sbGet('deposits','select=customer_name,vehicle_desc,vin,stock&order=created_at.desc&limit=50');
+    var deals=await sbGet('deals','select=customer_name,vehicle_desc,vin,stock,color,deal_type&order=created_at.desc&limit=300');
+    deals.forEach(function(d){
+      if(!d.vehicle_desc)return;
+      if(d.vin&&_vrVehicles.some(function(v){return v.vin&&v.vin===d.vin;}))return;
+      var parts=(d.vehicle_desc||'').split(' ');
+      _vrVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',stock:d.stock||'',color:d.color||'',source:'deal',customer:d.customer_name||'',dealType:d.deal_type||''});
+    });
+  }catch(e){}
+  // Pull from past deposits
+  try{
+    var deps=await sbGet('deposits','select=customer_name,vehicle_desc,vin,stock&order=created_at.desc&limit=200');
     deps.forEach(function(d){
       if(!d.vehicle_desc)return;
       if(d.vin&&_vrVehicles.some(function(v){return v.vin&&v.vin===d.vin;}))return;
@@ -12634,11 +12672,18 @@ function vrFilterVehicles(q){
   if(!q||q.length<2){list.innerHTML='';return;}
   var matches=_vrVehicles.filter(function(v){return fuzzyMatch([v.label,v.vin,v.stock,v.color,v.customer||''],q);});
   if(!matches.length){list.innerHTML='<div style="color:#555;font-size:13px;padding:8px;">No matches</div>';return;}
-  list.innerHTML=matches.slice(0,6).map(function(v,i){
-    return '<div onclick="vrSelectVehicle('+i+',\''+q.replace(/'/g,"\\'")+'\')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;cursor:pointer;"><div style="font-size:14px;font-weight:600;color:#fff;">'+v.label+'</div><div style="font-size:11px;color:#666;margin-top:2px;">VIN: '+(v.vin||'N/A')+' · Stock: '+(v.stock||'N/A')+(v.customer?' · '+v.customer:'')+'</div></div>';
+  list.innerHTML=matches.slice(0,10).map(function(v,i){
+    var srcBadge=v.source==='inventory'?'<span style="background:#1d4ed8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">INVENTORY</span>':
+      v.source==='deal'?'<span style="background:#f59e0b;color:#000;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">PAST DEAL</span>':
+      '<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;">DEPOSIT</span>';
+    var sub=[v.stock?'#'+v.stock:'',v.color,v.customer?v.customer:''].filter(Boolean).join(' · ');
+    return '<div onclick="vrSelectVehicle('+i+',\''+q.replace(/'/g,"\\'")+'\')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:10px 12px;cursor:pointer;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><span style="font-size:14px;font-weight:600;color:#fff;">'+v.label+'</span>'+srcBadge+'</div>'+
+      (sub?'<div style="font-size:11px;color:#666;margin-top:2px;">'+sub+'</div>':'')+
+      (v.vin?'<div style="font-size:10px;color:#333;margin-top:2px;">VIN: '+v.vin+'</div>':'')+
+    '</div>';
   }).join('');
-  // Store filtered for selection
-  list._vrFiltered=matches.slice(0,6);
+  list._vrFiltered=matches.slice(0,10);
 }
 
 function vrSelectVehicle(idx,q){
@@ -12655,7 +12700,7 @@ function vrSelectVehicle(idx,q){
   // Pre-fill manual fields too
   var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   set('vr-year',v.year);set('vr-make',v.make);set('vr-model',v.model);set('vr-vin',v.vin);
-  // If vehicle came from deposit, pre-fill customer
+  // If vehicle came from deal or deposit, pre-fill customer
   if(v.customer){
     var cp=v.customer.split(' ');
     if(!document.getElementById('vr-fname').value){set('vr-fname',cp[0]||'');set('vr-lname',cp.slice(1).join(' ')||'');}
