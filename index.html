@@ -11442,10 +11442,17 @@ function openFormDetail(id) {
     html += '<div style="margin-top:16px;background:#111;border-radius:14px;padding:16px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">E-Signature</div>';
     if(dep.esign_status==='signed') {
-      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">✅</span><span style="color:#4ade80;font-weight:700;">Electronically Signed</span></div>';
-      if(dep.esign_signature_url) html += '<img src="https://hphlouzqlimainczuqyc.supabase.co/storage/v1/object/public/car-photos/' + dep.esign_signature_url + '" style="max-width:180px;margin-top:10px;border:1px solid #333;border-radius:8px;background:#fff;padding:8px;"/>';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span style="font-size:20px;">✅</span><span style="color:#4ade80;font-weight:700;font-size:16px;">Electronically Signed</span></div>';
+      if(dep.esign_signature_url) {
+        var sigSrc = dep.esign_signature_url.startsWith('http') ? dep.esign_signature_url : 'https://hphlouzqlimainczuqyc.supabase.co/storage/v1/object/public/car-photos/' + dep.esign_signature_url;
+        html += '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;cursor:pointer;" onclick="window.open(\'' + sigSrc + '\',\'_blank\')">';
+        html += '<img src="' + sigSrc + '" style="max-width:200px;max-height:100px;"/>';
+        html += '<div style="font-size:11px;color:#888;margin-top:6px;">Tap to view full signature</div>';
+        html += '</div>';
+      }
     } else {
-      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">⏳</span><span style="color:#f59e0b;font-weight:600;">Pending — Awaiting signature</span></div>';
+      html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;">⏳</span><span style="color:#f59e0b;font-weight:600;">Pending — Awaiting customer signature</span></div>';
+      html += '<div style="font-size:12px;color:#555;margin-top:8px;">The signing link has been sent. You\'ll be notified when the customer signs.</div>';
     }
     html += '</div>';
   }
@@ -12162,6 +12169,8 @@ function renderInvoicesList(){
         '</div>'+
       '</div>'+
       (inv.invoice_num?'<div style="font-size:11px;color:#333;margin-top:4px;">#'+inv.invoice_num+'</div>':'')+
+      (inv.esign_status==='signed'?'<div style="margin-top:6px;"><span style="background:#166534;color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGNED</span></div>':'')+
+      (inv.esign_status==='pending'?'<div style="margin-top:6px;"><span style="background:#422006;color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">E-SIGN PENDING</span></div>':'')+
     '</div>';
   });
   list.innerHTML=html;
@@ -12803,6 +12812,25 @@ function esignOpen(formType) {
 
 function esignClose() {
   document.getElementById('esign-overlay').style.display = 'none';
+  // If the record was saved (link was generated), close the form overlay and refresh forms list
+  if (_esignToken) {
+    if (_esignFormType === 'deposit') {
+      document.getElementById('deposit-overlay').style.display = 'none';
+    } else if (_esignFormType === 'invoice') {
+      document.getElementById('inv-overlay').style.display = 'none';
+    } else if (_esignFormType === 'void_release') {
+      document.getElementById('vr-overlay').style.display = 'none';
+    }
+    // Refresh the forms list to show the new pending record
+    _formsViewingDetail = false;
+    var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'flex';
+    var body = document.getElementById('forms-body');
+    if (body) body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    document.getElementById('forms-header-title').textContent = 'FORMS';
+    if (_esignFormType === 'deposit') formsInnerTab('deposits');
+    else if (_esignFormType === 'invoice') formsInnerTab('invoices');
+    else if (_esignFormType === 'void_release') formsInnerTab('void');
+  }
 }
 
 async function esignCreateRequest(formType) {
@@ -12821,25 +12849,116 @@ async function esignCreateRequest(formType) {
       var fn = (document.getElementById('dep-fname') || {}).value || '';
       var ln = (document.getElementById('dep-lname') || {}).value || '';
       customerName = (fn + ' ' + ln).trim();
+
+      // Save the deposit record immediately with esign_status='pending'
+      var d = _depData.preview || {};
+      var ts = Date.now();
+      var idPhotoUrl = '';
+      if (_depData.idPhotoFile) {
+        var idExt = _depData.idPhotoFile.name.split('.').pop() || 'jpg';
+        var idPath = 'deposits/' + ts + '_id.' + idExt;
+        await sbUpload(idPath, _depData.idPhotoFile);
+        idPhotoUrl = SB_URL + '/storage/v1/object/public/car-photos/' + idPath;
+      }
+      var depRecord = {
+        customer_name: d.fullName || customerName,
+        vehicle_desc: d.vehicleStr || '',
+        vin: d.vin || '',
+        stock: d.stock || '',
+        deposit_amount: parseFloat(d.amount) || 0,
+        balance: d.balance || '',
+        deposit_date: d.dateDisp || '',
+        withdraw_until: d.withdrawDisp || '',
+        id_photo_url: idPhotoUrl,
+        deal_type: d.dealType || 'cash',
+        esign_status: 'pending',
+        created_by: (me && me.name) || '',
+        location: (me && me.location) || 'DeBary',
+        created_at: new Date().toISOString()
+      };
+      var depResult = await sbPost('deposits', depRecord);
+      if (depResult && depResult.length) formRecordId = depResult[0].id;
+
     } else if (formType === 'invoice') {
       formHtml = document.getElementById('inv-print-form').outerHTML;
       var cfn = (document.getElementById('inv-fname') || {}).value || '';
       var cln = (document.getElementById('inv-lname') || {}).value || '';
       customerName = (cfn + ' ' + cln).trim();
+
+      // Save the invoice record immediately
+      var ip = _invData.preview || {};
+      var its = Date.now();
+      var invIdUrl = '';
+      if (_invData.idPhotoFile) {
+        var ie1 = _invData.idPhotoFile.name.split('.').pop() || 'jpg';
+        var iidp = 'invoices/' + its + '_id.' + ie1;
+        await sbUpload(iidp, _invData.idPhotoFile);
+        invIdUrl = await sbSignUrl(iidp);
+      }
+      var invRecord = {
+        customer_name: ip.fullName || customerName,
+        vehicle_desc: ip.vehicle || '',
+        vin: _invData.vin || '',
+        total: ip.total || 0,
+        payment_method: ip.method || 'cash',
+        notes: ip.notes || '',
+        invoice_num: ip.invoiceNum || '',
+        lines: JSON.stringify(ip.lines || []),
+        id_photo_url: invIdUrl || null,
+        esign_status: 'pending',
+        created_by: (me && me.name) || '',
+        location: (me && me.location) || 'DeBary',
+        created_at: new Date().toISOString()
+      };
+      var invResult = await sbPost('invoices', invRecord);
+      if (invResult && invResult.length) formRecordId = invResult[0].id;
+
     } else if (formType === 'void_release') {
-      // Combine both void and release forms
       var voidHtml = document.getElementById('vr-void-form').outerHTML;
       var releaseHtml = document.getElementById('vr-release-form').outerHTML;
       formHtml = voidHtml + '<div style="margin:20px 0;"></div>' + releaseHtml;
       var vrfn = (document.getElementById('vr-fname') || {}).value || '';
       var vrln = (document.getElementById('vr-lname') || {}).value || '';
       customerName = (vrfn + ' ' + vrln).trim();
+
+      // Save the VR record immediately
+      var vg = function(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+      var vrFullName = [vg('vr-fname'), vg('vr-lname')].filter(Boolean).join(' ');
+      var vrYear = _vrData.year || vg('vr-year');
+      var vrMake = _vrData.make || vg('vr-make');
+      var vrModel = _vrData.model || vg('vr-model');
+      var vrVin = _vrData.vin || vg('vr-vin');
+      var vrVehicle = [vrYear, vrMake, vrModel].filter(Boolean).join(' ');
+      var vts = Date.now();
+      var vrIdUrl = '';
+      if (_vrData.idPhotoFile) {
+        var ve1 = _vrData.idPhotoFile.name.split('.').pop() || 'jpg';
+        var vidp = 'void_release/' + vts + '_id.' + ve1;
+        await sbUpload(vidp, _vrData.idPhotoFile);
+        vrIdUrl = await sbSignUrl(vidp);
+      }
+      var vrRecord = {
+        customer_name: vrFullName || customerName,
+        co_customer: vg('vr-cocustomer') || null,
+        vehicle_desc: vrVehicle,
+        vin: vrVin || '',
+        account: vg('vr-acct') || null,
+        form_type: _vrFormType,
+        id_photo_url: vrIdUrl || null,
+        esign_status: 'pending',
+        created_by: (me && me.name) || '',
+        location: (me && me.location) || 'DeBary',
+        created_at: new Date().toISOString()
+      };
+      var vrResult = await sbPost('void_releases', vrRecord);
+      if (vrResult && vrResult.length) formRecordId = vrResult[0].id;
     }
 
     // Create the esign_request record in Supabase
     var record = {
       token: token,
       form_type: formType,
+      form_record_id: formRecordId,
       form_html: formHtml,
       customer_name: customerName || 'Customer',
       status: 'pending',
