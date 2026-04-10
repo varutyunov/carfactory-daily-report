@@ -17038,28 +17038,38 @@ async function cashPayoutAdd(){
 
 var _codOwner='Vlad';
 
-function cashOutDealOpen(){
+async function cashOutDealOpen(){
   _codOwner='Vlad';
   codSetOwner('Vlad');
-  // Load current week's deals for this location
-  var wkStart=_payCurrentWeekStart;
-  var wkEnd=_payGetWeekEnd(wkStart);
-  wkEnd.setHours(23,59,59,999);
-  var locDeals=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).filter(function(d){
-    var dt=d.created_at?new Date(d.created_at):null;
-    if(!dt)return false;
-    return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary').toLowerCase()===_payLocation.toLowerCase();
-  });
-  // Also pull from _dealsData if _dealsAllData not populated
-  if(!locDeals.length&&typeof _dealsData!=='undefined') locDeals=_dealsData.slice();
   var list=document.getElementById('cod-deals-list');
-  if(!locDeals.length){
-    list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals this week.</div>';
+  list.innerHTML='<div style="text-align:center;color:#555;padding:24px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading deals...</div>';
+  document.getElementById('cash-out-deal-sheet').style.display='block';
+  // Fetch deals directly from Supabase for this week+location
+  var wkStart=_payCurrentWeekStart;
+  var weekKey=_payWeekKey(wkStart);
+  var wkEnd=new Date(wkStart);wkEnd.setDate(wkEnd.getDate()+7);
+  var loc=_payLocation;
+  try{
+    var deals=await sbGet('deals','location=eq.'+loc+'&created_at=gte.'+weekKey+'T00:00:00&created_at=lt.'+wkEnd.toISOString().slice(0,10)+'T00:00:00&order=created_at.desc');
+    _codDeals=deals||[];
+  }catch(e){_codDeals=[];}
+  // Filter to deals with cash
+  var cashDeals=_codDeals.filter(function(d){
+    var cash=0;
+    try{var pmts=typeof d.payments==='string'?JSON.parse(d.payments||'[]'):d.payments||[];
+      pmts.forEach(function(p){if((p.method||'').toLowerCase()==='cash')cash+=parseFloat(p.amount)||0;});
+    }catch(e){}
+    return cash>0;
+  });
+  if(!cashDeals.length){
+    list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals with cash this week.</div>';
   } else {
-    list.innerHTML=locDeals.map(function(d){
+    list.innerHTML=cashDeals.map(function(d){
       var cashTotal=0;
-      try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
-      var cashStr=cashTotal>0?'$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2}):'No cash';
+      try{var pmts=typeof d.payments==='string'?JSON.parse(d.payments||'[]'):d.payments||[];
+        pmts.forEach(function(p){if((p.method||'').toLowerCase()==='cash')cashTotal+=parseFloat(p.amount)||0;});
+      }catch(e){}
+      var cashStr='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2});
       return '<div onclick="codSelectDeal('+d.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">'
         +'<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+(d.customer_name||'Unknown')+'</div>'
         +'<div style="font-size:13px;color:#888;">'+(d.vehicle_desc||'')+'</div>'
@@ -17067,7 +17077,6 @@ function cashOutDealOpen(){
         +'</div>';
     }).join('');
   }
-  document.getElementById('cash-out-deal-sheet').style.display='block';
 }
 
 function cashOutDealClose(){
@@ -17082,12 +17091,17 @@ function codSetOwner(owner){
   if(tBtn){tBtn.style.background=owner==='Tommy'?'#f59e0b':'transparent';tBtn.style.color=owner==='Tommy'?'#000':'#888';tBtn.style.borderColor=owner==='Tommy'?'#f59e0b':'#333';}
 }
 
+var _codDeals=[];
+
 async function codSelectDeal(id){
-  var d=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).find(function(x){return x.id===id;})
+  var d=_codDeals.find(function(x){return x.id===id;})
+    ||(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).find(function(x){return x.id===id;})
     ||(typeof _dealsData!=='undefined'?_dealsData:[]).find(function(x){return x.id===id;});
   if(!d)return;
   var cashTotal=0;
-  try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
+  try{var pmts=typeof d.payments==='string'?JSON.parse(d.payments||'[]'):d.payments||[];
+    pmts.forEach(function(p){if((p.method||'').toLowerCase()==='cash')cashTotal+=parseFloat(p.amount)||0;});
+  }catch(e){}
   if(cashTotal<=0){alert('No cash payments on this deal.');return;}
   var cashStr='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2});
   if(!confirm('Cash out '+cashStr+' from '+d.customer_name+' deal to '+_codOwner+'?'))return;
@@ -17095,12 +17109,11 @@ async function codSelectDeal(id){
   try{
     showLoading('Posting cash out...');
     await sbPost('cash_payouts',{
-      paid_to:_codOwner+' — Deal Cash Out',
+      paid_to:_codOwner+' — Deal: '+(d.customer_name||'')+ ' / '+(d.vehicle_desc||''),
       amount:cashTotal,
       week_start:wk,
       location:_payLocation,
-      logged_by:me?me.name:'',
-      notes:'Deal: '+d.customer_name+' / '+(d.vehicle_desc||'')
+      logged_by:me?me.name:''
     });
     hideLoading();
     cashOutDealClose();
@@ -17146,6 +17159,72 @@ async function cashPayoutDelete(id){
   }
 }
 
+// Owner: immediately undo a deal cash out (deletes the payout, cash goes back to net)
+async function cashPayoutUndo(id){
+  if(!confirm('Undo this deal cash out? The cash will go back into net cash.'))return;
+  try{
+    await sbDelete('cash_payouts',id);
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
+}
+
+// Employee: request undo — marks payout as pending owner review
+async function cashPayoutRequestUndo(id){
+  if(!confirm('Request undo? An owner will need to approve it.'))return;
+  var p=_cashPayouts.find(function(x){return x.id===id;});
+  if(!p)return;
+  try{
+    await sbPatch('cash_payouts',id,{paid_to:'[UNDO PENDING] '+p.paid_to});
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+    // Notify owners
+    try{
+      var amt='$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2});
+      var who=me?me.name:'Employee';
+      await sendPushNotification(['vlad','tommy'],'↩️ Cash Out Undo Request',who+' requests undo on '+amt+' — '+(p.paid_to||''));
+    }catch(e){}
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
+}
+
+// Owner: approve employee undo request — deletes the payout
+async function cashPayoutApproveUndo(id){
+  if(!confirm('Approve undo? Cash will go back into net cash.'))return;
+  try{
+    await sbDelete('cash_payouts',id);
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
+}
+
+// Owner: deny employee undo request — removes the pending flag
+async function cashPayoutDenyUndo(id){
+  var p=_cashPayouts.find(function(x){return x.id===id;});
+  if(!p)return;
+  try{
+    var cleanName=(p.paid_to||'').replace('[UNDO PENDING] ','');
+    await sbPatch('cash_payouts',id,{paid_to:cleanName});
+    await cashPayoutsLoad();
+    cashPayoutsRender();
+    _payUpdateStats();
+    _cashPayoutsRenderInline();
+  }catch(e){
+    alert('Error: '+(e.message||e));
+  }
+}
+
 function cashPayoutsRender(){
   var list=document.getElementById('cash-payouts-list');
   if(!list)return;
@@ -17153,21 +17232,27 @@ function cashPayoutsRender(){
     list.innerHTML='<div style="text-align:center;color:#555;padding:20px 0;font-size:14px;">No payouts logged this week.</div>';
     return;
   }
+  var isOwner=me&&me.role==='manager';
   var fmt=function(v){return '$'+parseFloat(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var total=0;
   var html='';
   _cashPayouts.forEach(function(p,idx){
     var amt=parseFloat(p.amount)||0;
-    total+=amt;
+    var isDealCashOut=(p.paid_to||'').indexOf('Deal:')!==-1;
+    var isPendingUndo=(p.paid_to||'').indexOf('[UNDO PENDING]')!==-1;
+    if(isPendingUndo&&!isOwner){total+=0;}else{total+=amt;}
     var dt=p.created_at?new Date(p.created_at):null;
     var timeStr=dt?dt.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     var dateStr=dt?dt.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}):'';
     var detailId='cp-payout-detail-'+idx;
-    html+='<div onclick="var d=document.getElementById(\''+detailId+'\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';" style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    var borderColor=isPendingUndo?'rgba(245,158,11,.4)':'#1e1e1e';
+    html+='<div onclick="var d=document.getElementById(\''+detailId+'\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';" style="background:#111;border:1px solid '+borderColor+';border-radius:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;'+(isPendingUndo?'opacity:.6;':'')+ '">';
+    // Pending undo badge
+    if(isPendingUndo) html+='<div style="font-size:10px;font-weight:700;color:#f59e0b;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">⏳ UNDO PENDING — AWAITING OWNER REVIEW</div>';
     // Header row — name + amount
     html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">';
-    html+='<div style="font-size:16px;font-weight:700;color:#fff;">'+p.paid_to+'</div>';
-    html+='<span style="font-size:18px;font-weight:800;color:#ef4444;">-'+fmt(amt)+'</span>';
+    html+='<div style="font-size:15px;font-weight:700;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+p.paid_to.replace('[UNDO PENDING] ','')+'</div>';
+    html+='<span style="font-size:18px;font-weight:800;color:#ef4444;flex-shrink:0;margin-left:8px;">-'+fmt(amt)+'</span>';
     html+='</div>';
     // Subtitle
     html+='<div style="display:flex;align-items:center;gap:6px;">';
@@ -17183,8 +17268,17 @@ function cashPayoutsRender(){
     if(p.logged_by) html+='<div style="background:#0a0a0a;border-radius:8px;padding:10px 12px;"><div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;">Logged By</div><div style="font-size:13px;color:#fff;font-weight:600;margin-top:2px;">'+p.logged_by+'</div></div>';
     html+='</div>';
     html+='<div style="display:flex;gap:8px;">';
-    html+='<button onclick="event.stopPropagation();cashPayoutSaveEdit('+p.id+','+idx+')" style="flex:1;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Save Changes</button>';
-    html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="flex:1;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Delete</button>';
+    if(isOwner){
+      html+='<button onclick="event.stopPropagation();cashPayoutSaveEdit('+p.id+','+idx+')" style="flex:1;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Save</button>';
+      if(isDealCashOut&&!isPendingUndo) html+='<button onclick="event.stopPropagation();cashPayoutUndo('+p.id+')" style="flex:1;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Undo</button>';
+      if(isPendingUndo) html+='<button onclick="event.stopPropagation();cashPayoutApproveUndo('+p.id+')" style="flex:1;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Approve Undo</button>';
+      if(isPendingUndo) html+='<button onclick="event.stopPropagation();cashPayoutDenyUndo('+p.id+')" style="flex:1;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Deny</button>';
+      html+='<button onclick="event.stopPropagation();cashPayoutDelete('+p.id+')" style="flex:1;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Delete</button>';
+    } else {
+      // Employee: can only request undo on deal cash outs
+      if(isDealCashOut&&!isPendingUndo) html+='<button onclick="event.stopPropagation();cashPayoutRequestUndo('+p.id+')" style="flex:1;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:#f59e0b;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;">Request Undo</button>';
+      if(isPendingUndo) html+='<div style="flex:1;padding:10px;text-align:center;color:#f59e0b;font-size:12px;font-weight:700;">Undo requested — waiting for owner</div>';
+    }
     html+='</div>';
     html+='</div>';
     html+='</div>';
