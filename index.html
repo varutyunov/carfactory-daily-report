@@ -11918,37 +11918,66 @@ async function _viewSignedForm(formType, recordId) {
     // Render the original form HTML
     html += '<div style="transform-origin:top left;font-size:12px;">' + req.form_html + '</div>';
 
-    // Append signatures section
-    html += '<div style="border-top:2px solid #000;margin-top:20px;padding-top:16px;">';
-    html += '<div style="font-size:14px;font-weight:700;color:#000;margin-bottom:12px;">ELECTRONIC SIGNATURES</div>';
-    html += '<div style="display:flex;gap:16px;">';
+    // ── Electronic Signature & Authentication Certificate ──
+    var cert = null;
+    if (req.auth_certificate) {
+      cert = typeof req.auth_certificate === 'string' ? JSON.parse(req.auth_certificate) : req.auth_certificate;
+    }
+    var signedDate = req.signed_at ? new Date(req.signed_at) : (cert && cert.signed_at ? new Date(cert.signed_at) : null);
+    var formLabels = {deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'};
+    var formLabel = formLabels[formType] || 'Document';
+
+    html += '<div style="border-top:3px double #000;margin-top:24px;padding-top:16px;font-family:\'Times New Roman\',Times,Georgia,serif;">';
+
+    // Title
+    html += '<div style="text-align:center;margin-bottom:14px;">';
+    html += '<div style="font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#000;">Electronic Signature Certificate of Completion</div>';
+    html += '<div style="font-size:10px;color:#555;margin-top:2px;">This document was electronically signed in accordance with applicable law</div>';
+    html += '</div>';
+
+    // Document info table
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px;">';
+    html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;width:35%;">Document Type</td><td style="padding:4px 8px;border:1px solid #999;">' + formLabel + '</td></tr>';
+    if (cert && cert.signing_id) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Transaction ID</td><td style="padding:4px 8px;border:1px solid #999;font-family:monospace;font-size:10px;">' + cert.signing_id + '</td></tr>';
+    if (cert && cert.customer_name) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Signer</td><td style="padding:4px 8px;border:1px solid #999;">' + cert.customer_name + '</td></tr>';
+    if (signedDate) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Date & Time Signed</td><td style="padding:4px 8px;border:1px solid #999;">' + signedDate.toLocaleString('en-US', {dateStyle:'long',timeStyle:'medium'}) + '</td></tr>';
+    if (cert && cert.ip_address) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">IP Address</td><td style="padding:4px 8px;border:1px solid #999;font-family:monospace;">' + cert.ip_address + '</td></tr>';
+    if (cert && cert.user_agent) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Device / Browser</td><td style="padding:4px 8px;border:1px solid #999;font-size:9px;word-break:break-all;">' + cert.user_agent + '</td></tr>';
+    if (cert && cert.platform) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Platform</td><td style="padding:4px 8px;border:1px solid #999;">' + cert.platform + '</td></tr>';
+    html += '</table>';
+
+    // Signature images
+    html += '<div style="display:flex;gap:16px;margin-bottom:14px;">';
     if (custSigUrl) {
-      html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
+      html += '<div style="flex:1;border:1px solid #999;padding:10px;text-align:center;">';
       html += '<img src="' + custSigUrl + '" style="width:100%;height:50px;object-fit:contain;" />';
-      html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Customer Signature</div>';
-      if (req.signed_at) html += '<div style="font-size:9px;color:#999;">' + new Date(req.signed_at).toLocaleString() + '</div>';
+      html += '<div style="border-top:1px solid #000;margin-top:6px;padding-top:4px;font-size:11px;font-weight:700;">Customer / Buyer</div>';
+      if (cert && cert.customer_name) html += '<div style="font-size:10px;color:#333;">' + cert.customer_name + '</div>';
+      if (signedDate) html += '<div style="font-size:9px;color:#666;">' + signedDate.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + '</div>';
       html += '</div>';
     }
     if (sellerSigUrl && formType !== 'invoice') {
-      html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
+      html += '<div style="flex:1;border:1px solid #999;padding:10px;text-align:center;">';
       html += '<img src="' + sellerSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
-      html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Dealer/Representative</div>';
+      html += '<div style="border-top:1px solid #000;margin-top:6px;padding-top:4px;font-size:11px;font-weight:700;">Dealer / Authorized Representative</div>';
+      var repName = (record && record.created_by) ? (_repFullNames[(record.created_by||'').trim().toLowerCase()] || record.created_by) : '';
+      if (repName) html += '<div style="font-size:10px;color:#333;">' + repName + '</div>';
       html += '</div>';
     }
     html += '</div>';
 
-    // Auth certificate info
-    if (req.auth_certificate) {
-      var cert = typeof req.auth_certificate === 'string' ? JSON.parse(req.auth_certificate) : req.auth_certificate;
-      html += '<div style="margin-top:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:9px;color:#666;">';
-      html += '<div style="font-weight:700;margin-bottom:4px;">E-Sign Authentication Certificate</div>';
-      if (cert.signing_id) html += 'ID: ' + cert.signing_id + '<br>';
-      if (cert.signed_at) html += 'Signed: ' + new Date(cert.signed_at).toLocaleString() + '<br>';
-      if (cert.ip_address) html += 'IP: ' + cert.ip_address + '<br>';
-      html += 'Legally binding under ESIGN Act & UETA';
-      html += '</div>';
-    }
+    // Legal notice
+    html += '<div style="border:1px solid #999;padding:10px;font-size:9px;color:#333;line-height:1.5;background:#fafafa;">';
+    html += '<div style="font-weight:700;font-size:10px;margin-bottom:4px;text-transform:uppercase;">Legal Notice</div>';
+    html += 'This document has been electronically signed using a secure digital signature process. ';
+    html += 'All parties consented to conduct this transaction electronically. ';
+    html += 'This electronic signature is legally binding and enforceable under the Electronic Signatures in Global and National Commerce Act (ESIGN, 15 U.S.C. &sect; 7001 et seq.) ';
+    html += 'and the Uniform Electronic Transactions Act (UETA) as adopted by the State of Florida (F.S. &sect; 668.50). ';
+    html += 'The signer\'s identity was authenticated via IP address and device information recorded at the time of signing. ';
+    html += 'Any attempt to alter this document after execution will invalidate the signatures herein.';
+    html += '</div>';
 
+    html += '</div>';
     html += '</div>';
     html += '</div>';
 
