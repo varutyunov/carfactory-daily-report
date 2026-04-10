@@ -11375,14 +11375,18 @@ function renderForms() {
 async function openFormDetail(id) {
   _formsViewingDetail = true;
   var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
-  var dep = _formsData.find(function(d){ return d.id === id; });
-  if(!dep) return;
+  var dep = (_formsData||[]).find(function(d){ return d.id === id; });
 
   // Live refresh from Supabase to get latest esign status
   try{
     var fresh = await sbGet('deposits','id=eq.'+id);
-    if(fresh && fresh.length) { dep = fresh[0]; var idx = _formsData.findIndex(function(d){return d.id===id;}); if(idx>=0) _formsData[idx]=dep; }
+    if(fresh && fresh.length) {
+      dep = fresh[0];
+      if (_formsData) { var idx = _formsData.findIndex(function(d){return d.id===id;}); if(idx>=0) _formsData[idx]=dep; else _formsData.unshift(dep); }
+      else { _formsData = [dep]; }
+    }
   }catch(e){}
+  if(!dep) return;
 
   document.getElementById('forms-header-title').textContent = dep.customer_name || 'Detail';
 
@@ -11708,14 +11712,18 @@ async function formDeleteFinal(tableName, id) {
 async function openInvoiceDetail(id) {
   _formsViewingDetail = true;
   var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
-  var inv = _invData_list.find(function(d) { return d.id === id; });
-  if (!inv) return;
+  var inv = (_invData_list||[]).find(function(d) { return d.id === id; });
 
-  // Live refresh
+  // Live refresh from Supabase
   try {
     var fresh = await sbGet('invoices', 'id=eq.' + id);
-    if (fresh && fresh.length) { inv = fresh[0]; var idx = _invData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _invData_list[idx] = inv; }
+    if (fresh && fresh.length) {
+      inv = fresh[0];
+      if (_invData_list) { var idx = _invData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _invData_list[idx] = inv; else _invData_list.unshift(inv); }
+      else { _invData_list = [inv]; }
+    }
   } catch(e) {}
+  if (!inv) return;
 
   document.getElementById('forms-header-title').textContent = inv.customer_name || 'Invoice';
 
@@ -11879,14 +11887,18 @@ function renderVRList() {
 async function openVRDetail(id) {
   _formsViewingDetail = true;
   var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
-  var vr = _vrData_list.find(function(d) { return d.id === id; });
-  if (!vr) return;
+  var vr = (_vrData_list||[]).find(function(d) { return d.id === id; });
 
-  // Live refresh
+  // Live refresh from Supabase
   try {
     var fresh = await sbGet('void_releases', 'id=eq.' + id);
-    if (fresh && fresh.length) { vr = fresh[0]; var idx = _vrData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _vrData_list[idx] = vr; }
+    if (fresh && fresh.length) {
+      vr = fresh[0];
+      if (_vrData_list) { var idx = _vrData_list.findIndex(function(d) { return d.id === id; }); if (idx >= 0) _vrData_list[idx] = vr; else _vrData_list.unshift(vr); }
+      else { _vrData_list = [vr]; }
+    }
   } catch(e) {}
+  if (!vr) return;
 
   document.getElementById('forms-header-title').textContent = vr.customer_name || 'Void/Release';
 
