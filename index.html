@@ -11545,6 +11545,14 @@ async function _esignPollCheck() {
       if (rows && rows.length && rows[0].esign_status === 'signed') {
         // Customer has signed! Stop polling this one
         _esignStopPolling(chk.id);
+        // Invoices: auto-complete (no counter-sign needed)
+        if (chk.table === 'invoices') {
+          try { await sbPatch('invoices', chk.id, { esign_status: 'completed' }); } catch(e2) {}
+          try {
+            var esReqs = await sbGet('esign_requests', 'form_type=eq.invoice&form_record_id=eq.' + chk.id + '&order=created_at.desc&limit=1');
+            if (esReqs && esReqs.length) await sbPatch('esign_requests', esReqs[0].id, { status: 'completed' });
+          } catch(e3) {}
+        }
         _esignShowSignedAlert(rows[0], chk.table, chk.formType);
       }
     } catch(e) {}
@@ -11562,6 +11570,11 @@ function _esignShowSignedAlert(record, table, formType) {
   var banner = document.createElement('div');
   banner.id = 'esign-signed-banner';
   banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#166534;border-bottom:2px solid #4ade80;padding:16px 16px;animation:slideDown .3s ease;';
+  var isInvoice = table === 'invoices';
+  var actionLabel = isInvoice ? 'View Signed Form →' : 'Counter-Sign Now →';
+  var actionFn = isInvoice
+    ? 'document.getElementById(\'esign-signed-banner\').remove();_esignOpenCounterSign(\'' + table + '\',' + record.id + ')'
+    : 'document.getElementById(\'esign-signed-banner\').remove();_esignOpenCounterSign(\'' + table + '\',' + record.id + ')';
   banner.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
     '<span style="font-size:24px;">✍️</span>' +
     '<div style="flex:1;">' +
@@ -11571,7 +11584,7 @@ function _esignShowSignedAlert(record, table, formType) {
   '</div>' +
   '<div style="display:flex;gap:8px;margin-top:10px;">' +
     '<button onclick="document.getElementById(\'esign-signed-banner\').remove()" style="flex:1;padding:10px;background:rgba(0,0,0,0.3);border:none;border-radius:10px;color:#fff;font-size:13px;cursor:pointer;">Dismiss</button>' +
-    '<button onclick="document.getElementById(\'esign-signed-banner\').remove();_esignOpenCounterSign(\'' + table + '\',' + record.id + ')" style="flex:2;padding:10px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;">Counter-Sign Now →</button>' +
+    '<button onclick="' + actionFn + '" style="flex:2;padding:10px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;">' + actionLabel + '</button>' +
   '</div>';
   document.body.appendChild(banner);
 
@@ -11648,7 +11661,8 @@ function _buildEsignSection(record, tableName) {
     html += '<button onclick="' + refreshFn + '(' + record.id + ')" style="margin-top:10px;padding:10px 20px;background:#f59e0b;color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">🔄 Refresh Status</button>';
     html += '</div>';
 
-  } else if (record.esign_status === 'signed' && !record.seller_signature_url) {
+  } else if (record.esign_status === 'signed' && !record.seller_signature_url && tableName !== 'invoices') {
+    // Counter-sign needed (deposits & VR only — invoices have no rep signature)
     html += '<div style="background:#002211;border:1px solid #166534;border-radius:14px;padding:16px;">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
     html += '<span style="font-size:20px;">✅</span>';
@@ -11675,21 +11689,24 @@ function _buildEsignSection(record, tableName) {
     html += '</div>';
     html += '</div>';
 
-  } else if (record.esign_status === 'completed' || (record.esign_status === 'signed' && record.seller_signature_url)) {
+  } else if (record.esign_status === 'completed' || record.esign_status === 'signed') {
+    // Fully signed — invoices are complete once customer signs (no counter-sign)
     html += '<div style="background:#002211;border:1px solid #166534;border-radius:14px;padding:16px;">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
     html += '<span style="font-size:20px;">✅</span>';
     html += '<span style="font-size:15px;font-weight:700;color:#4ade80;">Fully Signed</span>';
     html += '</div>';
-    // Show both signatures
-    var sigGrid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+    // Show signatures — invoices only have customer sig, deposits/VR have both
+    var showSeller = tableName !== 'invoices';
+    var gridCols = (showSeller && sellerSigUrl) ? '1fr 1fr' : '1fr';
+    var sigGrid = '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:8px;">';
     if (custSigUrl) {
       sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
       sigGrid += '<img src="' + custSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Customer</div>';
       sigGrid += '</div>';
     }
-    if (sellerSigUrl) {
+    if (showSeller && sellerSigUrl) {
       sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
       sigGrid += '<img src="' + sellerSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Dealer/Rep</div>';
@@ -11912,7 +11929,7 @@ async function _viewSignedForm(formType, recordId) {
       if (req.signed_at) html += '<div style="font-size:9px;color:#999;">' + new Date(req.signed_at).toLocaleString() + '</div>';
       html += '</div>';
     }
-    if (sellerSigUrl) {
+    if (sellerSigUrl && formType !== 'invoice') {
       html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
       html += '<img src="' + sellerSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
       html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Dealer/Representative</div>';
@@ -11939,7 +11956,7 @@ async function _viewSignedForm(formType, recordId) {
     overlay.style.display = 'flex';
 
     // Inject signatures INTO the form's actual signature lines
-    _injectFormSignatures(overlay, custSigUrl, sellerSigUrl);
+    _injectFormSignatures(overlay, custSigUrl, sellerSigUrl, formType, record);
 
   } catch(e) {
     alert('Error loading form: ' + (e.message || e));
@@ -11947,9 +11964,17 @@ async function _viewSignedForm(formType, recordId) {
 }
 
 // Inject customer & seller signature images into the empty signature lines within the rendered form HTML
-function _injectFormSignatures(container, custSigUrl, sellerSigUrl) {
+function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, record) {
   var formArea = container.querySelector('div[style*="transform-origin"]');
   if (!formArea) return;
+
+  // For deposits: resolve seller rep full name and date for Print Name / Date fields
+  var repName = '';
+  var repDate = '';
+  if (formType === 'deposit') {
+    repName = (record && record.created_by) ? (_repFullNames[(record.created_by||'').trim().toLowerCase()] || record.created_by) : _getRepFullName();
+    repDate = (record && record.created_at) ? new Date(record.created_at).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US');
+  }
 
   // Walk all text nodes to find signature-related labels
   var walker = document.createTreeWalker(formArea, NodeFilter.SHOW_TEXT, null, false);
@@ -11975,6 +12000,22 @@ function _injectFormSignatures(container, custSigUrl, sellerSigUrl) {
           sigLine.style.height = 'auto';
           sigLine.style.minHeight = '36px';
           sigLine.style.borderBottom = 'none';
+        }
+      }
+    }
+
+    // Deposit: auto-fill seller "Print Name" and "Date" if empty
+    if (formType === 'deposit' && (txt === 'Print Name' || txt === 'Date')) {
+      var lbl = nodes[i].parentElement;
+      var line = lbl ? lbl.previousElementSibling : null;
+      if (line && !line.textContent.trim() && line.style.borderBottom) {
+        var parentCol = lbl.parentElement;
+        var parentText = parentCol ? parentCol.textContent.toLowerCase() : '';
+        if (parentText.indexOf('seller') !== -1 || parentText.indexOf('authorized') !== -1) {
+          var fillVal = (txt === 'Print Name') ? repName : repDate;
+          if (fillVal) {
+            line.innerHTML = '<span style="font-size:14px;">' + fillVal + '</span>';
+          }
         }
       }
     }
@@ -13680,6 +13721,17 @@ async function vrSave(){
 // E-SIGN LOGIC
 // ══════════════════════════════════════════════════════════════
 
+var _repFullNames = {
+  'tommy':'Thomas Sposato','thomas':'Thomas Sposato',
+  'vlad':'Vladimir Arutyunov','vladimir':'Vladimir Arutyunov',
+  'scott':'Scott Logan','emanuel':'Emanuel Flores','jesse':'Jesse Hill'
+};
+function _getRepFullName() {
+  if (!me || !me.name) return '';
+  var key = me.name.trim().toLowerCase();
+  return _repFullNames[key] || me.name;
+}
+
 var _esignFormType = '';
 var _esignToken = '';
 var _esignRecordId = null;
@@ -13739,7 +13791,22 @@ async function esignCreateRequest(formType) {
     var formRecordId = null;
 
     if (formType === 'deposit') {
-      formHtml = document.getElementById('dep-print-form').outerHTML;
+      // Auto-fill seller Print Name and Date on the form before capturing
+      var _depForm = document.getElementById('dep-print-form');
+      var _sellerCol = _depForm ? _depForm.querySelectorAll('div[style*="grid-template-columns"] > div') : [];
+      if (_sellerCol.length > 0) {
+        var _sellerDivs = _sellerCol[0].querySelectorAll('div');
+        for (var _si = 0; _si < _sellerDivs.length; _si++) {
+          var _stxt = _sellerDivs[_si].textContent.trim();
+          if (_stxt === 'Print Name' && _sellerDivs[_si].previousElementSibling && !_sellerDivs[_si].previousElementSibling.textContent.trim()) {
+            _sellerDivs[_si].previousElementSibling.innerHTML = '<span style="font-size:14px;">' + _getRepFullName() + '</span>';
+          }
+          if (_stxt === 'Date' && _sellerDivs[_si].previousElementSibling && !_sellerDivs[_si].previousElementSibling.querySelector('span')) {
+            _sellerDivs[_si].previousElementSibling.innerHTML = '<span style="font-size:14px;">' + new Date().toLocaleDateString('en-US') + '</span>';
+          }
+        }
+      }
+      formHtml = _depForm.outerHTML;
       var fn = (document.getElementById('dep-fname') || {}).value || '';
       var ln = (document.getElementById('dep-lname') || {}).value || '';
       customerName = (fn + ' ' + ln).trim();
