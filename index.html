@@ -1121,16 +1121,6 @@ body.light .cal-fab{background:#4488ff !important;}
         <span id="deal-total" style="font-size:20px;font-weight:700;color:#4ade80;">$0.00</span>
       </div>
 
-      <!-- Cash collected now (shown when any cash payment exists) -->
-      <div id="deal-add-week-wrap" style="display:none;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:12px 14px;margin-bottom:14px;">
-        <div style="font-size:13px;color:#4ade80;font-weight:600;margin-bottom:8px;">💵 Cash to post to this week</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input id="deal-cash-now" type="text" inputmode="decimal" placeholder="$0" oninput="moneyInput(this)" style="flex:1;background:#0a0a0a;border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:12px 14px;font-size:18px;font-weight:700;outline:none;text-align:right;min-width:0;"/>
-          <button onclick="dealCashNowNone()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">None</button>
-          <button onclick="dealCashNowFull()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Full</button>
-        </div>
-        <div style="font-size:11px;color:rgba(74,222,128,.5);margin-top:6px;">Enter partial amount if only a deposit was collected, or None to skip</div>
-      </div>
 
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
     </div>
@@ -15954,35 +15944,11 @@ function dealSetType(type) {
 }
 
 function dealUpdateWeekToggleVisibility() {
-  var cashTotal=0;
-  _dealPayments.forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});
-  var hasCash=cashTotal>0;
-  _dealAddToWeek = hasCash;
-  var weekWrap = document.getElementById('deal-add-week-wrap');
-  if(weekWrap) weekWrap.style.display = hasCash ? 'block' : 'none';
-  // Auto-fill cash-now field with full cash amount
-  var cashNowEl=document.getElementById('deal-cash-now');
-  if(cashNowEl&&hasCash){
-    var cur=parseFloat((cashNowEl.value||'').replace(/[^0-9.]/g,''))||0;
-    if(cur<=0||cur>cashTotal) cashNowEl.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  }
-}
-
-function dealCashNowNone(){
-  var el=document.getElementById('deal-cash-now');
-  if(el) el.value='$0.00';
-}
-
-function dealCashNowFull(){
-  var cashTotal=0;
-  _dealPayments.forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});
-  var el=document.getElementById('deal-cash-now');
-  if(el) el.value='$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  // No-op — cash always auto-posts to week
 }
 
 function dealSetAddToWeek(on) {
-  // Legacy no-op — auto handled by dealUpdateWeekToggleVisibility
-  _dealAddToWeek = on;
+  // No-op — cash always auto-posts to week
 }
 
 function dealPickupChanged() {
@@ -16163,10 +16129,10 @@ async function dealSubmit() {
       try{ await calSyncPickupPayments(); }catch(e){}
     }
 
-    // Post cash collected now to this week's payments
-    if(_dealAddToWeek) {
-      var cashNowEl=document.getElementById('deal-cash-now');
-      var cashNow=parseFloat((cashNowEl?cashNowEl.value:'').replace(/[^0-9.]/g,''))||0;
+    // Post full cash to this week's payments automatically
+    {
+      var cashNow=0;
+      payments.forEach(function(p){if(p.method==='cash')cashNow+=parseFloat(p.amount)||0;});
       if(cashNow>0){
         var today = new Date();
         var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
@@ -16503,6 +16469,7 @@ function _dealsCalcBreakdown(){
   b.total=b.cash+b.card+b.zelle+b.money_order+b.other;
   _dealsBreakdown=b;
 }
+
 function dealsShowBreakdown(){
   _dealsCalcBreakdown();
   var sheet=document.getElementById('deals-breakdown-sheet');
@@ -16511,7 +16478,7 @@ function dealsShowBreakdown(){
   var backBtn=document.getElementById('deals-breakdown-back');
   if(!sheet||!content)return;
   if(title) title.textContent='Deal Breakdown';
-  if(backBtn) backBtn.style.display='none';
+  if(backBtn){ backBtn.style.display='none'; backBtn.onclick=function(){dealsShowBreakdown();}; }
   var fmt=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var rows=[
     {method:'cash',label:'Cash',value:_dealsBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
@@ -16601,6 +16568,7 @@ function dealsCloseBreakdown(){
   var sheet=document.getElementById('deals-breakdown-sheet');
   if(sheet)sheet.style.display='none';
 }
+
 
 // ══════════════════════════════════════════════════════════════
 // CUSTOMER HISTORY & ANALYTICS
