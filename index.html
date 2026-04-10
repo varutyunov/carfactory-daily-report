@@ -11589,11 +11589,21 @@ async function _esignResumePolling() {
 }
 
 function _esignOpenCounterSign(table, recordId) {
-  // Open the forms view and navigate to the detail
+  // Close any open overlays first
+  ['deposit-overlay','inv-overlay','vr-overlay','esign-overlay'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.style.display='none';
+  });
+
+  // Open the forms view
   var formsOverlay = document.getElementById('forms-overlay');
   if (formsOverlay) formsOverlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
 
+  // Hide inner tabs (detail mode)
+  var tabs = document.getElementById('forms-inner-tabs'); if(tabs) tabs.style.display = 'none';
+  _formsViewingDetail = true;
+
+  // Navigate to the detail view
   if (table === 'invoices') {
     _formsActiveTab = 'invoices';
     openInvoiceDetail(recordId);
@@ -11669,18 +11679,21 @@ function _buildEsignSection(record, tableName) {
     var sigGrid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     if (custSigUrl) {
       sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
-      sigGrid += '<img src="' + custSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      sigGrid += '<img src="' + custSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Customer</div>';
       sigGrid += '</div>';
     }
     if (sellerSigUrl) {
       sigGrid += '<div style="background:#000;border-radius:10px;padding:8px;">';
-      sigGrid += '<img src="' + sellerSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      sigGrid += '<img src="' + sellerSigUrl + '" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       sigGrid += '<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Dealer/Rep</div>';
       sigGrid += '</div>';
     }
     sigGrid += '</div>';
     html += sigGrid;
+    // View Signed Form button
+    var ftMap = {deposits:'deposit',invoices:'invoice',void_releases:'void_release'};
+    html += '<button onclick="_viewSignedForm(\'' + ftMap[tableName] + '\',' + record.id + ')" style="width:100%;margin-top:12px;padding:12px;background:#1d4ed8;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">📄 View Signed Form</button>';
     html += '</div>';
   }
 
@@ -11833,7 +11846,9 @@ function _showCompletedReview(record, tableName) {
   html += 'Completed: ' + new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
   html += '</div>';
 
-  // Complete & Close button
+  // View form + Complete & Close buttons
+  var ftMap2 = {deposits:'deposit',invoices:'invoice',void_releases:'void_release'};
+  html += '<button onclick="_viewSignedForm(\'' + ftMap2[tableName] + '\',' + record.id + ')" style="width:100%;padding:14px;background:#1d4ed8;border:none;border-radius:14px;font-size:16px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;">📄 View Signed Form</button>';
   html += '<button onclick="_completeAndClose(\'' + tableName + '\')" style="width:100%;padding:16px;background:#4ade80;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:800;cursor:pointer;margin-bottom:10px;">✓ Complete & Close</button>';
 
   html += '</div>';
@@ -11842,6 +11857,81 @@ function _showCompletedReview(record, tableName) {
   var body = document.getElementById('forms-body');
   body.innerHTML = html;
   body.scrollTop = 0;
+}
+
+async function _viewSignedForm(formType, recordId) {
+  try {
+    var esReqs = await sbGet('esign_requests', 'form_type=eq.' + formType + '&form_record_id=eq.' + recordId + '&order=created_at.desc&limit=1');
+    if (!esReqs || !esReqs.length || !esReqs[0].form_html) {
+      alert('Signed form document not available.');
+      return;
+    }
+    var req = esReqs[0];
+    var tableName = {deposit:'deposits',invoice:'invoices',void_release:'void_releases'}[formType];
+    var record = null;
+    try { var recs = await sbGet(tableName, 'id=eq.' + recordId); if(recs&&recs.length) record=recs[0]; } catch(e){}
+
+    var custSigUrl = record ? _resolveEsignSigUrl(record.esign_signature_url) : '';
+    var sellerSigUrl = record ? (record.seller_signature_url || '') : '';
+
+    // Build a full-screen overlay with the form
+    var overlay = document.getElementById('signed-form-viewer');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'signed-form-viewer';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;background:#fff;display:flex;flex-direction:column;';
+      document.body.appendChild(overlay);
+    }
+
+    var html = '<div style="background:#000;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;">';
+    html += '<button onclick="document.getElementById(\'signed-form-viewer\').style.display=\'none\'" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px;">←</button>';
+    html += '<div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;">SIGNED FORM</div>';
+    html += '</div>';
+    html += '<div style="flex:1;overflow-y:auto;background:#fff;padding:10px;">';
+
+    // Render the original form HTML
+    html += '<div style="transform-origin:top left;font-size:12px;">' + req.form_html + '</div>';
+
+    // Append signatures section
+    html += '<div style="border-top:2px solid #000;margin-top:20px;padding-top:16px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#000;margin-bottom:12px;">ELECTRONIC SIGNATURES</div>';
+    html += '<div style="display:flex;gap:16px;">';
+    if (custSigUrl) {
+      html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
+      html += '<img src="' + custSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
+      html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Customer Signature</div>';
+      if (req.signed_at) html += '<div style="font-size:9px;color:#999;">' + new Date(req.signed_at).toLocaleString() + '</div>';
+      html += '</div>';
+    }
+    if (sellerSigUrl) {
+      html += '<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
+      html += '<img src="' + sellerSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
+      html += '<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Dealer/Representative</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Auth certificate info
+    if (req.auth_certificate) {
+      var cert = typeof req.auth_certificate === 'string' ? JSON.parse(req.auth_certificate) : req.auth_certificate;
+      html += '<div style="margin-top:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:9px;color:#666;">';
+      html += '<div style="font-weight:700;margin-bottom:4px;">E-Sign Authentication Certificate</div>';
+      if (cert.signing_id) html += 'ID: ' + cert.signing_id + '<br>';
+      if (cert.signed_at) html += 'Signed: ' + new Date(cert.signed_at).toLocaleString() + '<br>';
+      if (cert.ip_address) html += 'IP: ' + cert.ip_address + '<br>';
+      html += 'Legally binding under ESIGN Act & UETA';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    html += '</div>';
+
+    overlay.innerHTML = html;
+    overlay.style.display = 'flex';
+
+  } catch(e) {
+    alert('Error loading form: ' + (e.message || e));
+  }
 }
 
 function _completeAndClose(tableName) {
