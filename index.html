@@ -2212,24 +2212,41 @@ function initOneSignalUser(name){
     if(isOwner) localStorage.removeItem('cf_notif_dismissed');
     showNotifEnableBar();
   }
-  // Link user to OneSignal whenever SDK is ready
+  // Link user to OneSignal whenever SDK is ready — with retry
   function linkUser(OS){
-    try{
-      OS.login(window._osExternalId);
-      console.log('[OS] Logged in as:', window._osExternalId);
-      // Check subscription status
-      if(OS.User && OS.User.PushSubscription){
-        var sub = OS.User.PushSubscription;
-        console.log('[OS] Push subscription token:', sub.token);
-        console.log('[OS] Push subscription optedIn:', sub.optedIn);
+    var attempts = 0;
+    function tryLogin(){
+      attempts++;
+      try{
+        OS.login(window._osExternalId).then(function(){
+          console.log('[OS] Logged in as:', window._osExternalId);
+          if(OS.User && OS.User.PushSubscription){
+            var sub = OS.User.PushSubscription;
+            console.log('[OS] Push token:', sub.token ? 'yes' : 'none', 'optedIn:', sub.optedIn);
+          }
+        }).catch(function(e){
+          console.log('[OS] Login attempt ' + attempts + ' failed:', e);
+          if(attempts < 3) setTimeout(tryLogin, 5000 * attempts);
+        });
+      }catch(e){
+        console.log('[OS] Login error:', e);
+        if(attempts < 3) setTimeout(tryLogin, 5000 * attempts);
       }
-    }catch(e){ console.log('[OS] Login error:', e); }
+    }
+    tryLogin();
   }
   if(window.OneSignal && typeof window.OneSignal.login==='function'){
     linkUser(window.OneSignal);
   } else {
     OneSignalDeferred.push(linkUser);
   }
+  // Re-login periodically to keep external_id linked (every 30 min)
+  if(window._osRelinkInterval) clearInterval(window._osRelinkInterval);
+  window._osRelinkInterval = setInterval(function(){
+    if(window.OneSignal && typeof window.OneSignal.login === 'function'){
+      try{ window.OneSignal.login(window._osExternalId); }catch(e){}
+    }
+  }, 30 * 60 * 1000);
 }
 
 // Send a push notification to all subscribed employees
