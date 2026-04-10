@@ -11412,7 +11412,6 @@ function openDepositForm() {
   _depPayments = [{ amount: '', method: 'cash' }];
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'flex';
-  var tb = document.querySelector('.tb'); if(tb) tb.style.display='none';
   depShowStep(1);
   // Reset deal type + payment method buttons to defaults
   depSetDealType('cash');
@@ -11459,7 +11458,6 @@ function closeDepositForm() {
   }
   var overlay = document.getElementById('deposit-overlay');
   overlay.style.display = 'none';
-  var tb = document.querySelector('.tb'); if(tb) tb.style.display='';
 }
 
 var _depCurrentStep = 1;
@@ -12077,7 +12075,6 @@ function openInvoiceForm(){
   _invData={};_invLines=[];_invPayMethod='cash';_invCurrentStep=1;
   document.getElementById('inv-overlay').style.display='flex';
   document.getElementById('inv-overlay').classList.add('print-active');
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   invShowStep(1);
   ['inv-fname','inv-lname','inv-phone','inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
@@ -12210,7 +12207,6 @@ function closeInvoiceForm(){
   }
   document.getElementById('inv-overlay').style.display='none';
   document.getElementById('inv-overlay').classList.remove('print-active');
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
 function invGoBack(){
@@ -12423,7 +12419,6 @@ function openVoidRelease(){
   _vrData={};_vrFormType='both';_vrCurrentStep=1;
   document.getElementById('vr-overlay').style.display='flex';
   document.getElementById('vr-overlay').classList.add('print-active');
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   vrShowStep(1);
   vrSetFormType('both');
   ['vr-fname','vr-lname','vr-cocustomer','vr-year','vr-make','vr-model','vr-vin','vr-acct','vr-car-search'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
@@ -12451,7 +12446,6 @@ function vrClose(){
   }
   document.getElementById('vr-overlay').style.display='none';
   document.getElementById('vr-overlay').classList.remove('print-active');
-  var tb=document.querySelector('.tb');if(tb)tb.style.display='';
 }
 
 function vrGoBack(){
