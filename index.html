@@ -1037,19 +1037,25 @@ body.light .cal-fab{background:#4488ff !important;}
 
 <!-- FORMS VIEW OVERLAY -->
 <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;display:flex;flex-direction:column;">
-    <div style="height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-      <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-      <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
-    </div>
-    <div id="forms-inner-tabs" style="display:flex;gap:0;padding:0 16px 10px;">
-      <button onclick="formsInnerTab('deposits')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>
-      <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
-      <button onclick="formsInnerTab('void')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>
-    </div>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
   </div>
-  <div id="forms-body" style="padding-top:100px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+  <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;">
+      <!-- Location Toggle -->
+      <div id="forms-loc-tabs" style="margin-bottom:10px;">
+        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
+          <button onclick="formsSetLocation('DeBary')" id="forms-loc-debary" style="flex:1;padding:8px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>
+          <button onclick="formsSetLocation('DeLand')" id="forms-loc-deland" style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>
+        </div>
+      </div>
+      <!-- Form Type Tabs -->
+      <div id="forms-inner-tabs" style="display:flex;gap:0;margin-bottom:12px;">
+        <button onclick="formsInnerTab('deposits')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>
+        <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
+        <button onclick="formsInnerTab('void')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>
+      </div>
       <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
       <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;">
         <div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div>
@@ -11273,8 +11279,11 @@ function openFormsView() {
     var countEl = document.getElementById('tools-forms-count');
     if(countEl) countEl.style.display = 'none';
   }).catch(function(){});
-  // Show inner tabs and initialize to deposits
-  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
+  // Initialize location from user's location, rebuild body with tabs
+  var initLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+  _formsLocation = initLoc;
+  _formsViewingDetail = false;
+  document.getElementById('forms-body').innerHTML = _formsBodyHTML();
   formsInnerTab('deposits');
 }
 
@@ -11284,9 +11293,8 @@ function formsBack() {
   if(_formsViewingDetail) {
     _formsViewingDetail = false;
     document.getElementById('forms-header-title').textContent = 'FORMS';
-    var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
     var body = document.getElementById('forms-body');
-    body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    body.innerHTML = _formsBodyHTML();
     formsInnerTab(_formsActiveTab||'deposits');
   } else {
     closeFormsView();
@@ -11303,7 +11311,8 @@ async function loadForms() {
   var list = document.getElementById('forms-list');
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
-    _formsData = await sbGet('deposits', 'order=created_at.desc');
+    var allDeps = await sbGet('deposits', 'order=created_at.desc');
+    _formsData = allDeps.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     await _signStorageUrls(_formsData, ['id_photo_url','signed_form_url']);
     _formsFiltered = _formsData;
     renderForms();
@@ -11377,7 +11386,6 @@ function renderForms() {
 
 async function openFormDetail(id) {
   _formsViewingDetail = true;
-  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
   var dep = (_formsData||[]).find(function(d){ return d.id === id; });
 
   // Live refresh from Supabase to get latest esign status
@@ -11618,8 +11626,6 @@ function _esignOpenCounterSign(table, recordId) {
   if (formsOverlay) formsOverlay.style.display = 'flex';
   var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
 
-  // Hide inner tabs (detail mode)
-  var tabs = document.getElementById('forms-inner-tabs'); if(tabs) tabs.style.display = 'none';
   _formsViewingDetail = true;
 
   // Navigate to the detail view
@@ -11913,87 +11919,126 @@ async function _viewSignedForm(formType, recordId) {
     html += '<button onclick="document.getElementById(\'signed-form-viewer\').style.display=\'none\'" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px;">←</button>';
     html += '<div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;">SIGNED FORM</div>';
     html += '</div>';
+    // Parse auth certificate
+    var cert = null;
+    if (req.auth_certificate) {
+      cert = typeof req.auth_certificate === 'string' ? JSON.parse(req.auth_certificate) : req.auth_certificate;
+    }
+
     html += '<div style="flex:1;overflow-y:auto;background:#fff;padding:10px;">';
 
     // Render the original form HTML
     html += '<div style="transform-origin:top left;font-size:12px;">' + req.form_html + '</div>';
 
-    // ── Electronic Signature & Authentication Certificate ──
-    var cert = null;
-    if (req.auth_certificate) {
-      cert = typeof req.auth_certificate === 'string' ? JSON.parse(req.auth_certificate) : req.auth_certificate;
-    }
-    var signedDate = req.signed_at ? new Date(req.signed_at) : (cert && cert.signed_at ? new Date(cert.signed_at) : null);
-    var formLabels = {deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'};
-    var formLabel = formLabels[formType] || 'Document';
+    // ── Electronic Evidence Summary (attachment pages) ──
+    if (cert) {
+      var formLabel = {deposit:'Deposit Receipt',invoice:'Invoice',void_release:'Void Release'}[formType] || formType;
+      var signedAt = cert.signed_at ? new Date(cert.signed_at) : null;
+      var fmtDate = function(d){ if(!d) return '—'; return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true,timeZoneName:'short'}); };
+      var fmtShort = function(d){ if(!d) return '—'; return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); };
+      var createdAt = record && record.created_at ? new Date(record.created_at) : null;
 
-    html += '<div style="border-top:3px double #000;margin-top:24px;padding-top:16px;font-family:\'Times New Roman\',Times,Georgia,serif;">';
+      html += '<div style="margin-top:30px;border-top:3px solid #000;padding-top:20px;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#222;line-height:1.5;">';
 
-    // Title
-    html += '<div style="text-align:center;margin-bottom:14px;">';
-    html += '<div style="font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#000;">Electronic Signature Certificate of Completion</div>';
-    html += '<div style="font-size:10px;color:#555;margin-top:2px;">This document was electronically signed in accordance with applicable law</div>';
-    html += '</div>';
-
-    // Document info table
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px;">';
-    html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;width:35%;">Document Type</td><td style="padding:4px 8px;border:1px solid #999;">' + formLabel + '</td></tr>';
-    if (cert && cert.signing_id) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Transaction ID</td><td style="padding:4px 8px;border:1px solid #999;font-family:monospace;font-size:10px;">' + cert.signing_id + '</td></tr>';
-    if (cert && cert.customer_name) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Signer</td><td style="padding:4px 8px;border:1px solid #999;">' + cert.customer_name + '</td></tr>';
-    if (signedDate) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Date & Time Signed</td><td style="padding:4px 8px;border:1px solid #999;">' + signedDate.toLocaleString('en-US', {dateStyle:'long',timeStyle:'medium'}) + '</td></tr>';
-    if (cert && cert.ip_address) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">IP Address</td><td style="padding:4px 8px;border:1px solid #999;font-family:monospace;">' + cert.ip_address + '</td></tr>';
-    if (cert && cert.user_agent) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Device / Browser</td><td style="padding:4px 8px;border:1px solid #999;font-size:9px;word-break:break-all;">' + cert.user_agent + '</td></tr>';
-    if (cert && cert.platform) html += '<tr><td style="padding:4px 8px;border:1px solid #999;background:#f5f5f5;font-weight:700;">Platform</td><td style="padding:4px 8px;border:1px solid #999;">' + cert.platform + '</td></tr>';
-    html += '</table>';
-
-    // Signature images
-    html += '<div style="display:flex;gap:16px;margin-bottom:14px;">';
-    if (custSigUrl) {
-      html += '<div style="flex:1;border:1px solid #999;padding:10px;text-align:center;">';
-      html += '<img src="' + custSigUrl + '" style="width:100%;height:50px;object-fit:contain;" />';
-      html += '<div style="border-top:1px solid #000;margin-top:6px;padding-top:4px;font-size:11px;font-weight:700;">Customer / Buyer</div>';
-      if (cert && cert.customer_name) html += '<div style="font-size:10px;color:#333;">' + cert.customer_name + '</div>';
-      if (signedDate) html += '<div style="font-size:9px;color:#666;">' + signedDate.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + '</div>';
+      // Header
+      html += '<div style="text-align:center;margin-bottom:18px;">';
+      html += '<div style="font-size:16px;font-weight:900;letter-spacing:1px;">Electronic Evidence Summary</div>';
+      html += '<div style="font-size:10px;color:#666;margin-top:2px;">Car Factory E-Sign &mdash; carfactory.work</div>';
       html += '</div>';
-    }
-    if (sellerSigUrl && formType !== 'invoice') {
-      html += '<div style="flex:1;border:1px solid #999;padding:10px;text-align:center;">';
-      html += '<img src="' + sellerSigUrl + '" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
-      html += '<div style="border-top:1px solid #000;margin-top:6px;padding-top:4px;font-size:11px;font-weight:700;">Dealer / Authorized Representative</div>';
-      var repName = (record && record.created_by) ? (_repFullNames[(record.created_by||'').trim().toLowerCase()] || record.created_by) : '';
-      if (repName) html += '<div style="font-size:10px;color:#333;">' + repName + '</div>';
+
+      // Document Details
+      html += '<div style="font-size:12px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:8px;">Document Details</div>';
+      html += '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-bottom:16px;">';
+      html += '<tr><td style="padding:3px 0;font-weight:700;width:140px;">Document Title:</td><td>' + formLabel + '</td></tr>';
+      if (record && record.id) html += '<tr><td style="padding:3px 0;font-weight:700;">Record ID:</td><td>' + record.id + '</td></tr>';
+      if (cert.signing_id) html += '<tr><td style="padding:3px 0;font-weight:700;">Signing ID:</td><td style="font-family:monospace;font-size:10px;word-break:break-all;">' + cert.signing_id + '</td></tr>';
+      if (createdAt) html += '<tr><td style="padding:3px 0;font-weight:700;">Created:</td><td>' + fmtShort(createdAt) + '</td></tr>';
+      if (signedAt) html += '<tr><td style="padding:3px 0;font-weight:700;">Completed:</td><td>' + fmtDate(signedAt) + '</td></tr>';
+      html += '<tr><td style="padding:3px 0;font-weight:700;">Status:</td><td style="color:#16a34a;font-weight:700;">Completed</td></tr>';
+      html += '</table>';
+
+      // Signer Details
+      html += '<div style="font-size:12px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:8px;">Signer Details</div>';
+
+      // Customer signer
+      html += '<div style="background:#f9f9f9;border:1px solid #e5e5e5;border-radius:4px;padding:10px;margin-bottom:10px;">';
+      html += '<div style="font-weight:800;font-size:11px;margin-bottom:6px;">Customer / Buyer</div>';
+      html += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
+      if (cert.customer_name) html += '<tr><td style="padding:2px 0;font-weight:700;width:100px;">Name:</td><td>' + cert.customer_name + '</td></tr>';
+      if (signedAt) html += '<tr><td style="padding:2px 0;font-weight:700;">Signed:</td><td>' + fmtDate(signedAt) + '</td></tr>';
+      if (cert.ip_address) html += '<tr><td style="padding:2px 0;font-weight:700;">IP Address:</td><td style="font-family:monospace;font-size:10px;">' + cert.ip_address + '</td></tr>';
+      if (cert.platform) html += '<tr><td style="padding:2px 0;font-weight:700;">Platform:</td><td>' + cert.platform + '</td></tr>';
+      if (cert.user_agent) html += '<tr><td style="padding:2px 0;font-weight:700;">Device:</td><td style="font-size:9px;word-break:break-all;">' + cert.user_agent + '</td></tr>';
+      html += '</table>';
+      if (custSigUrl) html += '<div style="margin-top:8px;"><div style="font-weight:700;font-size:10px;margin-bottom:3px;">Signature:</div><img src="' + custSigUrl + '" style="height:40px;max-width:200px;object-fit:contain;border:1px solid #ddd;padding:4px;background:#fff;" /></div>';
       html += '</div>';
+
+      // Seller/Rep signer (if applicable)
+      if (sellerSigUrl && formType !== 'invoice') {
+        var repName2 = (record && record.created_by) ? (_repFullNames[(record.created_by||'').trim().toLowerCase()] || record.created_by) : '';
+        html += '<div style="background:#f9f9f9;border:1px solid #e5e5e5;border-radius:4px;padding:10px;margin-bottom:10px;">';
+        html += '<div style="font-weight:800;font-size:11px;margin-bottom:6px;">Seller / Authorized Representative</div>';
+        html += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
+        if (repName2) html += '<tr><td style="padding:2px 0;font-weight:700;width:100px;">Name:</td><td>' + repName2 + '</td></tr>';
+        html += '<tr><td style="padding:2px 0;font-weight:700;">Role:</td><td>Dealer Representative</td></tr>';
+        html += '</table>';
+        html += '<div style="margin-top:8px;"><div style="font-weight:700;font-size:10px;margin-bottom:3px;">Signature:</div><img src="' + sellerSigUrl + '" style="height:40px;max-width:200px;object-fit:contain;border:1px solid #ddd;padding:4px;background:#fff;filter:invert(1);" /></div>';
+        html += '</div>';
+      }
+
+      // Signing Audit Log
+      html += '<div style="font-size:12px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:8px;margin-top:16px;">Signing Audit Log</div>';
+      html += '<table style="width:100%;font-size:10px;border-collapse:collapse;">';
+      html += '<tr style="background:#eee;"><th style="text-align:left;padding:4px 6px;font-weight:800;">Timestamp</th><th style="text-align:left;padding:4px 6px;font-weight:800;">Action</th><th style="text-align:left;padding:4px 6px;font-weight:800;">Details</th></tr>';
+      if (createdAt) html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;font-family:monospace;white-space:nowrap;">' + fmtDate(createdAt) + '</td><td style="padding:4px 6px;">Document created</td><td style="padding:4px 6px;">' + formLabel + ' generated by ' + (record.created_by || 'rep') + '</td></tr>';
+      if (req.created_at) html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;font-family:monospace;white-space:nowrap;">' + fmtDate(new Date(req.created_at)) + '</td><td style="padding:4px 6px;">E-sign request sent</td><td style="padding:4px 6px;">Signing link delivered to customer</td></tr>';
+      if (signedAt) html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;font-family:monospace;white-space:nowrap;">' + fmtDate(signedAt) + '</td><td style="padding:4px 6px;">Customer signed</td><td style="padding:4px 6px;">' + (cert.customer_name||'Customer') + ' signed from IP ' + (cert.ip_address||'unknown') + '</td></tr>';
+      if (sellerSigUrl && formType !== 'invoice' && record && record.updated_at) html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;font-family:monospace;white-space:nowrap;">' + fmtDate(new Date(record.updated_at)) + '</td><td style="padding:4px 6px;">Seller counter-signed</td><td style="padding:4px 6px;">Representative counter-signed the document</td></tr>';
+      html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;font-family:monospace;white-space:nowrap;">' + fmtDate(signedAt || (record && record.updated_at ? new Date(record.updated_at) : null)) + '</td><td style="padding:4px 6px;font-weight:700;color:#16a34a;">Document completed</td><td style="padding:4px 6px;">All signatures collected, document finalized</td></tr>';
+      html += '</table>';
+
+      // Legal footer
+      html += '<div style="margin-top:18px;padding-top:10px;border-top:1px solid #ccc;font-size:9px;color:#666;line-height:1.5;">';
+      html += 'This document was electronically signed in compliance with the U.S. Electronic Signatures in Global and National Commerce Act (ESIGN, 15 U.S.C. &sect;7001&ndash;7006) and the Florida Uniform Electronic Transaction Act (UETA, F.S. &sect;668.50). ';
+      html += 'All parties consented to electronic signing. The signing identity was authenticated via unique token-based link. ';
+      html += 'This evidence summary is auto-generated and constitutes part of the original signed document record.';
+      html += '</div>';
+
+      html += '</div>'; // end evidence summary
     }
-    html += '</div>';
 
-    // Legal notice
-    html += '<div style="border:1px solid #999;padding:10px;font-size:9px;color:#333;line-height:1.5;background:#fafafa;">';
-    html += '<div style="font-weight:700;font-size:10px;margin-bottom:4px;text-transform:uppercase;">Legal Notice</div>';
-    html += 'This document has been electronically signed using a secure digital signature process. ';
-    html += 'All parties consented to conduct this transaction electronically. ';
-    html += 'This electronic signature is legally binding and enforceable under the Electronic Signatures in Global and National Commerce Act (ESIGN, 15 U.S.C. &sect; 7001 et seq.) ';
-    html += 'and the Uniform Electronic Transactions Act (UETA) as adopted by the State of Florida (F.S. &sect; 668.50). ';
-    html += 'The signer\'s identity was authenticated via IP address and device information recorded at the time of signing. ';
-    html += 'Any attempt to alter this document after execution will invalidate the signatures herein.';
-    html += '</div>';
-
-    html += '</div>';
     html += '</div>';
     html += '</div>';
 
     overlay.innerHTML = html;
     overlay.style.display = 'flex';
 
-    // Inject signatures INTO the form's actual signature lines
-    _injectFormSignatures(overlay, custSigUrl, sellerSigUrl, formType, record);
+    // Inject signatures + one-line auth stamps INTO the form's actual signature lines
+    _injectFormSignatures(overlay, custSigUrl, sellerSigUrl, formType, record, cert);
 
   } catch(e) {
     alert('Error loading form: ' + (e.message || e));
   }
 }
 
+// One-line auth stamp text for under each signature (signing_id / timestamp)
+function _esignStampLine(cert) {
+  if (!cert) return '';
+  var id = cert.signing_id || '';
+  var ts = '';
+  if (cert.signed_at) {
+    var d = new Date(cert.signed_at);
+    ts = d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0') + ' ' + String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0') + ':' + String(d.getUTCSeconds()).padStart(2,'0') + ' GMT';
+  }
+  if (!id && !ts) return '';
+  var parts = [];
+  if (id) parts.push(id);
+  if (ts) parts.push(ts);
+  return '<div style="font-family:monospace;font-size:7px;color:#888;margin-top:1px;line-height:1.2;letter-spacing:0.3px;">' + parts.join(' / ') + '</div>';
+}
+
 // Inject customer & seller signature images into the empty signature lines within the rendered form HTML
-function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, record) {
+function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, record, cert) {
   var formArea = container.querySelector('div[style*="transform-origin"]');
   if (!formArea) return;
 
@@ -12025,7 +12070,7 @@ function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, re
         // Customer sig is black pen (no filter needed on white bg); seller sig is white pen (invert)
         var filter = (colText.indexOf('seller') !== -1 || colText.indexOf('authorized') !== -1) ? 'filter:invert(1);' : '';
         if (url) {
-          sigLine.innerHTML = '<img src="' + url + '" style="height:36px;max-width:100%;object-fit:contain;' + filter + '" />';
+          sigLine.innerHTML = '<img src="' + url + '" style="height:36px;max-width:100%;object-fit:contain;' + filter + '" />' + _esignStampLine(cert);
           sigLine.style.height = 'auto';
           sigLine.style.minHeight = '36px';
           sigLine.style.borderBottom = 'none';
@@ -12054,7 +12099,7 @@ function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, re
       var labelEl2 = nodes[i].parentElement;
       var sigLine2 = labelEl2 ? labelEl2.previousElementSibling : null;
       if (sigLine2 && !sigLine2.textContent.trim() && custSigUrl) {
-        sigLine2.innerHTML = '<img src="' + custSigUrl + '" style="height:30px;max-width:100%;object-fit:contain;" />';
+        sigLine2.innerHTML = '<img src="' + custSigUrl + '" style="height:30px;max-width:100%;object-fit:contain;" />' + _esignStampLine(cert);
         sigLine2.style.height = 'auto';
         sigLine2.style.borderBottom = 'none';
       }
@@ -12064,7 +12109,7 @@ function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, re
     if (txt === 'Customer' && nodes[i].parentElement && nodes[i].parentElement.querySelector('span[style*="border-bottom"]')) {
       var span = nodes[i].parentElement.querySelector('span[style*="border-bottom"]');
       if (span && !span.textContent.trim() && custSigUrl) {
-        span.innerHTML = '<img src="' + custSigUrl + '" style="height:16px;object-fit:contain;" />';
+        span.innerHTML = '<img src="' + custSigUrl + '" style="height:16px;object-fit:contain;" />' + _esignStampLine(cert);
       }
     }
 
@@ -12074,20 +12119,20 @@ function _injectFormSignatures(container, custSigUrl, sellerSigUrl, formType, re
       if (parentDiv) {
         var repSpan = parentDiv.querySelector('span[style*="border-bottom"]');
         if (repSpan && !repSpan.textContent.trim() && sellerSigUrl) {
-          repSpan.innerHTML = '<img src="' + sellerSigUrl + '" style="height:16px;object-fit:contain;filter:invert(1);" />';
+          repSpan.innerHTML = '<img src="' + sellerSigUrl + '" style="height:16px;object-fit:contain;filter:invert(1);" />' + _esignStampLine(cert);
         }
       }
     }
   }
+
 }
 
 function _completeAndClose(tableName) {
   // Go back to the forms list, showing the correct tab
   _formsViewingDetail = false;
   document.getElementById('forms-header-title').textContent = 'FORMS';
-  var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'flex';
   var body = document.getElementById('forms-body');
-  body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+  body.innerHTML = _formsBodyHTML();
   if (tableName === 'deposits') formsInnerTab('deposits');
   else if (tableName === 'invoices') formsInnerTab('invoices');
   else if (tableName === 'void_releases') formsInnerTab('void');
@@ -12143,7 +12188,6 @@ async function formDeleteFinal(tableName, id) {
 
 async function openInvoiceDetail(id) {
   _formsViewingDetail = true;
-  var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
   var inv = (_invData_list||[]).find(function(d) { return d.id === id; });
 
   // Live refresh from Supabase
@@ -12267,7 +12311,8 @@ async function loadVRList() {
   var list = document.getElementById('forms-list');
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
-    _vrData_list = await sbGet('void_releases', 'order=created_at.desc');
+    var allVR = await sbGet('void_releases', 'order=created_at.desc');
+    _vrData_list = allVR.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     _vrFiltered = _vrData_list;
     renderVRList();
   } catch(e) {
@@ -12324,7 +12369,6 @@ function renderVRList() {
 
 async function openVRDetail(id) {
   _formsViewingDetail = true;
-  var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'none';
   var vr = (_vrData_list||[]).find(function(d) { return d.id === id; });
 
   // Live refresh from Supabase
@@ -13041,8 +13085,38 @@ var _invLines = [];
 var _invPayMethod = 'cash';
 var _invCurrentStep = 1;
 var _formsActiveTab = 'deposits';
+var _formsLocation = 'DeBary';
 var _invData_list = [];
 var _invFiltered = [];
+
+function _formsBodyHTML() {
+  var loc = _formsLocation;
+  var dbBg = loc==='DeBary' ? '#fff' : 'none', dbClr = loc==='DeBary' ? '#000' : '#555';
+  var dlBg = loc==='DeLand' ? '#fff' : 'none', dlClr = loc==='DeLand' ? '#000' : '#555';
+  var html = '<div style="padding:12px;">';
+  html += '<div id="forms-loc-tabs" style="margin-bottom:10px;"><div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">';
+  html += '<button onclick="formsSetLocation(\'DeBary\')" id="forms-loc-debary" style="flex:1;padding:8px 4px;background:'+dbBg+';border:none;border-radius:10px;color:'+dbClr+';font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>';
+  html += '<button onclick="formsSetLocation(\'DeLand\')" id="forms-loc-deland" style="flex:1;padding:8px 4px;background:'+dlBg+';border:none;border-radius:10px;color:'+dlClr+';font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>';
+  html += '</div></div>';
+  html += '<div id="forms-inner-tabs" style="display:flex;gap:0;margin-bottom:12px;">';
+  html += '<button onclick="formsInnerTab(\'deposits\')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>';
+  html += '<button onclick="formsInnerTab(\'invoices\')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>';
+  html += '<button onclick="formsInnerTab(\'void\')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>';
+  html += '</div>';
+  html += '<input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
+  html += '<div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div>';
+  html += '</div>';
+  return html;
+}
+
+function formsSetLocation(loc) {
+  _formsLocation = loc;
+  ['DeBary','DeLand'].forEach(function(l){
+    var btn = document.getElementById('forms-loc-' + l.toLowerCase());
+    if(btn){ btn.style.background = l===loc ? '#fff' : 'none'; btn.style.color = l===loc ? '#000' : '#555'; }
+  });
+  formsInnerTab(_formsActiveTab);
+}
 
 function formsInnerTab(tab){
   _formsActiveTab = tab;
@@ -13075,7 +13149,8 @@ async function loadInvoices(){
   var list=document.getElementById('forms-list');
   list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
-    _invData_list=await sbGet('invoices','order=created_at.desc');
+    var allInv=await sbGet('invoices','order=created_at.desc');
+    _invData_list=allInv.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     _invFiltered=_invData_list;
     renderInvoicesList();
   }catch(e){
@@ -13798,9 +13873,8 @@ function esignClose() {
     }
     // Refresh the forms list to show the new pending record
     _formsViewingDetail = false;
-    var tabs = document.getElementById('forms-inner-tabs'); if (tabs) tabs.style.display = 'flex';
     var body = document.getElementById('forms-body');
-    if (body) body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    if (body) body.innerHTML = _formsBodyHTML();
     document.getElementById('forms-header-title').textContent = 'FORMS';
     if (_esignFormType === 'deposit') formsInnerTab('deposits');
     else if (_esignFormType === 'invoice') formsInnerTab('invoices');
