@@ -18476,11 +18476,16 @@ async function isEditSave(){
   }catch(e){alert('Error: '+(e.message||e));}
 }
 
-function isLinkOpen(idx){
+async function isLinkOpen(idx){
   _isLinkIdx=idx;
   var c=_isData[idx];if(!c)return;
   document.getElementById('is-link-search').value='';
   document.getElementById('is-link-overlay').style.display='block';
+  document.getElementById('is-link-list').innerHTML='<div style="text-align:center;color:#555;padding:20px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading inventory...</div>';
+  try{
+    var inv=await sbGet('inventory','select=id,name,stock,vin,color,location&order=name.asc&limit=1000');
+    _isInv=Array.isArray(inv)?inv:[];
+  }catch(e){_isInv=S.inventory||[];}
   isLinkFilter();
 }
 function isLinkClose(){
@@ -18490,7 +18495,7 @@ function isLinkClose(){
 function isLinkFilter(){
   var q=(document.getElementById('is-link-search').value||'').toLowerCase();
   var list=document.getElementById('is-link-list');
-  var cars=(_isInv||[]).filter(function(c){return (c.location||'').toLowerCase()===_isLoc.toLowerCase();});
+  var cars=(_isInv||[]);
   if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
