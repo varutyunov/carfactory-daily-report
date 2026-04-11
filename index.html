@@ -18468,7 +18468,7 @@ function isEditOpen(idx){
     +field('Vlad Expenses','is-e-vlad',c.vlad_expenses||'','number')
     +'<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Expense / Repair Notes</div>'
     +'<textarea id="is-e-notes" rows="3" style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;resize:vertical;">'+(c.expense_notes||'')+'</textarea></div>';
-  document.getElementById('is-edit-overlay').style.display='flex';
+  document.getElementById('is-edit-overlay').style.display='block';
 }
 
 function isEditClose(){
@@ -18501,7 +18501,7 @@ function isLinkOpen(idx){
   _isLinkIdx=idx;
   var c=_isData[idx];if(!c)return;
   document.getElementById('is-link-search').value='';
-  document.getElementById('is-link-overlay').style.display='flex';
+  document.getElementById('is-link-overlay').style.display='block';
   isLinkFilter();
 }
 function isLinkClose(){
