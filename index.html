@@ -18324,7 +18324,7 @@ async function openInvSheets(){
     o.id='inv-sheets-overlay';
   }
   document.body.appendChild(o);
-  o.style.cssText='display:block;background:#000;min-height:100vh;';
+  o.style.cssText='display:block;background:#000;position:fixed;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   o.innerHTML=
     '<div class="tb">'+
     '<button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
