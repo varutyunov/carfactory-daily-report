@@ -18034,11 +18034,20 @@ function openDealDetail(id) {
     html += '<input type="hidden" id="de-dealcash-'+d.id+'" value="'+dealCashTotal+'"/>';
     html += '</div>';
 
-    // GPS Serial (if finance)
+    // GPS Serial + Pickup Payment (if finance)
     if(isFinance){
       html += '<div style="margin-bottom:10px;">';
       html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Serial</div>';
       html += '<input id="de-gps-'+d.id+'" value="'+(d.gps_serial||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+      html += '</div>';
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pick Up Payment</div>';
+      var puVal=d.pickup_payment?'$'+parseFloat(d.pickup_payment).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+      html += '<input id="de-pickup-'+d.id+'" type="text" inputmode="decimal" value="'+puVal+'" placeholder="$0.00" oninput="moneyInput(this)" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+      html += '</div>';
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pick Up Payment Due Date</div>';
+      html += '<input id="de-pickup-due-'+d.id+'" type="date" value="'+(d.pickup_payment_due||'')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;-webkit-appearance:none;"/>';
       html += '</div>';
     }
 
@@ -18221,6 +18230,18 @@ async function dealEditSave(id){
     // GPS
     var gpsEl=document.getElementById('de-gps-'+id);
     if(gpsEl&&gpsEl.value.trim()!==(d.gps_serial||'')) patch.gps_serial=gpsEl.value.trim();
+    // Pickup Payment
+    var puEl=document.getElementById('de-pickup-'+id);
+    if(puEl){
+      var puAmt=parseFloat((puEl.value||'').replace(/[^0-9.]/g,''))||0;
+      var oldPu=parseFloat(d.pickup_payment)||0;
+      if(puAmt!==oldPu) patch.pickup_payment=puAmt||null;
+    }
+    var puDueEl=document.getElementById('de-pickup-due-'+id);
+    if(puDueEl){
+      var puDue=puDueEl.value||null;
+      if(puDue!==(d.pickup_payment_due||null)) patch.pickup_payment_due=puDue;
+    }
     // Notes
     var notesEl=document.getElementById('de-notes-'+id);
     if(notesEl&&notesEl.value!==(d.notes||'')) patch.notes=notesEl.value;
@@ -18332,6 +18353,10 @@ async function dealEditSave(id){
         _payNetAdjustAmt=total;
         _netDealSave();
       }
+    }
+    // Sync pickup payments to calendar if changed
+    if(patch.pickup_payment!==undefined||patch.pickup_payment_due!==undefined){
+      try{await calSyncPickupPayments();}catch(e){}
     }
     if(btn){btn.textContent='Saved!';btn.style.background='#065f46';btn.style.borderColor='#10b981';}
     setTimeout(function(){
