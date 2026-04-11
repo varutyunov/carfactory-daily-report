@@ -1578,24 +1578,20 @@ body.light .cal-fab{background:#4488ff !important;}
 </div>
 
 <!-- INVENTORY SHEETS OVERLAY -->
-<div id="inv-sheets-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9000;background:#000;">
-  <!-- Header -->
-  <div style="position:absolute;top:0;left:0;right:0;z-index:1;padding:14px 16px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;">
+<div id="inv-sheets-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9000;background:#000;overflow:hidden;">
+  <div id="is-header" style="flex-shrink:0;padding-top:env(safe-area-inset-top,14px);padding-left:16px;padding-right:16px;padding-bottom:10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
       <button onclick="closeInvSheets()" style="background:none;border:none;color:#4ade80;font-size:22px;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent;">&#x2190;</button>
       <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;">Inventory Sheets</div>
       <button onclick="invSheetsAddCar()" style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:13px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>
     </div>
-    <!-- Location toggle -->
     <div style="display:flex;gap:8px;">
       <button id="is-loc-debary" onclick="invSheetsSetLoc('DeBary')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #4ade80;background:#4ade80;color:#000;-webkit-tap-highlight-color:transparent;">DeBary</button>
       <button id="is-loc-deland" onclick="invSheetsSetLoc('DeLand')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;-webkit-tap-highlight-color:transparent;">DeLand</button>
     </div>
-    <!-- Totals bar -->
     <div id="is-totals-bar" style="display:flex;gap:8px;margin-top:10px;font-size:12px;color:#888;"></div>
   </div>
-  <!-- Car list — absolute positioned, scrolls independently -->
-  <div id="is-car-list" style="position:absolute;top:140px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:12px 16px;display:flex;flex-direction:column;gap:10px;"></div>
+  <div id="is-car-list" style="overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:12px 16px;"></div>
 </div>
 
 <!-- INVENTORY SHEETS — EDIT CARD OVERLAY -->
@@ -18364,6 +18360,7 @@ async function openInvSheets(){
   document.getElementById('inv-sheets-overlay').style.display='block';
   document.getElementById('is-car-list').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   invSheetsSetLoc(_isLoc);
+  _isFixListHeight();
   try{
     var costs=await sbGet('inventory_costs','order=id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
@@ -18438,6 +18435,17 @@ function invSheetsRender(){
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">JOINT</div><div style="color:#ccc;font-weight:700;">'+fmt(tJoint)+'</div></div>'
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">VLAD</div><div style="color:#ccc;font-weight:700;">'+fmt(tVlad)+'</div></div>'
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">TOTAL</div><div style="color:#4ade80;font-weight:700;">'+fmt(tTotal)+'</div></div>';
+  _isFixListHeight();
+}
+function _isFixListHeight(){
+  setTimeout(function(){
+    var h=document.getElementById('is-header');
+    var l=document.getElementById('is-car-list');
+    if(!h||!l)return;
+    var hh=h.offsetHeight;
+    var vh=window.innerHeight;
+    l.style.height=(vh-hh)+'px';
+  },50);
 }
 
 async function invSheetsAddCar(){
