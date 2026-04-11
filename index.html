@@ -16150,7 +16150,8 @@ async function dealSubmit() {
       try{ await calSyncPickupPayments(); }catch(e){}
     }
 
-    // Post full cash to this week's payments automatically
+    // Post cash to this week's payments — subtract any existing deposits for same vehicle
+    var existingDeposits=0;var netCash=0;var depositMatches=[];
     {
       var cashNow=0;
       payments.forEach(function(p){if(p.method==='cash')cashNow+=parseFloat(p.amount)||0;});
@@ -16163,30 +16164,72 @@ async function dealSubmit() {
         var carMake = nameParts[1]||'';
         var carModel = nameParts.slice(2).join(' ')||'';
         var dealLoc = _dealData.dealLocation || (me ? me.location : 'DeBary');
-        var amtStr = '$' + cashNow.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-        try {
-          await sbPost('payments', {
-            customer_name: _dealData.customer,
-            payment_date: todayStr,
-            payment_time: null,
-            amount: amtStr,
-            payment_method: 'cash',
-            card_fee_added: false,
-            original_amount: null,
-            vehicle_year: carYear,
-            vehicle_make: carMake,
-            vehicle_model: carModel,
-            vehicle_vin: car.vin || '',
-            vehicle_color: car.color || '',
-            receipt_photo_url: null,
-            location: dealLoc,
-            logged_by: me ? me.name : '',
-            week_start: weekKey,
-            raw_ocr_text: 'Deal \u2014 ' + (car.name||''),
-            created_at: new Date().toISOString()
-          });
-        } catch(payErr) {
-          console.error('Failed to post payment to week:', payErr);
+
+        // Check for existing deposits this week for the same vehicle
+        existingDeposits=0;
+        depositMatches=[];
+        try{
+          // Query cash payments this week at this location (exclude deal-posted rows)
+          var weekPays=await sbGet('payments','payment_method=eq.cash&week_start=eq.'+weekKey+'&location=eq.'+dealLoc+'&order=created_at.desc');
+          if(Array.isArray(weekPays)){
+            var carVin=(car.vin||'').toUpperCase().trim();
+            var carYrLc=carYear.toLowerCase();
+            var carMkLc=carMake.toLowerCase();
+            var custWords=_dealData.customer.toLowerCase().split(/\s+/);
+            weekPays.forEach(function(wp){
+              // Skip deal-posted payments (they start with "Deal —")
+              if(wp.raw_ocr_text&&wp.raw_ocr_text.indexOf('Deal \u2014')===0) return;
+              // Primary match: VIN (if both have one)
+              var wpVin=(wp.vehicle_vin||'').toUpperCase().trim();
+              var vinMatch=carVin&&wpVin&&carVin===wpVin;
+              // Secondary match: year + make
+              var wpYr=(wp.vehicle_year||'').toLowerCase();
+              var wpMk=(wp.vehicle_make||'').toLowerCase();
+              var ymMatch=carYrLc&&carMkLc&&wpYr===carYrLc&&wpMk===carMkLc;
+              if(!vinMatch&&!ymMatch) return;
+              // Fuzzy name match: at least one word from deal customer appears in payment customer
+              var wpName=(wp.customer_name||'').toLowerCase();
+              var nameClose=custWords.some(function(w){return w.length>2&&wpName.indexOf(w)!==-1;});
+              if(!nameClose) return;
+              // Match found — this is an existing deposit for the same car+customer
+              var wpAmt=parseFloat((wp.amount||'').replace(/[^0-9.]/g,''))||0;
+              existingDeposits+=wpAmt;
+              depositMatches.push(wp);
+            });
+          }
+        }catch(e){console.warn('Deposit check error:',e);}
+
+        netCash=Math.max(0,cashNow-existingDeposits);
+        if(netCash>0){
+          var amtStr = '$' + netCash.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+          try {
+            await sbPost('payments', {
+              customer_name: _dealData.customer,
+              payment_date: todayStr,
+              payment_time: null,
+              amount: amtStr,
+              payment_method: 'cash',
+              card_fee_added: false,
+              original_amount: null,
+              vehicle_year: carYear,
+              vehicle_make: carMake,
+              vehicle_model: carModel,
+              vehicle_vin: car.vin || '',
+              vehicle_color: car.color || '',
+              receipt_photo_url: null,
+              location: dealLoc,
+              logged_by: me ? me.name : '',
+              week_start: weekKey,
+              raw_ocr_text: 'Deal \u2014 ' + (car.name||''),
+              created_at: new Date().toISOString()
+            });
+          } catch(payErr) {
+            console.error('Failed to post payment to week:', payErr);
+          }
+        }
+        // Log deposit deduction for debugging
+        if(existingDeposits>0){
+          console.log('Deal deposit deduction: $'+existingDeposits.toFixed(2)+' from '+depositMatches.length+' existing payment(s). Net new cash: $'+netCash.toFixed(2));
         }
       }
     }
@@ -16235,6 +16278,13 @@ async function dealSubmit() {
       h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pick Up Payment</div>';
       h += '<div style="font-size:18px;font-weight:700;color:#f59e0b;">$' + parseFloat(_dealData.pickupPayment).toFixed(2) + '</div>';
       if(_dealData.pickupDue) h += '<div style="font-size:13px;color:#888;margin-top:4px;">Due: ' + new Date(_dealData.pickupDue+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + '</div>';
+      h += '</div>';
+    }
+    if(existingDeposits>0){
+      h += '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:14px;padding:14px 16px;margin-bottom:12px;">';
+      h += '<div style="font-size:11px;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-weight:700;">Deposit Detected</div>';
+      h += '<div style="font-size:13px;color:#ccc;">$'+existingDeposits.toFixed(2)+' already in this week\'s cash was deducted.</div>';
+      h += '<div style="font-size:14px;font-weight:700;color:#4ade80;margin-top:6px;">Net new cash added: $'+netCash.toFixed(2)+'</div>';
       h += '</div>';
     }
     h += '<div style="font-size:13px;color:#555;text-align:center;margin-bottom:16px;">' + photoCount + ' photo' + (photoCount !== 1 ? 's' : '') + ' uploaded</div>';
