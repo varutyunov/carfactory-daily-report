@@ -1578,46 +1578,52 @@ body.light .cal-fab{background:#4488ff !important;}
 </div>
 
 <!-- INVENTORY SHEETS OVERLAY -->
-<div id="inv-sheets-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9000;background:#000;overflow:hidden;">
-  <div id="is-header" style="flex-shrink:0;padding-top:env(safe-area-inset-top,14px);padding-left:16px;padding-right:16px;padding-bottom:10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-      <button onclick="closeInvSheets()" style="background:none;border:none;color:#4ade80;font-size:22px;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent;">&#x2190;</button>
-      <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;">Inventory Sheets</div>
-      <button onclick="invSheetsAddCar()" style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:13px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button id="is-loc-debary" onclick="invSheetsSetLoc('DeBary')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #4ade80;background:#4ade80;color:#000;-webkit-tap-highlight-color:transparent;">DeBary</button>
-      <button id="is-loc-deland" onclick="invSheetsSetLoc('DeLand')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;-webkit-tap-highlight-color:transparent;">DeLand</button>
-    </div>
-    <div id="is-totals-bar" style="display:flex;gap:8px;margin-top:10px;font-size:12px;color:#888;"></div>
+<div id="inv-sheets-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">Inv Sheets</span>
+    <button onclick="invSheetsAddCar()" style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:13px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add</button>
   </div>
-  <div id="is-car-list" style="overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:12px 16px;"></div>
+  <div id="is-car-list" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:0 12px;">
+      <div style="margin:12px 0;">
+        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
+          <button onclick="invSheetsSetLoc('DeBary')" id="is-loc-debary" style="flex:1;padding:8px 4px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>
+          <button onclick="invSheetsSetLoc('DeLand')" id="is-loc-deland" style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>
+        </div>
+      </div>
+      <div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>
+      <div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:100px;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- INVENTORY SHEETS — EDIT CARD OVERLAY -->
-<div id="is-edit-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9100;background:#000;">
-  <div style="position:absolute;top:0;left:0;right:0;z-index:1;padding:14px 16px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;">
-    <div style="display:flex;align-items:center;gap:12px;">
-      <button onclick="isEditClose()" style="background:none;border:none;color:#4ade80;font-size:22px;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent;">&#x2190;</button>
-      <div id="is-edit-title" style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;"></div>
-    </div>
+<div id="is-edit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
+    <span id="is-edit-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;"></span>
   </div>
-  <div style="position:absolute;top:60px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:12px 16px 32px;">
-    <div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>
-    <button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:12px 16px 100px;">
+      <div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>
+    </div>
   </div>
 </div>
 
 <!-- INVENTORY SHEETS — LINK CAR PICKER -->
-<div id="is-link-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9200;background:#000;">
-  <div style="position:absolute;top:0;left:0;right:0;z-index:1;padding:14px 16px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-      <button onclick="isLinkClose()" style="background:none;border:none;color:#4ade80;font-size:22px;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent;">&#x2190;</button>
-      <div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;">Link to Inventory Car</div>
-    </div>
-    <input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;">
+<div id="is-link-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:14px 12px;line-height:1;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(255,255,255,.1);">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">Link Car</span>
   </div>
-  <div id="is-link-list" style="position:absolute;top:110px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:8px 16px 16px;display:flex;flex-direction:column;gap:6px;"></div>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:12px 16px 100px;">
+      <input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;">
+      <div id="is-link-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- CAR ACTION SHEET -->
@@ -18357,17 +18363,16 @@ var _isEditIdx=-1;    // index into _isData being edited
 var _isLinkIdx=-1;    // index into _isData for car linking
 
 async function openInvSheets(){
-  document.getElementById('inv-sheets-overlay').style.display='block';
-  document.getElementById('is-car-list').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  document.getElementById('inv-sheets-overlay').style.display='flex';
+  document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   invSheetsSetLoc(_isLoc);
-  _isFixListHeight();
   try{
     var costs=await sbGet('inventory_costs','order=id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
     _isInv=S.inventory||[];
     invSheetsRender();
   }catch(e){
-    document.getElementById('is-car-list').innerHTML='<div style="text-align:center;color:#f87171;padding:40px 0;">Error loading data</div>';
+    document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#f87171;padding:40px 0;">Error loading data</div>';
   }
 }
 
@@ -18379,17 +18384,17 @@ function invSheetsSetLoc(loc){
   _isLoc=loc;
   var db=document.getElementById('is-loc-debary'),dl=document.getElementById('is-loc-deland');
   if(loc==='DeBary'){
-    db.style.border='2px solid #4ade80';db.style.background='#4ade80';db.style.color='#000';
-    dl.style.border='2px solid #333';dl.style.background='transparent';dl.style.color='#888';
+    db.style.background='#4ade80';db.style.color='#000';
+    dl.style.background='none';dl.style.color='#555';
   }else{
-    dl.style.border='2px solid #4ade80';dl.style.background='#4ade80';dl.style.color='#000';
-    db.style.border='2px solid #333';db.style.background='transparent';db.style.color='#888';
+    dl.style.background='#4ade80';dl.style.color='#000';
+    db.style.background='none';db.style.color='#555';
   }
   invSheetsRender();
 }
 
 function invSheetsRender(){
-  var list=document.getElementById('is-car-list');
+  var list=document.getElementById('is-car-items');
   var totals=document.getElementById('is-totals-bar');
   var filtered=_isData.filter(function(c){return (c.location||'DeBary')===_isLoc;});
   if(!filtered.length){
@@ -18435,17 +18440,6 @@ function invSheetsRender(){
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">JOINT</div><div style="color:#ccc;font-weight:700;">'+fmt(tJoint)+'</div></div>'
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">VLAD</div><div style="color:#ccc;font-weight:700;">'+fmt(tVlad)+'</div></div>'
     +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">TOTAL</div><div style="color:#4ade80;font-weight:700;">'+fmt(tTotal)+'</div></div>';
-  _isFixListHeight();
-}
-function _isFixListHeight(){
-  setTimeout(function(){
-    var h=document.getElementById('is-header');
-    var l=document.getElementById('is-car-list');
-    if(!h||!l)return;
-    var hh=h.offsetHeight;
-    var vh=window.innerHeight;
-    l.style.height=(vh-hh)+'px';
-  },50);
 }
 
 async function invSheetsAddCar(){
@@ -18476,7 +18470,7 @@ function isEditOpen(idx){
     +field('Vlad Expenses','is-e-vlad',c.vlad_expenses||'','number')
     +'<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Expense / Repair Notes</div>'
     +'<textarea id="is-e-notes" rows="3" style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;resize:vertical;">'+(c.expense_notes||'')+'</textarea></div>';
-  document.getElementById('is-edit-overlay').style.display='block';
+  document.getElementById('is-edit-overlay').style.display='flex';
 }
 
 function isEditClose(){
@@ -18509,7 +18503,7 @@ function isLinkOpen(idx){
   _isLinkIdx=idx;
   var c=_isData[idx];if(!c)return;
   document.getElementById('is-link-search').value='';
-  document.getElementById('is-link-overlay').style.display='block';
+  document.getElementById('is-link-overlay').style.display='flex';
   isLinkFilter();
 }
 function isLinkClose(){
