@@ -18326,7 +18326,7 @@ async function openInvSheets(){
   document.body.appendChild(o);
   o.style.cssText='display:block;background:#000;position:fixed;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   o.innerHTML=
-    '<div class="tb">'+
+    '<div style="background:#000;border-bottom:1px solid #111;padding:16px 16px 12px;display:flex;align-items:center;gap:10px;">'+
     '<button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">INV SHEETS</span>'+
     '<button onclick="invSheetsAddCar()" style="background:none;border:none;color:#4ade80;font-size:13px;font-weight:800;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
@@ -18443,7 +18443,7 @@ function isEditOpen(idx){
   if(!o){o=document.createElement('div');o.id='is-edit-overlay';document.body.appendChild(o);}
   o.style.cssText='display:block;position:fixed;inset:0;background:#000;z-index:9100;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   o.innerHTML=
-    '<div class="tb">'+
+    '<div style="background:#000;border-bottom:1px solid #111;padding:16px 16px 12px;display:flex;align-items:center;gap:10px;">'+
     '<button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">'+(c.car_name||'Edit Car')+'</span>'+
     '<div style="width:36px;"></div>'+
@@ -18496,7 +18496,7 @@ async function isLinkOpen(idx){
   if(!o){o=document.createElement('div');o.id='is-link-overlay';document.body.appendChild(o);}
   o.style.cssText='display:block;position:fixed;inset:0;background:#000;z-index:9200;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   o.innerHTML=
-    '<div class="tb">'+
+    '<div style="background:#000;border-bottom:1px solid #111;padding:16px 16px 12px;display:flex;align-items:center;gap:10px;">'+
     '<button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">LINK CAR</span>'+
     '<div style="width:36px;"></div>'+
