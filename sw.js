@@ -1,14 +1,14 @@
 // Import OneSignal service worker for push notification handling
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-const CACHE = 'cf-cache-v378';
+const CACHE = 'cf-cache-v379';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// Activate: delete ALL old caches, claim all clients, force reload
+// Activate: delete ALL old caches, claim all clients
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>

@@ -1116,6 +1116,12 @@ body.light .cal-fab{background:#4488ff !important;}
         <input id="deal-customer" placeholder="Full name" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
       </div>
 
+      <!-- Co-Buyer Name -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Co-Buyer <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
+        <input id="deal-cobuyer" placeholder="Co-buyer full name" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+      </div>
+
       <!-- Payments Section -->
       <div style="margin-bottom:14px;">
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payments Collected</label>
@@ -15826,7 +15832,7 @@ function openDealForm(forceLoc) {
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
   dealShowStep(1);
   // Clear all inputs
-  ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
+  ['deal-inv-search','deal-customer','deal-cobuyer','deal-gps'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
   document.getElementById('deal-car-summary').textContent = '';
@@ -15924,6 +15930,7 @@ function dealSelectCar(carId) {
   _dealData.filter = '';
   // Reset form
   document.getElementById('deal-customer').value = '';
+  document.getElementById('deal-cobuyer').value = '';
   document.getElementById('deal-gps').value = '';
   document.getElementById('deal-pickup-payment').value = '';
   document.getElementById('deal-pickup-due').value = '';
@@ -16030,6 +16037,7 @@ function dealGoStep3() {
     }
   }
   _dealData.customer = customer;
+  _dealData.coBuyer = document.getElementById('deal-cobuyer').value.trim();
   _dealPhotos = [];
   document.getElementById('deal-photo-grid').innerHTML = '';
   dealShowStep(3);
@@ -16118,7 +16126,8 @@ async function dealSubmit() {
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      co_buyer: _dealData.coBuyer || ''
     };
     // Save pickup payment as its own columns
     if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
@@ -16195,6 +16204,7 @@ async function dealSubmit() {
     h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
     h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Customer</div>';
     h += '<div style="font-size:18px;font-weight:700;color:#fff;">' + _dealData.customer + '</div>';
+    if(_dealData.coBuyer) h += '<div style="font-size:13px;color:#888;margin-top:4px;">Co-Buyer: ' + _dealData.coBuyer + '</div>';
     h += '</div>';
     h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
     h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
@@ -17844,6 +17854,15 @@ function openDealDetail(id) {
   html += '<span style="font-size:13px;color:#666;">'+(d.created_at?new Date(d.created_at).toLocaleDateString():'')+'</span>';
   html += '</div>';
 
+  // Co-Buyer (editable by anyone)
+  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Co-Buyer</div>';
+  html += '<button onclick="dealEditCoBuyer('+d.id+')" style="background:none;border:none;color:#60a5fa;font-size:12px;font-weight:600;cursor:pointer;padding:2px 6px;">Edit</button>';
+  html += '</div>';
+  html += '<div id="deal-cobuyer-display" style="font-size:16px;font-weight:600;color:'+(d.co_buyer?'#fff':'#444')+';">'+(d.co_buyer||'None')+'</div>';
+  html += '</div>';
+
   // Vehicle
   html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
   html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Vehicle</div>';
@@ -18039,6 +18058,33 @@ function openDealDetail(id) {
 
   html += '</div>';
   document.getElementById('deals-view-body').innerHTML = html;
+}
+
+function dealEditCoBuyer(id) {
+  var d = _dealsData.find(function(x){ return x.id === id; });
+  if(!d) d = (_dealsAllData||[]).find(function(x){ return x.id === id; });
+  if(!d) return;
+  var wrap = document.getElementById('deal-cobuyer-display');
+  if(!wrap) return;
+  wrap.innerHTML = '<input id="deal-cobuyer-edit" value="'+(d.co_buyer||'')+'" placeholder="Co-buyer full name" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #333;border-radius:10px;color:#fff;padding:10px 12px;font-size:15px;outline:none;"/>' +
+    '<div style="display:flex;gap:8px;margin-top:8px;">' +
+    '<button onclick="dealSaveCoBuyer('+id+')" style="flex:1;padding:10px;background:#1d4ed8;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Save</button>' +
+    '<button onclick="openDealDetail('+id+')" style="flex:1;padding:10px;background:#222;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>' +
+    '</div>';
+  setTimeout(function(){ var inp = document.getElementById('deal-cobuyer-edit'); if(inp) inp.focus(); }, 100);
+}
+
+async function dealSaveCoBuyer(id) {
+  var inp = document.getElementById('deal-cobuyer-edit');
+  if(!inp) return;
+  var val = inp.value.trim();
+  try {
+    await sbPatch('deals', id, { co_buyer: val });
+    var d = _dealsData.find(function(x){ return x.id === id; });
+    if(!d) d = (_dealsAllData||[]).find(function(x){ return x.id === id; });
+    if(d) d.co_buyer = val;
+    openDealDetail(id);
+  } catch(e) { alert('Error saving co-buyer: ' + e.message); }
 }
 
 async function toggleGpsUploaded(id, el) {
