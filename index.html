@@ -1579,31 +1579,33 @@ body.light .cal-fab{background:#4488ff !important;}
 
 <!-- INVENTORY SHEETS OVERLAY -->
 <div id="inv-sheets-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:10px;">
-    <button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">Inv Sheets</span>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">INV SHEETS</span>
     <button onclick="invSheetsAddCar()" style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:12px;font-weight:800;padding:7px 12px;cursor:pointer;letter-spacing:1px;font-family:'Barlow Condensed',sans-serif;">+ ADD</button>
   </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="padding:0 16px 80px;">
-      <div class="cp-loc-toggle" style="padding:8px 0;">
-        <button class="cp-loc-btn active" id="is-loc-debary" onclick="invSheetsSetLoc('DeBary')">DeBary</button>
-        <button class="cp-loc-btn" id="is-loc-deland" onclick="invSheetsSetLoc('DeLand')">DeLand</button>
+  <div id="is-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;">
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
+          <button onclick="invSheetsSetLoc('DeBary')" id="is-loc-debary" style="flex:1;padding:8px 4px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>
+          <button onclick="invSheetsSetLoc('DeLand')" id="is-loc-deland" style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>
+        </div>
       </div>
       <div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>
-      <div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:100px;"></div>
+      <div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
   </div>
 </div>
 
 <!-- INVENTORY SHEETS — EDIT CARD OVERLAY -->
 <div id="is-edit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:10px;">
-    <button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;">&#8592;</button>
-    <span id="is-edit-title" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;"></span>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="is-edit-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;"></span>
   </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="padding:12px 16px 100px;">
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;">
       <div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>
       <button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>
     </div>
@@ -1612,14 +1614,14 @@ body.light .cal-fab{background:#4488ff !important;}
 
 <!-- INVENTORY SHEETS — LINK CAR PICKER -->
 <div id="is-link-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:10px;">
-    <button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">Link Car</span>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">LINK CAR</span>
   </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="padding:12px 16px 100px;">
-      <input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;">
-      <div id="is-link-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;">
+      <input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;outline:none;">
+      <div id="is-link-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
   </div>
 </div>
@@ -18381,8 +18383,13 @@ function closeInvSheets(){
 function invSheetsSetLoc(loc){
   _isLoc=loc;
   var db=document.getElementById('is-loc-debary'),dl=document.getElementById('is-loc-deland');
-  db.classList.toggle('active',loc==='DeBary');
-  dl.classList.toggle('active',loc==='DeLand');
+  if(loc==='DeBary'){
+    db.style.background='#4ade80';db.style.color='#000';
+    dl.style.background='none';dl.style.color='#555';
+  }else{
+    dl.style.background='#4ade80';dl.style.color='#000';
+    db.style.background='none';db.style.color='#555';
+  }
   invSheetsRender();
 }
 
