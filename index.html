@@ -17954,6 +17954,12 @@ function openDealDetail(id) {
     html += '<input id="de-customer-'+d.id+'" value="'+(d.customer_name||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
     html += '</div>';
 
+    // Co-Buyer
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Co-Buyer</div>';
+    html += '<input id="de-cobuyer-'+d.id+'" value="'+(d.co_buyer||'').replace(/"/g,'&quot;')+'" placeholder="Co-buyer full name" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '</div>';
+
     // Deal type
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Deal Type</div>';
@@ -18206,6 +18212,9 @@ async function dealEditSave(id){
     // Customer
     var custEl=document.getElementById('de-customer-'+id);
     if(custEl&&custEl.value.trim()!==d.customer_name) patch.customer_name=custEl.value.trim();
+    // Co-Buyer
+    var cbEl=document.getElementById('de-cobuyer-'+id);
+    if(cbEl&&cbEl.value.trim()!==(d.co_buyer||'')) patch.co_buyer=cbEl.value.trim();
     // Deal type
     var typeEl=document.getElementById('de-type-'+id);
     if(typeEl&&typeEl.value!==d.deal_type) patch.deal_type=typeEl.value;
