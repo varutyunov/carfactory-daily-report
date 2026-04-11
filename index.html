@@ -1577,54 +1577,7 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
 </div>
 
-<!-- INVENTORY SHEETS OVERLAY -->
-<div id="inv-sheets-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">INV SHEETS</span>
-    <button onclick="invSheetsAddCar()" style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:12px;font-weight:800;padding:7px 12px;cursor:pointer;letter-spacing:1px;font-family:'Barlow Condensed',sans-serif;">+ ADD</button>
-  </div>
-  <div id="is-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <div style="padding:12px;">
-      <div style="margin-bottom:10px;">
-        <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">
-          <button onclick="invSheetsSetLoc('DeBary')" id="is-loc-debary" style="flex:1;padding:8px 4px;background:#4ade80;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>
-          <button onclick="invSheetsSetLoc('DeLand')" id="is-loc-deland" style="flex:1;padding:8px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>
-        </div>
-      </div>
-      <div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>
-      <div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
-  </div>
-</div>
-
-<!-- INVENTORY SHEETS — EDIT CARD OVERLAY -->
-<div id="is-edit-overlay" style="display:none;position:fixed;inset:0;z-index:9100;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9110;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span id="is-edit-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;"></span>
-  </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <div style="padding:12px;">
-      <div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>
-      <button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- INVENTORY SHEETS — LINK CAR PICKER -->
-<div id="is-link-overlay" style="display:none;position:fixed;inset:0;z-index:9200;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9210;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-    <button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;">LINK CAR</span>
-  </div>
-  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <div style="padding:12px;">
-      <input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;outline:none;">
-      <div id="is-link-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
-  </div>
-</div>
+<!-- INVENTORY SHEETS — dynamically built by openInvSheets(), same pattern as payroll -->
 
 <!-- CAR ACTION SHEET -->
 <div id="m-car-actions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
@@ -18363,9 +18316,32 @@ var _isEditIdx=-1;    // index into _isData being edited
 var _isLinkIdx=-1;    // index into _isData for car linking
 
 async function openInvSheets(){
-  document.getElementById('inv-sheets-overlay').style.display='flex';
-  document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
+  // Hide app, show inv sheets as full page — same pattern as payroll
+  document.getElementById('app').style.display='none';
+  var o=document.getElementById('inv-sheets-overlay');
+  if(!o){
+    o=document.createElement('div');
+    o.id='inv-sheets-overlay';
+  }
+  document.body.appendChild(o);
+  o.style.cssText='display:block;background:#000;min-height:100vh;';
+  o.innerHTML=
+    '<div class="tb">'+
+    '<button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">INV SHEETS</span>'+
+    '<button onclick="invSheetsAddCar()" style="background:none;border:none;color:#4ade80;font-size:13px;font-weight:800;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
+    '</div>'+
+    '<div style="padding:0 12px;">'+
+    '<div style="display:flex;gap:8px;padding:8px 4px;">'+
+    '<div id="is-loc-debary" onclick="invSheetsSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeBary</div>'+
+    '<div id="is-loc-deland" onclick="invSheetsSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeLand</div>'+
+    '</div>'+
+    '<div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>'+
+    '<div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px;"></div>'+
+    '</div>';
+  window.scrollTo(0,0);
   invSheetsSetLoc(_isLoc);
+  document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
     var costs=await sbGet('inventory_costs','order=id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
@@ -18377,18 +18353,21 @@ async function openInvSheets(){
 }
 
 function closeInvSheets(){
-  document.getElementById('inv-sheets-overlay').style.display='none';
+  var o=document.getElementById('inv-sheets-overlay');
+  if(o) o.style.display='none';
+  document.getElementById('app').style.display='flex';
 }
 
 function invSheetsSetLoc(loc){
   _isLoc=loc;
   var db=document.getElementById('is-loc-debary'),dl=document.getElementById('is-loc-deland');
+  if(!db||!dl)return;
   if(loc==='DeBary'){
-    db.style.background='#4ade80';db.style.color='#000';
-    dl.style.background='none';dl.style.color='#555';
+    db.style.background='#4ade80';db.style.color='#000';db.style.borderColor='#4ade80';
+    dl.style.background='#111';dl.style.color='#888';dl.style.borderColor='#333';
   }else{
-    dl.style.background='#4ade80';dl.style.color='#000';
-    db.style.background='none';db.style.color='#555';
+    dl.style.background='#4ade80';dl.style.color='#000';dl.style.borderColor='#4ade80';
+    db.style.background='#111';db.style.color='#888';db.style.borderColor='#333';
   }
   invSheetsRender();
 }
@@ -18456,13 +18435,24 @@ async function invSheetsAddCar(){
 function isEditOpen(idx){
   _isEditIdx=idx;
   var c=_isData[idx];if(!c)return;
-  document.getElementById('is-edit-title').textContent=c.car_name||'Edit Car';
-  var b=document.getElementById('is-edit-body');
   var field=function(label,id,val,type){
     return '<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">'+label+'</div>'
       +'<input id="'+id+'" type="'+(type||'text')+'" value="'+((val!=null&&val!=='')?val:'')+'" style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;"></div>';
   };
-  b.innerHTML=field('Car Name','is-e-name',c.car_name)
+  var o=document.getElementById('is-edit-overlay');
+  if(!o){o=document.createElement('div');o.id='is-edit-overlay';document.body.appendChild(o);}
+  o.style.cssText='display:block;position:fixed;inset:0;background:#000;z-index:9100;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  o.innerHTML=
+    '<div class="tb">'+
+    '<button onclick="isEditClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">'+(c.car_name||'Edit Car')+'</span>'+
+    '<div style="width:36px;"></div>'+
+    '</div>'+
+    '<div style="padding:12px 16px 80px;">'+
+    '<div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>'+
+    '<button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>'+
+    '</div>';
+  document.getElementById('is-edit-body').innerHTML=field('Car Name','is-e-name',c.car_name)
     +field('Purchase Cost','is-e-cost',c.purchase_cost||'','number')
     +field('Purchase Source','is-e-source',c.purchase_source||'')
     +field('Purchase Date','is-e-date',c.purchase_date||'','date')
@@ -18470,11 +18460,11 @@ function isEditOpen(idx){
     +field('Vlad Expenses','is-e-vlad',c.vlad_expenses||'','number')
     +'<div><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Expense / Repair Notes</div>'
     +'<textarea id="is-e-notes" rows="3" style="width:100%;padding:10px 14px;background:#111;border:1px solid #222;border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;resize:vertical;">'+(c.expense_notes||'')+'</textarea></div>';
-  document.getElementById('is-edit-overlay').style.display='flex';
 }
 
 function isEditClose(){
-  document.getElementById('is-edit-overlay').style.display='none';
+  var o=document.getElementById('is-edit-overlay');
+  if(o) o.style.display='none';
   _isEditIdx=-1;
 }
 
@@ -18502,8 +18492,19 @@ async function isEditSave(){
 async function isLinkOpen(idx){
   _isLinkIdx=idx;
   var c=_isData[idx];if(!c)return;
-  document.getElementById('is-link-search').value='';
-  document.getElementById('is-link-overlay').style.display='flex';
+  var o=document.getElementById('is-link-overlay');
+  if(!o){o=document.createElement('div');o.id='is-link-overlay';document.body.appendChild(o);}
+  o.style.cssText='display:block;position:fixed;inset:0;background:#000;z-index:9200;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  o.innerHTML=
+    '<div class="tb">'+
+    '<button onclick="isLinkClose()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">LINK CAR</span>'+
+    '<div style="width:36px;"></div>'+
+    '</div>'+
+    '<div style="padding:12px 16px 80px;">'+
+    '<input id="is-link-search" oninput="isLinkFilter()" placeholder="Search cars..." style="width:100%;padding:10px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;outline:none;">'+
+    '<div id="is-link-list" style="display:flex;flex-direction:column;gap:10px;"></div>'+
+    '</div>';
   document.getElementById('is-link-list').innerHTML='<div style="text-align:center;color:#555;padding:20px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading inventory...</div>';
   try{
     var inv=await sbGet('inventory','select=id,name,stock,vin,color,location&order=name.asc&limit=1000');
@@ -18512,7 +18513,8 @@ async function isLinkOpen(idx){
   isLinkFilter();
 }
 function isLinkClose(){
-  document.getElementById('is-link-overlay').style.display='none';
+  var o=document.getElementById('is-link-overlay');
+  if(o) o.style.display='none';
   _isLinkIdx=-1;
 }
 function isLinkFilter(){
