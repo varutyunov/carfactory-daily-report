@@ -18983,7 +18983,7 @@ function d26LinkFilter(){
   var q=(document.getElementById('d26-link-search').value||'').toLowerCase();
   var list=document.getElementById('d26-link-list');
   var cars=(_d26LinkInv||[]);
-  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1||(c.buyer||'').toLowerCase().indexOf(q)!==-1;});
+  if(q){var qWords=q.split(/\s+/).filter(Boolean);cars=cars.filter(function(c){var blob=((c.name||'')+' '+(c.stock||'')+' '+(c.vin||'')+' '+(c.buyer||'')+' '+(c.color||'')).toLowerCase();return qWords.every(function(w){return blob.indexOf(w)!==-1;});});}
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
   cars.slice(0,50).forEach(function(car){
