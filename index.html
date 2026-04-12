@@ -18512,36 +18512,30 @@ async function openInvSheets(){
     '<div style="background:#000;border-bottom:1px solid #111;padding:14px 16px 8px;flex-shrink:0;">'+
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'+
         '<button onclick="closeInvSheets()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
-        '<span id="sh-title" style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">INV SHEETS</span>'+
+        '<span id="sh-title" style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">SHEETS</span>'+
         '<button id="sh-add-btn" onclick="invSheetsAddCar()" style="background:none;border:none;color:#4ade80;font-size:13px;font-weight:800;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
       '</div>'+
-      // Dots
-      '<div id="sh-dots" style="display:flex;justify-content:center;gap:8px;padding:4px 0;">'+
-        '<span class="sh-dot" onclick="shSetPage(0)" style="width:7px;height:7px;border-radius:50%;background:#fff;transform:scale(1.3);transition:all .3s;cursor:pointer;"></span>'+
-        '<span class="sh-dot" onclick="shSetPage(1)" style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s;cursor:pointer;"></span>'+
+      // Tabs: Inventory | Deals26
+      '<div style="display:flex;gap:0;border-bottom:1px solid #222;">'+
+        '<div id="sh-tab-inv" onclick="shSetPage(0)" style="flex:1;text-align:center;padding:10px 0 8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#4ade80;border-bottom:2px solid #4ade80;-webkit-tap-highlight-color:transparent;">Inventory</div>'+
+        '<div id="sh-tab-deals" onclick="shSetPage(1)" style="flex:1;text-align:center;padding:10px 0 8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#555;border-bottom:2px solid transparent;-webkit-tap-highlight-color:transparent;">Deals26</div>'+
       '</div>'+
     '</div>'+
-    // Swipe container
-    '<div id="sh-swipe" style="display:flex;flex:1;min-height:0;width:200%;transition:transform .35s cubic-bezier(.4,0,.2,1);will-change:transform;touch-action:pan-y;">'+
-      // Page 0: Inv Sheets
-      '<div id="sh-page-0" style="width:50%;flex-shrink:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;">'+
-        '<div style="padding:0 12px;">'+
-          '<div style="display:flex;gap:8px;padding:8px 4px;">'+
-            '<div id="is-loc-debary" onclick="invSheetsSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeBary</div>'+
-            '<div id="is-loc-deland" onclick="invSheetsSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeLand</div>'+
-          '</div>'+
-          '<div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>'+
-          '<div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px;"></div>'+
+    // Page 0: Inventory
+    '<div id="sh-page-0" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+
+      '<div style="padding:0 12px;">'+
+        '<div style="display:flex;gap:8px;padding:8px 4px;">'+
+          '<div id="is-loc-debary" onclick="invSheetsSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeBary</div>'+
+          '<div id="is-loc-deland" onclick="invSheetsSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeLand</div>'+
         '</div>'+
+        '<div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>'+
+        '<div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px;"></div>'+
       '</div>'+
-      // Page 1: Deals
-      '<div id="sh-page-1" style="width:50%;flex-shrink:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:auto;">'+
-        '<div id="sh-deals-body" style="padding-bottom:40px;">'+
-          '<div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Swipe to load deals...</div>'+
-        '</div>'+
-      '</div>'+
+    '</div>'+
+    // Page 1: Deals26
+    '<div id="sh-page-1" style="flex:1;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;display:none;">'+
+      '<div id="sh-deals-body" style="padding-bottom:40px;"></div>'+
     '</div>';
-  _shInitSwipe();
   invSheetsSetLoc(_isLoc);
   document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
@@ -18566,25 +18560,22 @@ function closeInvSheets(){
 function shSetPage(idx){
   if(idx<0||idx>1)return;
   _shPageIdx=idx;
-  var el=document.getElementById('sh-swipe');
-  if(!el)return;
-  el.style.transition='';el.style.transform='';
-  if(idx===1) el.style.transform='translateX(-50%)';
-  else el.style.transform='translateX(0)';
-  // Update dots
-  var dots=document.querySelectorAll('#sh-dots .sh-dot');
-  dots.forEach(function(d,i){
-    d.style.background=i===idx?'#fff':'rgba(255,255,255,.2)';
-    d.style.transform=i===idx?'scale(1.3)':'scale(1)';
-  });
-  // Update header
-  var title=document.getElementById('sh-title');
+  var p0=document.getElementById('sh-page-0');
+  var p1=document.getElementById('sh-page-1');
+  var t0=document.getElementById('sh-tab-inv');
+  var t1=document.getElementById('sh-tab-deals');
   var addBtn=document.getElementById('sh-add-btn');
   if(idx===0){
-    if(title)title.textContent='INV SHEETS';
+    if(p0)p0.style.display='';
+    if(p1)p1.style.display='none';
+    if(t0){t0.style.color='#4ade80';t0.style.borderBottom='2px solid #4ade80';}
+    if(t1){t1.style.color='#555';t1.style.borderBottom='2px solid transparent';}
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','invSheetsAddCar()');}
   }else{
-    if(title)title.textContent='DEALS 26';
+    if(p0)p0.style.display='none';
+    if(p1)p1.style.display='';
+    if(t0){t0.style.color='#555';t0.style.borderBottom='2px solid transparent';}
+    if(t1){t1.style.color='#4ade80';t1.style.borderBottom='2px solid #4ade80';}
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','d26Edit(-1)');}
     if(!_shDealsLoaded){_shDealsLoaded=true;shLoadDeals();}
   }
@@ -18858,47 +18849,7 @@ async function d26Delete(id){
   }catch(e){alert('Error deleting: '+e.message);}
 }
 
-function _shInitSwipe(){
-  if(_shSwInited)return;_shSwInited=true;
-  var _shSx=0,_shSy=0,_shDx=0,_shDir=null;
-  var overlay=document.getElementById('inv-sheets-overlay');
-  document.addEventListener('touchstart',function(e){
-    if(!_sheetsOpen||!overlay||!overlay.contains(e.target))return;
-    // Don't swipe if an edit/link overlay is open
-    var eo=document.getElementById('is-edit-overlay');if(eo&&eo.style.display==='block')return;
-    var lo=document.getElementById('is-link-overlay');if(lo&&lo.style.display==='block')return;
-    _shSx=e.touches[0].clientX;_shSy=e.touches[0].clientY;_shDx=0;_shDir=null;
-  },true);
-  document.addEventListener('touchmove',function(e){
-    if(!_sheetsOpen||!overlay||!overlay.contains(e.target))return;
-    if(_shDir==='v')return;
-    var dx=e.touches[0].clientX-_shSx;var dy=e.touches[0].clientY-_shSy;
-    if(_shDir===null){
-      if(Math.abs(dx)<8&&Math.abs(dy)<8)return;
-      _shDir=Math.abs(dx)>=Math.abs(dy)?'h':'v';
-      if(_shDir==='h'){var el=document.getElementById('sh-swipe');if(el)el.style.transition='none';}
-    }
-    if(_shDir!=='h')return;
-    e.preventDefault();e.stopPropagation();_shDx=dx;
-    var el=document.getElementById('sh-swipe');if(!el)return;
-    var base=_shPageIdx*-50;
-    var pct=base+(dx/overlay.offsetWidth)*50;
-    pct=Math.max(-50,Math.min(0,pct));
-    el.style.transform='translateX('+pct+'%)';
-  },{capture:true,passive:false});
-  document.addEventListener('touchend',function(e){
-    if(!_sheetsOpen)return;
-    if(_shDir!=='h'){_shDir=null;return;}
-    var el=document.getElementById('sh-swipe');
-    if(el){el.style.transition='';el.style.transform='';}
-    if(Math.abs(_shDx)>40){
-      if(_shDx<0&&_shPageIdx<1)shSetPage(1);
-      else if(_shDx>0&&_shPageIdx>0)shSetPage(0);
-      else shSetPage(_shPageIdx);
-    }else{shSetPage(_shPageIdx);}
-    _shDir=null;
-  },true);
-}
+function _shInitSwipe(){/* removed — using tabs now */}
 
 function invSheetsSetLoc(loc){
   _isLoc=loc;
