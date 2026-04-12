@@ -5526,10 +5526,9 @@ async function syncNow(){
       var rDL=await fetch(DELAND_URL+'?t='+Date.now());
       if(rDL.ok) deland=parseCSV(await rDL.text(),'DeLand');
     }catch(e){console.log('DeLand CSV skipped:',e);}
-    // Merge — DeLand wins on same stock number OR same VIN (handles transfers)
-    var delandStocks=new Set(deland.map(function(c){return c.stock;}));
+    // Merge — DeLand wins on same VIN only (not stock#, since different cars can share stock# across locations)
     var delandVins=new Set(deland.map(function(c){return c.vin;}).filter(Boolean));
-    var imp=deland.concat(debary.filter(function(c){return !delandStocks.has(c.stock)&&!(c.vin&&delandVins.has(c.vin));}));
+    var imp=deland.concat(debary.filter(function(c){return !(c.vin&&delandVins.has(c.vin));}));
     if(!imp.length) throw new Error('No INSTOCK vehicles found');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     // Fetch fresh inventory from Supabase to avoid stale-cache duplicates
