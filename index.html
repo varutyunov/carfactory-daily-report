@@ -18712,47 +18712,101 @@ function d26RowClick(e,idx){
   }
   d26Edit(idx);
 }
+var _d26ExpIdx=-1;
 function d26ShowExpPopup(idx){
   var d=_d26Data[idx];if(!d)return;
+  _d26ExpIdx=idx;
   var noteVal=(d.expense_notes||'').trim();
   var car=d.car_desc||'';
-  var total=d26FmtCell(d.expenses);
-  // Build item rows
-  var itemsHtml='';
+  // Parse items
+  var items=[];
   if(noteVal){
-    var items=noteVal.split(',');
-    items.forEach(function(item){
+    noteVal.split(',').forEach(function(item){
       item=item.trim();
       var m=item.match(/^(\d+)\s+(.+)/);
-      if(m){
-        itemsHtml+='<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1a1a1a;">'+
-          '<span style="color:#ccc;font-size:13px;">'+m[2]+'</span>'+
-          '<span style="color:#f59e0b;font-weight:700;font-size:13px;white-space:nowrap;margin-left:12px;">$'+m[1]+'</span>'+
-        '</div>';
-      }else{
-        itemsHtml+='<div style="padding:8px 0;border-bottom:1px solid #1a1a1a;color:#888;font-size:13px;">'+item+'</div>';
-      }
+      if(m) items.push({amt:m[1],desc:m[2]});
+      else if(item) items.push({amt:'',desc:item});
     });
-  }else{
-    itemsHtml='<div style="color:#555;font-style:italic;padding:12px 0;text-align:center;">No breakdown available</div>';
   }
+  // Build editable rows
+  var rowsHtml='';
+  items.forEach(function(it,i){
+    rowsHtml+=d26ExpRow(i,it.amt,it.desc);
+  });
   // Remove existing popup
   var old=document.getElementById('d26-exp-popup');
   if(old)old.remove();
-  // Create popup
   var pop=document.createElement('div');
   pop.id='d26-exp-popup';
   pop.style.cssText='position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);-webkit-tap-highlight-color:transparent;';
   pop.onclick=function(ev){if(ev.target===pop)pop.remove();};
   pop.innerHTML=
-    '<div style="background:#111;border:1px solid #333;border-radius:16px;width:85%;max-width:340px;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;" onclick="event.stopPropagation()">'+
-      '<div style="padding:14px 16px 10px;border-bottom:1px solid #222;">'+
+    '<div style="background:#111;border:1px solid #333;border-radius:16px;width:88%;max-width:360px;max-height:75vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">'+
+      '<div style="padding:14px 16px 10px;border-bottom:1px solid #222;flex-shrink:0;">'+
         '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px;">'+car+'</div>'+
-        '<div style="font-size:12px;color:#f59e0b;font-weight:700;margin-top:4px;">Total: '+total+'</div>'+
+        '<div id="d26-exp-total" style="font-size:12px;color:#f59e0b;font-weight:700;margin-top:4px;">Total: $'+d26ExpCalcTotal()+'</div>'+
       '</div>'+
-      '<div style="padding:4px 16px 16px;">'+itemsHtml+'</div>'+
+      '<div id="d26-exp-items" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 16px;">'+rowsHtml+'</div>'+
+      '<div style="padding:10px 16px;border-top:1px solid #222;display:flex;gap:8px;flex-shrink:0;">'+
+        '<button onclick="d26ExpAddRow()" style="flex:1;background:#222;border:1px solid #333;border-radius:8px;color:#4ade80;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
+        '<button onclick="d26ExpSave()" style="flex:1;background:#4ade80;border:none;border-radius:8px;color:#000;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">SAVE</button>'+
+      '</div>'+
     '</div>';
   document.body.appendChild(pop);
+  d26ExpRecalc();
+}
+function d26ExpRow(i,amt,desc){
+  return '<div class="d26-exp-row" style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a1a;">'+
+    '<input type="number" value="'+(amt||'')+'" placeholder="$" oninput="d26ExpRecalc()" style="width:60px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f59e0b;padding:8px 6px;font-size:13px;font-weight:700;outline:none;text-align:right;-webkit-appearance:none;" />'+
+    '<input type="text" value="'+(desc||'').replace(/"/g,'&quot;')+'" placeholder="description" style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:8px 6px;font-size:13px;outline:none;" />'+
+    '<button onclick="this.parentElement.remove();d26ExpRecalc()" style="background:none;border:none;color:#555;font-size:18px;padding:4px 6px;cursor:pointer;line-height:1;">&times;</button>'+
+  '</div>';
+}
+function d26ExpAddRow(){
+  var c=document.getElementById('d26-exp-items');
+  if(!c)return;
+  var n=c.querySelectorAll('.d26-exp-row').length;
+  c.insertAdjacentHTML('beforeend',d26ExpRow(n,'',''));
+  var inputs=c.querySelectorAll('.d26-exp-row:last-child input');
+  if(inputs[0])inputs[0].focus();
+}
+function d26ExpCalcTotal(){
+  var c=document.getElementById('d26-exp-items');
+  if(!c)return '0';
+  var total=0;
+  c.querySelectorAll('.d26-exp-row').forEach(function(row){
+    var v=parseFloat(row.querySelector('input[type="number"]').value)||0;
+    total+=v;
+  });
+  return total.toLocaleString();
+}
+function d26ExpRecalc(){
+  var el=document.getElementById('d26-exp-total');
+  if(el) el.textContent='Total: $'+d26ExpCalcTotal();
+}
+async function d26ExpSave(){
+  var c=document.getElementById('d26-exp-items');
+  if(!c||_d26ExpIdx<0)return;
+  var d=_d26Data[_d26ExpIdx];if(!d)return;
+  var items=[];var total=0;
+  c.querySelectorAll('.d26-exp-row').forEach(function(row){
+    var inputs=row.querySelectorAll('input');
+    var amt=parseFloat(inputs[0].value)||0;
+    var desc=(inputs[1].value||'').trim();
+    if(amt>0||desc){
+      items.push(amt+' '+desc);
+      total+=amt;
+    }
+  });
+  var noteStr=items.join(', ');
+  try{
+    await sbPatch('deals26',d.id,{expense_notes:noteStr,expenses:total});
+    d.expense_notes=noteStr;
+    d.expenses=total;
+    var pop=document.getElementById('d26-exp-popup');
+    if(pop)pop.remove();
+    d26Render();
+  }catch(e){alert('Error saving: '+e.message);}
 }
 
 function d26Edit(idx){
