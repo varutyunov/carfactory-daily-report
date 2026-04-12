@@ -18687,7 +18687,7 @@ async function isLinkOpen(idx){
     '</div>';
   document.getElementById('is-link-list').innerHTML='<div style="text-align:center;color:#555;padding:20px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading inventory...</div>';
   try{
-    var inv=await sbGet('inventory','select=id,name,stock,vin,color,location&order=name.asc&limit=1000');
+    var inv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location&order=name.asc&limit=1000');
     _isInv=Array.isArray(inv)?inv:[];
   }catch(e){_isInv=S.inventory||[];}
   isLinkFilter();
@@ -18707,7 +18707,8 @@ function isLinkFilter(){
   cars.forEach(function(car){
     html+='<div onclick="isLinkSelect('+car.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+'</div>';
-    html+='<div style="font-size:11px;color:#555;margin-top:2px;">#'+car.stock+(car.vin?' &middot; '+car.vin:'')+(car.color?' &middot; '+car.color:'')+'</div>';
+    var milesStr=car.miles?car.miles.toLocaleString()+' mi':'';
+    html+='<div style="font-size:11px;color:#555;margin-top:2px;">#'+car.stock+(car.vin?' &middot; '+car.vin:'')+(car.color?' &middot; '+car.color:'')+(milesStr?' &middot; '+milesStr:'')+'</div>';
     html+='</div>';
   });
   list.innerHTML=html;
