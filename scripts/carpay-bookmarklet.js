@@ -139,7 +139,7 @@
 
     // Payment history
     var payments = [];
-    var rows = doc.querySelectorAll('#customer-payment-history-table tbody tr, #payment-history-table tbody tr, table tbody tr');
+    var rows = doc.querySelectorAll('#payment-history-table tbody tr, table tbody tr');
     rows.forEach(function(tr) {
       var cells = tr.querySelectorAll('td');
       if (cells.length >= 4) {
@@ -267,13 +267,17 @@
 
     log('📋 Fetching customer details (phone, vehicle, balance)...');
     if (skipped) log('   ⚡ ' + skipped + ' already cached, fetching ' + needFetch.length + ' remaining', '#60a5fa');
-    else log('   This takes ~' + Math.ceil(needFetch.length * 1.5 / 2) + ' seconds (throttled to avoid IP ban)...');
+    else log('   This takes ~' + Math.ceil(customers.length / 5) + ' seconds...');
 
     var customerPayments = []; // collect payment history from each customer's payment-history tab
-    // Use known dealer IDs — detection from page HTML is unreliable (can pick up wrong dealer)
-    var dealerId = _loc === 'deland' ? '657' : '656';
-    log('   🔑 dealerId: ' + dealerId, '#888');
-    var batchSize = 2; // Throttled: 2 at a time to avoid rate limiting
+    var dealerId = location.search.match(/dealerId=(\d+)/) ? location.search.match(/dealerId=(\d+)/)[1] : '';
+    if (!dealerId) {
+      var dMatch = document.body.innerHTML.match(/dealerId[=:][\s"']*(\d+)/);
+      if (dMatch) dealerId = dMatch[1];
+    }
+    // Fallback to known dealer IDs
+    if (!dealerId) dealerId = _loc === 'deland' ? '657' : '656';
+    var batchSize = 5;
     for (var i = 0; i < needFetch.length; i += batchSize) {
       var batch = needFetch.slice(i, i + batchSize);
       await Promise.all(batch.map(async function(cust) {
@@ -301,10 +305,6 @@
             if (pr.ok) {
               var phtml = await pr.text();
               var phPays = parseCustomerPage(phtml, cust.carpay_id).payments;
-              // Debug: log payment results for first 5 customers
-              if (customerPayments.length === 0 && i < batchSize * 5) {
-                log('    💳 ' + cust.name + ': ' + phPays.length + ' payments (html=' + phtml.length + ', hasTable=' + (phtml.indexOf('customer-payment-history-table') !== -1) + ')', '#888');
-              }
               if (phPays && phPays.length) {
                 phPays.forEach(function(p) {
                   customerPayments.push({
@@ -320,69 +320,21 @@
                   });
                 });
               }
-            } else {
-              log('    💳 ' + cust.name + ': HTTP ' + pr.status, '#ef4444');
             }
-          } catch(e) {
-            log('    💳 ' + cust.name + ': ERROR ' + e.message, '#ef4444');
-          }
+          } catch(e) {}
         } catch(e) {
           // skip
         }
       }));
       var pct = Math.min(100, Math.round(((i + batchSize) / needFetch.length) * 100));
       log('   ' + pct + '% (' + Math.min(i + batchSize, needFetch.length) + '/' + needFetch.length + ' fetched, ' + customerPayments.length + ' payments)');
-      await sleep(1500); // 1.5s between batches to avoid IP ban
+      await sleep(200);
     }
     var _phCount = customers.filter(function(c){return c.phone;}).length;
     var _emCount = customers.filter(function(c){return c.email;}).length;
     var _vhCount = customers.filter(function(c){return c.vehicle;}).length;
     log('✅ Details fetched — 📞 ' + _phCount + ' phones, ✉ ' + _emCount + ' emails, 🚗 ' + _vhCount + ' vehicles', '#30d158');
-    log('   (' + customerPayments.length + ' payments from detail fetches)');
-
-    // ── Fetch payment history for ALL customers (including cached) ──────────
-    log('');
-    log('📋 Fetching payment history for all ' + customers.length + ' customers...');
-    var payBatchSize = 2;
-    for (var pi2 = 0; pi2 < customers.length; pi2 += payBatchSize) {
-      var payBatch = customers.slice(pi2, pi2 + payBatchSize);
-      await Promise.all(payBatch.map(async function(cust) {
-        if (!cust.carpay_id) return;
-        try {
-          var phUrl = '/dms/customer/' + cust.carpay_id + '?dealerId=' + dealerId + '&tabId=payment-history';
-          var pr = await fetch(phUrl, { credentials: 'include' });
-          if (pr.ok) {
-            var phtml = await pr.text();
-            var phPays = parseCustomerPage(phtml, cust.carpay_id).payments;
-            if (pi2 < payBatchSize * 3) {
-              log('    💳 ' + cust.name + ': ' + phPays.length + ' pays (hasTable=' + (phtml.indexOf('customer-payment-history-table') !== -1) + ')', '#888');
-            }
-            if (phPays && phPays.length) {
-              phPays.forEach(function(p) {
-                var key = cust.account + '|' + p.date + '|' + p.amount;
-                customerPayments.push({
-                  location: _loc,
-                  carpay_id: cust.carpay_id,
-                  name: cust.name,
-                  account: cust.account,
-                  reference: '',
-                  date: p.date,
-                  time: '',
-                  method: p.method || '',
-                  amount_sent: p.amount || '$0.00'
-                });
-              });
-            }
-          }
-        } catch(e) {}
-      }));
-      if (pi2 % 20 === 0) {
-        var ppct = Math.min(100, Math.round(((pi2 + payBatchSize) / customers.length) * 100));
-        log('   ' + ppct + '% (' + customerPayments.length + ' payments so far)');
-      }
-      await sleep(1500);
-    }
-    log('✅ Payment history: ' + customerPayments.length + ' payments from customer pages', '#30d158');
+    log('   (' + customerPayments.length + ' payments from customer pages)');
 
     // ── Step 3: Fetch recent payments ───────────────────────────────────────
     log('');
@@ -397,14 +349,14 @@
       prows.forEach(function(tr) {
         var cells = tr.querySelectorAll('td');
         if (cells.length < 11) return;
-        var name = cells[0] ? (cells[0].textContent || '').trim() : '';
-        var account = cells[1] ? (cells[1].textContent || '').trim() : '';
-        var reference = cells[2] ? (cells[2].textContent || '').trim() : '';
-        var date = cells[3] ? (cells[3].textContent || '').trim() : '';
-        var time = cells[4] ? (cells[4].textContent || '').trim() : '';
-        var method = cells[5] ? (cells[5].textContent || '').trim() : '';
-        var payType = cells[8] ? (cells[8].textContent || '').trim() : '';
-        var amountSent = cells[11] ? (cells[11].textContent || '').trim() : '';
+        var name = cells[0] ? cells[0].innerText.trim() : '';
+        var account = cells[1] ? cells[1].innerText.trim() : '';
+        var reference = cells[2] ? cells[2].innerText.trim() : '';
+        var date = cells[3] ? cells[3].innerText.trim() : '';
+        var time = cells[4] ? cells[4].innerText.trim() : '';
+        var method = cells[5] ? cells[5].innerText.trim() : '';
+        var payType = cells[8] ? cells[8].innerText.trim() : '';
+        var amountSent = cells[11] ? cells[11].innerText.trim() : '';
         if (name && account && amountSent) {
           var cust = customers.find(function(c) { return c.account === account; });
           var carpayId = cust ? cust.carpay_id : '';
@@ -463,62 +415,22 @@
       if (Object.keys(flaggedAccounts).length) log('  🚩 Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
     }
 
-    // Normalize all customer objects to have identical keys (PostgREST requires this for batch POST)
-    var _allKeys = ['name','account','next_payment','days_late','auto_pay','carpay_id','location','vehicle','phone','email','scheduled_amount','payment_frequency','current_amount_due','repo_flagged'];
-    customers.forEach(function(c) {
-      _allKeys.forEach(function(k) { if (!(k in c)) c[k] = (k === 'days_late' ? 0 : k === 'auto_pay' || k === 'repo_flagged' ? false : k === 'current_amount_due' ? null : ''); });
-      // Re-apply repo_flagged
-      if (flaggedAccounts[c.account]) c.repo_flagged = true;
-    });
-
     // Debug: verify data before save
     var _sample = customers.slice(0, 2).map(function(c) { return c.name + ' ph=' + (c.phone||'NULL') + ' veh=' + (c.vehicle||'NULL'); });
     log('  🔍 Pre-save sample: ' + _sample.join(' | '), '#f59e0b');
     log('  🔍 Keys: ' + Object.keys(customers[0] || {}).join(', '), '#f59e0b');
-    log('  🔍 JSON[0]: ' + JSON.stringify(customers[0]).slice(0, 300), '#f59e0b');
 
     // Clear existing for this location
     await sbDeleteByLocation('carpay_customers', _loc);
-    // Only delete payments if we have replacements — never wipe without new data
-    if (allPayments.length > 0) {
-      await sbDeleteByLocation('carpay_payments', _loc);
-    } else {
-      log('  ℹ Keeping existing payments (no new ones found)', '#60a5fa');
-    }
+    await sbDeleteByLocation('carpay_payments', _loc);
+
+    // Re-apply repo_flagged
+    customers.forEach(function(c) {
+      if (flaggedAccounts[c.account]) c.repo_flagged = true;
+    });
 
     var custsDone = await sbUpsert('carpay_customers', customers);
     log('  ✅ ' + custsDone + ' customers saved', '#30d158');
-
-    // ── Post-save verification & fix-up ──────────────────────────────────────
-    // Check if detail fields actually persisted — if not, patch them individually
-    await sleep(500);
-    var verifyRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + _loc + '&select=id,account,vehicle,phone&limit=5&order=name.asc', {
-      headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
-    });
-    if (verifyRes.ok) {
-      var verifyData = await verifyRes.json();
-      var needsFix = verifyData.filter(function(v) { return !v.vehicle && !v.phone; });
-      if (needsFix.length > 0) {
-        log('  ⚠ Detail fields lost during batch insert — running fix-up patches...', '#f59e0b');
-        var fixCount = 0;
-        for (var fi = 0; fi < customers.length; fi++) {
-          var fc = customers[fi];
-          if (!fc.vehicle && !fc.phone) continue; // nothing to fix
-          try {
-            var patchR = await fetch(SB_URL + '/rest/v1/carpay_customers?account=eq.' + encodeURIComponent(fc.account) + '&location=eq.' + _loc, {
-              method: 'PATCH',
-              headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=minimal' }),
-              body: JSON.stringify({ vehicle: fc.vehicle || '', phone: fc.phone || '', email: fc.email || '', scheduled_amount: fc.scheduled_amount || '', payment_frequency: fc.payment_frequency || '', current_amount_due: fc.current_amount_due })
-            });
-            if (patchR.ok) fixCount++;
-          } catch(e) {}
-          if (fi % 10 === 0 && fi > 0) { log('   Patching... ' + fi + '/' + customers.length); await sleep(500); }
-        }
-        log('  ✅ Fixed ' + fixCount + ' customers via individual patches', '#30d158');
-      } else {
-        log('  ✅ Verified: detail fields persisted correctly', '#30d158');
-      }
-    }
 
     if (allPayments.length) {
       var paysDone = await sbUpsert('carpay_payments', allPayments);
