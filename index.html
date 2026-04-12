@@ -18938,6 +18938,23 @@ async function d26LinkOpen(idx){
     var inv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location&order=name.asc&limit=1000');
     _d26LinkInv=Array.isArray(inv)?inv:[];
   }catch(e){_d26LinkInv=S.inventory||[];}
+  // Also load CarPay accounts (customer+vehicle pairings) — always add, they bring buyer names
+  try{
+    var cpPays=await sbGet('payments','select=customer_name,vehicle_vin,vehicle_year,vehicle_make,vehicle_model,vehicle_color&limit=2000');
+    var cpSeen={};
+    cpPays.forEach(function(p){
+      var cpVin=(p.vehicle_vin||'').toUpperCase().trim();
+      if(!cpVin) return;
+      var cpKey=cpVin+'|'+(p.customer_name||'').toUpperCase();
+      if(cpSeen[cpKey]) return;
+      cpSeen[cpKey]=true;
+      // Skip if this exact VIN+name combo already in list
+      var alreadyHas=_d26LinkInv.some(function(c){return (c.vin||'').toUpperCase()===cpVin&&(c.buyer||'').toUpperCase()===(p.customer_name||'').toUpperCase();});
+      if(alreadyHas) return;
+      existVins.add(cpVin);
+      _d26LinkInv.push({id:null,name:[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' '),stock:'',vin:p.vehicle_vin||'',color:p.vehicle_color||'',miles:null,location:'',sold:true,buyer:p.customer_name||'',carpay:true});
+    });
+  }catch(e){}
   // Also load sold inventory CSVs
   try{
     var soldUrls=['https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/SoldInventoryDeBary.csv','https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/SoldInventoryDeLand.csv'];
@@ -18987,7 +19004,7 @@ function d26LinkFilter(){
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
   cars.slice(0,50).forEach(function(car){
-    var soldBadge=car.sold?'<span style="display:inline-block;background:rgba(239,68,68,.15);color:#ef4444;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">SOLD</span>':'';
+    var soldBadge=car.carpay?'<span style="display:inline-block;background:rgba(96,165,250,.15);color:#60a5fa;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">CARPAY</span>':(car.sold?'<span style="display:inline-block;background:rgba(239,68,68,.15);color:#ef4444;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">SOLD</span>':'');
     html+='<div onclick="d26LinkSelect(\''+car.vin+'\')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
     html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+soldBadge+'</div>';
     var milesStr=car.miles?car.miles.toLocaleString()+' mi':'';
