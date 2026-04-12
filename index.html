@@ -18535,7 +18535,7 @@ async function openInvSheets(){
         '</div>'+
       '</div>'+
       // Page 1: Deals
-      '<div id="sh-page-1" style="width:50%;flex-shrink:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;">'+
+      '<div id="sh-page-1" style="width:50%;flex-shrink:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:auto;">'+
         '<div id="sh-deals-body" style="padding-bottom:40px;">'+
           '<div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Swipe to load deals...</div>'+
         '</div>'+
@@ -18680,11 +18680,12 @@ function d26Render(){
       var expHtml=expVal?
         '<span style="'+(hasNotes?'text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f59e0b;':'border-bottom:1px solid #333;')+'">'+expVal+'</span>':
         '';
+      var expTdClick=expVal?' onclick="event.stopPropagation();d26ToggleNote('+idx+')"':'';
       html+='<tr onclick="d26Edit('+idx+')" style="background:'+rowBg+';cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid #1a1a1a;">'+
         '<td style="'+cs+'text-align:center;color:#555;font-size:10px;font-weight:700;">'+(d.deal_num||'')+'</td>'+
         '<td style="'+cs+'text-align:left;color:#fff;font-weight:600;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;letter-spacing:.3px;max-width:150px;">'+carHtml+'</td>'+
         '<td style="'+ns+'color:#f87171;">'+d26FmtCell(d.cost)+'</td>'+
-        '<td onclick="event.stopPropagation();d26ToggleNote('+idx+')" style="'+ns+'color:#f59e0b;cursor:pointer;">'+expHtml+'</td>'+
+        '<td'+expTdClick+' style="'+ns+'color:#f59e0b;'+(expVal?'cursor:pointer;':'')+'">'+expHtml+'</td>'+
         '<td style="'+ns+'color:#888;">'+d26FmtCell(d.taxes)+'</td>'+
         '<td style="'+ns+'color:#4ade80;font-weight:700;">'+d26FmtCell(d.money)+'</td>'+
         '<td style="'+ns+'color:'+owedColor+';font-weight:700;">'+d26FmtCell(d.owed)+'</td>'+
