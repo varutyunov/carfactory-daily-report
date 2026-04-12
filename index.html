@@ -18938,6 +18938,40 @@ async function d26LinkOpen(idx){
     var inv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location&order=name.asc&limit=1000');
     _d26LinkInv=Array.isArray(inv)?inv:[];
   }catch(e){_d26LinkInv=S.inventory||[];}
+  // Also load sold inventory CSVs
+  try{
+    var soldUrls=['https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/SoldInventoryDeBary.csv','https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/SoldInventoryDeLand.csv'];
+    var existVins=new Set(_d26LinkInv.map(function(c){return (c.vin||'').toUpperCase();}));
+    for(var si=0;si<soldUrls.length;si++){
+      try{
+        var sr=await fetch(soldUrls[si]+'?t='+Date.now());
+        if(!sr.ok) continue;
+        var stxt=await sr.text();
+        var slines=stxt.trim().split('\n');
+        if(slines.length<2) continue;
+        var shdr=slines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').toLowerCase();});
+        for(var sj=1;sj<slines.length;sj++){
+          // Handle quoted fields (buyer names have commas)
+          var sraw=slines[sj];var svals=[];var inQ=false;var cur='';
+          for(var sk=0;sk<sraw.length;sk++){
+            var ch=sraw[sk];
+            if(ch==='"'){inQ=!inQ;}
+            else if(ch===','&&!inQ){svals.push(cur.trim());cur='';}
+            else{cur+=ch;}
+          }
+          svals.push(cur.trim());
+          var srow={};shdr.forEach(function(h,j){srow[h]=svals[j]||'';});
+          var svin=(srow['vin']||'').toUpperCase().trim();
+          if(!svin||existVins.has(svin)) continue;
+          existVins.add(svin);
+          var sname=[srow['year'],srow['make'],srow['model']].filter(Boolean).join(' ');
+          var sbuyer=(srow['lookupname']||'').replace(/"/g,'');
+          _d26LinkInv.push({id:null,name:sname,stock:srow['stockno']||'',vin:srow['vin']||'',color:'',miles:null,location:si===0?'DeBary':'DeLand',sold:true,buyer:sbuyer});
+        }
+      }catch(se){}
+    }
+  }catch(e){}
+  _d26LinkInv.sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
   d26LinkFilter();
 }
 function d26LinkClose(){
@@ -18949,14 +18983,17 @@ function d26LinkFilter(){
   var q=(document.getElementById('d26-link-search').value||'').toLowerCase();
   var list=document.getElementById('d26-link-list');
   var cars=(_d26LinkInv||[]);
-  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
+  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1||(c.buyer||'').toLowerCase().indexOf(q)!==-1;});
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
-  cars.forEach(function(car){
+  cars.slice(0,50).forEach(function(car){
+    var soldBadge=car.sold?'<span style="display:inline-block;background:rgba(239,68,68,.15);color:#ef4444;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">SOLD</span>':'';
     html+='<div onclick="d26LinkSelect(\''+car.vin+'\')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+'</div>';
+    html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+soldBadge+'</div>';
     var milesStr=car.miles?car.miles.toLocaleString()+' mi':'';
-    html+='<div style="font-size:11px;color:#555;margin-top:2px;">#'+car.stock+(car.vin?' &middot; '+car.vin:'')+(car.color?' &middot; '+car.color:'')+(milesStr?' &middot; '+milesStr:'')+'</div>';
+    var details='#'+(car.stock||'')+(car.vin?' &middot; '+car.vin:'')+(car.color?' &middot; '+car.color:'')+(milesStr?' &middot; '+milesStr:'');
+    if(car.buyer) details+=' &middot; '+car.buyer;
+    html+='<div style="font-size:11px;color:#555;margin-top:2px;">'+details+'</div>';
     html+='</div>';
   });
   list.innerHTML=html;
