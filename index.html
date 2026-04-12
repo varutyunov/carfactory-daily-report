@@ -18683,28 +18683,7 @@ function d26Render(){
         '<td style="'+ns+'color:#f472b6;">'+d26FmtCell(d.manny)+'</td>'+
         '<td style="'+cs+'text-align:center;font-size:10px;">'+(d.gps_sold?'<span style="color:#4ade80;">&#10003;</span>':'')+'</td>'+
       '</tr>';
-      // Hidden note row (expanded via d26ToggleNote) — shows expense breakdown
-      if(parseFloat(d.expenses)||0){
-        var noteVal=(d.expense_notes||'').trim();
-        var breakdownHtml='';
-        if(noteVal){
-          // Notes format: "99 wing, 35 mirror cover, 557 econo"
-          var items=noteVal.split(',');
-          breakdownHtml=items.map(function(item){
-            item=item.trim();
-            var m=item.match(/^(\d+)\s+(.+)/);
-            if(m) return '<span style="color:#f59e0b;font-weight:700;">$'+m[1]+'</span> <span style="color:#aaa;">'+m[2]+'</span>';
-            return '<span style="color:#aaa;">'+item+'</span>';
-          }).join('<span style="color:#333;"> &bull; </span>');
-        }else{
-          breakdownHtml='<span style="color:#555;font-style:italic;">No breakdown</span>';
-        }
-        html+='<tr id="d26-note-'+idx+'" style="display:none;background:#1a1500;">'+
-          '<td colspan="11" style="padding:8px 10px;border-bottom:1px solid #333;white-space:normal;">'+
-            '<div style="font-size:11px;line-height:1.8;">'+breakdownHtml+'</div>'+
-          '</td>'+
-        '</tr>';
-      }
+      // No inline note row — expenses shown in popup via d26ShowExpPopup
     });
     html+='<tr style="background:#0a0f0a;border-top:1px solid #333;border-bottom:2px solid #333;">'+
       '<td style="'+cs+'"></td>'+
@@ -18728,30 +18707,52 @@ function d26RowClick(e,idx){
   var el=e.target;
   while(el&&el.tagName!=='TD') el=el.parentElement;
   if(el&&el.hasAttribute('data-exp')){
-    d26ToggleNote(parseInt(el.getAttribute('data-exp')));
+    d26ShowExpPopup(parseInt(el.getAttribute('data-exp')));
     return;
   }
   d26Edit(idx);
 }
-function d26ToggleNote(idx){
-  var row=document.getElementById('d26-note-'+idx);
-  if(!row)return;
-  var show=row.style.display==='none';
-  row.style.display=show?'table-row':'none';
-  if(show){var inp=document.getElementById('d26-ni-'+idx);if(inp)inp.focus();}
-}
-async function d26SaveNote(idx){
-  var inp=document.getElementById('d26-ni-'+idx);
-  if(!inp)return;
-  var val=inp.value.trim();
+function d26ShowExpPopup(idx){
   var d=_d26Data[idx];if(!d)return;
-  try{
-    await sbPatch('deals26',d.id,{expense_notes:val});
-    d.expense_notes=val;
-    var row=document.getElementById('d26-note-'+idx);
-    if(row)row.style.display='none';
-    d26Render();
-  }catch(e){alert('Error saving note: '+e.message);}
+  var noteVal=(d.expense_notes||'').trim();
+  var car=d.car_desc||'';
+  var total=d26FmtCell(d.expenses);
+  // Build item rows
+  var itemsHtml='';
+  if(noteVal){
+    var items=noteVal.split(',');
+    items.forEach(function(item){
+      item=item.trim();
+      var m=item.match(/^(\d+)\s+(.+)/);
+      if(m){
+        itemsHtml+='<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1a1a1a;">'+
+          '<span style="color:#ccc;font-size:13px;">'+m[2]+'</span>'+
+          '<span style="color:#f59e0b;font-weight:700;font-size:13px;white-space:nowrap;margin-left:12px;">$'+m[1]+'</span>'+
+        '</div>';
+      }else{
+        itemsHtml+='<div style="padding:8px 0;border-bottom:1px solid #1a1a1a;color:#888;font-size:13px;">'+item+'</div>';
+      }
+    });
+  }else{
+    itemsHtml='<div style="color:#555;font-style:italic;padding:12px 0;text-align:center;">No breakdown available</div>';
+  }
+  // Remove existing popup
+  var old=document.getElementById('d26-exp-popup');
+  if(old)old.remove();
+  // Create popup
+  var pop=document.createElement('div');
+  pop.id='d26-exp-popup';
+  pop.style.cssText='position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);-webkit-tap-highlight-color:transparent;';
+  pop.onclick=function(ev){if(ev.target===pop)pop.remove();};
+  pop.innerHTML=
+    '<div style="background:#111;border:1px solid #333;border-radius:16px;width:85%;max-width:340px;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;" onclick="event.stopPropagation()">'+
+      '<div style="padding:14px 16px 10px;border-bottom:1px solid #222;">'+
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px;">'+car+'</div>'+
+        '<div style="font-size:12px;color:#f59e0b;font-weight:700;margin-top:4px;">Total: '+total+'</div>'+
+      '</div>'+
+      '<div style="padding:4px 16px 16px;">'+itemsHtml+'</div>'+
+    '</div>';
+  document.body.appendChild(pop);
 }
 
 function d26Edit(idx){
