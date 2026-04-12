@@ -18678,13 +18678,13 @@ function d26Render(){
       var hasNotes=d.expense_notes&&d.expense_notes.trim();
       var expVal=d26FmtCell(d.expenses);
       var expHtml=expVal?
-        '<span style="cursor:pointer;'+(hasNotes?'text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f59e0b;':'border-bottom:1px solid #333;')+'" onclick="event.stopPropagation();d26ToggleNote('+idx+')">'+expVal+'</span>':
+        '<span style="'+(hasNotes?'text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f59e0b;':'border-bottom:1px solid #333;')+'">'+expVal+'</span>':
         '';
       html+='<tr onclick="d26Edit('+idx+')" style="background:'+rowBg+';cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid #1a1a1a;">'+
         '<td style="'+cs+'text-align:center;color:#555;font-size:10px;font-weight:700;">'+(d.deal_num||'')+'</td>'+
         '<td style="'+cs+'text-align:left;color:#fff;font-weight:600;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;letter-spacing:.3px;max-width:150px;">'+carHtml+'</td>'+
         '<td style="'+ns+'color:#f87171;">'+d26FmtCell(d.cost)+'</td>'+
-        '<td style="'+ns+'color:#f59e0b;position:relative;">'+expHtml+'</td>'+
+        '<td onclick="event.stopPropagation();d26ToggleNote('+idx+')" style="'+ns+'color:#f59e0b;cursor:pointer;">'+expHtml+'</td>'+
         '<td style="'+ns+'color:#888;">'+d26FmtCell(d.taxes)+'</td>'+
         '<td style="'+ns+'color:#4ade80;font-weight:700;">'+d26FmtCell(d.money)+'</td>'+
         '<td style="'+ns+'color:'+owedColor+';font-weight:700;">'+d26FmtCell(d.owed)+'</td>'+
