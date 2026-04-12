@@ -18670,6 +18670,11 @@ function d26Render(){
       var expHtml=expVal?
         '<span style="border-bottom:1px dashed #f59e0b;">'+expVal+'</span>':
         '';
+      // Payment cell: clickable to expand/add notes
+      var pmtVal=d26FmtCell(d.payments);
+      var pmtHtml=pmtVal?
+        '<span style="border-bottom:1px dashed #60a5fa;">'+pmtVal+'</span>':
+        '';
       html+='<tr onclick="d26RowClick(event,'+idx+')" style="background:'+rowBg+';cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid #1a1a1a;">'+
         '<td style="'+cs+'text-align:center;color:#555;font-size:10px;font-weight:700;">'+(d.deal_num||'')+'</td>'+
         '<td style="'+cs+'text-align:left;color:#fff;font-weight:600;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;letter-spacing:.3px;max-width:150px;">'+carHtml+'</td>'+
@@ -18678,7 +18683,7 @@ function d26Render(){
         '<td style="'+ns+'color:#888;">'+d26FmtCell(d.taxes)+'</td>'+
         '<td style="'+ns+'color:#4ade80;font-weight:700;">'+d26FmtCell(d.money)+'</td>'+
         '<td style="'+ns+'color:'+owedColor+';font-weight:700;">'+d26FmtCell(d.owed)+'</td>'+
-        '<td style="'+ns+'color:#60a5fa;">'+d26FmtCell(d.payments)+'</td>'+
+        '<td'+(pmtVal?' data-pmt="'+idx+'"':'')+' style="'+ns+'color:#60a5fa;'+(pmtVal?'cursor:pointer;padding:8px 6px;':'')+'">'+pmtHtml+'</td>'+
         '<td style="'+ns+'color:#a78bfa;">'+d26FmtCell(d.dealer_fee)+'</td>'+
         '<td style="'+ns+'color:#f472b6;">'+d26FmtCell(d.manny)+'</td>'+
         '<td style="'+cs+'text-align:center;font-size:10px;">'+(d.gps_sold?'<span style="color:#4ade80;">&#10003;</span>':'')+'</td>'+
@@ -18708,6 +18713,10 @@ function d26RowClick(e,idx){
   while(el&&el.tagName!=='TD') el=el.parentElement;
   if(el&&el.hasAttribute('data-exp')){
     d26ShowExpPopup(parseInt(el.getAttribute('data-exp')));
+    return;
+  }
+  if(el&&el.hasAttribute('data-pmt')){
+    d26ShowPmtPopup(parseInt(el.getAttribute('data-pmt')));
     return;
   }
   d26Edit(idx);
@@ -18804,6 +18813,102 @@ async function d26ExpSave(){
     d.expense_notes=noteStr;
     d.expenses=total;
     var pop=document.getElementById('d26-exp-popup');
+    if(pop)pop.remove();
+    d26Render();
+  }catch(e){alert('Error saving: '+e.message);}
+}
+
+// ── Payment Popup (same pattern as expenses) ──
+var _d26PmtIdx=-1;
+function d26ShowPmtPopup(idx){
+  var d=_d26Data[idx];if(!d)return;
+  _d26PmtIdx=idx;
+  var noteVal=(d.payment_notes||'').trim();
+  var car=d.car_desc||'';
+  var items=[];
+  if(noteVal){
+    noteVal.split(',').forEach(function(item){
+      item=item.trim();
+      var m=item.match(/^(\d+(?:\.\d+)?)\s*(.*)/);
+      if(m) items.push({amt:m[1],desc:(m[2]||'').trim()});
+      else if(item) items.push({amt:'',desc:item});
+    });
+  }
+  var rowsHtml='';
+  items.forEach(function(it,i){
+    rowsHtml+=d26PmtRow(i,it.amt,it.desc);
+  });
+  var old=document.getElementById('d26-pmt-popup');
+  if(old)old.remove();
+  var pop=document.createElement('div');
+  pop.id='d26-pmt-popup';
+  pop.style.cssText='position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);-webkit-tap-highlight-color:transparent;';
+  pop.onclick=function(ev){if(ev.target===pop)pop.remove();};
+  pop.innerHTML=
+    '<div style="background:#111;border:1px solid #333;border-radius:16px;width:88%;max-width:360px;max-height:75vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">'+
+      '<div style="padding:14px 16px 10px;border-bottom:1px solid #222;flex-shrink:0;">'+
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px;">'+car+'</div>'+
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:#60a5fa;letter-spacing:1px;margin-top:2px;">PAYMENTS</div>'+
+        '<div id="d26-pmt-total" style="font-size:12px;color:#60a5fa;font-weight:700;margin-top:4px;">Total: $'+d26PmtCalcTotal()+'</div>'+
+      '</div>'+
+      '<div id="d26-pmt-items" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 16px;">'+rowsHtml+'</div>'+
+      '<div style="padding:10px 16px;border-top:1px solid #222;display:flex;gap:8px;flex-shrink:0;">'+
+        '<button onclick="d26PmtAddRow()" style="flex:1;background:#222;border:1px solid #333;border-radius:8px;color:#60a5fa;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
+        '<button onclick="d26PmtSave()" style="flex:1;background:#60a5fa;border:none;border-radius:8px;color:#000;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">SAVE</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(pop);
+  d26PmtRecalc();
+}
+function d26PmtRow(i,amt,desc){
+  return '<div class="d26-pmt-row" style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a1a;">'+
+    '<input type="number" value="'+(amt||'')+'" placeholder="$" oninput="d26PmtRecalc()" style="width:60px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#60a5fa;padding:8px 6px;font-size:13px;font-weight:700;outline:none;text-align:right;-webkit-appearance:none;" />'+
+    '<input type="text" value="'+(desc||'').replace(/"/g,'&quot;')+'" placeholder="description" style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:8px 6px;font-size:13px;outline:none;" />'+
+    '<button onclick="this.parentElement.remove();d26PmtRecalc()" style="background:none;border:none;color:#555;font-size:18px;padding:4px 6px;cursor:pointer;line-height:1;">&times;</button>'+
+  '</div>';
+}
+function d26PmtAddRow(){
+  var c=document.getElementById('d26-pmt-items');
+  if(!c)return;
+  var n=c.querySelectorAll('.d26-pmt-row').length;
+  c.insertAdjacentHTML('beforeend',d26PmtRow(n,'',''));
+  var inputs=c.querySelectorAll('.d26-pmt-row:last-child input');
+  if(inputs[0])inputs[0].focus();
+}
+function d26PmtCalcTotal(){
+  var c=document.getElementById('d26-pmt-items');
+  if(!c)return '0';
+  var total=0;
+  c.querySelectorAll('.d26-pmt-row').forEach(function(row){
+    var v=parseFloat(row.querySelector('input[type="number"]').value)||0;
+    total+=v;
+  });
+  return total.toLocaleString();
+}
+function d26PmtRecalc(){
+  var el=document.getElementById('d26-pmt-total');
+  if(el) el.textContent='Total: $'+d26PmtCalcTotal();
+}
+async function d26PmtSave(){
+  var c=document.getElementById('d26-pmt-items');
+  if(!c||_d26PmtIdx<0)return;
+  var d=_d26Data[_d26PmtIdx];if(!d)return;
+  var items=[];var total=0;
+  c.querySelectorAll('.d26-pmt-row').forEach(function(row){
+    var inputs=row.querySelectorAll('input');
+    var amt=parseFloat(inputs[0].value)||0;
+    var desc=(inputs[1].value||'').trim();
+    if(amt>0||desc){
+      items.push(desc?(amt+' '+desc):(''+amt));
+      total+=amt;
+    }
+  });
+  var noteStr=items.join(', ');
+  try{
+    await sbPatch('deals26',d.id,{payment_notes:noteStr,payments:total});
+    d.payment_notes=noteStr;
+    d.payments=total;
+    var pop=document.getElementById('d26-pmt-popup');
     if(pop)pop.remove();
     d26Render();
   }catch(e){alert('Error saving: '+e.message);}
