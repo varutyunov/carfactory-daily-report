@@ -5440,18 +5440,20 @@ async function syncLocation(loc){
     var imp=parseCSV(csv,loc);
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
-    var csvStocks=new Set(imp.map(function(c){return c.stock;}));
-    var existByStock={};var existByVin={};
+    var existByVin={};var existByName={};
     S.inventory.forEach(function(c){
-      if(c.stock) existByStock[c.stock]=c;
-      if(c.vin) existByVin[c.vin]=c;
+      if(c.vin) existByVin[c.vin.toUpperCase().trim()]=c;
+      if(c.name) existByName[c.name.toLowerCase().trim()]=c;
     });
+    var csvVins=new Set(imp.map(function(c){return (c.vin||'').toUpperCase().trim();}).filter(Boolean));
     var added=0,updated=0,removed=0;
     var sbPatches=[];var toInsertSB=[];
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
-      // VIN match first (authoritative), then stock fallback
-      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock];
+      // VIN match only (authoritative), name fallback for cars without VIN
+      var cVin=(c.vin||'').toUpperCase().trim();
+      var cName=(c.name||'').toLowerCase().trim();
+      var exist=(cVin?existByVin[cVin]:null)||(cName?existByName[cName]:null);
       if(exist){
         var patch={};
         if(c.color){exist.color=c.color;patch.color=c.color;}
@@ -5486,16 +5488,14 @@ async function syncLocation(loc){
     if(sbPatches.length){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
     }
-    // Only remove cars of THIS location that are no longer in its CSV — protect by VIN
+    // Only remove cars of THIS location that are no longer in its CSV — VIN-based only
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
-    var locCsvVins=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
-      if(!c.stock) return true;
+      if(!c.vin) return true; // no VIN = manually added, keep
       if((c.location||'DeBary').toLowerCase()!==loc.toLowerCase()) return true; // don't touch other location
-      if(csvStocks.has(c.stock)) return true;
+      if(csvVins.has(c.vin.toUpperCase().trim())) return true; // VIN still in CSV
       if(activeIds.has(c.id)) return true;
-      if(c.vin&&locCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
       toRemoveDB.push(c.id);
       removed++;
       return false;
@@ -5604,8 +5604,8 @@ async function syncNow(){
       if(activeIds.has(c.id)) return true; // has active assignments, keep it
       // Don't remove DeLand cars if DeLand CSV wasn't loaded
       if(!hasDeland&&(c.location||'DeBary').toLowerCase()==='deland') return true;
-      // Don't remove manually-added cars (no stock = added in-app, not from CSV)
-      if(!c.stock) return true;
+      // Don't remove manually-added cars (no VIN = added in-app, not from CSV)
+      if(!c.vin) return true;
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
