@@ -5532,35 +5532,42 @@ async function syncNow(){
     var imp=deland.concat(debary.filter(function(c){return !delandStocks.has(c.stock)&&!(c.vin&&delandVins.has(c.vin));}));
     if(!imp.length) throw new Error('No INSTOCK vehicles found');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
-    var csvStocks=new Set(imp.map(function(c){return c.stock;}));
     // Fetch fresh inventory from Supabase to avoid stale-cache duplicates
     try{
       var freshInv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location,photo,work&order=id.asc&limit=2000');
       if(Array.isArray(freshInv)&&freshInv.length>0) S.inventory=freshInv;
     }catch(e){console.warn('Fresh inventory fetch failed, using cache:',e);}
-    var existByStock={};var existByVin={};
-    // Build lookup — key by stock+location to avoid cross-location collisions
+    // Build lookups — VIN is primary, name (year make model) is fallback
+    var existByVin={};var existByName={};
     S.inventory.forEach(function(c){
-      if(c.vin) existByVin[c.vin]=c;
-      if(c.stock) existByStock[c.stock+'|'+(c.location||'')]=c;
+      if(c.vin) existByVin[c.vin.toUpperCase().trim()]=c;
+      if(c.name) existByName[c.name.toLowerCase().trim()]=c;
     });
     var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[];
-    var seenVins=new Set(); // dedup within CSV batch
+    var seenVins=new Set();var seenNames=new Set(); // dedup within CSV batch
     imp.forEach(function(c){
       var _fc=fixColor(c.color);
       if(_fc){if(c.vin)colorMap[c.vin]=_fc;if(c.stock)colorMap[c.stock]=_fc;}
-      // Skip if we already processed this VIN in this batch (CSV has dupes)
-      if(c.vin&&seenVins.has(c.vin)) return;
-      if(c.vin) seenVins.add(c.vin);
-      // VIN match first (authoritative), then stock+location fallback
-      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock+'|'+(c.location||'')];
+      // Dedup within this CSV batch by VIN first, then name
+      var cVin=(c.vin||'').toUpperCase().trim();
+      var cName=(c.name||'').toLowerCase().trim();
+      if(cVin&&seenVins.has(cVin)) return;
+      if(cVin) seenVins.add(cVin);
+      if(!cVin&&cName&&seenNames.has(cName)) return;
+      if(cName) seenNames.add(cName);
+      // Match: VIN first (authoritative), then year/make/model name fallback
+      var exist=(cVin?existByVin[cVin]:null)||(cName?existByName[cName]:null);
       if(exist){
+        // Mark as matched so removal logic knows this DB car is still in CSV
+        exist._csvMatched=true;
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
         if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
+        // Fill in VIN if DB record was missing it
+        if(cVin&&!exist.vin){exist.vin=c.vin;patch.vin=c.vin;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
       } else {
@@ -5568,10 +5575,12 @@ async function syncNow(){
         added++;
       }
     });
-    // Deduplicate inserts by VIN before posting (safety net)
-    var insertVins=new Set();
+    // Deduplicate inserts by VIN, then by name (safety net)
+    var insertVins=new Set();var insertNames=new Set();
     toInsertSB=toInsertSB.filter(function(c){
       if(c.vin){if(insertVins.has(c.vin))return false;insertVins.add(c.vin);}
+      var nm=(c.name||'').toLowerCase().trim();
+      if(!c.vin&&nm){if(insertNames.has(nm))return false;insertNames.add(nm);}
       return true;
     });
     if(toInsertSB.length){
@@ -5587,17 +5596,17 @@ async function syncNow(){
       }
     }
     if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
-    // Remove cars no longer in either CSV — protect by stock number OR VIN
-    // If DeLand CSV failed to load, don't remove DeLand cars (they'd be wiped by stale merge)
+    // Remove cars no longer in CSV — use the _csvMatched flag instead of stock lookup
     var hasDeland=deland.length>0;
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
-    var allCsvVins=new Set(imp.map(function(c){return c.vin;}).filter(Boolean));
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
-      if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
-      if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
+      if(c._csvMatched){delete c._csvMatched;return true;}
+      if(activeIds.has(c.id)) return true; // has active assignments, keep it
       // Don't remove DeLand cars if DeLand CSV wasn't loaded
       if(!hasDeland&&(c.location||'DeBary').toLowerCase()==='deland') return true;
+      // Don't remove manually-added cars (no stock = added in-app, not from CSV)
+      if(!c.stock) return true;
       toRemoveDB.push(c.id);removed++;return false;
     });
     for(var d=0;d<toRemoveDB.length;d++){try{await sbDelete('inventory',toRemoveDB[d]);}catch(e){}}
