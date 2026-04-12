@@ -18688,15 +18688,20 @@ function d26Render(){
         var noteVal=(d.expense_notes||'').trim();
         var breakdownHtml='';
         if(noteVal){
-          // Parse formula like "99+35+12+557+40" into individual amounts
-          var parts=noteVal.split('+');
-          breakdownHtml=parts.map(function(p){return '<span style="color:#f59e0b;font-weight:600;">$'+p.trim()+'</span>';}).join(' <span style="color:#555;">+</span> ');
+          // Notes format: "99 wing, 35 mirror cover, 557 econo"
+          var items=noteVal.split(',');
+          breakdownHtml=items.map(function(item){
+            item=item.trim();
+            var m=item.match(/^(\d+)\s+(.+)/);
+            if(m) return '<span style="color:#f59e0b;font-weight:700;">$'+m[1]+'</span> <span style="color:#aaa;">'+m[2]+'</span>';
+            return '<span style="color:#aaa;">'+item+'</span>';
+          }).join('<span style="color:#333;"> &bull; </span>');
         }else{
-          breakdownHtml='<span style="color:#555;font-style:italic;">No breakdown available</span>';
+          breakdownHtml='<span style="color:#555;font-style:italic;">No breakdown</span>';
         }
         html+='<tr id="d26-note-'+idx+'" style="display:none;background:#1a1500;">'+
           '<td colspan="11" style="padding:8px 10px;border-bottom:1px solid #333;white-space:normal;">'+
-            '<div style="font-size:12px;line-height:1.6;">'+breakdownHtml+'</div>'+
+            '<div style="font-size:11px;line-height:1.8;">'+breakdownHtml+'</div>'+
           '</td>'+
         '</tr>';
       }
