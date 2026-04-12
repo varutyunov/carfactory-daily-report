@@ -5533,23 +5533,33 @@ async function syncNow(){
     if(!imp.length) throw new Error('No INSTOCK vehicles found');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
+    // Fetch fresh inventory from Supabase to avoid stale-cache duplicates
+    try{
+      var freshInv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location,photo,work&order=id.asc&limit=2000');
+      if(Array.isArray(freshInv)&&freshInv.length>0) S.inventory=freshInv;
+    }catch(e){console.warn('Fresh inventory fetch failed, using cache:',e);}
     var existByStock={};var existByVin={};
-    S.inventory.forEach(function(c){if(c.stock)existByStock[c.stock]=c;if(c.vin)existByVin[c.vin]=c;});
+    // Build lookup — key by stock+location to avoid cross-location collisions
+    S.inventory.forEach(function(c){
+      if(c.vin) existByVin[c.vin]=c;
+      if(c.stock) existByStock[c.stock+'|'+(c.location||'')]=c;
+    });
     var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[];
+    var seenVins=new Set(); // dedup within CSV batch
     imp.forEach(function(c){
       var _fc=fixColor(c.color);
       if(_fc){if(c.vin)colorMap[c.vin]=_fc;if(c.stock)colorMap[c.stock]=_fc;}
-      // VIN match first (authoritative), then stock fallback
-      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock];
+      // Skip if we already processed this VIN in this batch (CSV has dupes)
+      if(c.vin&&seenVins.has(c.vin)) return;
+      if(c.vin) seenVins.add(c.vin);
+      // VIN match first (authoritative), then stock+location fallback
+      var exist=(c.vin?existByVin[c.vin]:null)||existByStock[c.stock+'|'+(c.location||'')];
       if(exist){
         var patch={};
         if(_fc&&_fc!==exist.color){exist.color=_fc;patch.color=_fc;}
         if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
-        // Update stock number if it changed (transfer case: same VIN, new stock number)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
-        // Update location to match merged CSV (DeLand wins in merge, so this is authoritative)
         if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
-        // Update name if it changed
         if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
         updated++;
@@ -5557,6 +5567,12 @@ async function syncNow(){
         toInsertSB.push({name:c.name,stock:c.stock,vin:c.vin||'',color:_fc||'',miles:c.miles||null,location:c.location,photo:null});
         added++;
       }
+    });
+    // Deduplicate inserts by VIN before posting (safety net)
+    var insertVins=new Set();
+    toInsertSB=toInsertSB.filter(function(c){
+      if(c.vin){if(insertVins.has(c.vin))return false;insertVins.add(c.vin);}
+      return true;
     });
     if(toInsertSB.length){
       stEl.textContent='Adding '+toInsertSB.length+' new cars...';
