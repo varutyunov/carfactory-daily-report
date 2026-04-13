@@ -191,6 +191,19 @@ async function fetchVehicleFromApi(html, carpayId) {
     baseUrl + '/customers/' + carpayId + '/details',
   ];
 
+  // First try the base URL itself to discover the API structure
+  try {
+    const discoverRes = await fetch(baseUrl, {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      timeout: 10000
+    });
+    console.log('  [API] Base URL ' + baseUrl + ' → ' + discoverRes.status);
+    if (discoverRes.ok) {
+      const body = await discoverRes.text();
+      console.log('  [API] Base response (300): ' + body.slice(0, 300));
+    }
+  } catch(e) { console.log('  [API] Base URL error: ' + e.message); }
+
   for (const url of endpoints) {
     try {
       const res = await fetch(url, {
@@ -201,9 +214,14 @@ async function fetchVehicleFromApi(html, carpayId) {
         },
         timeout: 10000
       });
-      if (!res.ok) continue;
+      console.log('  [API] ' + url + ' → ' + res.status);
+      if (!res.ok) {
+        const t = await res.text(); console.log('  [API] Body: ' + t.slice(0, 200));
+        continue;
+      }
       const data = await res.json();
       const jsonStr = JSON.stringify(data);
+      console.log('  [API] OK response (500): ' + jsonStr.slice(0, 500));
 
       // Search the JSON for vehicle-like patterns
       const vMatch = jsonStr.match(/((?:19|20)\d{2})\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/);
@@ -352,6 +370,7 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
   await cpSelectDealer(dealerId);
   const batchSize = 5;
   let fetched = 0;
+  let debugApiDumped = false;
 
   // Load existing vehicle data so SPA-page customers keep their vehicles
   const existingDetails = {};
@@ -382,6 +401,24 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
         // If HTML parsing failed but page has userToken, try the CarPay API
         if (!details.vehicle && html.includes('window.userToken')) {
           try {
+            // Log JS scripts and any embedded JSON/data in the page for the first SPA customer
+            if (!debugApiDumped) {
+              debugApiDumped = true;
+              const scripts = (html.match(/src="([^"]*\.js[^"]*)"/gi) || []).map(s => s.replace(/src="/,'').replace(/"/,'')).filter(s => !s.includes('jquery') && !s.includes('bootstrap'));
+              console.log('  [SPA-DEBUG] Scripts: ' + scripts.join(', '));
+              // Look for any inline script that references vehicle/car/account
+              const inlineScripts = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+              for (const sc of inlineScripts) {
+                const body = sc.replace(/<\/?script[^>]*>/gi, '');
+                if (body.length > 50 && body.length < 5000 && (body.includes('vehicle') || body.includes('account') || body.includes('customer') || body.includes('userToken'))) {
+                  console.log('  [SPA-DEBUG] Inline script (' + body.length + ' chars): ' + body.replace(/\n/g, '\\n').slice(0, 600));
+                }
+              }
+              // Check for data attributes with customer/vehicle info
+              const dataAttrs = html.match(/data-[\w-]+="[^"]*"/gi) || [];
+              const interestingAttrs = dataAttrs.filter(d => d.includes('customer') || d.includes('vehicle') || d.includes('account') || d.match(/\d{4}/));
+              if (interestingAttrs.length) console.log('  [SPA-DEBUG] Data attrs: ' + interestingAttrs.slice(0, 10).join(', '));
+            }
             const apiVehicle = await fetchVehicleFromApi(html, cust.carpay_id);
             if (apiVehicle) {
               cust.vehicle = apiVehicle;
