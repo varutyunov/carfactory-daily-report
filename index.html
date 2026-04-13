@@ -12316,6 +12316,15 @@ async function vrLoadVehicles(){
       _vrVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',stock:d.stock||'',color:'',source:'deposit',customer:d.customer_name||''});
     });
   }catch(e){}
+  try{
+    var deals=await sbGet('deals','select=customer_name,vehicle_desc,vin,stock&order=created_at.desc&limit=200');
+    deals.forEach(function(d){
+      if(!d.vehicle_desc)return;
+      if(d.vin&&_vrVehicles.some(function(v){return v.vin&&v.vin===d.vin;}))return;
+      var parts=(d.vehicle_desc||'').split(' ');
+      _vrVehicles.push({label:d.vehicle_desc,year:parts[0]||'',make:parts[1]||'',model:parts.slice(2).join(' ')||'',vin:d.vin||'',stock:d.stock||'',color:'',source:'deal',customer:d.customer_name||''});
+    });
+  }catch(e){}
 }
 
 function vrFilterVehicles(q){
