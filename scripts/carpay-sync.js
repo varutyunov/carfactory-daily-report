@@ -303,64 +303,40 @@ async function cpGetCustomerDetails(dealerId, customers) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
-        // If HTML parsing failed, try the CarPay API (SPA pages load data via JS)
+        // If HTML parsing failed, dump page info for debugging and try DMS tab URLs
         if (!details.vehicle) {
+          // Log what's in the HTML to understand the page structure
+          const scriptUrls = (html.match(/src="([^"]*api[^"]*)"/gi) || []).join(', ');
+          const dataAttrs = (html.match(/data-\w+="[^"]*\d{4}[^"]*"/gi) || []).slice(0, 5).join(', ');
+          const jsVars = (html.match(/window\.\w+\s*=\s*[^;]{0,100}/g) || []).slice(0, 5).join(' | ');
+          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ')');
+          console.log('    JS vars: ' + jsVars.slice(0, 400));
+          console.log('    HTML size: ' + html.length + ', scripts: ' + scriptUrls.slice(0, 200));
+
+          // Try fetching the "account" tab which might have vehicle info server-rendered
           try {
-            const tokenMatch = html.match(/window\.userToken\s*=\s*"([^"]+)"/);
-            if (tokenMatch) {
-              // Try the customer API endpoint
-              const apiRes = await fetch('https://api.carpay.com/ui-states/customers/' + cust.carpay_id, {
-                headers: {
-                  'Authorization': 'Bearer ' + tokenMatch[1],
-                  'Accept': 'application/json',
-                  'User-Agent': 'Mozilla/5.0'
-                },
-                timeout: 15000
-              });
-              if (apiRes.ok) {
-                const apiData = await apiRes.json();
-                const apiText = JSON.stringify(apiData);
-                // Look for vehicle in API response
-                const vehMatch = apiText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-                if (vehMatch && isValidVehicle(vehMatch[1])) {
-                  cust.vehicle = vehMatch[1].trim();
-                  console.log('  ✅ API fallback found vehicle for ' + cust.name + ': ' + cust.vehicle);
-                } else {
-                  // Dump API response keys/sample for debugging
-                  console.log('  ⚠ No vehicle for ' + cust.name + ' — API response sample: ' + apiText.slice(0, 300));
-                }
-              } else {
-                console.log('  ⚠ No vehicle for ' + cust.name + ' — API HTTP ' + apiRes.status);
-                // Try alternate API paths
-                const altPaths = [
-                  'https://api.carpay.com/ui-states/dealer/customers/' + cust.carpay_id,
-                  'https://api.carpay.com/customers/' + cust.carpay_id
-                ];
-                for (const altUrl of altPaths) {
-                  try {
-                    const altRes = await fetch(altUrl, {
-                      headers: { 'Authorization': 'Bearer ' + tokenMatch[1], 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-                      timeout: 10000
-                    });
-                    if (altRes.ok) {
-                      const altData = await altRes.json();
-                      const altText = JSON.stringify(altData);
-                      console.log('    Alt API ' + altUrl.split('/').slice(-2).join('/') + ': ' + altText.slice(0, 300));
-                      const altVeh = altText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-                      if (altVeh && isValidVehicle(altVeh[1])) {
-                        cust.vehicle = altVeh[1].trim();
-                        console.log('  ✅ Alt API found vehicle for ' + cust.name + ': ' + cust.vehicle);
-                        break;
-                      }
-                    }
-                  } catch(e2) {}
-                }
-              }
+            const tabRes = await cpFetch('/dms/customer/' + cust.carpay_id + '?tabId=account');
+            const tabHtml = await tabRes.text();
+            const tabDetails = parseCustomerDetails(tabHtml);
+            if (tabDetails.vehicle) {
+              cust.vehicle = tabDetails.vehicle;
+              console.log('    ✅ Account tab found vehicle: ' + cust.vehicle);
             } else {
-              console.log('  ⚠ No vehicle for ' + cust.name + ' — no userToken in HTML');
+              // Try the "details" or "info" tab
+              const tab2Res = await cpFetch('/dms/customer/' + cust.carpay_id + '?tabId=details');
+              const tab2Html = await tab2Res.text();
+              const tab2Details = parseCustomerDetails(tab2Html);
+              if (tab2Details.vehicle) {
+                cust.vehicle = tab2Details.vehicle;
+                console.log('    ✅ Details tab found vehicle: ' + cust.vehicle);
+              } else {
+                // Dump a sample of tab content for debugging
+                const tabText = tab2Html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400);
+                console.log('    Details tab text: ' + tabText.slice(0, 300));
+              }
             }
-          } catch(apiErr) {
-            console.log('  ⚠ No vehicle for ' + cust.name + ' — API error: ' + apiErr.message);
+          } catch(tabErr) {
+            console.log('    Tab fetch error: ' + tabErr.message);
           }
         }
       } catch (e) { /* skip individual failures */ }
