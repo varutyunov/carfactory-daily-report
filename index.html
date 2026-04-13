@@ -12732,12 +12732,16 @@ async function depositSave() {
       if(depAmt > 0) {
         var amtStr = '$' + depAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
         try {
+          // Build payment method string from _depPayments (e.g. "$500 cash, $200 card")
+          var pmtParts = _depPayments.filter(function(p){return parseFloat(p.amount)>0;});
+          var pmtMethodStr = pmtParts.length<=1 ? (pmtParts[0]&&pmtParts[0].method||'cash') :
+            pmtParts.map(function(p){return '$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+p.method;}).join(', ');
           await sbPost('payments', {
             customer_name: d.fullName || '',
             payment_date: todayStr,
             payment_time: null,
             amount: amtStr,
-            payment_method: 'cash',
+            payment_method: pmtMethodStr,
             card_fee_added: false,
             original_amount: null,
             vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
@@ -14713,16 +14717,28 @@ function _payUpdateStats(){
   var active=_payWeekData.filter(function(p){return !p.delete_requested;});
   var count=active.length;
   var cash=0,card=0,check=0,other=0;
-  var dealTagCash=0,depositTagCash=0;
+  var dealTagCash=0;
   active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
     var m=(p.payment_method||'cash').toLowerCase();
     var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
-    var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
-    if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;if(isDeposit)depositTagCash+=v;}
-    else if(m==='card') card+=v;
-    else if(m==='check') check+=v;
-    else other+=v;
+    if(m.indexOf(',')!==-1){
+      // Multi-method: parse each "$500.00 cash, $200.00 card"
+      m.split(',').forEach(function(part){
+        part=part.trim();
+        var pv=parseFloat(part.replace(/[^0-9.]/g,''))||0;
+        var pm=part.replace(/\$[\d,.]+\s*/,'').toLowerCase().trim();
+        if(pm==='cash'){cash+=pv;if(isDeal)dealTagCash+=pv;}
+        else if(pm==='card') card+=pv;
+        else if(pm==='check') check+=pv;
+        else other+=pv;
+      });
+    } else {
+      if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;}
+      else if(m==='card') card+=v;
+      else if(m==='check') check+=v;
+      else other+=v;
+    }
   });
   _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
   _payDealTagCash=dealTagCash;
@@ -15198,6 +15214,16 @@ function payCloseBreakdown(){
   if(sheet)sheet.style.display='none';
 }
 
+function _payMethodBadge(method){
+  var s='display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;';
+  var map={cash:s+'background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);',card:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',check:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);',zelle:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',money_order:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);'};
+  var def=s+'background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);';
+  var m=(method||'cash');
+  if(m.indexOf(',')!==-1){
+    return m.split(',').map(function(t){t=t.trim();var k=t.replace(/\$[\d,.]+\s*/,'').toLowerCase().trim();return '<span style="'+(map[k]||def)+'">'+t.toUpperCase().replace(/MONEY_ORDER/g,'M.O.')+'</span>';}).join(' ');
+  }
+  return '<span style="'+(map[m.toLowerCase()]||def)+'">'+m.toUpperCase().replace('MONEY_ORDER','M.O.')+'</span>';
+}
 function _payRenderCards(){
   var list=document.getElementById('pay-list-items');
   if(!_payWeekData.length){
@@ -15232,42 +15258,28 @@ function _payRenderCards(){
     groups[dateStr].forEach(function(p){
       var amt=p.amount||'$0';
       var name=p.customer_name||'Unknown';
-      var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
-      var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
-      var isDealRow=_payNetAdjusted&&isDeal;
+      var isDealRow=_payNetAdjusted&&p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
       var adjInfo=isDealRow?dealAdjust[(p.customer_name||'').toLowerCase()]:null;
       var isPartial=adjInfo&&adjInfo.custom<adjInfo.full;
       if(isPartial) amt='$'+adjInfo.custom.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
       var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
       var color=p.vehicle_color?(' · '+p.vehicle_color):'';
       var time=p.payment_time||'';
-      var method=p.payment_method||'cash';
-      var methodBadge='';
-      if(method==='cash') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);">CASH</span>';
-      else if(method==='card') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);">CARD</span>';
-      else if(method==='check') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);">CHECK</span>';
-      else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
-      // Type badge: DEPOSIT or DEAL
-      var typeBadge='';
-      if(isDeposit) typeBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.25);">DEPOSIT</span>';
-      else if(isDeal) typeBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(244,114,182,.15);color:#f472b6;border:1px solid rgba(244,114,182,.25);">DEAL</span>';
+      var methodBadge=_payMethodBadge(p.payment_method);
       var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
       var delFlag=p.delete_requested?'border-left:3px solid #ef4444;':'';
       var partialBorder=isPartial?'border-left:3px solid #f59e0b;':'';
-      var depositBorder=isDeposit&&!delFlag&&!partialBorder?'border-left:3px solid #a78bfa;':'';
-      var dealBorder=isDeal&&!isDeposit&&!delFlag&&!partialBorder?'border-left:3px solid #f472b6;':'';
       var finalStyle=p.is_final_payment?'border:2px solid #ef4444;box-shadow:0 0 12px rgba(239,68,68,.3);':'border:1px solid #1a1a1a;';
-      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;'+finalStyle+'border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+partialBorder+depositBorder+dealBorder+'">';
+      html+='<div onclick="payViewDetail('+p.id+')" style="background:#0d0d0d;'+finalStyle+'border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;'+delFlag+partialBorder+'">';
       if(thumb) html+=thumb;
       html+='<div style="flex:1;min-width:0;">';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
       html+='<div style="font-size:15px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>';
-      html+='<span style="font-size:16px;font-weight:700;color:'+(isPartial?'#f59e0b':(isDeposit?'#a78bfa':'#4ade80'))+';">'+amt+'</span>';
+      html+='<span style="font-size:16px;font-weight:700;color:'+(isPartial?'#f59e0b':'#4ade80')+';">'+amt+'</span>';
       html+='</div>';
       if(veh) html+='<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+veh+color+'</div>';
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
       html+=methodBadge;
-      if(typeBadge) html+=typeBadge;
       if(time) html+='<span style="font-size:11px;color:#555;">'+time+'</span>';
       if(p.is_final_payment) html+='<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25);margin-left:4px;">FINAL</span>';
       if(p.delete_requested) html+='<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25);margin-left:4px;">DELETE REQ</span>';
@@ -15334,12 +15346,7 @@ function _payRenderSearchResults(){
     groups[dateStr].forEach(function(p){
       var amt=p.amount||'$0';
       var name=p.customer_name||'Unknown';
-      var method=p.payment_method||'cash';
-      var methodBadge='';
-      if(method==='cash') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);">CASH</span>';
-      else if(method==='card') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);">CARD</span>';
-      else if(method==='check') methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);">CHECK</span>';
-      else methodBadge='<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);">OTHER</span>';
+      var methodBadge=_payMethodBadge(p.payment_method);
       var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
       var color=p.vehicle_color?(' · '+p.vehicle_color):'';
       var thumb=p.receipt_photo_url?'<img src="'+p.receipt_photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#111;"/>':'';
@@ -15378,7 +15385,15 @@ function payViewDetail(id){
   document.getElementById('pay-detail-view').style.display='block';
   var vb=document.getElementById('pay-view-body');if(vb)vb.scrollTop=0;
   var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
-  var method=(p.payment_method||'cash').toUpperCase();
+  var rawMethod=(p.payment_method||'cash');
+  var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
+  // Multi-method deposits show breakdown; single method just uppercase
+  var methodHtml;
+  if(rawMethod.indexOf(',')!==-1){
+    methodHtml=rawMethod.split(',').map(function(s){return '<div style="font-size:14px;color:#fff;font-weight:600;">'+s.trim().replace(/(\$[\d,.]+)\s+(.+)/,function(_,a,m){return a+' <span style="color:#a78bfa;">'+m.toUpperCase()+'</span>';})+'</div>';}).join('');
+  } else {
+    methodHtml='<div style="font-size:14px;color:#fff;font-weight:600;">'+rawMethod.toUpperCase()+'</div>';
+  }
   var html='';
   if(p.receipt_photo_url) html+='<div onclick="payOpenLightbox(\''+p.receipt_photo_url.replace(/'/g,"\\'")+'\')" style="cursor:pointer;position:relative;"><img src="'+p.receipt_photo_url+'" style="width:100%;border-radius:14px;border:1px solid #1e1e1e;max-height:300px;object-fit:contain;background:#0a0a0a;margin-bottom:16px;"/><div style="position:absolute;bottom:24px;right:8px;background:rgba(0,0,0,.7);border-radius:8px;padding:4px 10px;font-size:11px;color:#fff;">Tap to view</div></div>';
   html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:12px;">';
@@ -15387,7 +15402,7 @@ function payViewDetail(id){
   html+='<div style="font-size:14px;color:#888;margin-bottom:12px;">'+veh+(p.vehicle_color?' · '+p.vehicle_color:'')+'</div>';
   if(p.vehicle_vin) html+='<div style="font-size:12px;color:#555;margin-bottom:8px;">VIN: '+p.vehicle_vin+'</div>';
   html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">';
-  html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">Method</span><div style="font-size:14px;color:#fff;font-weight:600;">'+method+'</div></div>';
+  html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">'+(isDeposit?'Paid With':'Method')+'</span>'+methodHtml+'</div>';
   html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">Date</span><div style="font-size:14px;color:#fff;">'+((p.payment_date||''))+'</div></div>';
   if(p.payment_time) html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">Time</span><div style="font-size:14px;color:#fff;">'+p.payment_time+'</div></div>';
   html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;">Logged by</span><div style="font-size:14px;color:#fff;">'+((p.logged_by||''))+'</div></div>';
