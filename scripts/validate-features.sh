@@ -77,6 +77,15 @@ check "vrSave"                      'function vrSave'
 # ── vrLoadVehicles must include deals (not just inventory) ─────
 check "vrLoadVehicles queries deals" "vrLoadVehicles.*\|deals.*vrLoadVehicles\|deals.*select=customer_name"
 
+# ── E-SIGN LEGAL / EVIDENCE SYSTEM ────────────────────────────
+check "_esignStampLine"             'function _esignStampLine'
+check "_injectFormSignatures"       'function _injectFormSignatures'
+check "Electronic Evidence Summary" 'Electronic Evidence Summary'
+check "ESIGN Act legal footer"      'ESIGN.*7001\|7001.*ESIGN'
+check "esign-void-cust-sig spot"    'id="esign-void-cust-sig"'
+check "esign-rel-cust-sig spot"     'id="esign-rel-cust-sig"'
+check "esign-rel-dealer-sig spot"   'id="esign-rel-dealer-sig"'
+
 echo ""
 if [ $ERRORS -eq 0 ]; then
   echo "✅ All $(($(grep -c 'check "' "$0"))) protected features present."
