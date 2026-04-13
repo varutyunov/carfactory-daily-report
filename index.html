@@ -16182,36 +16182,42 @@ async function cashPayoutAdd(){
 
 var _codOwner='Vlad';
 
-function cashOutDealOpen(){
+async function cashOutDealOpen(){
   _codOwner='Vlad';
   codSetOwner('Vlad');
-  // Load current week's deals for this location
-  var wkStart=_payCurrentWeekStart;
-  var wkEnd=_payGetWeekEnd(wkStart);
-  wkEnd.setHours(23,59,59,999);
-  var locDeals=(typeof _dealsAllData!=='undefined'?_dealsAllData:[]).filter(function(d){
-    var dt=d.created_at?new Date(d.created_at):null;
-    if(!dt)return false;
-    return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary')===_payLocation;
-  });
-  // Also pull from _dealsData if _dealsAllData not populated
-  if(!locDeals.length&&typeof _dealsData!=='undefined') locDeals=_dealsData.slice();
-  var list=document.getElementById('cod-deals-list');
-  if(!locDeals.length){
-    list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals this week.</div>';
-  } else {
-    list.innerHTML=locDeals.map(function(d){
-      var cashTotal=0;
-      try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
-      var cashStr=cashTotal>0?'$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2}):'No cash';
-      return '<div onclick="codSelectDeal('+d.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">'
-        +'<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+(d.customer_name||'Unknown')+'</div>'
-        +'<div style="font-size:13px;color:#888;">'+(d.vehicle_desc||'')+'</div>'
-        +'<div style="font-size:15px;font-weight:700;color:#f59e0b;margin-top:6px;">'+cashStr+'</div>'
-        +'</div>';
-    }).join('');
-  }
   document.getElementById('cash-out-deal-sheet').style.display='block';
+  var list=document.getElementById('cod-deals-list');
+  list.innerHTML='<div style="text-align:center;color:#555;padding:24px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading deals...</div>';
+  try{
+    // Always fetch fresh from Supabase — don't rely on deals view being loaded
+    var wkStart=_payCurrentWeekStart;
+    var wkEnd=_payGetWeekEnd(new Date(wkStart));
+    wkEnd.setHours(23,59,59,999);
+    var allDeals=await sbGet('deals','order=created_at.desc&limit=200');
+    var locDeals=allDeals.filter(function(d){
+      var dt=d.created_at?new Date(d.created_at):null;
+      if(!dt)return false;
+      return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary')===_payLocation;
+    });
+    // Update _dealsAllData cache while we're at it
+    _dealsAllData=allDeals.filter(function(d){return (d.location||'DeBary')===_payLocation;});
+    if(!locDeals.length){
+      list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals this week.</div>';
+    } else {
+      list.innerHTML=locDeals.map(function(d){
+        var cashTotal=0;
+        try{JSON.parse(d.payments||'[]').forEach(function(p){if(p.method==='cash')cashTotal+=parseFloat(p.amount)||0;});}catch(e){}
+        var cashStr=cashTotal>0?'$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2}):'No cash';
+        return '<div onclick="codSelectDeal('+d.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.05);">'
+          +'<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">'+(d.customer_name||'Unknown')+'</div>'
+          +'<div style="font-size:13px;color:#888;">'+(d.vehicle_desc||'')+'</div>'
+          +'<div style="font-size:15px;font-weight:700;color:#f59e0b;margin-top:6px;">'+cashStr+'</div>'
+          +'</div>';
+      }).join('');
+    }
+  }catch(e){
+    list.innerHTML='<div style="text-align:center;color:#ef4444;padding:24px;">Error loading deals: '+(e.message||e)+'</div>';
+  }
 }
 
 function cashOutDealClose(){
