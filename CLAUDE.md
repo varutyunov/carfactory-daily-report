@@ -149,6 +149,22 @@ _payBreakdown         — {cash, card, check, other, total}
 - Every modal/overlay MUST have a back/close button
 - `syncFromSupabase()` — pull all data, called after login and periodically
 
+## CRITICAL: Safe Editing Rules (Prevent Code Loss)
+
+This codebase has suffered repeated code loss from edits that accidentally overwrite adjacent logic. Follow these rules strictly:
+
+1. **Read before replacing.** Before any Edit that replaces more than 5 lines, re-read the target section fresh. Code may have been added since you last read it (by a prior session, a merge, or earlier in this session).
+
+2. **Use surgical edits.** Target the smallest possible block. Never replace an entire function just to change a few lines inside it. If you need to add code between two existing blocks, insert — don't replace the surrounding blocks.
+
+3. **Never replace across function boundaries.** If your `old_string` spans from inside one function into another, you risk deleting everything between them. One edit = one function or one logical block.
+
+4. **Verify after multi-edit sessions.** After making 3+ edits in the same file region, grep for all function names that should exist in that area. If any are missing, you overwrote them.
+
+5. **Grep before committing.** Before every commit, grep for key function names from the features you're working near. If a function existed before your changes and isn't there after, stop and fix it.
+
+6. **The version.json merge is safe.** `git fetch origin main && git merge origin/main --no-edit` only changes `version.json` (GitHub Actions timestamp). It does NOT overwrite `index.html`. If code is missing after a push cycle, the edit — not the merge — deleted it.
+
 ## Deploy Checklist
 1. Make changes in worktree
 2. Test in preview (mobile viewport)
@@ -161,6 +177,17 @@ The pre-push git hook (`scripts/validate-features.sh`) runs automatically and bl
 
 ## PROTECTED FEATURES — NEVER DELETE
 These are built, working, and must survive every future change. `scripts/validate-features.sh` enforces this on every push.
+
+### Deposit Payment Tracking
+- **Method badge:** `_payMethodBadge(method)` — styled badge for cash/card/zelle/m.o.
+- **Forms detail:** `openFormDetail` includes `#form-dep-method` div that async-loads payment method from `payments` table (matches by customer name + amount)
+- **Forms edit:** `formDepEditMethod(payId)`, `formDepRenderMethodEdit`, `formDepCancelMethodEdit`, `formDepSaveMethod` — inline method editor in deposit detail
+- **Module vars:** `_formDepMethodPayId`, `_formDepMethodRows[]`
+- **Payments detail:** `payViewDetail` shows "Paid With" + TAP TO EDIT for deposits (owner only), "Method" for regular payments
+- **Payments edit:** `payEditDepMethod(id)`, `payRenderDepMethodEdit`, `paySaveDepMethod` — inline method editor in weekly payments detail
+- **Module vars:** `_payEditDepMethodId`, `_payDepMethodRows[]`
+- **Auto-post:** Deposits auto-post to weekly payments on save (no manual toggle). Method string built from `_depPayments` array.
+- **Deposit-deal matching:** `_buildDealFullCashMap` builds `_payDealDepositMap` matching deposit cash to deals by VIN → vehicle desc → customer name. `_getDealFullCash` subtracts prior deposit cash from deal cash for net cash calculation.
 
 ### E-Sign System (Legal electronic signatures via ESIGN Act / UETA)
 - **Library:** `signature_pad@4.1.7` — loaded in `<head>` scripts
