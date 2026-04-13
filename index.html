@@ -13155,9 +13155,11 @@ async function _viewSignedForm(formType,recordId){
       overlay.style.cssText='position:fixed;inset:0;z-index:99998;background:#fff;display:flex;flex-direction:column;';
       document.body.appendChild(overlay);
     }
+    var custName=(record&&record.customer_name)||'Form';
     var html='<div style="background:#000;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;">';
     html+='<button onclick="document.getElementById(\'signed-form-viewer\').style.display=\'none\'" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px;">←</button>';
-    html+='<div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;">SIGNED FORM</div>';
+    html+='<div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;flex:1;">SIGNED FORM</div>';
+    html+='<button onclick="_downloadSignedFormPDF(\''+custName.replace(/'/g,"\\'")+'_'+formType+'\')" id="sfv-dl-btn" style="padding:8px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Download</button>';
     html+='</div>';
     // Parse auth certificate
     var cert=null;
@@ -13228,6 +13230,59 @@ async function _viewSignedForm(formType,recordId){
     overlay.innerHTML=html;overlay.style.display='flex';
     _injectFormSignatures(overlay,custSigUrl,sellerSigUrl,formType,record,cert);
   }catch(e){alert('Error loading form: '+(e.message||e));}
+}
+
+async function _downloadSignedFormPDF(fileName){
+  var overlay=document.getElementById('signed-form-viewer');
+  if(!overlay)return;
+  var contentDiv=overlay.querySelector('div[style*="overflow-y:auto"]')||overlay.querySelector('div[style*="overflow-y: auto"]');
+  if(!contentDiv){alert('Could not find form content.');return;}
+  if(typeof html2canvas==='undefined'||!window.jspdf||!window.jspdf.jsPDF){alert('PDF library not loaded. Check internet connection.');return;}
+  var btn=document.getElementById('sfv-dl-btn');
+  if(btn){btn.textContent='Generating...';btn.disabled=true;}
+  function resetBtn(){if(btn){btn.textContent='⬇ Download';btn.disabled=false;}}
+  try{
+    var canvas=await html2canvas(contentDiv,{
+      scale:2,
+      backgroundColor:'#ffffff',
+      logging:false,
+      useCORS:true,
+      allowTaint:true,
+      scrollY:0,
+      width:contentDiv.scrollWidth,
+      height:contentDiv.scrollHeight,
+      windowWidth:contentDiv.scrollWidth,
+      windowHeight:contentDiv.scrollHeight
+    });
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:'portrait',unit:'in',format:'letter'});
+    var pageW=8.5,pageH=11;
+    var totalImgH=(canvas.height*pageW)/canvas.width;
+    if(totalImgH<=pageH){
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',0,0,pageW,totalImgH);
+    } else {
+      var pageHeightPx=Math.floor(canvas.width*(pageH/pageW));
+      var totalPages=Math.ceil(canvas.height/pageHeightPx);
+      for(var p=0;p<totalPages;p++){
+        if(p>0)pdf.addPage();
+        var srcY=p*pageHeightPx;
+        var sliceH=Math.min(pageHeightPx,canvas.height-srcY);
+        var sliceCanvas=document.createElement('canvas');
+        sliceCanvas.width=canvas.width;sliceCanvas.height=sliceH;
+        sliceCanvas.getContext('2d').drawImage(canvas,0,srcY,canvas.width,sliceH,0,0,canvas.width,sliceH);
+        var sliceImgH=(sliceH*pageW)/canvas.width;
+        pdf.addImage(sliceCanvas.toDataURL('image/jpeg',0.92),'JPEG',0,0,pageW,sliceImgH);
+      }
+    }
+    var safeName=(fileName||'SignedForm').replace(/[^a-zA-Z0-9_\-]/g,'_')+'.pdf';
+    var pdfBlob=pdf.output('blob');
+    var pdfFile=new File([pdfBlob],safeName,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[pdfFile]})){
+      navigator.share({files:[pdfFile]}).catch(function(){pdf.save(safeName);}).finally(resetBtn);
+    } else {
+      pdf.save(safeName);resetBtn();
+    }
+  }catch(e){alert('Download error: '+(e.message||e));resetBtn();}
 }
 
 function _esignStampLine(cert){
