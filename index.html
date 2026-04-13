@@ -16245,12 +16245,11 @@ async function codSelectDeal(id){
   try{
     showLoading('Posting cash out...');
     await sbPost('cash_payouts',{
-      paid_to:_codOwner+' — Deal Cash Out',
+      paid_to:_codOwner+' — '+d.customer_name+' / '+(d.vehicle_desc||''),
       amount:cashTotal,
       week_start:wk,
       location:_payLocation,
-      logged_by:me?me.name:'',
-      notes:'Deal: '+d.customer_name+' / '+(d.vehicle_desc||'')
+      logged_by:me?me.name:''
     });
     hideLoading();
     cashOutDealClose();
