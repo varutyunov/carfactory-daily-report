@@ -10556,20 +10556,14 @@ function _txInit() {
         <input id="dep-balance" type="text" inputmode="decimal" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="$0" oninput="moneyInput(this)"/>
       </div>
 
-      <!-- Add to week's cash (cash payment method only) -->
-      <div id="dep-add-week-wrap" style="background:#111;border-radius:14px;padding:14px;margin-bottom:10px;display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
+      <!-- Auto-post info: cash portion goes to weekly payments automatically -->
+      <div id="dep-add-week-wrap" style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.15);border-radius:14px;padding:14px;margin-bottom:10px;display:none;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:18px;">💵</div>
           <div>
-            <div style="font-size:14px;font-weight:700;color:#4ade80;">Add to this week's cash</div>
-            <div style="font-size:12px;color:#555;margin-top:2px;">Posts amount into the weekly cash total</div>
+            <div style="font-size:14px;font-weight:700;color:#4ade80;">Cash auto-posted to weekly payments</div>
+            <div id="dep-auto-cash-detail" style="font-size:12px;color:#888;margin-top:2px;"></div>
           </div>
-          <div onclick="depSetAddToWeek(!_depAddToWeek)" id="dep-week-toggle" style="width:48px;height:28px;border-radius:14px;background:#333;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;">
-            <div id="dep-week-knob" style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#888;transition:left .2s;"></div>
-          </div>
-        </div>
-        <div id="dep-week-amount-wrap" style="display:none;margin-top:12px;">
-          <div style="font-size:11px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Amount to add</div>
-          <input id="dep-week-amount" type="text" inputmode="decimal" placeholder="$0.00" oninput="moneyInput(this)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #4ade80;border-radius:10px;color:#fff;padding:12px;font-size:16px;font-weight:700;outline:none;"/>
         </div>
       </div>
 
@@ -11597,41 +11591,41 @@ async function depositSave() {
 
     await sbPost('deposits', record);
 
-    // Post deposit cash to the weekly payments if "Add to week" is toggled on
-    if(_depAddToWeek) {
+    // Auto-post deposit to weekly payments — all payment methods tracked
+    var depPayParts = _depPayments.filter(function(p){return parseFloat(p.amount)>0;});
+    if(depPayParts.length) {
       var today = new Date();
       var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
       var weekKey = _payWeekKey(today);
       var depLoc = record.location;
-      var weekAmtInput = document.getElementById('dep-week-amount');
-      var weekAmtRaw = weekAmtInput ? weekAmtInput.value.replace(/[^0-9.]/g,'') : '';
-      var depAmt = parseFloat(weekAmtRaw) || 0;
-      if(depAmt > 0) {
-        var amtStr = '$' + depAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-        try {
-          await sbPost('payments', {
-            customer_name: d.fullName || '',
-            payment_date: todayStr,
-            payment_time: null,
-            amount: amtStr,
-            payment_method: 'cash',
-            card_fee_added: false,
-            original_amount: null,
-            vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
-            vehicle_make: document.getElementById('dep-make') ? document.getElementById('dep-make').value.trim() : '',
-            vehicle_model: document.getElementById('dep-model') ? document.getElementById('dep-model').value.trim() : '',
-            vehicle_vin: d.vin || '',
-            vehicle_color: document.getElementById('dep-color') ? document.getElementById('dep-color').value.trim() : '',
-            receipt_photo_url: null,
-            location: depLoc,
-            logged_by: record.created_by,
-            week_start: weekKey,
-            raw_ocr_text: 'Deposit — ' + (d.vehicleStr || ''),
-            created_at: new Date().toISOString()
-          });
-        } catch(payErr) {
-          console.error('Failed to post deposit to week cash:', payErr);
-        }
+      var totalAmt = depPayParts.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+      var amtStr = '$' + totalAmt.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      // Build payment method string
+      var pmtMethodStr = depPayParts.length<=1 ? (depPayParts[0].method||'cash') :
+        depPayParts.map(function(p){return '$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+p.method;}).join(', ');
+      try {
+        await sbPost('payments', {
+          customer_name: d.fullName || '',
+          payment_date: todayStr,
+          payment_time: null,
+          amount: amtStr,
+          payment_method: pmtMethodStr,
+          card_fee_added: false,
+          original_amount: null,
+          vehicle_year: document.getElementById('dep-year') ? document.getElementById('dep-year').value.trim() : '',
+          vehicle_make: document.getElementById('dep-make') ? document.getElementById('dep-make').value.trim() : '',
+          vehicle_model: document.getElementById('dep-model') ? document.getElementById('dep-model').value.trim() : '',
+          vehicle_vin: d.vin || '',
+          vehicle_color: document.getElementById('dep-color') ? document.getElementById('dep-color').value.trim() : '',
+          receipt_photo_url: null,
+          location: depLoc,
+          logged_by: record.created_by,
+          week_start: weekKey,
+          raw_ocr_text: 'Deposit — ' + (d.vehicleStr || ''),
+          created_at: new Date().toISOString()
+        });
+      } catch(payErr) {
+        console.error('Failed to post deposit to week payments:', payErr);
       }
     }
 
@@ -11788,31 +11782,18 @@ function depUpdateTotal() {
   if(hiddenAmt) hiddenAmt.value = total > 0 ? total.toFixed(2) : '';
 }
 function depUpdateWeekToggle() {
-  // Show "add to week" only if at least one payment is cash
+  // Show auto-post info if any cash payment
   var hasCash = _depPayments.some(function(p){ return p.method==='cash' && parseFloat(p.amount)>0; });
   var weekWrap = document.getElementById('dep-add-week-wrap');
   if(weekWrap) weekWrap.style.display = hasCash ? 'block' : 'none';
-  if(!hasCash) { _depAddToWeek = false; depSetAddToWeek(false); }
-}
-
-function depSetAddToWeek(on) {
-  _depAddToWeek = on;
-  var toggle = document.getElementById('dep-week-toggle');
-  var knob = document.getElementById('dep-week-knob');
-  if(!toggle || !knob) return;
-  toggle.style.background = on ? '#166534' : '#333';
-  knob.style.background = on ? '#4ade80' : '#888';
-  knob.style.left = on ? '24px' : '4px';
-  var amtWrap = document.getElementById('dep-week-amount-wrap');
-  var amtInput = document.getElementById('dep-week-amount');
-  if(amtWrap) amtWrap.style.display = on ? 'block' : 'none';
-  if(on && amtInput) {
-    // Pre-fill with just the cash portion of payments
+  // Update detail text
+  var detail = document.getElementById('dep-auto-cash-detail');
+  if(detail && hasCash) {
     var cashTotal = _depPayments.reduce(function(sum,p){ return p.method==='cash' ? sum+(parseFloat(p.amount)||0) : sum; }, 0);
-    amtInput.value = cashTotal > 0 ? cashTotal.toFixed(2) : '';
-    moneyInput(amtInput);
-    amtInput.focus();
-    amtInput.select();
+    var nonCash = _depPayments.filter(function(p){ return p.method!=='cash' && parseFloat(p.amount)>0; });
+    var parts = ['$'+cashTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' cash → net payments'];
+    nonCash.forEach(function(p){ parts.push('$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+p.method+' tracked separately'); });
+    detail.textContent = parts.join(' · ');
   }
 }
 
