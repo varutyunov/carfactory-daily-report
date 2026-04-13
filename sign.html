@@ -328,10 +328,15 @@ function showSuccess(cert,sigDataUrl){
 
 function esignNotifyOwners(cert){
   try{
-    fetch(SB_URL+'/functions/v1/esign-notify',{
+    var formLabel={deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'}[cert.form_type]||cert.form_type;
+    fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-      body:JSON.stringify({form_type:cert.form_type,customer_name:cert.customer_name,token:cert.token})
+      body:JSON.stringify({
+        target_names:['Vlad','Tommy'],
+        title:'✅ Document Signed',
+        body:cert.customer_name+' signed the '+formLabel
+      })
     }).catch(function(){});
   }catch(e){console.warn('Notification error',e);}
 }
