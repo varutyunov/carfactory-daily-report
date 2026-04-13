@@ -149,21 +149,26 @@ _payBreakdown         — {cash, card, check, other, total}
 - Every modal/overlay MUST have a back/close button
 - `syncFromSupabase()` — pull all data, called after login and periodically
 
-## CRITICAL: Safe Editing Rules (Prevent Code Loss)
+## ABSOLUTE RULE: Never Delete Working Code
 
-This codebase has suffered repeated code loss from edits that accidentally overwrite adjacent logic. Follow these rules strictly:
+**NEVER delete, replace, or overwrite existing working functions.** The user has never asked to delete code. Every function in the app was built for a reason and must be preserved. Violations of this rule have caused repeated loss of critical features.
 
-1. **Read before replacing.** Before any Edit that replaces more than 5 lines, re-read the target section fresh. Code may have been added since you last read it (by a prior session, a merge, or earlier in this session).
+**Hard rules:**
+1. **NEVER remove a function.** If you're adding new logic, INSERT it — don't replace blocks that contain existing functions.
+2. **NEVER replace more than one function at a time.** Each Edit must target one function or one small section within a function. If your `old_string` contains multiple function definitions, your edit is too broad — shrink it.
+3. **ASK before any destructive edit.** If a change would remove or fundamentally restructure existing code, ask the user first. The user wants to approve any removal.
+4. **INSERT, don't replace.** When adding new features, find the right insertion point and add code there. Don't replace a neighboring block that happens to be nearby.
+5. **Read the target area fresh before every edit.** Code may have been added by a prior session. Never assume you know what's there from memory.
+6. **Grep before EVERY commit.** Run a grep for all key function names in the area you edited. If any function that existed before is now missing, STOP and fix it before committing.
+7. **After the commit, grep again.** Double-check the committed file still has all expected functions.
 
-2. **Use surgical edits.** Target the smallest possible block. Never replace an entire function just to change a few lines inside it. If you need to add code between two existing blocks, insert — don't replace the surrounding blocks.
+**Why this matters:** This is a 27k-line single-file app. A single overly broad Edit can silently delete dozens of functions. The user loses hours of work and trust. There is no acceptable reason to delete working code without explicit permission.
 
-3. **Never replace across function boundaries.** If your `old_string` spans from inside one function into another, you risk deleting everything between them. One edit = one function or one logical block.
+## Safe Editing Mechanics
 
-4. **Verify after multi-edit sessions.** After making 3+ edits in the same file region, grep for all function names that should exist in that area. If any are missing, you overwrote them.
-
-5. **Grep before committing.** Before every commit, grep for key function names from the features you're working near. If a function existed before your changes and isn't there after, stop and fix it.
-
-6. **The version.json merge is safe.** `git fetch origin main && git merge origin/main --no-edit` only changes `version.json` (GitHub Actions timestamp). It does NOT overwrite `index.html`. If code is missing after a push cycle, the edit — not the merge — deleted it.
+1. **Use surgical edits.** Target the smallest possible block. Never replace an entire function just to change a few lines inside it.
+2. **Never replace across function boundaries.** If your `old_string` spans from inside one function into another, you risk deleting everything between them.
+3. **The version.json merge is safe.** `git fetch origin main && git merge origin/main --no-edit` only changes `version.json`. It does NOT overwrite `index.html`. If code is missing after a push cycle, the edit — not the merge — deleted it.
 
 ## Deploy Checklist
 1. Make changes in worktree
