@@ -156,3 +156,35 @@ _payBreakdown         — {cash, card, check, other, total}
 4. Bump `sw.js` cache version
 5. `git add`, `git commit`, then push from main repo
 6. `git fetch origin main && git merge origin/main --no-edit && git push`
+
+The pre-push git hook (`scripts/validate-features.sh`) runs automatically and blocks the push if any protected feature is missing.
+
+## PROTECTED FEATURES — NEVER DELETE
+These are built, working, and must survive every future change. `scripts/validate-features.sh` enforces this on every push.
+
+### E-Sign System (Legal electronic signatures via ESIGN Act / UETA)
+- **Library:** `signature_pad@4.1.7` — loaded in `<head>` scripts
+- **Overlay:** `#esign-overlay` with `#esign-status-preparing`, `#esign-status-ready`, `#esign-status-sent`
+- **Send flow:** `esignOpen`, `esignClose`, `esignCreateRequest`, `esignCopyLink`, `esignSendSMS`, `esignSendEmail`, `esignShare`
+- **Polling:** `_esignStartPolling`, `_esignStopPolling`, `_esignPollCheck`, `_esignResumePolling`
+- **After customer signs:** `_esignShowSignedAlert` (green banner + vibrate), `_esignOpenCounterSign` (navigate to detail)
+- **Counter-sign pad:** `_buildEsignSection`, `_initCounterSignPad`, `_clearCounterSign`, `_submitCounterSign`
+- **Completion:** `_showCompletedReview`, `_viewSignedForm`, `_completeAndClose`, `_resolveEsignSigUrl`
+- **Supabase table:** `esign_requests` (form_type, form_record_id, form_html, status, signed_at, auth_certificate)
+- **Signing page:** `sign.html` at `carfactory.work/sign.html?token=`
+
+### Forms System (Deposits / Invoices / Void-Release)
+- **Overlay:** `#forms-overlay` with inner tabs: Deposits · Invoices · Void/Release
+- **Deposit detail:** `openFormDetail` — includes e-sign section
+- **Invoice detail:** `openInvoiceDetail` — tappable list items, includes e-sign section
+- **Void/Release list:** `loadVoidRelease` + `renderVRList` — loads real records from Supabase, tappable
+- **Void/Release detail:** `openVRDetail` — includes e-sign section + counter-sign pad
+- **Delete:** `formDeleteConfirm` + `formDeleteFinal` (also removes linked esign_requests)
+
+### Void/Release Form
+- **Overlay:** `#vr-overlay`
+- **Middle name field:** `#vr-mname` — sits between first and last name in Step 1
+- **Vehicle search:** `vrLoadVehicles` queries inventory + deposits + **deals (last 200)**
+- **Preview:** `vrGoPreview` — builds full name from `[fname, mname, lname].filter(Boolean).join(' ')`
+- **Save flow:** `vrSignedFormTaken` (enables save btn) → `vrSave` (uploads signed photo → Supabase)
+- **E-sign button:** in Step 2, triggers `esignOpen('void_release')`
