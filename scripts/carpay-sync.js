@@ -159,7 +159,19 @@ async function cpGetCustomers(dealerId) {
 }
 
 // ── Parse customer detail page for vehicle, phone, email, balance ───────────
-const CAR_MAKES = ['Acura','Alfa','Aston','Audi','Bentley','BMW','Buick','Cadillac','Chevrolet','Chevy','Chrysler','Dodge','Ferrari','Fiat','Ford','Genesis','GMC','Honda','Hyundai','Infiniti','Jaguar','Jeep','Kia','Lamborghini','Land','Lexus','Lincoln','Maserati','Mazda','McLaren','Mercedes','Mini','Mitsubishi','Nissan','Porsche','Ram','Rolls','Subaru','Tesla','Toyota','Volkswagen','Volvo'];
+const CAR_MAKES = ['Acura','Alfa','Aston','Audi','Bentley','BMW','Buick','Cadillac','Chevrolet','Chevy','Chrysler','Dodge','Ferrari','Fiat','Ford','Genesis','GMC','Honda','Hyundai','Infiniti','Jaguar','Jeep','Kia','Lamborghini','Land','Lexus','Lincoln','Maserati','Mazda','McLaren','Mercedes','Mini','Mitsubishi','Nissan','Pontiac','Porsche','Ram','Rolls','Saab','Saturn','Scion','Subaru','Tesla','Toyota','Volkswagen','Volvo','Oldsmobile','Mercury','Plymouth','Hummer','Isuzu','Suzuki','Daewoo'];
+// Words that appear in CarPay UI text and should NOT be treated as vehicle names
+const NOT_VEHICLE = ['successful','regular','schedule','payment','customer','online','mobile','approved','complete','pending','failed','declined','amount','frequency','login','dealer','account','balance','history','transaction'];
+
+function isValidVehicle(v) {
+  if (!v) return false;
+  const words = v.toLowerCase().split(/\s+/);
+  // Must have at least year + one word
+  if (words.length < 2) return false;
+  // Second word (make) must not be a known CarPay UI term
+  if (NOT_VEHICLE.some(bad => words[1] === bad || words.slice(1).join(' ').startsWith(bad))) return false;
+  return true;
+}
 
 function parseCustomerDetails(html) {
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -188,7 +200,7 @@ function parseCustomerDetails(html) {
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     if (titleMatch) {
       m = titleMatch[1].match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-      if (m) vehicle = m[1].trim();
+      if (m && isValidVehicle(m[1])) vehicle = m[1].trim();
     }
   }
 
@@ -198,7 +210,7 @@ function parseCustomerDetails(html) {
     for (const h of headingMatches) {
       const hText = h.replace(/<[^>]+>/g, '').trim();
       m = hText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-      if (m) { vehicle = m[1].trim(); break; }
+      if (m && isValidVehicle(m[1])) { vehicle = m[1].trim(); break; }
     }
   }
 
@@ -291,6 +303,11 @@ async function cpGetCustomerDetails(dealerId, customers) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
+        // Log customers where vehicle extraction failed so we can debug
+        if (!details.vehicle) {
+          const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 500);
+          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + '): ' + snippet.slice(0, 200));
+        }
       } catch (e) { /* skip individual failures */ }
     }));
     fetched += batch.length;
