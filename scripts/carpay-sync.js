@@ -286,7 +286,7 @@ function parseCustomerDetails(html) {
 // ── Fetch customer details (vehicle, phone, email) for all customers ────────
 async function cpGetCustomerDetails(dealerId, customers) {
   await cpSelectDealer(dealerId);
-  const batchSize = 3; // conservative to avoid rate limiting
+  const batchSize = 5; // 5 concurrent to speed up while avoiding rate limits
   let fetched = 0;
 
   for (let i = 0; i < customers.length; i += batchSize) {
@@ -303,10 +303,20 @@ async function cpGetCustomerDetails(dealerId, customers) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
-        // Log customers where vehicle extraction failed so we can debug
+        // Log customers where vehicle extraction failed — dump more text to find vehicle
         if (!details.vehicle) {
-          const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 500);
-          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + '): ' + snippet.slice(0, 200));
+          const plainText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+          // Find all year-like numbers and their context
+          const yearContexts = [];
+          const yearRe = /((?:19|20)\d{2})/g;
+          let ym;
+          while ((ym = yearRe.exec(plainText)) !== null) {
+            const start = Math.max(0, ym.index - 30);
+            const end = Math.min(plainText.length, ym.index + 60);
+            yearContexts.push(plainText.slice(start, end).trim());
+          }
+          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || ['',''])[1].trim());
+          console.log('    HTML length: ' + html.length + ', year contexts: ' + JSON.stringify(yearContexts.slice(0, 8)));
         }
       } catch (e) { /* skip individual failures */ }
     }));
@@ -317,7 +327,7 @@ async function cpGetCustomerDetails(dealerId, customers) {
       console.log('  Details: ' + fetched + '/' + customers.length + ' fetched (' + ph + ' phones, ' + vh + ' vehicles)');
     }
     // Throttle to avoid IP ban
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 800));
   }
 
   const phCount = customers.filter(c => c.phone).length;
