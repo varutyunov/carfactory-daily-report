@@ -288,6 +288,7 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
   await cpSelectDealer(dealerId);
   const batchSize = 5;
   let fetched = 0;
+  let debugFailDumped = false, debugSuccessDumped = false;
 
   // Load existing vehicle data so SPA-page customers keep their vehicles
   const existingDetails = {};
@@ -315,6 +316,22 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
+        // DEBUG: dump HTML structure for first success + first failure
+        if (!details.vehicle && !debugFailDumped) {
+          debugFailDumped = true;
+          console.log('  [DEBUG-FAIL] ' + cust.name + ' (acct ' + cust.account + ') HTML length=' + html.length);
+          console.log('  [DEBUG-FAIL] First 800 chars: ' + html.slice(0, 800).replace(/\n/g, '\\n'));
+          console.log('  [DEBUG-FAIL] Title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
+          console.log('  [DEBUG-FAIL] Has tel: ' + (html.includes('href="tel:')) + ', has mailto: ' + html.includes('mailto:'));
+          console.log('  [DEBUG-FAIL] window vars: ' + (html.match(/window\.\w+\s*=/g) || []).join(', '));
+          console.log('  [DEBUG-FAIL] Body text (200): ' + html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 200));
+        }
+        if (details.vehicle && !debugSuccessDumped) {
+          debugSuccessDumped = true;
+          console.log('  [DEBUG-OK] ' + cust.name + ' vehicle=' + details.vehicle + ' HTML length=' + html.length);
+          console.log('  [DEBUG-OK] First 800 chars: ' + html.slice(0, 800).replace(/\n/g, '\\n'));
+          console.log('  [DEBUG-OK] Title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
+        }
         // If HTML parsing failed, use previously saved vehicle data (from bookmarklet)
         if (!details.vehicle && existingDetails[cust.account]) {
           cust.vehicle = existingDetails[cust.account];
