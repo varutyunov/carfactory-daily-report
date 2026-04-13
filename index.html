@@ -13776,20 +13776,35 @@ function _payUpdateStats(){
   var active=_payWeekData.filter(function(p){return !p.delete_requested;});
   var count=active.length;
   var cash=0,card=0,check=0,other=0;
-  var dealTagCash=0;
+  var dealTagCash=0,depositTagCash=0;
   active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
     var m=(p.payment_method||'cash').toLowerCase();
     var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
-    if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;}
-    else if(m==='card') card+=v;
-    else if(m==='check') check+=v;
-    else other+=v;
+    var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
+    if(m.indexOf(',')!==-1){
+      // Multi-method: parse each "$500.00 cash, $200.00 card"
+      m.split(',').forEach(function(part){
+        part=part.trim();
+        var pv=parseFloat(part.replace(/[^0-9.]/g,''))||0;
+        var pm=part.replace(/\$[\d,.]+\s*/,'').toLowerCase().trim();
+        if(pm==='cash'){cash+=pv;if(isDeal)dealTagCash+=pv;if(isDeposit)depositTagCash+=pv;}
+        else if(pm==='card') card+=pv;
+        else if(pm==='check') check+=pv;
+        else other+=pv;
+      });
+    } else {
+      if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;if(isDeposit)depositTagCash+=v;}
+      else if(m==='card') card+=v;
+      else if(m==='check') check+=v;
+      else other+=v;
+    }
   });
   _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
   _payDealTagCash=dealTagCash;
+  _payDepositTagCash=depositTagCash;
   var fmt=function(v){return '$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
-  var cashNoDeal=cash-dealTagCash;
+  var cashNoDeal=cash-dealTagCash-depositTagCash;
   document.getElementById('pay-stat-count').textContent=count;
   var cashInEl=document.getElementById('pay-stat-total');
   var dealLabel=document.getElementById('pay-deal-cash-label');
@@ -13800,8 +13815,8 @@ function _payUpdateStats(){
   // Update Cash Out tile
   var coEl=document.getElementById('pay-stat-cashout');
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
-  // Net Cash
-  var netCash=cash-paidOut;
+  // Net Cash (exclude deal + deposit cash)
+  var netCash=cash-depositTagCash-paidOut;
   var ne=document.getElementById('pay-stat-net');
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
@@ -13818,7 +13833,7 @@ function _payUpdateStats(){
           }
         }
       });
-      var adjCash=cash-dealTagCash+_payNetAdjustAmt+unconfiguredDealCash;
+      var adjCash=cash-dealTagCash-depositTagCash+_payNetAdjustAmt+unconfiguredDealCash;
       var adjNet=adjCash-paidOut;
       ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
       ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
@@ -13834,6 +13849,7 @@ function _payUpdateStats(){
 }
 
 var _payDealTagCash=0;
+var _payDepositTagCash=0;
 var _payNetAdjusted=false;
 var _payNetAdjustAmt=null;
 var _payDealRows=[];
