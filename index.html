@@ -13804,7 +13804,7 @@ function _payUpdateStats(){
   _payDealTagCash=dealTagCash;
   _payDepositTagCash=depositTagCash;
   var fmt=function(v){return '$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
-  var cashNoDeal=cash-dealTagCash-depositTagCash;
+  var cashNoDeal=cash-dealTagCash;
   document.getElementById('pay-stat-count').textContent=count;
   var cashInEl=document.getElementById('pay-stat-total');
   var dealLabel=document.getElementById('pay-deal-cash-label');
@@ -13815,8 +13815,8 @@ function _payUpdateStats(){
   // Update Cash Out tile
   var coEl=document.getElementById('pay-stat-cashout');
   if(coEl) coEl.textContent=(paidOut>0?'-':'')+fmt(paidOut);
-  // Net Cash (exclude deal + deposit cash)
-  var netCash=cash-depositTagCash-paidOut;
+  // Net Cash
+  var netCash=cash-paidOut;
   var ne=document.getElementById('pay-stat-net');
   var netLabel=document.getElementById('pay-stat-net-label');
   if(ne){
@@ -13833,7 +13833,7 @@ function _payUpdateStats(){
           }
         }
       });
-      var adjCash=cash-dealTagCash-depositTagCash+_payNetAdjustAmt+unconfiguredDealCash;
+      var adjCash=cash-dealTagCash+_payNetAdjustAmt+unconfiguredDealCash;
       var adjNet=adjCash-paidOut;
       ne.textContent=(adjNet<0?'-':'')+fmt(adjNet);
       ne.style.color=adjNet>=0?'#f59e0b':'#ef4444';
@@ -13854,15 +13854,17 @@ var _payNetAdjusted=false;
 var _payNetAdjustAmt=null;
 var _payDealRows=[];
 var _payDealFullCashMap={};
+var _payDealDepositMap={};
 var _netLpTimer=null;
 var _netLpFired=false;
 
 // Cross-reference deals table to get full cash per deal — uses _payLocation
 async function _buildDealFullCashMap(){
   _payDealFullCashMap={};
+  _payDealDepositMap={};
   try{
     var loc=_payLocation||'DeBary';
-    var deals=await sbGet('deals','location=eq.'+encodeURIComponent(loc)+'&select=customer_name,payments');
+    var deals=await sbGet('deals','location=eq.'+encodeURIComponent(loc)+'&select=customer_name,payments,vehicle_desc,sold_inv_vin');
     if(!Array.isArray(deals))return;
     deals.forEach(function(d){
       var cashTotal=0;
@@ -13872,7 +13874,48 @@ async function _buildDealFullCashMap(){
       }catch(e){}
       var key=(d.customer_name||'').toLowerCase();
       _payDealFullCashMap[key]=cashTotal;
+      // Store vehicle info for deposit matching
+      if(d.vehicle_desc||d.sold_inv_vin) _payDealFullCashMap['_veh_'+key]={desc:(d.vehicle_desc||'').toLowerCase(),vin:(d.sold_inv_vin||'').toLowerCase()};
     });
+    // Look up deposit payments to subtract from deal cash
+    var depPays=await sbGet('payments','raw_ocr_text=like.Deposit*&location=eq.'+encodeURIComponent(loc)+'&order=created_at.desc&limit=200');
+    if(Array.isArray(depPays)&&depPays.length){
+      depPays.forEach(function(dp){
+        var depAmt=parseFloat((dp.amount||'').replace(/[^0-9.]/g,''))||0;
+        if(depAmt<=0)return;
+        var depVin=(dp.vehicle_vin||'').toLowerCase().trim();
+        var depVeh=([dp.vehicle_year,dp.vehicle_make,dp.vehicle_model].filter(Boolean).join(' ')).toLowerCase();
+        var depCust=(dp.customer_name||'').toLowerCase().trim();
+        // Match by VIN first, then by vehicle desc words, then by customer name
+        var matched=false;
+        Object.keys(_payDealFullCashMap).forEach(function(k){
+          if(matched||k.indexOf('_veh_')===0)return;
+          var vehInfo=_payDealFullCashMap['_veh_'+k];
+          if(!vehInfo)return;
+          // VIN match (100%)
+          if(depVin&&vehInfo.vin&&depVin===vehInfo.vin){ _payDealDepositMap[k]=(_payDealDepositMap[k]||0)+depAmt; matched=true; return; }
+          // Vehicle desc match — all words from deposit vehicle must appear in deal vehicle
+          if(depVeh.length>3&&vehInfo.desc){
+            var words=depVeh.split(/\s+/).filter(function(w){return w.length>2;});
+            if(words.length>=2&&words.every(function(w){return vehInfo.desc.indexOf(w)!==-1;})){ _payDealDepositMap[k]=(_payDealDepositMap[k]||0)+depAmt; matched=true; return; }
+          }
+          // Customer name close match
+          if(depCust&&k===depCust){ _payDealDepositMap[k]=(_payDealDepositMap[k]||0)+depAmt; matched=true; return; }
+          // Customer last name match (fuzzy)
+          if(depCust){
+            var depLast=depCust.split(/\s+/).pop();
+            var dealLast=k.split(/\s+/).pop();
+            if(depLast&&dealLast&&depLast.length>2&&depLast===dealLast){
+              var depFirst=depCust.split(/\s+/)[0]||'';
+              var dealFirst=k.split(/\s+/)[0]||'';
+              if(depFirst&&dealFirst&&(depFirst===dealFirst||depFirst.indexOf(dealFirst)===0||dealFirst.indexOf(depFirst)===0)){
+                _payDealDepositMap[k]=(_payDealDepositMap[k]||0)+depAmt; matched=true;
+              }
+            }
+          }
+        });
+      });
+    }
   }catch(e){
     // Fallback to _dealsData if available
     if(_dealsData&&_dealsData.length){
@@ -13891,7 +13934,9 @@ async function _buildDealFullCashMap(){
 
 function _getDealFullCash(customerName,paymentRowAmt){
   var key=(customerName||'').toLowerCase();
-  return _payDealFullCashMap[key]||paymentRowAmt;
+  var full=_payDealFullCashMap[key]||paymentRowAmt;
+  var depAlready=_payDealDepositMap[key]||0;
+  return Math.max(0,full-depAlready);
 }
 
 function _netLpStart(e){
