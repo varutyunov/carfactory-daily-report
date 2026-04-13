@@ -11496,6 +11496,41 @@ async function openFormDetail(id) {
   html += '</div>';
   html += '</div>';
 
+  // Payment method — look up linked payment record
+  html += '<div id="form-dep-method" style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>';
+  html += '<div style="font-size:14px;color:#666;margin-top:6px;">Loading...</div>';
+  html += '</div>';
+  // Async load payment method
+  (function(depId, custName){
+    sbGet('payments','raw_ocr_text=like.Deposit*&customer_name=eq.'+encodeURIComponent(custName)+'&order=created_at.desc&limit=5').then(function(pays){
+      var el=document.getElementById('form-dep-method');
+      if(!el)return;
+      if(!pays||!pays.length){
+        el.innerHTML='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>'+
+          '<div style="font-size:14px;color:#666;margin-top:6px;">Not posted to weekly payments</div>';
+        return;
+      }
+      // Match by amount
+      var depAmt=parseFloat(dep.deposit_amount)||0;
+      var match=pays.find(function(p){var pAmt=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;return Math.abs(pAmt-depAmt)<0.01;});
+      if(!match){
+        el.innerHTML='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payment Method</div>'+
+          '<div style="font-size:14px;color:#666;margin-top:6px;">Not posted to weekly payments</div>';
+        return;
+      }
+      var raw=(match.payment_method||'cash');
+      var methodHtml;
+      if(raw.indexOf(',')!==-1){
+        methodHtml=raw.split(',').map(function(s){return '<span style="display:inline-block;font-size:13px;font-weight:600;color:#fff;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:4px 10px;margin:4px 4px 0 0;">'+s.trim().toUpperCase().replace(/MONEY_ORDER/g,'M.O.')+'</span>';}).join('');
+      } else {
+        methodHtml='<span style="display:inline-block;font-size:13px;font-weight:600;color:#fff;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:4px 10px;margin-top:6px;">'+raw.toUpperCase().replace('MONEY_ORDER','M.O.')+'</span>';
+      }
+      var editBtn='<span onclick="formDepEditMethod('+match.id+')" style="color:#a78bfa;font-size:10px;cursor:pointer;margin-left:8px;">TAP TO EDIT</span>';
+      el.innerHTML='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Paid With'+editBtn+'</div>'+methodHtml;
+    }).catch(function(){});
+  })(dep.id, dep.customer_name);
+
   if(dep.withdraw_until) {
     html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Vehicle Held Until</div>';
@@ -11542,6 +11577,77 @@ async function openFormDetail(id) {
   // Init counter-sign pad if customer has signed but seller hasn't
   if(dep.esign_status==='signed' && !dep.seller_signature_url) {
     _initCounterSignPad();
+  }
+}
+
+// Edit deposit payment method from Forms detail view
+var _formDepMethodPayId=null;
+var _formDepMethodRows=[];
+function formDepEditMethod(payId){
+  _formDepMethodPayId=payId;
+  var el=document.getElementById('form-dep-method');
+  if(!el)return;
+  // Fetch the payment to get current method
+  sbGet('payments','id=eq.'+payId).then(function(pays){
+    if(!pays||!pays.length)return;
+    var p=pays[0];
+    var raw=(p.payment_method||'cash');
+    if(raw.indexOf(',')!==-1){
+      _formDepMethodRows=raw.split(',').map(function(s){
+        s=s.trim();var m=s.match(/^\$([\d,.]+)\s+(.+)$/);
+        if(m)return{amount:m[1].replace(/,/g,''),method:m[2].toLowerCase().trim()};
+        return{amount:'',method:s.toLowerCase()};
+      });
+    } else {
+      var totalAmt=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
+      _formDepMethodRows=[{amount:totalAmt?totalAmt.toFixed(2):'',method:raw.toLowerCase()}];
+    }
+    formDepRenderMethodEdit(el);
+  });
+}
+function formDepRenderMethodEdit(el){
+  if(!el)el=document.getElementById('form-dep-method');
+  if(!el)return;
+  var html='<div style="font-size:13px;font-weight:700;color:#a78bfa;margin-bottom:12px;">Edit Payment Method</div>';
+  html+='<div id="form-dep-method-rows">';
+  _formDepMethodRows.forEach(function(r,i){
+    html+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">';
+    html+='<input type="text" inputmode="decimal" placeholder="$0.00" value="'+(r.amount?'$'+r.amount:'')+'" oninput="moneyInput(this);_formDepMethodRows['+i+'].amount=this.value.replace(/[^0-9.]/g,\'\')" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>';
+    html+='<select onchange="_formDepMethodRows['+i+'].method=this.value" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 8px;font-size:14px;outline:none;appearance:auto;">';
+    html+='<option value="cash"'+(r.method==='cash'?' selected':'')+'>Cash</option>';
+    html+='<option value="card"'+(r.method==='card'?' selected':'')+'>Card</option>';
+    html+='<option value="zelle"'+(r.method==='zelle'?' selected':'')+'>Zelle</option>';
+    html+='<option value="money_order"'+(r.method==='money_order'?' selected':'')+'>M.O.</option>';
+    html+='<option value="other"'+(r.method==='other'?' selected':'')+'>Other</option>';
+    html+='</select>';
+    if(_formDepMethodRows.length>1) html+='<button onclick="_formDepMethodRows.splice('+i+',1);formDepRenderMethodEdit()" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>';
+    html+='</div>';
+  });
+  html+='</div>';
+  html+='<button onclick="_formDepMethodRows.push({amount:\'\',method:\'cash\'});formDepRenderMethodEdit()" style="background:none;border:1px dashed #333;border-radius:10px;color:#888;font-size:13px;padding:10px;width:100%;cursor:pointer;margin-bottom:12px;">+ Add Payment Method</button>';
+  html+='<div style="display:flex;gap:8px;">';
+  html+='<button onclick="formDepCancelMethodEdit()" style="flex:1;padding:12px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>';
+  html+='<button onclick="formDepSaveMethod()" style="flex:1;padding:12px;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.4);border-radius:10px;color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;">Save</button>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+function formDepCancelMethodEdit(){
+  // Reload the form detail to reset
+  var dep=(_formsData||[]).find(function(d){return document.getElementById('forms-header-title').textContent===d.customer_name;});
+  if(dep) openFormDetail(dep.id);
+}
+async function formDepSaveMethod(){
+  var parts=_formDepMethodRows.filter(function(r){return parseFloat(r.amount)>0;});
+  if(!parts.length){alert('Add at least one payment method.');return;}
+  var methodStr=parts.length===1?parts[0].method:
+    parts.map(function(r){return '$'+parseFloat(r.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+r.method;}).join(', ');
+  try{
+    await sbPatch('payments',_formDepMethodPayId,{payment_method:methodStr});
+    // Refresh the detail view
+    var dep=(_formsData||[]).find(function(d){return document.getElementById('forms-header-title').textContent===d.customer_name;});
+    if(dep) openFormDetail(dep.id);
+  }catch(e){
+    alert('Error saving: '+e.message);
   }
 }
 
