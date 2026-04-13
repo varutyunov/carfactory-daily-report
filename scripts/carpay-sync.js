@@ -284,10 +284,22 @@ function parseCustomerDetails(html) {
 }
 
 // ── Fetch customer details (vehicle, phone, email) for all customers ────────
-async function cpGetCustomerDetails(dealerId, customers) {
+async function cpGetCustomerDetails(dealerId, customers, location) {
   await cpSelectDealer(dealerId);
-  const batchSize = 5; // 5 concurrent to speed up while avoiding rate limits
+  const batchSize = 5;
   let fetched = 0;
+
+  // Load existing vehicle data so SPA-page customers keep their vehicles
+  const existingDetails = {};
+  try {
+    const exRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + location + '&vehicle=neq.&select=account,vehicle', {
+      headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
+    });
+    if (exRes.ok) {
+      (await exRes.json()).forEach(c => { existingDetails[c.account] = c.vehicle; });
+      console.log('  Loaded ' + Object.keys(existingDetails).length + ' existing vehicles to preserve');
+    }
+  } catch(e) {}
 
   for (let i = 0; i < customers.length; i += batchSize) {
     const batch = customers.slice(i, i + batchSize);
@@ -303,41 +315,12 @@ async function cpGetCustomerDetails(dealerId, customers) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
-        // If HTML parsing failed, dump page info for debugging and try DMS tab URLs
-        if (!details.vehicle) {
-          // Log what's in the HTML to understand the page structure
-          const scriptUrls = (html.match(/src="([^"]*api[^"]*)"/gi) || []).join(', ');
-          const dataAttrs = (html.match(/data-\w+="[^"]*\d{4}[^"]*"/gi) || []).slice(0, 5).join(', ');
-          const jsVars = (html.match(/window\.\w+\s*=\s*[^;]{0,100}/g) || []).slice(0, 5).join(' | ');
-          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ')');
-          console.log('    JS vars: ' + jsVars.slice(0, 400));
-          console.log('    HTML size: ' + html.length + ', scripts: ' + scriptUrls.slice(0, 200));
-
-          // Try fetching the "account" tab which might have vehicle info server-rendered
-          try {
-            const tabRes = await cpFetch('/dms/customer/' + cust.carpay_id + '?tabId=account');
-            const tabHtml = await tabRes.text();
-            const tabDetails = parseCustomerDetails(tabHtml);
-            if (tabDetails.vehicle) {
-              cust.vehicle = tabDetails.vehicle;
-              console.log('    ✅ Account tab found vehicle: ' + cust.vehicle);
-            } else {
-              // Try the "details" or "info" tab
-              const tab2Res = await cpFetch('/dms/customer/' + cust.carpay_id + '?tabId=details');
-              const tab2Html = await tab2Res.text();
-              const tab2Details = parseCustomerDetails(tab2Html);
-              if (tab2Details.vehicle) {
-                cust.vehicle = tab2Details.vehicle;
-                console.log('    ✅ Details tab found vehicle: ' + cust.vehicle);
-              } else {
-                // Dump a sample of tab content for debugging
-                const tabText = tab2Html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400);
-                console.log('    Details tab text: ' + tabText.slice(0, 300));
-              }
-            }
-          } catch(tabErr) {
-            console.log('    Tab fetch error: ' + tabErr.message);
-          }
+        // If HTML parsing failed, use previously saved vehicle data (from bookmarklet)
+        if (!details.vehicle && existingDetails[cust.account]) {
+          cust.vehicle = existingDetails[cust.account];
+          console.log('  ℹ Kept saved vehicle for ' + cust.name + ': ' + cust.vehicle);
+        } else if (!details.vehicle) {
+          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — SPA page, no saved data');
         }
       } catch (e) { /* skip individual failures */ }
     }));
@@ -532,7 +515,7 @@ async function main() {
 
     // Step 2: Fetch vehicle, phone, email from each customer's detail page
     console.log('  Fetching customer details (vehicle, phone, email)...');
-    await cpGetCustomerDetails(loc.dealerId, customers);
+    await cpGetCustomerDetails(loc.dealerId, customers, loc.name);
 
     // Step 3: Fetch recent payments
     const recentPayments = await cpGetRecentPayments(loc.dealerId);
