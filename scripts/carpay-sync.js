@@ -217,12 +217,7 @@ function parseCustomerDetails(html) {
           }
         }
       }
-      // Last resort: first year+words match with plausible car year
-      if (!vehicle && allYearMatches.length) {
-        const fallback = allYearMatches[0].trim();
-        const fbYear = parseInt(fallback);
-        if (fbYear >= 1990 && fbYear <= 2029) vehicle = fallback;
-      }
+      // No last-resort fallback — only accept known car makes to avoid false positives
     }
   }
 
