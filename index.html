@@ -10938,10 +10938,10 @@ function _txInit() {
           </div>
           <div style="margin-top:60px;display:flex;justify-content:space-between;align-items:flex-end;">
             <div><div id="esign-void-cust-sig" style="border-bottom:1px solid #000;width:200px;min-height:40px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Sign</div></div>
-            <div><div style="border-bottom:1px solid #000;width:120px;height:20px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Date</div></div>
+            <div><div id="vr-void-date" style="border-bottom:1px solid #000;width:120px;height:20px;font-size:13px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Date</div></div>
           </div>
           <div style="margin-top:30px;">
-            <div style="border-bottom:1px solid #000;width:200px;height:20px;"></div>
+            <div id="vr-void-print" style="border-bottom:1px solid #000;width:200px;height:20px;font-size:13px;"></div>
             <div style="font-size:13px;font-weight:600;margin-top:4px;">Print</div>
           </div>
         </div>
@@ -12679,6 +12679,8 @@ function vrGoPreview(){
     document.getElementById('vr-void-vehicle-desc').textContent=vehicleDesc;
     document.getElementById('vr-void-vin').textContent=vin;
     document.getElementById('vr-void-customer').textContent=fullName;
+    document.getElementById('vr-void-print').textContent=fullName;
+    document.getElementById('vr-void-date').textContent=months[now.getMonth()]+' '+now.getDate()+', '+now.getFullYear();
   }
 
   if(showRelease){
