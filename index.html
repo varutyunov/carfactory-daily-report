@@ -10989,12 +10989,113 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="vrPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Forms</button>
+        <button onclick="esignOpen('void_release')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
+
+        <!-- Signed form photo prompt -->
+        <div id="vr-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
+          <div style="color:#ea580c;font-size:19px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">⚠️ Required: Signed Forms</div>
+          <div style="color:#aaa;font-size:13px;text-align:center;margin-bottom:16px;line-height:1.5;">Print the forms above, have the customer sign them, then photograph the signed copies. <strong style="color:#fff;">You cannot save without this.</strong></div>
+          <label id="vr-signed-label" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px;background:#7c2d12;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;text-align:center;color:#fff;box-sizing:border-box;">
+            📸 Take Photo of Signed Forms
+            <input type="file" accept="image/*" capture="environment" onchange="vrSignedFormTaken(this)" style="display:none;"/>
+          </label>
+          <div id="vr-signed-preview-wrap" style="display:none;margin-top:14px;">
+            <img id="vr-signed-preview" style="width:100%;border-radius:10px;margin-bottom:10px;"/>
+            <div style="text-align:center;color:#4ade80;font-weight:700;font-size:15px;">✓ Signed forms captured</div>
+            <label style="display:block;text-align:center;margin-top:8px;cursor:pointer;color:#666;font-size:12px;">
+              Retake
+              <input type="file" accept="image/*" capture="environment" onchange="vrSignedFormTaken(this)" style="display:none;"/>
+            </label>
+          </div>
+        </div>
+
+        <button id="vr-save-btn" onclick="vrSave()" disabled style="width:100%;padding:16px;background:#166534;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:not-allowed;margin-top:4px;opacity:0.4;">Save Record</button>
+        <div id="vr-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
         <button onclick="vrClose()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
       </div>
     </div>
 
   </div>
 </div><!-- /vr-overlay -->
+
+<div id="esign-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000000ee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="esignClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0;line-height:1;display:flex;align-items:center;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">SEND FOR E-SIGN</span>
+  </div>
+  <div style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:20px 16px 100px;max-width:500px;margin:0 auto;">
+
+      <!-- Status: Preparing -->
+      <div id="esign-status-preparing" style="text-align:center;padding:30px 0;">
+        <div class="dep-spinner" style="margin:0 auto 12px;"></div>
+        <div style="font-size:15px;color:#888;">Preparing document for signing...</div>
+      </div>
+
+      <!-- Status: Ready to send -->
+      <div id="esign-status-ready" style="display:none;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:48px;margin-bottom:8px;">✍️</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;" id="esign-doc-label">Deposit Agreement</div>
+          <div style="font-size:14px;color:#888;margin-top:4px;" id="esign-customer-label">Customer Name</div>
+        </div>
+
+        <!-- Link section -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Signing Link</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-link" readonly style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:13px;outline:none;"/>
+            <button onclick="esignCopyLink()" id="esign-copy-btn" style="padding:12px 18px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Copy</button>
+          </div>
+        </div>
+
+        <!-- Send via SMS -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Send via Text Message</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-phone" type="tel" placeholder="(555) 123-4567" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;"/>
+            <button onclick="esignSendSMS()" id="esign-sms-btn" style="padding:12px 18px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send</button>
+          </div>
+          <div id="esign-sms-status" style="font-size:12px;color:#888;margin-top:6px;display:none;"></div>
+        </div>
+
+        <!-- Send via Email -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:12px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">Send via Email</div>
+          <div style="display:flex;gap:8px;">
+            <input id="esign-email" type="email" placeholder="customer@email.com" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;"/>
+            <button onclick="esignSendEmail()" id="esign-email-btn" style="padding:12px 18px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send</button>
+          </div>
+          <div id="esign-email-status" style="font-size:12px;color:#888;margin-top:6px;display:none;"></div>
+        </div>
+
+        <!-- Share button (mobile) -->
+        <button onclick="esignShare()" id="esign-share-btn" style="width:100%;padding:15px;background:#111;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">📤 Share Link</button>
+
+        <!-- Info -->
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:16px;">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px;">How It Works</div>
+          <div style="font-size:13px;color:#888;line-height:1.6;">
+            1. Customer opens the link on their phone<br>
+            2. They review the document<br>
+            3. They draw their signature<br>
+            4. IP address, timestamp &amp; device are recorded<br>
+            5. You'll see the signed status in Forms
+          </div>
+          <div style="font-size:11px;color:#444;margin-top:10px;">Link expires in 72 hours. Legally binding under ESIGN Act &amp; UETA.</div>
+        </div>
+      </div>
+
+      <!-- Status: Already sent -->
+      <div id="esign-status-sent" style="display:none;text-align:center;padding:30px 0;">
+        <div style="font-size:48px;margin-bottom:8px;">✅</div>
+        <div style="font-size:18px;font-weight:700;color:#4ade80;margin-bottom:4px;">E-Sign Request Sent</div>
+        <div style="font-size:14px;color:#888;">The customer will receive the signing link shortly.</div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /esign-overlay -->
 
 <style>
 @media print {
@@ -12425,6 +12526,229 @@ function vrPrint(){
   window.onafterprint=cleanup;
   window.print();
   setTimeout(cleanup,3000);
+}
+
+function vrSignedFormTaken(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  _vrData.signedFormFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _vrData.signedFormDataUrl=e.target.result;
+    var prev=document.getElementById('vr-signed-preview');if(prev)prev.src=e.target.result;
+    document.getElementById('vr-signed-label').style.display='none';
+    document.getElementById('vr-signed-preview-wrap').style.display='block';
+    var btn=document.getElementById('vr-save-btn');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  };
+  reader.readAsDataURL(file);
+}
+
+async function vrSave(){
+  if(!_vrData.signedFormFile){alert('Please photograph the signed forms first.');return;}
+  var btn=document.getElementById('vr-save-btn');
+  var status=document.getElementById('vr-save-status');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;}
+  try{
+    var ts=Date.now();
+    var signedUrl='';
+    var ext2=_vrData.signedFormFile.name.split('.').pop()||'jpg';
+    var signedPath='void_release/'+ts+'_signed.'+ext2;
+    await sbUpload(signedPath,_vrData.signedFormFile);
+    signedUrl=await sbSignUrl(signedPath);
+
+    var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+    var fullName=[g('vr-fname'),g('vr-mname'),g('vr-lname')].filter(Boolean).join(' ');
+    var yr=_vrData.year||g('vr-year');
+    var mk=_vrData.make||g('vr-make');
+    var md=_vrData.model||g('vr-model');
+    var vin=_vrData.vin||g('vr-vin');
+    var vehicleDesc=[yr,mk,md].filter(Boolean).join(' ');
+
+    var record={
+      customer_name:fullName,
+      co_customer:g('vr-cocustomer')||null,
+      vehicle_desc:vehicleDesc,
+      vin:vin||'',
+      account:g('vr-acct')||null,
+      form_type:_vrFormType,
+      signed_form_url:signedUrl||null,
+      created_by:(me&&me.name)||'',
+      location:(me&&me.location)||'DeBary',
+      created_at:new Date().toISOString()
+    };
+    await sbPost('void_releases',record);
+    if(status)status.innerHTML='<span style="color:#4ade80;font-weight:600;">✓ Record saved!</span>';
+    if(btn){btn.textContent='Saved ✓';btn.style.background='#166534';btn.style.opacity='1';}
+  }catch(e){
+    console.error('Void/Release save error:',e);
+    if(status)status.innerHTML='<span style="color:#ef4444;">Error: '+(e.message||e)+'</span>';
+    if(btn){btn.textContent='Save Record';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// E-SIGN LOGIC
+// ══════════════════════════════════════════════════════════════
+
+var _repFullNames={'tommy':'Thomas Sposato','thomas':'Thomas Sposato','vlad':'Vladimir Arutyunov','vladimir':'Vladimir Arutyunov','scott':'Scott Logan','emanuel':'Emmanuel Flores','manny':'Emmanuel Flores','emmanuel':'Emmanuel Flores','jesse':'Jesse Hill'};
+function _getRepFullName(){if(!me||!me.name)return '';var key=me.name.trim().toLowerCase();return _repFullNames[key]||me.name;}
+
+var _esignFormType='',_esignToken='',_esignRecordId=null;
+
+function esignOpen(formType){
+  _esignFormType=formType;_esignToken='';_esignRecordId=null;
+  document.getElementById('esign-overlay').style.display='flex';
+  document.getElementById('esign-status-preparing').style.display='';
+  document.getElementById('esign-status-ready').style.display='none';
+  document.getElementById('esign-status-sent').style.display='none';
+  document.getElementById('esign-phone').value='';
+  document.getElementById('esign-email').value='';
+  document.getElementById('esign-sms-status').style.display='none';
+  document.getElementById('esign-email-status').style.display='none';
+  if(!navigator.share)document.getElementById('esign-share-btn').style.display='none';
+  else document.getElementById('esign-share-btn').style.display='';
+  esignCreateRequest(formType);
+}
+
+function esignClose(){
+  document.getElementById('esign-overlay').style.display='none';
+  if(_esignToken){
+    if(_esignFormType==='void_release'){document.getElementById('vr-overlay').style.display='none';}
+    _formsViewingDetail=false;
+    if(typeof formsInnerTab==='function')formsInnerTab('void');
+  }
+}
+
+async function esignCreateRequest(formType){
+  try{
+    var token=crypto.randomUUID();
+    _esignToken=token;
+    var formHtml='',customerName='',formRecordId=null;
+
+    if(formType==='void_release'){
+      var voidEl=document.getElementById('vr-void-form');
+      var relEl=document.getElementById('vr-release-form');
+      formHtml=(voidEl?voidEl.outerHTML:'')+'<div style="margin:20px 0;"></div>'+(relEl?relEl.outerHTML:'');
+      var vg=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+      customerName=[vg('vr-fname'),vg('vr-mname'),vg('vr-lname')].filter(Boolean).join(' ');
+      var vrYear=_vrData.year||vg('vr-year'),vrMake=_vrData.make||vg('vr-make'),vrModel=_vrData.model||vg('vr-model'),vrVin=_vrData.vin||vg('vr-vin');
+      var vrRecord={customer_name:customerName,co_customer:vg('vr-cocustomer')||null,vehicle_desc:[vrYear,vrMake,vrModel].filter(Boolean).join(' '),vin:vrVin||'',account:vg('vr-acct')||null,form_type:_vrFormType,esign_status:'pending',created_by:(me&&me.name)||'',location:(me&&me.location)||'DeBary',created_at:new Date().toISOString()};
+      var vrResult=await sbPost('void_releases',vrRecord);
+      if(vrResult&&vrResult.length)formRecordId=vrResult[0].id;
+    } else if(formType==='deposit'){
+      var depEl=document.getElementById('dep-print-form');
+      formHtml=depEl?depEl.outerHTML:'';
+      var fn=(document.getElementById('dep-fname')||{}).value||'';
+      var ln=(document.getElementById('dep-lname')||{}).value||'';
+      customerName=(fn+' '+ln).trim();
+    } else if(formType==='invoice'){
+      var invEl=document.getElementById('inv-print-form');
+      formHtml=invEl?invEl.outerHTML:'';
+      var cfn=(document.getElementById('inv-fname')||{}).value||'';
+      var cln=(document.getElementById('inv-lname')||{}).value||'';
+      customerName=(cfn+' '+cln).trim();
+    }
+
+    var record={token:token,form_type:formType,form_record_id:formRecordId,form_html:formHtml,customer_name:customerName||'Customer',status:'pending',created_by:me?me.name:'unknown',location:(me&&me.location)?me.location:'DeBary'};
+    var result=await sbPost('esign_requests',record);
+    if(result&&result.length)_esignRecordId=result[0].id;
+
+    var signingUrl='https://carfactory.work/sign.html?token='+token;
+    if(formRecordId){var tableMap={deposit:'deposits',invoice:'invoices',void_release:'void_releases'};_esignStartPolling(tableMap[formType],formRecordId,formType);}
+
+    document.getElementById('esign-status-preparing').style.display='none';
+    document.getElementById('esign-status-ready').style.display='';
+    document.getElementById('esign-link').value=signingUrl;
+    var typeLabels={deposit:'Deposit Agreement',invoice:'Mechanic Invoice',void_release:'Void / Release'};
+    document.getElementById('esign-doc-label').textContent=typeLabels[formType]||formType;
+    document.getElementById('esign-customer-label').textContent=customerName||'Customer';
+  }catch(e){
+    console.error('E-sign create error:',e);
+    document.getElementById('esign-status-preparing').innerHTML='<div style="color:#ef4444;font-size:15px;">Error: '+(e.message||e)+'</div>';
+  }
+}
+
+function esignCopyLink(){
+  var input=document.getElementById('esign-link');
+  navigator.clipboard.writeText(input.value).then(function(){
+    var btn=document.getElementById('esign-copy-btn');btn.textContent='Copied!';btn.style.background='#22c55e';
+    setTimeout(function(){btn.textContent='Copy';btn.style.background='#1d4ed8';},2000);
+  }).catch(function(){input.select();document.execCommand('copy');});
+}
+
+async function esignSendSMS(){
+  var phone=document.getElementById('esign-phone').value.replace(/[^0-9]/g,'');
+  if(phone.length<10){alert('Please enter a valid phone number.');return;}
+  if(phone.length===10)phone='1'+phone;
+  var btn=document.getElementById('esign-sms-btn'),status=document.getElementById('esign-sms-status');
+  btn.disabled=true;btn.textContent='Sending...';status.style.display='block';status.style.color='#888';status.textContent='Sending text message...';
+  try{
+    var signingUrl=document.getElementById('esign-link').value;
+    var customerName=document.getElementById('esign-customer-label').textContent;
+    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({method:'sms',to:'+'+phone,signing_url:signingUrl,customer_name:customerName,token:_esignToken})});
+    var data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'SMS send failed');
+    if(_esignRecordId)await sbPatch('esign_requests',_esignRecordId,{customer_contact:'+'+phone,delivery_method:'sms'});
+    status.style.color='#4ade80';status.textContent='Text message sent!';btn.textContent='Sent!';btn.style.background='#166534';
+  }catch(e){
+    status.style.color='#ef4444';status.textContent='Failed: '+(e.message||e)+'. Use Copy Link instead.';btn.disabled=false;btn.textContent='Send';
+  }
+}
+
+async function esignSendEmail(){
+  var email=document.getElementById('esign-email').value.trim();
+  if(!email||!email.includes('@')){alert('Please enter a valid email address.');return;}
+  var btn=document.getElementById('esign-email-btn'),status=document.getElementById('esign-email-status');
+  btn.disabled=true;btn.textContent='Sending...';status.style.display='block';status.style.color='#888';status.textContent='Sending email...';
+  try{
+    var signingUrl=document.getElementById('esign-link').value;
+    var customerName=document.getElementById('esign-customer-label').textContent;
+    var docLabel=document.getElementById('esign-doc-label').textContent;
+    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({method:'email',to:email,signing_url:signingUrl,customer_name:customerName,doc_type:docLabel,token:_esignToken})});
+    var data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'Email send failed');
+    if(_esignRecordId)await sbPatch('esign_requests',_esignRecordId,{customer_contact:email,delivery_method:'email'});
+    status.style.color='#4ade80';status.textContent='Email sent!';btn.textContent='Sent!';btn.style.background='#166534';
+  }catch(e){
+    status.style.color='#ef4444';status.textContent='Failed: '+(e.message||e)+'. Use Copy Link instead.';btn.disabled=false;btn.textContent='Send';
+  }
+}
+
+function esignShare(){
+  var signingUrl=document.getElementById('esign-link').value;
+  var customerName=document.getElementById('esign-customer-label').textContent;
+  var docLabel=document.getElementById('esign-doc-label').textContent;
+  if(navigator.share){navigator.share({title:'Car Factory — Sign '+docLabel,text:'Hi '+customerName+', please sign your '+docLabel+' from Car Factory:',url:signingUrl}).catch(function(){});}
+}
+
+var _esignPollTimer=null,_esignPendingChecks=[];
+function _esignStartPolling(table,recordId,formType){
+  _esignPendingChecks.push({table:table,id:recordId,formType:formType});
+  if(_esignPollTimer)return;
+  _esignPollTimer=setInterval(_esignPollCheck,10000);
+}
+function _esignStopPolling(recordId){
+  _esignPendingChecks=_esignPendingChecks.filter(function(p){return p.id!==recordId;});
+  if(!_esignPendingChecks.length&&_esignPollTimer){clearInterval(_esignPollTimer);_esignPollTimer=null;}
+}
+async function _esignPollCheck(){
+  for(var i=_esignPendingChecks.length-1;i>=0;i--){
+    var chk=_esignPendingChecks[i];
+    try{
+      var rows=await sbGet(chk.table,'id=eq.'+chk.id+'&select=id,esign_status,customer_name');
+      if(rows&&rows.length&&rows[0].esign_status==='signed'){
+        _esignStopPolling(chk.id);
+        showToast('✍️ '+(rows[0].customer_name||'Customer')+' signed their form!');
+      }
+    }catch(e){}
+  }
+}
+async function _esignResumePolling(){
+  try{
+    var pending=await sbGet('esign_requests','status=eq.pending&order=created_at.desc&limit=20');
+    if(pending&&pending.length){var tableMap={deposit:'deposits',invoice:'invoices',void_release:'void_releases'};pending.forEach(function(req){if(req.form_record_id&&req.form_type&&tableMap[req.form_type])_esignStartPolling(tableMap[req.form_type],req.form_record_id,req.form_type);});}
+  }catch(e){}
 }
 
 // ══════════════════════════════════════════════════════════════
