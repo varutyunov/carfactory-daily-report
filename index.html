@@ -1037,18 +1037,11 @@ body.light .cal-fab{background:#4488ff !important;}
 
 <!-- FORMS VIEW OVERLAY -->
 <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;display:flex;flex-direction:column;">
-    <div style="height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
-      <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
-      <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
-    </div>
-    <div id="forms-inner-tabs" style="display:flex;gap:0;padding:0 16px 10px;">
-      <button onclick="formsInnerTab('deposits')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>
-      <button onclick="formsInnerTab('invoices')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>
-      <button onclick="formsInnerTab('void')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>
-    </div>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9010;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="formsBack()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span id="forms-header-title" style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">FORMS</span>
   </div>
-  <div id="forms-body" style="padding-top:100px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+  <div id="forms-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;">
       <input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>
       <div id="forms-list" style="display:flex;flex-direction:column;gap:10px;">
@@ -11196,8 +11189,11 @@ function openFormsView() {
     var countEl = document.getElementById('tools-forms-count');
     if(countEl) countEl.style.display = 'none';
   }).catch(function(){});
-  // Show inner tabs and initialize to deposits
-  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
+  // Initialize location from user's location, rebuild body with tabs
+  var initLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+  _formsLocation = initLoc;
+  _formsViewingDetail = false;
+  document.getElementById('forms-body').innerHTML = _formsBodyHTML();
   formsInnerTab('deposits');
 }
 
@@ -11207,9 +11203,8 @@ function formsBack() {
   if(_formsViewingDetail) {
     _formsViewingDetail = false;
     document.getElementById('forms-header-title').textContent = 'FORMS';
-    var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='flex';
     var body = document.getElementById('forms-body');
-    body.innerHTML = '<div style="padding:12px;"><input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/><div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div></div>';
+    body.innerHTML = _formsBodyHTML();
     formsInnerTab(_formsActiveTab||'deposits');
   } else {
     closeFormsView();
@@ -11226,7 +11221,8 @@ async function loadForms() {
   var list = document.getElementById('forms-list');
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
-    _formsData = await sbGet('deposits', 'order=created_at.desc');
+    var allDeps = await sbGet('deposits', 'order=created_at.desc');
+    _formsData = allDeps.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     await _signStorageUrls(_formsData, ['id_photo_url','signed_form_url']);
     // Preload deposit payment methods for list display
     try {
@@ -11313,7 +11309,6 @@ function renderForms() {
 
 function openFormDetail(id) {
   _formsViewingDetail = true;
-  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
 
@@ -12116,6 +12111,36 @@ var _invPayMethod = 'cash';
 var _formsActiveTab = 'deposits';
 var _invData_list = [];
 var _invFiltered = [];
+var _formsLocation = 'DeBary';
+
+function _formsBodyHTML() {
+  var loc = _formsLocation;
+  var dbBg = loc==='DeBary' ? '#fff' : 'none', dbClr = loc==='DeBary' ? '#000' : '#555';
+  var dlBg = loc==='DeLand' ? '#fff' : 'none', dlClr = loc==='DeLand' ? '#000' : '#555';
+  var html = '<div style="padding:12px;">';
+  html += '<div id="forms-loc-tabs" style="margin-bottom:10px;"><div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;">';
+  html += '<button onclick="formsSetLocation(\'DeBary\')" id="forms-loc-debary" style="flex:1;padding:8px 4px;background:'+dbBg+';border:none;border-radius:10px;color:'+dbClr+';font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeBary</button>';
+  html += '<button onclick="formsSetLocation(\'DeLand\')" id="forms-loc-deland" style="flex:1;padding:8px 4px;background:'+dlBg+';border:none;border-radius:10px;color:'+dlClr+';font-size:12px;font-weight:700;cursor:pointer;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;text-transform:uppercase;">DeLand</button>';
+  html += '</div></div>';
+  html += '<div id="forms-inner-tabs" style="display:flex;gap:0;margin-bottom:12px;">';
+  html += '<button onclick="formsInnerTab(\'deposits\')" id="forms-tab-deposits" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-radius:10px 0 0 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff;color:#000;">Deposits</button>';
+  html += '<button onclick="formsInnerTab(\'invoices\')" id="forms-tab-invoices" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Invoices</button>';
+  html += '<button onclick="formsInnerTab(\'void\')" id="forms-tab-void" style="flex:1;padding:10px 0;font-size:13px;font-weight:700;letter-spacing:.5px;border:1px solid #2a2a2a;border-left:none;border-radius:0 10px 10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#111;color:#666;">Void/Release</button>';
+  html += '</div>';
+  html += '<input id="forms-search" placeholder="Search by name, vehicle, stock..." oninput="formsFilter(this.value)" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;"/>';
+  html += '<div id="forms-list" style="display:flex;flex-direction:column;gap:10px;"><div style="text-align:center;color:#555;padding:40px 0;">Loading forms...</div></div>';
+  html += '</div>';
+  return html;
+}
+
+function formsSetLocation(loc) {
+  _formsLocation = loc;
+  ['DeBary','DeLand'].forEach(function(l){
+    var btn = document.getElementById('forms-loc-' + l.toLowerCase());
+    if(btn){ btn.style.background = l===loc ? '#fff' : 'none'; btn.style.color = l===loc ? '#000' : '#555'; }
+  });
+  formsInnerTab(_formsActiveTab);
+}
 
 function formsInnerTab(tab){
   _formsActiveTab = tab;
@@ -12145,7 +12170,8 @@ async function loadInvoices(){
   var list=document.getElementById('forms-list');
   list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
-    _invData_list=await sbGet('invoices','order=created_at.desc');
+    var allInv=await sbGet('invoices','order=created_at.desc');
+    _invData_list=allInv.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     _invFiltered=_invData_list;
     renderInvoicesList();
   }catch(e){
@@ -12546,7 +12572,8 @@ async function loadVoidRelease(){
   var list=document.getElementById('forms-list');
   list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
-    _vrData_list=await sbGet('void_releases','order=created_at.desc');
+    var allVR=await sbGet('void_releases','order=created_at.desc');
+    _vrData_list=allVR.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
     _vrFiltered=_vrData_list;
     renderVRList();
   }catch(e){
@@ -13056,7 +13083,6 @@ function _esignOpenCounterSign(table,recordId){
   var formsOverlay=document.getElementById('forms-overlay');
   if(formsOverlay)formsOverlay.style.display='flex';
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
-  var tabs=document.getElementById('forms-inner-tabs');if(tabs)tabs.style.display='none';
   _formsViewingDetail=true;
   if(table==='invoices'){_formsActiveTab='invoices';openInvoiceDetail(recordId);}
   else if(table==='void_releases'){_formsActiveTab='void';openVRDetail(recordId);}
