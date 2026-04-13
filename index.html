@@ -14622,6 +14622,7 @@ function payViewDetail(id){
   var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ');
   var rawMethod=(p.payment_method||'cash');
   var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
+  var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
   var methodHtml;
   if(rawMethod.indexOf(',')!==-1){
     methodHtml=rawMethod.split(',').map(function(s){return '<div style="font-size:14px;color:#fff;font-weight:600;">'+s.trim().replace(/(\$[\d,.]+)\s+(.+)/,function(_,a,m){return a+' <span style="color:#a78bfa;">'+m.toUpperCase()+'</span>';})+'</div>';}).join('');
@@ -14662,6 +14663,16 @@ function payViewDetail(id){
     html+='</div>';
   }
   html+='</div>';
+
+  // Payment type badge (DEPOSIT / DEAL / PAYMENT) — owners can edit
+  var curType=isDeposit?'deposit':(isDeal?'deal':'payment');
+  var typeBadgeColors={deposit:'background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.25);',deal:'background:rgba(244,114,182,.15);color:#f472b6;border:1px solid rgba(244,114,182,.25);',payment:'background:rgba(74,222,128,.08);color:#4ade80;border:1px solid rgba(74,222,128,.25);'};
+  html+='<div id="pay-type-section" style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;margin-bottom:12px;">';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;">';
+  html+='<div><span style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">Type</span>';
+  html+='<div style="margin-top:6px;"><span style="display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;border-radius:8px;'+typeBadgeColors[curType]+'">'+curType.toUpperCase()+'</span></div></div>';
+  if(_payIsOwner()) html+='<span onclick="payEditType('+p.id+')" style="color:#a78bfa;font-size:11px;cursor:pointer;font-weight:600;">TAP TO EDIT</span>';
+  html+='</div></div>';
 
   // Edit button (owners only)
   if(_payIsOwner()){
@@ -14761,6 +14772,68 @@ async function paySaveDepMethod(){
     payViewDetail(id);
   }catch(e){
     alert('Error saving: '+e.message);
+  }
+}
+
+// === Owner: edit payment type (Deposit / Deal / Payment) ===
+function payEditType(id){
+  var p=_payWeekData.find(function(x){return x.id===id;});
+  if(!p)return;
+  var isDeposit=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deposit \u2014 ')===0;
+  var isDeal=p.raw_ocr_text&&p.raw_ocr_text.indexOf('Deal \u2014 ')===0;
+  var curType=isDeposit?'deposit':(isDeal?'deal':'payment');
+  var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ')||'';
+  var el=document.getElementById('pay-type-section');
+  if(!el)return;
+  var types=[
+    {key:'deposit',label:'DEPOSIT',color:'#a78bfa',bg:'rgba(167,139,250,.15)',border:'rgba(167,139,250,.25)'},
+    {key:'deal',label:'DEAL',color:'#f472b6',bg:'rgba(244,114,182,.15)',border:'rgba(244,114,182,.25)'},
+    {key:'payment',label:'PAYMENT',color:'#4ade80',bg:'rgba(74,222,128,.08)',border:'rgba(74,222,128,.25)'}
+  ];
+  var html='<div style="font-size:13px;font-weight:700;color:#a78bfa;margin-bottom:12px;">Change Payment Type</div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  types.forEach(function(t){
+    var sel=t.key===curType;
+    html+='<button onclick="paySelectType(\''+t.key+'\')" id="pay-type-btn-'+t.key+'" style="flex:1;padding:12px 8px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid '+(sel?t.color:t.border)+';background:'+(sel?t.bg:'transparent')+';color:'+t.color+';">'+t.label+'</button>';
+  });
+  html+='</div>';
+  html+='<div style="display:flex;gap:8px;">';
+  html+='<button onclick="payViewDetail('+id+')" style="flex:1;padding:12px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>';
+  html+='<button onclick="paySaveType('+id+')" style="flex:1;padding:12px;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.4);border-radius:10px;color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;">Save</button>';
+  html+='</div>';
+  el.innerHTML=html;
+  el.style.border='1px solid #a78bfa';
+  window._payEditTypeSelection=curType;
+}
+function paySelectType(type){
+  window._payEditTypeSelection=type;
+  var types=['deposit','deal','payment'];
+  var colors={deposit:'#a78bfa',deal:'#f472b6',payment:'#4ade80'};
+  var bgs={deposit:'rgba(167,139,250,.15)',deal:'rgba(244,114,182,.15)',payment:'rgba(74,222,128,.08)'};
+  types.forEach(function(t){
+    var btn=document.getElementById('pay-type-btn-'+t);
+    if(!btn)return;
+    var sel=t===type;
+    btn.style.borderColor=sel?colors[t]:'rgba(255,255,255,.1)';
+    btn.style.background=sel?bgs[t]:'transparent';
+  });
+}
+async function paySaveType(id){
+  var p=_payWeekData.find(function(x){return x.id===id;});
+  if(!p)return;
+  var newType=window._payEditTypeSelection||'payment';
+  var veh=[p.vehicle_year,p.vehicle_make,p.vehicle_model].filter(Boolean).join(' ')||'';
+  var newRaw='';
+  if(newType==='deposit') newRaw='Deposit \u2014 '+veh;
+  else if(newType==='deal') newRaw='Deal \u2014 '+veh;
+  else newRaw='';
+  try{
+    await sbPatch('payments',id,{raw_ocr_text:newRaw});
+    p.raw_ocr_text=newRaw;
+    _payRenderCards();
+    payViewDetail(id);
+  }catch(e){
+    alert('Error saving type: '+e.message);
   }
 }
 
