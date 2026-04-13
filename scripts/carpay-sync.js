@@ -303,20 +303,65 @@ async function cpGetCustomerDetails(dealerId, customers) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
-        // Log customers where vehicle extraction failed — dump more text to find vehicle
+        // If HTML parsing failed, try the CarPay API (SPA pages load data via JS)
         if (!details.vehicle) {
-          const plainText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-          // Find all year-like numbers and their context
-          const yearContexts = [];
-          const yearRe = /((?:19|20)\d{2})/g;
-          let ym;
-          while ((ym = yearRe.exec(plainText)) !== null) {
-            const start = Math.max(0, ym.index - 30);
-            const end = Math.min(plainText.length, ym.index + 60);
-            yearContexts.push(plainText.slice(start, end).trim());
+          try {
+            const tokenMatch = html.match(/window\.userToken\s*=\s*"([^"]+)"/);
+            if (tokenMatch) {
+              // Try the customer API endpoint
+              const apiRes = await fetch('https://api.carpay.com/ui-states/customers/' + cust.carpay_id, {
+                headers: {
+                  'Authorization': 'Bearer ' + tokenMatch[1],
+                  'Accept': 'application/json',
+                  'User-Agent': 'Mozilla/5.0'
+                },
+                timeout: 15000
+              });
+              if (apiRes.ok) {
+                const apiData = await apiRes.json();
+                const apiText = JSON.stringify(apiData);
+                // Look for vehicle in API response
+                const vehMatch = apiText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
+                if (vehMatch && isValidVehicle(vehMatch[1])) {
+                  cust.vehicle = vehMatch[1].trim();
+                  console.log('  ✅ API fallback found vehicle for ' + cust.name + ': ' + cust.vehicle);
+                } else {
+                  // Dump API response keys/sample for debugging
+                  console.log('  ⚠ No vehicle for ' + cust.name + ' — API response sample: ' + apiText.slice(0, 300));
+                }
+              } else {
+                console.log('  ⚠ No vehicle for ' + cust.name + ' — API HTTP ' + apiRes.status);
+                // Try alternate API paths
+                const altPaths = [
+                  'https://api.carpay.com/ui-states/dealer/customers/' + cust.carpay_id,
+                  'https://api.carpay.com/customers/' + cust.carpay_id
+                ];
+                for (const altUrl of altPaths) {
+                  try {
+                    const altRes = await fetch(altUrl, {
+                      headers: { 'Authorization': 'Bearer ' + tokenMatch[1], 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+                      timeout: 10000
+                    });
+                    if (altRes.ok) {
+                      const altData = await altRes.json();
+                      const altText = JSON.stringify(altData);
+                      console.log('    Alt API ' + altUrl.split('/').slice(-2).join('/') + ': ' + altText.slice(0, 300));
+                      const altVeh = altText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
+                      if (altVeh && isValidVehicle(altVeh[1])) {
+                        cust.vehicle = altVeh[1].trim();
+                        console.log('  ✅ Alt API found vehicle for ' + cust.name + ': ' + cust.vehicle);
+                        break;
+                      }
+                    }
+                  } catch(e2) {}
+                }
+              }
+            } else {
+              console.log('  ⚠ No vehicle for ' + cust.name + ' — no userToken in HTML');
+            }
+          } catch(apiErr) {
+            console.log('  ⚠ No vehicle for ' + cust.name + ' — API error: ' + apiErr.message);
           }
-          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || ['',''])[1].trim());
-          console.log('    HTML length: ' + html.length + ', year contexts: ' + JSON.stringify(yearContexts.slice(0, 8)));
         }
       } catch (e) { /* skip individual failures */ }
     }));
