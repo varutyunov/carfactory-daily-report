@@ -16370,10 +16370,12 @@ function _cashPayoutsRenderInline(){
 // === PAYROLL CALCULATOR ===
 var _payrollExtras=[];
 var _payrollExtraSign=1;
+var _payrollDeductions=[];
 
 function payrollOpen(who){
   _payrollExtras=[];
   _payrollExtraSign=1;
+  _payrollDeductions=[];
   // Hide original cash payouts sheet
   document.getElementById('cash-payouts-sheet').style.display='none';
   // Show payroll calc as its own full-screen overlay — reliable iOS scroll
@@ -16458,6 +16460,25 @@ function payrollRender(who){
     html+='</div></div>';
   }
 
+  // Cash Deductions (Manny + Jesse)
+  if(isManny||isJesse){
+    html+='<div style="background:#111;border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:14px;margin-bottom:10px;">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+    html+='<div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;">Cash Deductions</div>';
+    html+='<button onclick="payrollAddDeduction(\''+who+'\')" style="padding:4px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:#ef4444;-webkit-tap-highlight-color:transparent;">+ Add</button>';
+    html+='</div>';
+    html+='<div id="pr-deductions-list">';
+    if(!_payrollDeductions.length){
+      html+='<div style="font-size:13px;color:#444;text-align:center;padding:8px 0;">No deductions</div>';
+    }
+    html+='</div>';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #1e1e1e;">';
+    html+='<span style="font-size:12px;color:#888;">Total Deducted</span>';
+    html+='<span id="pr-deductions-total" style="font-size:16px;font-weight:700;color:#ef4444;">-$0.00</span>';
+    html+='</div>';
+    html+='</div>';
+  }
+
   // Extras list
   html+='<div id="pr-extras-list"></div>';
 
@@ -16520,6 +16541,38 @@ function mannyCarPay(cars){
   var first=Math.min(cars,5)*125;
   var rest=Math.max(0,cars-5)*300;
   return first+rest;
+}
+
+function payrollAddDeduction(who){
+  _payrollDeductions.push({reason:'',amount:0});
+  payrollRenderDeductions(who);
+}
+function payrollRemoveDeduction(who,idx){
+  _payrollDeductions.splice(idx,1);
+  payrollRenderDeductions(who);
+  payrollRecalc(who);
+}
+function payrollUpdateDeduction(idx,field,val){
+  if(_payrollDeductions[idx]) _payrollDeductions[idx][field]=field==='amount'?(parseFloat(val)||0):val;
+}
+function payrollRenderDeductions(who){
+  var el=document.getElementById('pr-deductions-list');
+  if(!el)return;
+  if(!_payrollDeductions.length){
+    el.innerHTML='<div style="font-size:13px;color:#444;text-align:center;padding:8px 0;">No deductions</div>';
+    var te=document.getElementById('pr-deductions-total');
+    if(te) te.textContent='-$0.00';
+    return;
+  }
+  var html='';
+  _payrollDeductions.forEach(function(d,i){
+    html+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">';
+    html+='<input type="text" placeholder="Reason" value="'+(d.reason||'')+'" oninput="payrollUpdateDeduction('+i+',\'reason\',this.value)" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 12px;font-size:14px;outline:none;min-width:0;"/>';
+    html+='<input type="text" inputmode="decimal" placeholder="$0" value="'+(d.amount?'$'+d.amount:'')+'" oninput="moneyInput(this);payrollUpdateDeduction('+i+',\'amount\',this.value.replace(/[^0-9.]/g,\'\'));payrollRecalc(\''+who+'\')" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#ef4444;padding:10px 12px;font-size:14px;outline:none;text-align:right;"/>';
+    html+='<button onclick="payrollRemoveDeduction(\''+who+'\','+i+')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:12px;cursor:pointer;border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
+    html+='</div>';
+  });
+  el.innerHTML=html;
 }
 
 function payrollSetSign(sign){
@@ -16596,7 +16649,12 @@ function payrollRecalc(who){
   var extrasTotal=0;
   _payrollExtras.forEach(function(e){extrasTotal+=e.amount*(e.sign||1);});
 
-  var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal;
+  var deductionsTotal=0;
+  _payrollDeductions.forEach(function(d){deductionsTotal+=(parseFloat(d.amount)||0);});
+  var dte=document.getElementById('pr-deductions-total');
+  if(dte) dte.textContent='-$'+deductionsTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal-deductionsTotal;
   var ge=document.getElementById('pr-grand-total');
   if(ge) ge.textContent='$'+grand.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
@@ -16617,7 +16675,9 @@ async function payrollSubmit(who){
   var fullSalesTotal=fullSales*50;
   var extrasTotal=0;
   _payrollExtras.forEach(function(e){extrasTotal+=e.amount*(e.sign||1);});
-  var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal;
+  var deductionsTotal=0;
+  _payrollDeductions.forEach(function(d){deductionsTotal+=(parseFloat(d.amount)||0);});
+  var grand=daysTotal+carsTotal+fullSalesTotal+extrasTotal-deductionsTotal;
   if(grand<=0){alert('Nothing to pay.');return;}
 
   // Build description
@@ -16626,6 +16686,9 @@ async function payrollSubmit(who){
   if((isManny||isJesse)&&fullSales>0) desc+=', '+fullSales+' full sale'+(fullSales===1?'':'s')+' ($'+fullSalesTotal+')';
   if(_payrollExtras.length){
     _payrollExtras.forEach(function(e){var sign=(e.sign||1);desc+=', '+e.reason+' ('+(sign>0?'+':'-')+'$'+e.amount+')';});
+  }
+  if(_payrollDeductions.length){
+    _payrollDeductions.filter(function(d){return d.reason&&d.amount>0;}).forEach(function(d){desc+=', '+d.reason+' (-$'+d.amount+')';});
   }
 
   var wk=_payWeekKey(_payCurrentWeekStart);
