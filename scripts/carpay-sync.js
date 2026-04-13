@@ -173,6 +173,70 @@ function isValidVehicle(v) {
   return true;
 }
 
+// ── Fetch vehicle from CarPay API using userToken (for SPA pages) ────────────
+async function fetchVehicleFromApi(html, carpayId) {
+  const tokenMatch = html.match(/window\.userToken\s*=\s*"([^"]+)"/);
+  const baseMatch = html.match(/window\.UiStateApiBaseUrl\s*=\s*"([^"]+)"/);
+  if (!tokenMatch || !baseMatch) return null;
+
+  const token = tokenMatch[1].replace(/\\\//g, '/');
+  const baseUrl = baseMatch[1].replace(/\\\//g, '/');
+
+  // Try several API endpoints to find vehicle data
+  const endpoints = [
+    baseUrl + '/customers/' + carpayId,
+    baseUrl + '/customer/' + carpayId,
+    baseUrl + '/customers/' + carpayId + '/vehicle',
+    baseUrl + '/customers/' + carpayId + '/account',
+    baseUrl + '/customers/' + carpayId + '/details',
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0'
+        },
+        timeout: 10000
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const jsonStr = JSON.stringify(data);
+
+      // Search the JSON for vehicle-like patterns
+      const vMatch = jsonStr.match(/((?:19|20)\d{2})\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/);
+      if (vMatch) {
+        const possibleVehicle = vMatch[0].trim();
+        if (isValidVehicle(possibleVehicle)) {
+          const parts = possibleVehicle.split(/\s+/);
+          if (CAR_MAKES.some(mk => parts[1].toLowerCase().startsWith(mk.toLowerCase().slice(0, 3)))) {
+            return possibleVehicle;
+          }
+        }
+      }
+
+      // Also check for explicit vehicle keys
+      const vehicleKeys = ['vehicle', 'car', 'auto', 'vehicleDescription', 'vehicle_description', 'vehicleName'];
+      for (const key of vehicleKeys) {
+        if (data[key] && typeof data[key] === 'string' && data[key].match(/\d{4}/)) {
+          return data[key].trim();
+        }
+        // Check nested objects
+        if (typeof data === 'object') {
+          for (const topKey of Object.keys(data)) {
+            if (data[topKey] && typeof data[topKey] === 'object' && data[topKey][key]) {
+              return String(data[topKey][key]).trim();
+            }
+          }
+        }
+      }
+    } catch (e) { /* try next endpoint */ }
+  }
+  return null;
+}
+
 function parseCustomerDetails(html) {
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
@@ -288,7 +352,6 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
   await cpSelectDealer(dealerId);
   const batchSize = 5;
   let fetched = 0;
-  let debugFailDumped = false, debugSuccessDumped = false;
 
   // Load existing vehicle data so SPA-page customers keep their vehicles
   const existingDetails = {};
@@ -316,28 +379,24 @@ async function cpGetCustomerDetails(dealerId, customers, location) {
         cust.scheduled_amount = details.scheduledAmount || '';
         cust.payment_frequency = details.paymentFrequency || '';
         cust.current_amount_due = details.currentAmountDue;
-        // DEBUG: dump HTML structure for first success + first failure
-        if (!details.vehicle && !debugFailDumped) {
-          debugFailDumped = true;
-          console.log('  [DEBUG-FAIL] ' + cust.name + ' (acct ' + cust.account + ') HTML length=' + html.length);
-          console.log('  [DEBUG-FAIL] First 800 chars: ' + html.slice(0, 800).replace(/\n/g, '\\n'));
-          console.log('  [DEBUG-FAIL] Title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
-          console.log('  [DEBUG-FAIL] Has tel: ' + (html.includes('href="tel:')) + ', has mailto: ' + html.includes('mailto:'));
-          console.log('  [DEBUG-FAIL] window vars: ' + (html.match(/window\.\w+\s*=/g) || []).join(', '));
-          console.log('  [DEBUG-FAIL] Body text (200): ' + html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 200));
+        // If HTML parsing failed but page has userToken, try the CarPay API
+        if (!details.vehicle && html.includes('window.userToken')) {
+          try {
+            const apiVehicle = await fetchVehicleFromApi(html, cust.carpay_id);
+            if (apiVehicle) {
+              cust.vehicle = apiVehicle;
+              console.log('  ✅ API found vehicle for ' + cust.name + ': ' + apiVehicle);
+            }
+          } catch (e) {
+            console.log('  API fetch error for ' + cust.name + ': ' + e.message);
+          }
         }
-        if (details.vehicle && !debugSuccessDumped) {
-          debugSuccessDumped = true;
-          console.log('  [DEBUG-OK] ' + cust.name + ' vehicle=' + details.vehicle + ' HTML length=' + html.length);
-          console.log('  [DEBUG-OK] First 800 chars: ' + html.slice(0, 800).replace(/\n/g, '\\n'));
-          console.log('  [DEBUG-OK] Title: ' + (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
-        }
-        // If HTML parsing failed, use previously saved vehicle data (from bookmarklet)
-        if (!details.vehicle && existingDetails[cust.account]) {
+        // Still no vehicle? Try preserved Supabase data
+        if (!cust.vehicle && !details.vehicle && existingDetails[cust.account]) {
           cust.vehicle = existingDetails[cust.account];
           console.log('  ℹ Kept saved vehicle for ' + cust.name + ': ' + cust.vehicle);
-        } else if (!details.vehicle) {
-          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — SPA page, no saved data');
+        } else if (!cust.vehicle && !details.vehicle) {
+          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — SPA page, API failed, no saved data');
         }
       } catch (e) { /* skip individual failures */ }
     }));
