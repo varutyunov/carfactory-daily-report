@@ -10937,7 +10937,7 @@ function _txInit() {
             I<span style="border-bottom:1px solid #000;padding:0 40px;" id="vr-void-customer"></span> relinquish all rights to the &ldquo;vehicle&rdquo;, and am voluntarily surrendering it back to the &ldquo;dealer&rdquo;. All paperwork received from the &ldquo;dealer&rdquo; that is associated with the &ldquo;vehicle&rdquo; is now void. Further, I give permission to the &ldquo;dealer&rdquo; to void any ownership of the &ldquo;vehicle&rdquo; with the Florida Department of Motor Vehicles.
           </div>
           <div style="margin-top:60px;display:flex;justify-content:space-between;align-items:flex-end;">
-            <div><div style="border-bottom:1px solid #000;width:200px;height:20px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Sign</div></div>
+            <div><div id="esign-void-cust-sig" style="border-bottom:1px solid #000;width:200px;min-height:40px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Sign</div></div>
             <div><div style="border-bottom:1px solid #000;width:120px;height:20px;"></div><div style="font-size:13px;font-weight:600;margin-top:4px;">Date</div></div>
           </div>
           <div style="margin-top:30px;">
@@ -10976,14 +10976,14 @@ function _txInit() {
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
             <div style="width:45%;">Witness <span style="border-bottom:1px solid #000;display:inline-block;width:180px;"></span></div>
-            <div style="width:45%;"><span style="border-bottom:1px solid #000;display:inline-block;width:200px;"></span><br>Customer</div>
+            <div style="width:45%;"><span id="esign-rel-cust-sig" style="border-bottom:1px solid #000;display:inline-block;width:200px;min-height:40px;vertical-align:bottom;"></span><br>Customer</div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
             <div style="width:45%;">Witness <span style="border-bottom:1px solid #000;display:inline-block;width:180px;"></span></div>
             <div style="width:45%;"><span style="border-bottom:1px solid #000;display:inline-block;width:200px;"></span><br>Co-Customer</div>
           </div>
           <div style="text-align:center;margin-top:16px;">
-            <span style="border-bottom:1px solid #000;display:inline-block;width:240px;"></span><br>Secured Party Representative
+            <span id="esign-rel-dealer-sig" style="border-bottom:1px solid #000;display:inline-block;width:240px;min-height:40px;vertical-align:bottom;"></span><br>Secured Party Representative
           </div>
         </div>
       </div>
@@ -12995,14 +12995,14 @@ function _buildEsignSection(record,tableName){
     html+='</div>';
     if(custSigUrl){
       html+='<div style="background:#000;border-radius:10px;padding:8px;margin-bottom:12px;">';
-      html+='<img src="'+custSigUrl+'" style="width:100%;max-height:80px;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+      html+='<img src="'+custSigUrl+'" style="width:100%;max-height:80px;object-fit:contain;filter:invert(1);" onerror="this.style.display=\'none\'" />';
       html+='<div style="font-size:11px;color:#555;text-align:center;margin-top:4px;">Customer Signature</div>';
       html+='</div>';
     }
     html+='<div style="border-top:1px solid #1a3a2a;padding-top:12px;margin-top:8px;">';
     html+='<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Your Counter-Signature Required</div>';
     html+='<div style="font-size:12px;color:#888;margin-bottom:10px;">'+(tableName==='void_releases'?'Sign as representative to complete this form.':'Sign as seller/dealer to complete this form.')+'</div>';
-    html+='<div style="background:#000;border-radius:10px;border:1px solid #333;height:140px;position:relative;">';
+    html+='<div style="background:#f8f8f8;border-radius:10px;border:2px solid #555;height:140px;position:relative;">';
     html+='<canvas id="counter-sign-canvas" style="display:block;width:100%;height:140px;touch-action:none;"></canvas>';
     html+='</div>';
     html+='<div style="display:flex;gap:8px;margin-top:8px;">';
@@ -13018,12 +13018,12 @@ function _buildEsignSection(record,tableName){
     html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     if(custSigUrl){
       html+='<div style="background:#000;border-radius:10px;padding:8px;">';
-      html+='<img src="'+custSigUrl+'" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
+      html+='<img src="'+custSigUrl+'" style="width:100%;max-height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       html+='<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Customer</div></div>';
     }
     if(sellerSigUrl){
       html+='<div style="background:#000;border-radius:10px;padding:8px;">';
-      html+='<img src="'+sellerSigUrl+'" style="width:100%;max-height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
+      html+='<img src="'+sellerSigUrl+'" style="width:100%;max-height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:12px;text-align:center;color:#4ade80;font-size:12px;>✓ Signed</div>\'" />';
       html+='<div style="font-size:10px;color:#555;text-align:center;margin-top:4px;">Dealer/Rep</div></div>';
     }
     html+='</div>';
@@ -13043,7 +13043,7 @@ function _initCounterSignPad(){
     var w=rect.width||300,h=rect.height||140;
     canvas.width=w*2;canvas.height=h*2;
     var ctx=canvas.getContext('2d');ctx.scale(2,2);
-    _counterSignPad=new SignaturePad(canvas,{backgroundColor:'rgba(0,0,0,0)',penColor:'#fff',minWidth:1.5,maxWidth:3});
+    _counterSignPad=new SignaturePad(canvas,{backgroundColor:'rgba(255,255,255,0)',penColor:'#000',minWidth:1.5,maxWidth:3});
   },100);
 }
 
@@ -13113,7 +13113,7 @@ function _showCompletedReview(record,tableName){
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">';
   if(reviewCustSig){
     html+='<div style="background:#111;border-radius:14px;padding:12px;">';
-    html+='<img src="'+reviewCustSig+'" style="width:100%;height:60px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;text-align:center;color:#555;>Signed</div>\'" />';
+    html+='<img src="'+reviewCustSig+'" style="width:100%;height:60px;object-fit:contain;filter:invert(1);" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;text-align:center;color:#555;>Signed</div>\'" />';
     html+='<div style="font-size:11px;color:#4ade80;text-align:center;margin-top:6px;font-weight:600;">Customer ✓</div></div>';
   }
   if(record.seller_signature_url){
@@ -13164,14 +13164,14 @@ async function _viewSignedForm(formType,recordId){
     html+='<div style="display:flex;gap:16px;">';
     if(custSigUrl){
       html+='<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
-      html+='<img src="'+custSigUrl+'" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
+      html+='<img src="'+custSigUrl+'" style="width:100%;height:50px;object-fit:contain;" />';
       html+='<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Customer Signature</div>';
       if(req.signed_at)html+='<div style="font-size:9px;color:#999;">'+new Date(req.signed_at).toLocaleString()+'</div>';
       html+='</div>';
     }
     if(sellerSigUrl){
       html+='<div style="flex:1;border:1px solid #ccc;border-radius:8px;padding:8px;text-align:center;">';
-      html+='<img src="'+sellerSigUrl+'" style="width:100%;height:50px;object-fit:contain;filter:invert(1);" />';
+      html+='<img src="'+sellerSigUrl+'" style="width:100%;height:50px;object-fit:contain;" />';
       html+='<div style="font-size:10px;color:#666;margin-top:4px;border-top:1px solid #000;padding-top:4px;">Dealer/Representative</div>';
       html+='</div>';
     }
@@ -13188,6 +13188,18 @@ async function _viewSignedForm(formType,recordId){
     }
     html+='</div></div>';
     overlay.innerHTML=html;overlay.style.display='flex';
+    // Inject signatures into designated form spots
+    (function(){
+      var _inj=function(el,url,lbl){
+        if(!el||!url)return;
+        el.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:38px;object-fit:contain;display:block;"/>'+
+          '<span style="font-size:9px;color:#666;">'+lbl+'</span>';
+        el.style.borderBottom='none';
+      };
+      _inj(overlay.querySelector('#esign-void-cust-sig'),custSigUrl,'Customer Signature');
+      _inj(overlay.querySelector('#esign-rel-cust-sig'),custSigUrl,'Customer Signature');
+      _inj(overlay.querySelector('#esign-rel-dealer-sig'),sellerSigUrl,'Dealer/Rep Signature');
+    })();
   }catch(e){alert('Error loading form: '+(e.message||e));}
 }
 
