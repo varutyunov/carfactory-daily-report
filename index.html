@@ -15178,7 +15178,7 @@ async function aiParsePaymentText(text){ return {name:'',date:'',car:'',amount:'
 // Legacy regex parser kept for compatibility
 function parsePaymentText(text){ return {name:'',date:'',car:'',amount:''}; }
 
-// Vehicle search for payment form
+// Vehicle search for payment form — inventory + past deals (both lots)
 async function payVehicleSearch(){
   var o=document.getElementById('pay-vehicle-search-overlay');
   if(!o){o=document.createElement('div');o.id='pay-vehicle-search-overlay';document.body.appendChild(o);}
@@ -15190,14 +15190,18 @@ async function payVehicleSearch(){
     '<div style="width:36px;"></div>'+
     '</div>'+
     '<div style="padding:12px 16px 80px;">'+
-    '<input id="pay-veh-search-input" oninput="payVehicleFilter()" placeholder="Search by name, stock#, VIN..." style="width:100%;padding:12px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;outline:none;">'+
+    '<input id="pay-veh-search-input" oninput="payVehicleFilter()" placeholder="Search by name, stock#, VIN, customer..." style="width:100%;padding:12px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;color:#fff;font-size:16px;box-sizing:border-box;margin-bottom:12px;outline:none;">'+
     '<div id="pay-veh-search-list" style="display:flex;flex-direction:column;gap:8px;"></div>'+
     '</div>';
-  document.getElementById('pay-veh-search-list').innerHTML='<div style="text-align:center;color:#555;padding:20px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading inventory...</div>';
+  document.getElementById('pay-veh-search-list').innerHTML='<div style="text-align:center;color:#555;padding:20px;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
-    var inv=await sbGet('inventory','select=id,name,stock,vin,color,miles,location&order=name.asc&limit=1000');
-    window._payVehList=Array.isArray(inv)?inv:[];
-  }catch(e){window._payVehList=S.inventory||[];}
+    var res=await Promise.all([
+      sbGet('inventory','select=id,name,stock,vin,color,miles,location&order=name.asc&limit=1000'),
+      sbGet('deals','select=id,vehicle_desc,customer_name,vin,stock,location,created_at&order=created_at.desc&limit=500')
+    ]);
+    window._payVehList=Array.isArray(res[0])?res[0]:[];
+    window._payDealList=Array.isArray(res[1])?res[1]:[];
+  }catch(e){window._payVehList=S.inventory||[];window._payDealList=[];}
   payVehicleFilter();
   setTimeout(function(){var inp=document.getElementById('pay-veh-search-input');if(inp)inp.focus();},200);
 }
@@ -15209,47 +15213,87 @@ function payVehicleFilter(){
   var q=(document.getElementById('pay-veh-search-input').value||'').toLowerCase();
   var list=document.getElementById('pay-veh-search-list');
   var cars=(window._payVehList||[]);
-  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
-  if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
+  var deals=(window._payDealList||[]);
+  if(q){
+    cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
+    deals=deals.filter(function(d){return (d.vehicle_desc||'').toLowerCase().indexOf(q)!==-1||(d.customer_name||'').toLowerCase().indexOf(q)!==-1||(d.stock||'').toLowerCase().indexOf(q)!==-1||(d.vin||'').toLowerCase().indexOf(q)!==-1;});
+  }
   var html='';
-  cars.forEach(function(car){
-    html+='<div onclick="payVehicleSelect('+car.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-    html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+'</div>';
-    var meta=[];
-    if(car.stock) meta.push('#'+car.stock);
-    if(car.color) meta.push(car.color);
-    if(car.vin) meta.push(car.vin);
-    if(car.miles) meta.push(car.miles.toLocaleString()+' mi');
-    if(car.location) meta.push(car.location);
-    html+='<div style="font-size:11px;color:#555;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
-    html+='</div>';
-  });
+  // Inventory section
+  if(cars.length){
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#4ade80;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 6px;">Inventory ('+cars.length+')</div>';
+    cars.forEach(function(car){
+      html+='<div onclick="payVehicleSelect('+car.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+      html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+'</div>';
+      var meta=[];
+      if(car.stock) meta.push('#'+car.stock);
+      if(car.color) meta.push(car.color);
+      if(car.vin) meta.push(car.vin);
+      if(car.miles) meta.push(car.miles.toLocaleString()+' mi');
+      if(car.location) meta.push(car.location);
+      html+='<div style="font-size:11px;color:#555;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
+      html+='</div>';
+    });
+  }
+  // Past Deals section
+  if(deals.length){
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#f59e0b;letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 6px;">Past Deals ('+deals.length+')</div>';
+    deals.slice(0,50).forEach(function(d){
+      html+='<div onclick="payDealSelect('+d.id+')" style="background:#111;border:1px solid #2a2000;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+      html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+(d.vehicle_desc||'Unknown vehicle')+'</div>';
+      var meta=[];
+      if(d.customer_name) meta.push(d.customer_name);
+      if(d.stock) meta.push('#'+d.stock);
+      if(d.location) meta.push(d.location);
+      if(d.created_at) meta.push(d.created_at.slice(0,10));
+      html+='<div style="font-size:11px;color:#8b7000;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
+      html+='</div>';
+    });
+  }
+  if(!cars.length&&!deals.length){
+    html='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No vehicles or deals found.</div>';
+  }
   list.innerHTML=html;
 }
-function payVehicleSelect(carId){
-  var car=(window._payVehList||[]).find(function(c){return c.id===carId;});
-  if(!car) return;
-  // Parse name like "24 Camry SE" or "2019 Honda Civic" to extract year/make/model
-  var nm=(car.name||'').trim();
-  var parts=nm.split(/\s+/);
+function _payParseVehicleName(nm){
+  var parts=(nm||'').trim().split(/\s+/);
   var yr='',make='',model='';
   if(parts.length>=1){
     yr=parts[0];
-    // Convert 2-digit year to 4-digit
     if(yr.length===2) yr=(parseInt(yr)>50?'19':'20')+yr;
   }
   if(parts.length>=2) make=parts[1];
   if(parts.length>=3) model=parts.slice(2).join(' ');
+  return {yr:yr,make:make,model:model};
+}
+function payVehicleSelect(carId){
+  var car=(window._payVehList||[]).find(function(c){return c.id===carId;});
+  if(!car) return;
+  var p=_payParseVehicleName(car.name);
   var yEl=document.getElementById('pay-scan-year');
   var mkEl=document.getElementById('pay-scan-make');
   var mdEl=document.getElementById('pay-scan-model');
   var clEl=document.getElementById('pay-scan-color');
   var vnEl=document.getElementById('pay-scan-vin');
-  if(yEl) yEl.value=yr;
-  if(mkEl) mkEl.value=make;
-  if(mdEl) mdEl.value=model;
+  if(yEl) yEl.value=p.yr;
+  if(mkEl) mkEl.value=p.make;
+  if(mdEl) mdEl.value=p.model;
   if(clEl && car.color) clEl.value=car.color;
   if(vnEl && car.vin) vnEl.value=car.vin;
+  payVehicleSearchClose();
+}
+function payDealSelect(dealId){
+  var d=(window._payDealList||[]).find(function(x){return x.id===dealId;});
+  if(!d) return;
+  var p=_payParseVehicleName(d.vehicle_desc);
+  var yEl=document.getElementById('pay-scan-year');
+  var mkEl=document.getElementById('pay-scan-make');
+  var mdEl=document.getElementById('pay-scan-model');
+  var vnEl=document.getElementById('pay-scan-vin');
+  if(yEl) yEl.value=p.yr;
+  if(mkEl) mkEl.value=p.make;
+  if(mdEl) mdEl.value=p.model;
+  if(vnEl && d.vin) vnEl.value=d.vin;
   payVehicleSearchClose();
 }
 
