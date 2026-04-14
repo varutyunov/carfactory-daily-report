@@ -15294,6 +15294,14 @@ function payDealSelect(dealId){
   if(mkEl) mkEl.value=p.make;
   if(mdEl) mdEl.value=p.model;
   if(vnEl && d.vin) vnEl.value=d.vin;
+  // Fill customer name from deal
+  if(d.customer_name){
+    var nm=(d.customer_name||'').trim().split(/\s+/);
+    var fnEl=document.getElementById('pay-scan-fname');
+    var lnEl=document.getElementById('pay-scan-lname');
+    if(fnEl) fnEl.value=nm[0]||'';
+    if(lnEl) lnEl.value=nm.length>1?nm.slice(1).join(' '):'';
+  }
   payVehicleSearchClose();
 }
 
