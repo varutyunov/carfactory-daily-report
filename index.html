@@ -1092,7 +1092,11 @@ body.light .cal-fab{background:#4488ff !important;}
       <!-- Customer Name -->
       <div style="margin-bottom:14px;">
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Customer Name</label>
-        <input id="deal-customer" placeholder="Full name" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+          <input id="deal-customer-fname" placeholder="First" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+          <input id="deal-customer-lname" placeholder="Last" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        </div>
+        <input id="deal-customer-mname" placeholder="Middle name (optional)" style="width:100%;box-sizing:border-box;margin-top:8px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
       </div>
 
       <!-- Payments Section -->
@@ -1276,7 +1280,11 @@ body.light .cal-fab{background:#4488ff !important;}
 
         <div style="margin-bottom:12px;">
           <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Customer Name <span style="color:#ff453a;">*</span></label>
-          <input id="pay-scan-name" placeholder="Customer name" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+            <input id="pay-scan-fname" placeholder="First" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+            <input id="pay-scan-lname" placeholder="Last" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+          </div>
+          <input id="pay-scan-mname" placeholder="Middle name (optional)" style="width:100%;box-sizing:border-box;margin-top:8px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
         </div>
 
         <div style="display:flex;gap:10px;margin-bottom:12px;">
@@ -10479,7 +10487,7 @@ function _txInit() {
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:16px;text-transform:uppercase;">Step 3 of 4 — Review & Complete</div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">First Name</div>
           <input id="dep-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="First"/>
@@ -10488,6 +10496,10 @@ function _txInit() {
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Last Name</div>
           <input id="dep-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;" placeholder="Last"/>
         </div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Middle Name</div>
+        <input id="dep-mname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Middle (optional)"/>
       </div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">VEHICLE</div>
@@ -10684,7 +10696,7 @@ function _txInit() {
       <div style="font-size:14px;color:#666;margin-bottom:20px;">Enter customer and vehicle information</div>
 
       <div style="font-size:11px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">CUSTOMER</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
         <div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">First Name</div>
           <input id="inv-fname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="First"/>
@@ -10693,6 +10705,10 @@ function _txInit() {
           <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Last Name</div>
           <input id="inv-lname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Last"/>
         </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Middle Name</div>
+        <input id="inv-mname" style="width:100%;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;" placeholder="Middle (optional)"/>
       </div>
       <div style="margin-bottom:20px;">
         <div style="font-size:11px;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Phone</div>
@@ -11554,7 +11570,7 @@ function openDepositForm() {
   if(choose) choose.style.display = 'flex';
   if(previewWrap) previewWrap.style.display = 'none';
   // Clear all form inputs
-  ['dep-fname','dep-lname','dep-year','dep-make','dep-model','dep-stock','dep-vin','dep-color','dep-amount','dep-balance','dep-date','dep-withdraw'].forEach(function(id) {
+  ['dep-fname','dep-mname','dep-lname','dep-year','dep-make','dep-model','dep-stock','dep-vin','dep-color','dep-amount','dep-balance','dep-date','dep-withdraw'].forEach(function(id) {
     var el = document.getElementById(id); if(el) { el.value = ''; el.defaultValue = ''; }
   });
   // Reset vehicle search
@@ -11915,6 +11931,7 @@ function depUpdateWeekToggle() {
 function depositGoPreview() {
   var get = function(id){ var el=document.getElementById(id); var v=el?el.value.trim():''; return['dep-amount','dep-balance'].indexOf(id)!==-1?v.replace(/[^0-9.]/g,''):v; };
   var fname = get('dep-fname');
+  var mname = get('dep-mname');
   var lname = get('dep-lname');
   var year  = get('dep-year');
   var make  = get('dep-make');
@@ -11939,7 +11956,7 @@ function depositGoPreview() {
 
   function setText(id, val) { var el=document.getElementById(id); if(el) el.textContent = val||''; }
 
-  var fullName = [fname, lname].filter(Boolean).join(' ');
+  var fullName = [fname, mname, lname].filter(Boolean).join(' ');
   var vehicleStr = [year, make, model, color].filter(Boolean).join(' ');
   var vinLine = vehicleStr + (vin ? '\nVIN: ' + vin : '') + (stock ? '  |  Stock #' + stock : '');
   var amountFmt = amount ? '$'+parseFloat(amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
@@ -12302,7 +12319,7 @@ function openInvoiceForm(){
   document.getElementById('inv-overlay').classList.add('print-active');
   var tb=document.querySelector('.tb');if(tb)tb.style.display='none';
   invShowStep(1);
-  ['inv-fname','inv-lname','inv-phone','inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){
+  ['inv-fname','inv-mname','inv-lname','inv-phone','inv-year','inv-make','inv-model','inv-vin','inv-mileage'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   var notes=document.getElementById('inv-notes');if(notes)notes.value='';
@@ -12380,8 +12397,10 @@ function invSelectVehicle(idx,q){
   var selMil=document.getElementById('inv-sel-mileage');if(selMil)selMil.value=v.mileage||'';
   // Auto-fill customer from deal if customer fields are empty
   if(v.customer&&!document.getElementById('inv-fname').value){
-    var cParts=v.customer.split(' ');
-    set('inv-fname',cParts[0]||'');set('inv-lname',cParts.slice(1).join(' ')||'');
+    var cParts=v.customer.split(/\s+/);
+    set('inv-fname',cParts[0]||'');
+    set('inv-lname',cParts.length>1?cParts[cParts.length-1]:'');
+    set('inv-mname',cParts.length>2?cParts.slice(1,-1).join(' '):'');
   }
   // Show selected card, hide search
   var selEl=document.getElementById('inv-car-selected');
@@ -12438,7 +12457,7 @@ function invGoStep2(){
   if(!g('inv-year')||!g('inv-make')||!g('inv-model')){alert('Please enter vehicle info.');return;}
   if(!g('inv-vin')){alert('Please enter VIN.');return;}
   if(!g('inv-mileage')){alert('Please enter mileage.');return;}
-  _invData.fname=g('inv-fname');_invData.lname=g('inv-lname');_invData.phone=g('inv-phone');
+  _invData.fname=g('inv-fname');_invData.mname=g('inv-mname');_invData.lname=g('inv-lname');_invData.phone=g('inv-phone');
   _invData.year=g('inv-year');_invData.make=g('inv-make');_invData.model=g('inv-model');
   _invData.vin=g('inv-vin');_invData.mileage=g('inv-mileage');
   if(!_invLines.length) invAddLine();
@@ -12487,7 +12506,7 @@ function invGoPreview(){
   var validLines=_invLines.filter(function(l){return l.desc&&l.amount;});
   if(!validLines.length){alert('Please add at least one line item with description and amount.');return;}
   var sum=0;validLines.forEach(function(l){sum+=parseFloat(l.amount)||0;});
-  var fullName=[_invData.fname,_invData.lname].filter(Boolean).join(' ');
+  var fullName=[_invData.fname,_invData.mname,_invData.lname].filter(Boolean).join(' ');
   var vehicle=[_invData.year,_invData.make,_invData.model].filter(Boolean).join(' ');
   var invNum='INV-'+Date.now().toString(36).toUpperCase();
   var now=new Date();
@@ -12943,14 +12962,16 @@ async function esignCreateRequest(formType){
       var depEl=document.getElementById('dep-print-form');
       formHtml=depEl?depEl.outerHTML:'';
       var fn=(document.getElementById('dep-fname')||{}).value||'';
+      var mn=(document.getElementById('dep-mname')||{}).value||'';
       var ln=(document.getElementById('dep-lname')||{}).value||'';
-      customerName=(fn+' '+ln).trim();
+      customerName=[fn,mn,ln].filter(Boolean).join(' ');
     } else if(formType==='invoice'){
       var invEl=document.getElementById('inv-print-form');
       formHtml=invEl?invEl.outerHTML:'';
       var cfn=(document.getElementById('inv-fname')||{}).value||'';
+      var cmn=(document.getElementById('inv-mname')||{}).value||'';
       var cln=(document.getElementById('inv-lname')||{}).value||'';
-      customerName=(cfn+' '+cln).trim();
+      customerName=[cfn,cmn,cln].filter(Boolean).join(' ');
     }
 
     var record={token:token,form_type:formType,form_record_id:formRecordId,form_html:formHtml,customer_name:customerName||'Customer',status:'pending',created_by:me?me.name:'unknown',location:(me&&me.location)?me.location:'DeBary'};
@@ -13721,7 +13742,7 @@ function openPayScanForm(){
   document.getElementById('pay-scan-fields').style.display='block';
   document.getElementById('pay-scan-capture').style.display='block';
   document.getElementById('pay-skip-photo-btn').style.display='block';
-  ['pay-scan-name','pay-scan-amount','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color'].forEach(function(id){
+  ['pay-scan-fname','pay-scan-mname','pay-scan-lname','pay-scan-amount','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   document.getElementById('pay-scan-date').value=new Date().toISOString().split('T')[0];
@@ -13751,7 +13772,10 @@ function payEditPayment(id){
   document.getElementById('pay-scan-capture').style.display='none';
   document.getElementById('pay-skip-photo-btn').style.display='none';
   // Fill form with existing data
-  document.getElementById('pay-scan-name').value=p.customer_name||'';
+  var _psnParts=(p.customer_name||'').split(/\s+/);
+  document.getElementById('pay-scan-fname').value=_psnParts[0]||'';
+  document.getElementById('pay-scan-lname').value=_psnParts.length>1?_psnParts[_psnParts.length-1]:'';
+  document.getElementById('pay-scan-mname').value=_psnParts.length>2?_psnParts.slice(1,-1).join(' '):'';
   document.getElementById('pay-scan-date').value=p.payment_date||'';
   document.getElementById('pay-scan-time').value=p.payment_time||'';
   document.getElementById('pay-scan-amount').value=p.amount||'';
@@ -15105,7 +15129,10 @@ async function runPayScanOCR(imgSrc){
     prog.style.display='none';
     document.getElementById('pay-scan-raw').textContent = rawText || aiText;
 
-    document.getElementById('pay-scan-name').value=parsed.name||'';
+    var _ocrParts=(parsed.name||'').split(/\s+/);
+    document.getElementById('pay-scan-fname').value=_ocrParts[0]||'';
+    document.getElementById('pay-scan-lname').value=_ocrParts.length>1?_ocrParts[_ocrParts.length-1]:'';
+    document.getElementById('pay-scan-mname').value=_ocrParts.length>2?_ocrParts.slice(1,-1).join(' '):'';
     document.getElementById('pay-scan-date').value=parsed.date||'';
     document.getElementById('pay-scan-time').value=parsed.time||'';
     document.getElementById('pay-scan-year').value=parsed.vehicle_year||'';
@@ -15141,7 +15168,7 @@ async function payScanSave(){
   var saveBtn = document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   // Validate all required fields
-  var name=document.getElementById('pay-scan-name').value.trim();
+  var name=[document.getElementById('pay-scan-fname').value.trim(),document.getElementById('pay-scan-mname').value.trim(),document.getElementById('pay-scan-lname').value.trim()].filter(Boolean).join(' ');
   var date=document.getElementById('pay-scan-date').value;
   var time=document.getElementById('pay-scan-time').value;
   var amount=document.getElementById('pay-scan-amount').value.trim().replace(/[^0-9.$]/g,'');
@@ -15284,7 +15311,7 @@ function openDealForm(forceLoc) {
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
   dealShowStep(1);
   // Clear all inputs
-  ['deal-inv-search','deal-customer','deal-gps'].forEach(function(id) {
+  ['deal-inv-search','deal-customer-fname','deal-customer-mname','deal-customer-lname','deal-gps'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
   document.getElementById('deal-car-summary').textContent = '';
@@ -15381,7 +15408,9 @@ function dealSelectCar(carId) {
   document.getElementById('deal-inv-search').value = '';
   _dealData.filter = '';
   // Reset form
-  document.getElementById('deal-customer').value = '';
+  document.getElementById('deal-customer-fname').value = '';
+  document.getElementById('deal-customer-mname').value = '';
+  document.getElementById('deal-customer-lname').value = '';
   document.getElementById('deal-gps').value = '';
   document.getElementById('deal-pickup-payment').value = '';
   document.getElementById('deal-pickup-due').value = '';
@@ -15493,8 +15522,11 @@ function dealUpdateTotal() {
 }
 
 function dealGoStep3() {
-  var customer = document.getElementById('deal-customer').value.trim();
-  if(!customer) { alert('Please enter the customer name.'); return; }
+  var cFname = document.getElementById('deal-customer-fname').value.trim();
+  var cMname = document.getElementById('deal-customer-mname').value.trim();
+  var cLname = document.getElementById('deal-customer-lname').value.trim();
+  if(!cFname||!cLname) { alert('Please enter the customer first and last name.'); return; }
+  var customer = [cFname, cMname, cLname].filter(Boolean).join(' ');
   var hasPayment = _dealPayments.some(function(p){ return parseFloat(p.amount) > 0; });
   if(!hasPayment) { alert('Please enter at least one payment.'); return; }
   if(_dealData.type === 'finance') {
@@ -17385,10 +17417,18 @@ function openDealDetail(id) {
     html += '<div style="margin-top:24px;border-top:1px solid #1a1a1a;padding-top:20px;">';
     html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#60a5fa;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">Edit Deal</div>';
 
-    // Customer name
+    // Customer name — split into first / middle / last
+    var _deParts=(d.customer_name||'').split(/\s+/);
+    var _deFname=_deParts[0]||'';
+    var _deLname=_deParts.length>1?_deParts[_deParts.length-1]:'';
+    var _deMname=_deParts.length>2?_deParts.slice(1,-1).join(' '):'';
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Customer Name</div>';
-    html += '<input id="de-customer-'+d.id+'" value="'+(d.customer_name||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
+    html += '<input id="de-customer-fname-'+d.id+'" value="'+_deFname.replace(/"/g,'&quot;')+'" placeholder="First" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '<input id="de-customer-lname-'+d.id+'" value="'+_deLname.replace(/"/g,'&quot;')+'" placeholder="Last" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '</div>';
+    html += '<input id="de-customer-mname-'+d.id+'" value="'+_deMname.replace(/"/g,'&quot;')+'" placeholder="Middle (optional)" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-top:6px;"/>';
     html += '</div>';
 
     // Deal type
@@ -17670,9 +17710,12 @@ async function dealEditSave(id){
   if(btn){btn.textContent='Saving...';btn.disabled=true;btn.style.opacity='.5';}
   try{
     var patch={};
-    // Customer
-    var custEl=document.getElementById('de-customer-'+id);
-    if(custEl&&custEl.value.trim()!==d.customer_name) patch.customer_name=custEl.value.trim();
+    // Customer — combine first/middle/last
+    var deFn=(document.getElementById('de-customer-fname-'+id)||{}).value||'';
+    var deMn=(document.getElementById('de-customer-mname-'+id)||{}).value||'';
+    var deLn=(document.getElementById('de-customer-lname-'+id)||{}).value||'';
+    var deCust=[deFn.trim(),deMn.trim(),deLn.trim()].filter(Boolean).join(' ');
+    if(deCust&&deCust!==d.customer_name) patch.customer_name=deCust;
     // Deal type
     var typeEl=document.getElementById('de-type-'+id);
     if(typeEl&&typeEl.value!==d.deal_type) patch.deal_type=typeEl.value;
