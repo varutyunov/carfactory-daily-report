@@ -18032,6 +18032,20 @@ async function dealMoveWeek(id, dir) {
   }
 }
 
+// ── SHEETS SYNC HELPER ──────────────────────────────────────────────────────
+// Push app edits to Google Sheet via Netlify function → Apps Script web app
+function sheetsPush(tab, rowIndex, data){
+  try{
+    fetch('/.netlify/functions/sheets-push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({secret:window._sheetsSyncSecret||'',tab:tab,action:'update',row_index:rowIndex,data:data})
+    }).catch(function(){});
+  }catch(e){}
+}
+// Secret is set by owner in settings; stored in localStorage
+window._sheetsSyncSecret=localStorage.getItem('cf_sheets_secret')||'';
+
 // ── INVENTORY SHEETS ────────────────────────────────────────────────────────
 var _isData=[];       // inventory_costs rows
 var _isInv=[];        // inventory cars
@@ -18355,6 +18369,8 @@ async function d26ExpSave(){
     await sbPatch('deals26',d.id,{expense_notes:noteStr,expenses:total});
     d.expense_notes=noteStr;
     d.expenses=total;
+    var so=d.sort_order||(_d26ExpIdx+1);
+    sheetsPush('Deals26',so,{expenses:total,expense_notes:noteStr});
     var pop=document.getElementById('d26-exp-popup');
     if(pop)pop.remove();
     d26Render();
@@ -18451,6 +18467,8 @@ async function d26PmtSave(){
     await sbPatch('deals26',d.id,{payment_notes:noteStr,payments:total});
     d.payment_notes=noteStr;
     d.payments=total;
+    var so=d.sort_order||(_d26PmtIdx+1);
+    sheetsPush('Deals26',so,{payments:total});
     var pop=document.getElementById('d26-pmt-popup');
     if(pop)pop.remove();
     d26Render();
@@ -18625,10 +18643,13 @@ async function d26Save(){
       var id=_d26Data[_d26EditIdx].id;
       await sbPatch('deals26',id,obj);
       Object.assign(_d26Data[_d26EditIdx],obj);
+      // Push to Google Sheet — row_index is sort_order
+      var so=_d26Data[_d26EditIdx].sort_order||(_d26EditIdx+1);
+      sheetsPush('Deals26',so,obj);
     }else{
       obj.sort_order=_d26Data.length+1;
       var res=await sbPost('deals26',obj);
-      if(res&&res[0])_d26Data.push(res[0]);
+      if(res&&res[0]){_d26Data.push(res[0]);sheetsPush('Deals26',obj.sort_order,obj);}
     }
     d26EditClose();
     d26Render();
@@ -18774,6 +18795,9 @@ async function isEditSave(){
   try{
     await sbPatch('inventory_costs',c.id,body);
     Object.assign(c,body);
+    // Push to Google Sheet — row_index is sort_order or position in array
+    var isIdx=_isData.indexOf(c);
+    if(isIdx>=0) sheetsPush('Inventory',isIdx+1,body);
     isEditClose();
     invSheetsRender();
   }catch(e){alert('Error: '+(e.message||e));}
