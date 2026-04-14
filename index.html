@@ -15677,14 +15677,39 @@ async function dealSubmit() {
       var carMake = nameParts[1]||'';
       var carModel = nameParts.slice(2).join(' ')||'';
       var postLoc = _dealPostLoc || _dealData.dealLocation || (me ? me.location : 'DeBary');
-      // Check for prior deposit cash on this customer to subtract from deal cash
+      // Check for prior deposit cash to subtract from deal cash
+      // Match by VIN first, then by vehicle desc, then by customer last name
       var depCashAlready=0;
       try{
-        var custKey=(_dealData.customer||'').toLowerCase();
-        var depPays=await sbGet('payments','raw_ocr_text=like.Deposit*&customer_name=ilike.'+encodeURIComponent(_dealData.customer)+'&order=created_at.desc&limit=50');
+        var depPays=await sbGet('payments','raw_ocr_text=like.Deposit*&order=created_at.desc&limit=200');
         if(Array.isArray(depPays)){
+          var dealVin=(car.vin||'').toLowerCase().trim();
+          var dealVeh=(car.name||'').toLowerCase();
+          var dealCustParts=(_dealData.customer||'').toLowerCase().split(/\s+/);
+          var dealLast=dealCustParts[dealCustParts.length-1]||'';
+          var dealFirst=dealCustParts[0]||'';
           depPays.forEach(function(dp){
-            if((dp.payment_method||'').toLowerCase()==='cash'){
+            var matched=false;
+            var dpVin=(dp.vehicle_vin||'').toLowerCase().trim();
+            // 1. VIN match
+            if(dealVin&&dpVin&&dealVin===dpVin) matched=true;
+            // 2. Vehicle desc match — raw_ocr_text contains "Deposit — {vehicle}"
+            if(!matched&&dp.raw_ocr_text){
+              var dpVeh=(dp.raw_ocr_text.replace(/^Deposit\s*[—–-]\s*/i,'')||'').toLowerCase();
+              if(dpVeh&&dealVeh&&dealVeh.indexOf(dpVeh)!==-1) matched=true;
+              if(!matched&&dpVeh.length>5){
+                var dealWords=dealVeh.split(/\s+/).filter(function(w){return w.length>2;});
+                if(dealWords.length>=2&&dealWords.every(function(w){return dpVeh.indexOf(w)!==-1;})) matched=true;
+              }
+            }
+            // 3. Customer last+first name match
+            if(!matched){
+              var dpCustParts=(dp.customer_name||'').toLowerCase().split(/\s+/);
+              var dpLast=dpCustParts[dpCustParts.length-1]||'';
+              var dpFirst=dpCustParts[0]||'';
+              if(dealLast&&dpLast&&dealLast===dpLast&&dealFirst&&dpFirst&&(dealFirst===dpFirst||dealFirst.indexOf(dpFirst)===0||dpFirst.indexOf(dealFirst)===0)) matched=true;
+            }
+            if(matched&&(dp.payment_method||'').toLowerCase()==='cash'){
               depCashAlready+=parseFloat((dp.amount||'').replace(/[^0-9.]/g,''))||0;
             }
           });
