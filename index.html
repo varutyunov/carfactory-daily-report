@@ -18834,6 +18834,12 @@ function isShowExpPopup(idx, type){
       else if(item) items.push({amt:'',desc:item});
     });
   }
+  // If no notes but existing total, pre-populate one row with that amount
+  if(items.length===0){
+    var totalField=type==='joint'?'joint_expenses':'vlad_expenses';
+    var existingTotal=parseFloat(c[totalField])||0;
+    if(existingTotal>0) items.push({amt:String(existingTotal),desc:''});
+  }
   var rowsHtml='';
   items.forEach(function(it,i){ rowsHtml+=isExpRow(i,it.amt,it.desc,color); });
   var old=document.getElementById('is-exp-popup');
