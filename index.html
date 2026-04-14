@@ -18099,7 +18099,7 @@ async function openInvSheets(){
   invSheetsSetLoc(_isLoc);
   document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try{
-    var costs=await sbGet('inventory_costs','order=id.asc&limit=500');
+    var costs=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
     _isInv=S.inventory||[];
     invSheetsRender();
@@ -18749,7 +18749,7 @@ async function invSheetsAddCar(){
   if(!name||!name.trim())return;
   try{
     await sbPost('inventory_costs',{car_name:name.trim(),purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',location:_isLoc});
-    var costs=await sbGet('inventory_costs','order=id.asc&limit=500');
+    var costs=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
     invSheetsRender();
   }catch(e){alert('Error: '+(e.message||e));}
