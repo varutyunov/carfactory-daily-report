@@ -13607,8 +13607,7 @@ function openPayScan(){
     toggle.style.display='none';
     label.textContent=_payLocation.toUpperCase();
   }
-  // Hide add button for owners (view only)
-  if(addBtn) addBtn.style.display=_payIsOwner()?'none':'flex';
+  if(addBtn) addBtn.style.display='flex';
   // Scott: scan-only mode — skip list, go straight to scan form with loc toggle
   var isScott=me&&me.name.toLowerCase().indexOf('scott')!==-1;
   if(isScott){
