@@ -1,15 +1,21 @@
 // ============================================================
 // Google Apps Script — Two-Way Sync for "Car Factory Debary"
 // ============================================================
-// Install: Extensions > Apps Script > paste this > Save
-// Then: Deploy > New deployment > Web app > Anyone > Deploy
-// Copy the web app URL → set as APPS_SCRIPT_WEB_URL in Netlify env vars
-// Also set SHEETS_SYNC_SECRET in both Netlify and here (line below)
-// Then: Triggers (clock icon) > Add trigger > onSheetEdit > On edit
+// SETUP:
+// 1. Open your Google Sheet → Extensions → Apps Script
+// 2. Paste this entire file → Save
+// 3. Set SYNC_SECRET below to any password you choose
+// 4. Deploy → New deployment → Web app → Execute as: Me → Who has access: Anyone → Deploy
+// 5. Copy the web app URL (you'll paste it into the app)
+// 6. Go to Triggers (clock icon) → Add trigger:
+//    Function: onSheetEdit | Event: From spreadsheet | On edit
 // ============================================================
 
-var SYNC_SECRET = 'CHANGE_ME_TO_YOUR_SECRET'; // Must match Netlify env SHEETS_SYNC_SECRET
-var NETLIFY_SYNC_URL = 'https://carfactory.work/.netlify/functions/sheets-sync';
+var SYNC_SECRET = 'CHANGE_ME';  // Pick any secret — must match what you enter in the app
+
+// Supabase config
+var SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
 
 // Tab config — maps sheet tab names to Supabase tables + column layouts
 var TAB_CONFIG = {
@@ -17,12 +23,11 @@ var TAB_CONFIG = {
     table: 'inventory_costs',
     startRow: 20,    // First data row in the sheet (1-indexed)
     columns: {
-      // column letter → Supabase field
-      'G': 'purchase_cost',    // Cost
-      'H': 'car_name',         // Car Name
-      'I': 'joint_expenses',   // Joint Expenses
-      'J': 'vlad_expenses',    // Vlad Expenses
-      // K = Total (formula, don't sync back)
+      'G': 'purchase_cost',
+      'H': 'car_name',
+      'I': 'joint_expenses',
+      'J': 'vlad_expenses'
+      // K = Total (formula, don't sync)
     }
   },
   'Deals26': {
@@ -39,38 +44,38 @@ var TAB_CONFIG = {
       'H': 'dealer_fee',
       'I': 'manny',
       'J': 'deal_num',
-      'K': 'gps_sold'         // X = true
+      'K': 'gps_sold'
     }
   }
 };
 
-// Lock to prevent re-entrant edits
-var _syncing = false;
-
 // ============================================================
-// DIRECTION 1: Google Sheet → Supabase (on edit)
+// DIRECTION 1: Google Sheet → Supabase (on cell edit)
 // ============================================================
 function onSheetEdit(e) {
-  if (_syncing) return;
   if (!e || !e.range) return;
 
   var sheet = e.range.getSheet();
   var tabName = sheet.getName();
   var config = TAB_CONFIG[tabName];
-  if (!config) return; // Not a synced tab
+  if (!config) return;
 
   var row = e.range.getRow();
   var col = e.range.getColumn();
   var colLetter = columnToLetter(col);
 
-  // Check if this is a data row
   if (row < config.startRow) return;
 
-  // Check if this is a synced column
   var field = config.columns[colLetter];
   if (!field) return;
 
-  // Get the row index relative to start
+  // Check if this edit came from the app (via doPost) — skip to prevent loops
+  var lock = PropertiesService.getScriptProperties().getProperty('_syncLock');
+  if (lock === 'app') {
+    PropertiesService.getScriptProperties().deleteProperty('_syncLock');
+    return;
+  }
+
   var rowIndex = row - config.startRow + 1;
 
   // Build data object with all synced fields for this row
@@ -82,88 +87,66 @@ function onSheetEdit(e) {
     var cNum = letterToColumn(cLetter);
     var val = sheet.getRange(row, cNum).getValue();
 
-    // Type conversions
     if (cField === 'gps_sold') {
       data[cField] = (val === 'X' || val === 'x' || val === true);
-    } else if (cField === 'car_name' || cField === 'car_desc' || cField === 'expense_notes' || cField === 'notes') {
+    } else if (cField === 'car_name' || cField === 'car_desc') {
       data[cField] = String(val || '');
     } else if (cField === 'deal_num') {
       data[cField] = parseInt(val) || 0;
     } else {
-      // Numeric — strip $ and commas
       data[cField] = parseFloat(String(val).replace(/[$,]/g, '')) || 0;
     }
   }
 
-  // POST to Netlify function
-  var payload = {
-    secret: SYNC_SECRET,
-    table: config.table,
-    action: 'update_by_index',
-    row_index: rowIndex,
-    data: data
-  };
+  data.sync_source = 'sheets';
+  data.updated_at = new Date().toISOString();
 
+  // Write directly to Supabase
   try {
-    UrlFetchApp.fetch(NETLIFY_SYNC_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
+    if (config.table === 'deals26') {
+      // Update by sort_order
+      supabasePatch(config.table, 'sort_order=eq.' + rowIndex, data);
+    } else {
+      // inventory_costs: get the nth row by id order
+      var rows = supabaseGet(config.table, 'select=id&order=id.asc&limit=1&offset=' + (rowIndex - 1));
+      if (rows && rows.length > 0) {
+        supabasePatch(config.table, 'id=eq.' + rows[0].id, data);
+      }
+    }
   } catch (err) {
-    Logger.log('Sync error: ' + err.message);
+    Logger.log('Sheet→Supabase sync error: ' + err.message);
   }
 }
 
 // ============================================================
-// DIRECTION 2: App → Google Sheet (via web app POST)
+// DIRECTION 2: App → Google Sheet (via web app doPost)
 // ============================================================
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
 
-    // Auth check
     if (body.secret !== SYNC_SECRET) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // Only process app-sourced updates
-    if (body.source !== 'app') {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid source' }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ error: 'Unauthorized' });
     }
 
     var tabName = body.tab;
-    var config = null;
-    // Find config by tab name
-    var configKeys = Object.keys(TAB_CONFIG);
-    for (var i = 0; i < configKeys.length; i++) {
-      if (configKeys[i] === tabName) {
-        config = TAB_CONFIG[configKeys[i]];
-        config._tabName = configKeys[i];
-        break;
-      }
-    }
+    var config = TAB_CONFIG[tabName];
     if (!config) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown tab: ' + tabName }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ error: 'Unknown tab: ' + tabName });
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(config._tabName);
+    var sheet = ss.getSheetByName(tabName);
     if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Sheet not found: ' + config._tabName }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ error: 'Sheet tab not found: ' + tabName });
     }
 
     var rowIndex = body.row_index;
     var data = body.data;
     var targetRow = config.startRow + rowIndex - 1;
 
-    // Set syncing flag to prevent onEdit from re-triggering
-    _syncing = true;
+    // Set lock so onSheetEdit knows to skip this edit
+    PropertiesService.getScriptProperties().setProperty('_syncLock', 'app');
 
     // Write each field to its column
     var colKeys = Object.keys(config.columns);
@@ -173,38 +156,65 @@ function doPost(e) {
       if (data.hasOwnProperty(cField)) {
         var cNum = letterToColumn(cLetter);
         var val = data[cField];
-
-        // Format for sheet
         if (cField === 'gps_sold') {
           val = val ? 'X' : '';
         }
-
         sheet.getRange(targetRow, cNum).setValue(val);
       }
     }
 
-    _syncing = false;
     SpreadsheetApp.flush();
 
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, row: targetRow }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ ok: true, row: targetRow });
 
   } catch (err) {
-    _syncing = false;
-    return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ error: err.message });
   }
 }
 
-// Allow GET for testing
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'ok', message: 'Car Factory Sheets Sync is running' }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return jsonResponse({ status: 'ok', message: 'Car Factory Sheets Sync is running' });
+}
+
+// ============================================================
+// Supabase helpers
+// ============================================================
+function supabaseGet(table, query) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?' + query;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    },
+    muteHttpExceptions: true
+  });
+  return JSON.parse(res.getContentText());
+}
+
+function supabasePatch(table, filter, data) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?' + filter;
+  UrlFetchApp.fetch(url, {
+    method: 'patch',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    payload: JSON.stringify(data),
+    muteHttpExceptions: true
+  });
 }
 
 // ============================================================
 // Helpers
 // ============================================================
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function columnToLetter(col) {
   var letter = '';
   while (col > 0) {

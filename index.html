@@ -18033,18 +18033,19 @@ async function dealMoveWeek(id, dir) {
 }
 
 // ── SHEETS SYNC HELPER ──────────────────────────────────────────────────────
-// Push app edits to Google Sheet via Netlify function → Apps Script web app
+// Push app edits directly to Google Apps Script web app → writes to Google Sheet
 function sheetsPush(tab, rowIndex, data){
+  var url=localStorage.getItem('cf_sheets_url');
+  var secret=localStorage.getItem('cf_sheets_secret');
+  if(!url||!secret) return; // Not configured
   try{
-    fetch('/.netlify/functions/sheets-push',{
+    fetch(url,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({secret:window._sheetsSyncSecret||'',tab:tab,action:'update',row_index:rowIndex,data:data})
+      headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
+      body:JSON.stringify({secret:secret,tab:tab,action:'update',row_index:rowIndex,data:data})
     }).catch(function(){});
   }catch(e){}
 }
-// Secret is set by owner in settings; stored in localStorage
-window._sheetsSyncSecret=localStorage.getItem('cf_sheets_secret')||'';
 
 // ── INVENTORY SHEETS ────────────────────────────────────────────────────────
 var _isData=[];       // inventory_costs rows
