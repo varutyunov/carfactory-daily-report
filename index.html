@@ -15752,55 +15752,8 @@ async function dealSubmit() {
       }
     }
 
-    // Build confirmation screen with deal summary
-    var isFinance = _dealData.type === 'finance';
-    var totalStr = '$' + total.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-    var photoCount = photoUrls.length;
-    var payStr = payments.map(function(p){ return '$' + p.amount.toFixed(2) + ' (' + p.method + ')'; }).join(', ');
-    var s4 = document.getElementById('deal-step4');
-    var h = '<div style="text-align:center;margin-bottom:24px;">';
-    h += '<div style="width:64px;height:64px;border-radius:50%;background:#166534;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:26px;font-weight:800;color:#4ade80;letter-spacing:2px;text-transform:uppercase;">Deal Submitted</div>';
-    h += '</div>';
-    h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Customer</div>';
-    h += '<div style="font-size:18px;font-weight:700;color:#fff;">' + _dealData.customer + '</div>';
-    h += '</div>';
-    h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
-    h += '<div style="font-size:16px;font-weight:600;color:#fff;">' + (car.name||'') + '</div>';
-    if(car.stock) h += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock #' + car.stock + '</div>';
-    h += '</div>';
-    h += '<div style="display:flex;gap:10px;margin-bottom:12px;">';
-    h += '<div style="flex:1;background:#111;border-radius:14px;padding:16px;">';
-    h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total</div>';
-    h += '<div style="font-size:22px;font-weight:700;color:#4ade80;">' + totalStr + '</div>';
-    h += '</div>';
-    h += '<div style="flex:1;background:#111;border-radius:14px;padding:16px;">';
-    h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Type</div>';
-    h += '<div style="font-size:18px;font-weight:700;color:' + (isFinance ? '#a78bfa' : '#60a5fa') + ';">' + (isFinance ? 'Finance' : 'Cash') + '</div>';
-    h += '</div></div>';
-    h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Payments</div>';
-    h += '<div style="font-size:14px;color:#ccc;">' + payStr + '</div>';
-    h += '</div>';
-    if(isFinance && _dealData.gpsSerial) {
-      h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
-      h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Serial</div>';
-      h += '<div style="font-size:16px;font-weight:600;color:#f59e0b;">' + _dealData.gpsSerial + '</div>';
-      h += '</div>';
-    }
-    if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
-      h += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:12px;">';
-      h += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pick Up Payment</div>';
-      h += '<div style="font-size:18px;font-weight:700;color:#f59e0b;">$' + parseFloat(_dealData.pickupPayment).toFixed(2) + '</div>';
-      if(_dealData.pickupDue) h += '<div style="font-size:13px;color:#888;margin-top:4px;">Due: ' + new Date(_dealData.pickupDue+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + '</div>';
-      h += '</div>';
-    }
-    h += '<div style="font-size:13px;color:#555;text-align:center;margin-bottom:16px;">' + photoCount + ' photo' + (photoCount !== 1 ? 's' : '') + ' uploaded</div>';
-    h += '<button onclick="closeDealForm()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Done</button>';
-    s4.innerHTML = h;
-    dealShowStep(4);
+    // Close deal form and return to main page
+    closeDealForm();
   } catch(err) {
     console.error('Deal submit error:', err);
     alert('Error submitting deal: ' + (err.message || err));
