@@ -17487,13 +17487,14 @@ function openDealDetail(id) {
     html += '<input id="de-customer-mname-'+d.id+'" value="'+_deMname.replace(/"/g,'&quot;')+'" placeholder="Middle (optional)" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-top:6px;"/>';
     html += '</div>';
 
-    // Deal type
+    // Deal type toggle
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Deal Type</div>';
-    html += '<select id="de-type-'+d.id+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;appearance:auto;">';
-    html += '<option value="cash"'+(d.deal_type==='cash'?' selected':'')+'>Purchased in Full</option>';
-    html += '<option value="finance"'+(d.deal_type==='finance'?' selected':'')+'>Finance</option>';
-    html += '</select></div>';
+    html += '<input type="hidden" id="de-type-'+d.id+'" value="'+(d.deal_type||'cash')+'"/>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button onclick="deSetType('+d.id+',\'cash\')" id="de-type-cash-'+d.id+'" style="flex:1;padding:12px 8px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:'+(d.deal_type!=='finance'?'2px solid #1d4ed8':'1px solid #333')+';background:'+(d.deal_type!=='finance'?'#1d4ed8':'transparent')+';color:'+(d.deal_type!=='finance'?'#fff':'#888')+';-webkit-tap-highlight-color:transparent;">Purchased in Full</button>';
+    html += '<button onclick="deSetType('+d.id+',\'finance\')" id="de-type-finance-'+d.id+'" style="flex:1;padding:12px 8px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:'+(d.deal_type==='finance'?'2px solid #7c3aed':'1px solid #333')+';background:'+(d.deal_type==='finance'?'#7c3aed':'transparent')+';color:'+(d.deal_type==='finance'?'#fff':'#888')+';-webkit-tap-highlight-color:transparent;">Finance</button>';
+    html += '</div></div>';
 
     // Payments
     html += '<div style="margin-bottom:10px;">';
@@ -17757,6 +17758,15 @@ async function dealEditAddPhotos(id,files){
     }
   }
   if(status) status.textContent=files.length+' photo'+(files.length>1?'s':'')+' added';
+}
+
+function deSetType(id,type){
+  var h=document.getElementById('de-type-'+id);
+  if(h) h.value=type;
+  var cashBtn=document.getElementById('de-type-cash-'+id);
+  var finBtn=document.getElementById('de-type-finance-'+id);
+  if(cashBtn){cashBtn.style.background=type==='cash'?'#1d4ed8':'transparent';cashBtn.style.color=type==='cash'?'#fff':'#888';cashBtn.style.border=type==='cash'?'2px solid #1d4ed8':'1px solid #333';}
+  if(finBtn){finBtn.style.background=type==='finance'?'#7c3aed':'transparent';finBtn.style.color=type==='finance'?'#fff':'#888';finBtn.style.border=type==='finance'?'2px solid #7c3aed':'1px solid #333';}
 }
 
 async function dealEditSave(id){
