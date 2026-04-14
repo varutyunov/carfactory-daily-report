@@ -15219,9 +15219,24 @@ function payVehicleFilter(){
     deals=deals.filter(function(d){return (d.vehicle_desc||'').toLowerCase().indexOf(q)!==-1||(d.customer_name||'').toLowerCase().indexOf(q)!==-1||(d.stock||'').toLowerCase().indexOf(q)!==-1||(d.vin||'').toLowerCase().indexOf(q)!==-1;});
   }
   var html='';
+  // Past Deals section (first — more relevant)
+  if(deals.length){
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#f59e0b;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 6px;">Past Deals ('+deals.length+')</div>';
+    deals.slice(0,50).forEach(function(d){
+      html+='<div onclick="payDealSelect('+d.id+')" style="background:#111;border:1px solid #2a2000;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+      html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+(d.vehicle_desc||'Unknown vehicle')+'</div>';
+      var meta=[];
+      if(d.customer_name) meta.push(d.customer_name);
+      if(d.stock) meta.push('#'+d.stock);
+      if(d.location) meta.push(d.location);
+      if(d.created_at) meta.push(d.created_at.slice(0,10));
+      html+='<div style="font-size:11px;color:#8b7000;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
+      html+='</div>';
+    });
+  }
   // Inventory section
   if(cars.length){
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#4ade80;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 6px;">Inventory ('+cars.length+')</div>';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#4ade80;letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 6px;">Inventory ('+cars.length+')</div>';
     cars.forEach(function(car){
       html+='<div onclick="payVehicleSelect('+car.id+')" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
       html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+car.name+'</div>';
@@ -15232,21 +15247,6 @@ function payVehicleFilter(){
       if(car.miles) meta.push(car.miles.toLocaleString()+' mi');
       if(car.location) meta.push(car.location);
       html+='<div style="font-size:11px;color:#555;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
-      html+='</div>';
-    });
-  }
-  // Past Deals section
-  if(deals.length){
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#f59e0b;letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 6px;">Past Deals ('+deals.length+')</div>';
-    deals.slice(0,50).forEach(function(d){
-      html+='<div onclick="payDealSelect('+d.id+')" style="background:#111;border:1px solid #2a2000;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
-      html+='<div style="font-size:14px;font-weight:700;color:#fff;">'+(d.vehicle_desc||'Unknown vehicle')+'</div>';
-      var meta=[];
-      if(d.customer_name) meta.push(d.customer_name);
-      if(d.stock) meta.push('#'+d.stock);
-      if(d.location) meta.push(d.location);
-      if(d.created_at) meta.push(d.created_at.slice(0,10));
-      html+='<div style="font-size:11px;color:#8b7000;margin-top:2px;">'+meta.join(' &middot; ')+'</div>';
       html+='</div>';
     });
   }
