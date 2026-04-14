@@ -18034,10 +18034,12 @@ async function dealMoveWeek(id, dir) {
 
 // ── SHEETS SYNC HELPER ──────────────────────────────────────────────────────
 // Push app edits directly to Google Apps Script web app → writes to Google Sheet
+var _SHEETS_URL='https://script.google.com/macros/s/AKfycbwmr2iJ7zQmwaeh2SN3D1FY0jaoEU12htZStBhiMheLi4ARU4Py7g4Q2ULBWJdwcYcl/exec';
+var _SHEETS_SECRET='cf-sync-2026';
 function sheetsPush(tab, rowIndex, data){
-  var url=localStorage.getItem('cf_sheets_url');
-  var secret=localStorage.getItem('cf_sheets_secret');
-  if(!url||!secret) return; // Not configured
+  var url=_SHEETS_URL;
+  var secret=_SHEETS_SECRET;
+  if(!url||!secret) return;
   try{
     fetch(url,{
       method:'POST',
