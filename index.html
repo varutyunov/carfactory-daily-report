@@ -11350,7 +11350,7 @@ function openFormDetail(id) {
 
   var isFinance = dep.deal_type === 'finance';
   var amtStr = dep.deposit_amount ? '$' + parseFloat(dep.deposit_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
-  var balStr = dep.balance ? '$' + parseFloat(dep.balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
+  var balStr = dep.remaining_balance ? '$' + parseFloat(dep.remaining_balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
 
   var html = '<div style="padding:16px 12px 40px;">';
 
@@ -11724,7 +11724,7 @@ async function depositSave() {
       vin: d.vin || '',
       stock: d.stock || '',
       deposit_amount: parseFloat(d.amount) || 0,
-      balance: d.balance || '',
+      remaining_balance: d.balance || '',
       deposit_date: d.dateDisp || '',
       withdraw_until: d.withdrawDisp || '',
       id_photo_url: idPhotoUrl,
