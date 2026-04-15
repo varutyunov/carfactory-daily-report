@@ -18694,21 +18694,9 @@ function invSheetsRender(){
     totals.innerHTML='';
     return;
   }
-  var fmt=function(v){var n=parseFloat(v)||0;return n?'$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}):'';};
+  var fmt=function(v){var n=parseFloat(v)||0;return '$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
   var tCost=0,tJoint=0,tVlad=0,tTotal=0;
-  var cs='border-right:1px solid #222;padding:3px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  var ns=cs+'text-align:right;font-variant-numeric:tabular-nums;';
-  var hc='background:#0a0a0a;color:#888;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 4px;border-right:1px solid #222;border-bottom:1px solid #333;white-space:nowrap;position:sticky;top:0;z-index:2;';
-  var html='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;font-size:11px;font-family:\'SF Mono\',\'Consolas\',monospace;color:#ccc;">';
-  html+='<table style="border-collapse:collapse;min-width:420px;width:100%;">';
-  html+='<thead><tr>'+
-    '<th style="'+hc+'min-width:140px;text-align:left;">Car</th>'+
-    '<th style="'+hc+'width:55px;text-align:right;">Cost</th>'+
-    '<th style="'+hc+'width:55px;text-align:right;">Joint</th>'+
-    '<th style="'+hc+'width:50px;text-align:right;">Vlad</th>'+
-    '<th style="'+hc+'width:58px;text-align:right;">Total</th>'+
-    '<th style="'+hc+'min-width:80px;text-align:left;">Notes</th>'+
-  '</tr></thead><tbody>';
+  var html='';
   filtered.forEach(function(c,i){
     var cost=parseFloat(c.purchase_cost)||0;
     var joint=parseFloat(c.joint_expenses)||0;
@@ -18719,29 +18707,29 @@ function invSheetsRender(){
     var linked=null;
     if(c.car_id){for(var x=0;x<_isInv.length;x++){if(_isInv[x].id==c.car_id){linked=_isInv[x];break;}}}
     var nameDisplay=c.car_name||'Unnamed';
-    var dot=linked?'<span style="color:#4ade80;font-size:8px;vertical-align:middle;margin-left:3px;">&#9679;</span>':'';
-    var rowBg=i%2===0?'#111':'#0d0d0d';
-    html+='<tr onclick="isEditOpen('+realIdx+')" style="background:'+rowBg+';cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid #1a1a1a;">'+
-      '<td style="'+cs+'text-align:left;color:#fff;font-weight:600;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;letter-spacing:.3px;max-width:160px;">'+nameDisplay+dot+'</td>'+
-      '<td style="'+ns+'color:#f87171;">'+fmt(cost)+'</td>'+
-      '<td onclick="event.stopPropagation();isShowExpPopup('+realIdx+',&quot;joint&quot;)" style="'+ns+'color:#f59e0b;cursor:pointer;text-decoration:underline dotted;">'+fmt(joint)+'</td>'+
-      '<td onclick="event.stopPropagation();isShowExpPopup('+realIdx+',&quot;vlad&quot;)" style="'+ns+'color:#a78bfa;cursor:pointer;text-decoration:underline dotted;">'+fmt(vlad)+'</td>'+
-      '<td style="'+ns+'color:#4ade80;font-weight:700;">'+fmt(total)+'</td>'+
-      '<td style="'+cs+'color:#555;font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(c.expense_notes||'')+'</td>'+
-    '</tr>';
+    var stockDisplay=linked?('#'+(linked.stock||'')):'';
+    var linkBadge=linked?'<span style="display:inline-block;background:rgba(74,222,128,.15);color:#4ade80;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;">LINKED</span>':'<span style="display:inline-block;background:rgba(245,158,11,.15);color:#f59e0b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;">LINK CAR</span>';
+    html+='<div onclick="isEditOpen('+realIdx+')" style="background:#111;border:1px solid #1a1a1a;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;margin-bottom:6px;">';
+    html+='<div style="display:flex;align-items:center;margin-bottom:8px;">';
+    html+='<div style="flex:1;font-size:15px;font-weight:700;color:#fff;">'+nameDisplay+linkBadge+'</div>';
+    if(stockDisplay) html+='<div style="font-size:12px;color:#555;">'+stockDisplay+'</div>';
+    html+='</div>';
+    html+='<div style="display:flex;gap:6px;font-size:12px;margin-bottom:4px;">';
+    html+='<div style="flex:1;"><span style="color:#555;">Cost:</span> <span style="color:#f87171;">'+fmt(cost)+'</span></div>';
+    html+='<div style="flex:1;" onclick="event.stopPropagation();isShowExpPopup('+realIdx+',\'joint\')"><span style="color:#555;">Joint:</span> <span style="color:#f59e0b;cursor:pointer;text-decoration:underline dotted;">'+fmt(joint)+'</span></div>';
+    html+='<div style="flex:1;" onclick="event.stopPropagation();isShowExpPopup('+realIdx+',\'vlad\')"><span style="color:#555;">Vlad:</span> <span style="color:#a78bfa;cursor:pointer;text-decoration:underline dotted;">'+fmt(vlad)+'</span></div>';
+    html+='</div>';
+    html+='<div style="display:flex;align-items:center;">';
+    html+='<div style="flex:1;font-size:13px;font-weight:700;color:#4ade80;">Total: '+fmt(total)+'</div>';
+    if(c.expense_notes){html+='<div style="font-size:11px;color:#666;max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+c.expense_notes+'</div>';}
+    html+='</div>';
+    html+='</div>';
   });
-  // Totals row
-  html+='<tr style="background:#0a0f0a;border-top:1px solid #333;border-bottom:2px solid #333;">'+
-    '<td style="'+cs+'text-align:left;color:#4ade80;font-weight:700;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;letter-spacing:.5px;">TOTAL ('+filtered.length+')</td>'+
-    '<td style="'+ns+'color:#f87171;font-weight:700;">'+fmt(tCost)+'</td>'+
-    '<td style="'+ns+'color:#f59e0b;font-weight:700;">'+fmt(tJoint)+'</td>'+
-    '<td style="'+ns+'color:#a78bfa;font-weight:700;">'+fmt(tVlad)+'</td>'+
-    '<td style="'+ns+'color:#4ade80;font-weight:700;">'+fmt(tTotal)+'</td>'+
-    '<td style="'+cs+'"></td>'+
-  '</tr>';
-  html+='</tbody></table></div>';
   list.innerHTML=html;
-  totals.innerHTML='';
+  totals.innerHTML='<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">COST</div><div style="color:#f87171;font-weight:700;">'+fmt(tCost)+'</div></div>'
+    +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">JOINT</div><div style="color:#f59e0b;font-weight:700;">'+fmt(tJoint)+'</div></div>'
+    +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">VLAD</div><div style="color:#a78bfa;font-weight:700;">'+fmt(tVlad)+'</div></div>'
+    +'<div style="flex:1;text-align:center;"><div style="color:#555;font-size:10px;">TOTAL</div><div style="color:#4ade80;font-weight:700;">'+fmt(tTotal)+'</div></div>';
 }
 
 async function invSheetsAddCar(){
