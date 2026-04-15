@@ -7831,11 +7831,11 @@ async function executeAITool(toolName, input){
     if(!_formsData||!_formsData.length){try{_formsData=await sbGet('deposits','order=created_at.desc');}catch(e){_formsData=[];}}
     var forms=_formsData||[];
     if(q2==='all'){
-      return {total:forms.length,forms:forms.slice(0,20).map(function(f){return {id:f.id,customer:f.customer_name,vehicle:f.vehicle_desc,deposit:f.deposit_amount,balance:f.remaining_balance,date:f.deposit_date,created_by:f.created_by,location:f.location};})};
+      return {total:forms.length,forms:forms.slice(0,20).map(function(f){return {id:f.id,customer:f.customer_name,vehicle:f.vehicle_desc,deposit:f.deposit_amount,balance:f.balance,date:f.deposit_date,created_by:f.created_by,location:f.location};})};
     }
     var fMatches=forms.filter(function(f){return ((f.customer_name||'')+(f.vehicle_desc||'')+(f.stock||'')).toLowerCase().includes(q2);});
     if(!fMatches.length) return {message:'No deposit forms found matching "'+input.query+'"'};
-    return {found:fMatches.length,forms:fMatches.slice(0,20).map(function(f){return {id:f.id,customer:f.customer_name,vehicle:f.vehicle_desc,deposit:f.deposit_amount,balance:f.remaining_balance,date:f.deposit_date,deal_type:f.deal_type,created_by:f.created_by,location:f.location};})};
+    return {found:fMatches.length,forms:fMatches.slice(0,20).map(function(f){return {id:f.id,customer:f.customer_name,vehicle:f.vehicle_desc,deposit:f.deposit_amount,balance:f.balance,date:f.deposit_date,deal_type:f.deal_type,created_by:f.created_by,location:f.location};})};
   }
   if(toolName === 'get_deals'){
     var q3=(input.query||'all').toLowerCase();
@@ -11350,7 +11350,7 @@ function openFormDetail(id) {
 
   var isFinance = dep.deal_type === 'finance';
   var amtStr = dep.deposit_amount ? '$' + parseFloat(dep.deposit_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
-  var balStr = dep.remaining_balance ? '$' + parseFloat(dep.remaining_balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
+  var balStr = dep.balance ? '$' + parseFloat(dep.balance).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A';
 
   var html = '<div style="padding:16px 12px 40px;">';
 
@@ -11724,13 +11724,12 @@ async function depositSave() {
       vin: d.vin || '',
       stock: d.stock || '',
       deposit_amount: parseFloat(d.amount) || 0,
-      remaining_balance: d.balance || '',
+      balance: d.balance || '',
       deposit_date: d.dateDisp || '',
       withdraw_until: d.withdrawDisp || '',
       id_photo_url: idPhotoUrl,
       signed_form_url: signedFormUrl,
       deal_type: d.dealType || 'cash',
-      payment_method: (function(){var pp=_depPayments.filter(function(p){return parseFloat(p.amount)>0;});if(!pp.length)return 'cash';return pp.length===1?pp[0].method:pp.map(function(p){return '$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+p.method;}).join(', ');})(),
       created_by: (typeof me !== 'undefined' && me && me.name) ? me.name : '',
       location: (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary',
       created_at: new Date().toISOString()
