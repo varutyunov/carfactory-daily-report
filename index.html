@@ -1392,12 +1392,8 @@ body.light .cal-fab{background:#4488ff !important;}
           <input id="pay-scan-note" placeholder="Any notes about this payment..." style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;"/>
         </div>
 
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-          <label onclick="var cb=document.getElementById('pay-is-final');cb.checked=!cb.checked;" style="display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-            <input type="checkbox" id="pay-is-final" style="width:18px;height:18px;accent-color:#ef4444;"/>
-            <span style="font-size:13px;color:#ef4444;font-weight:700;letter-spacing:.5px;">Final Payment</span>
-          </label>
-        </div>
+        <input type="checkbox" id="pay-is-final" style="display:none;"/>
+        <div onclick="var cb=document.getElementById('pay-is-final');cb.checked=!cb.checked;var el=this;if(cb.checked){el.style.background='#ef4444';el.style.borderColor='#ef4444';el.style.color='#fff';}else{el.style.background='transparent';el.style.borderColor='#ef4444';el.style.color='#ef4444';}" style="width:100%;padding:14px;background:transparent;border:2px solid #ef4444;border-radius:14px;color:#ef4444;font-size:15px;font-weight:700;text-align:center;cursor:pointer;margin-bottom:16px;-webkit-tap-highlight-color:transparent;letter-spacing:.5px;">FINAL PAYMENT</div>
         <button onclick="payScanSave()" style="width:100%;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Save Payment</button>
         <button onclick="payFormSkipPhoto()" id="pay-skip-photo-btn" style="display:none;width:100%;margin-top:8px;padding:14px;background:transparent;border:1px solid #333;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Skip Photo &amp; Fill Manually</button>
       </div>
@@ -15417,15 +15413,8 @@ async function payScanSave(){
   _paySaving=false;
   _payEditId=null;
   if(document.getElementById('pay-is-final')) document.getElementById('pay-is-final').checked=false;
-  // Go back to list
-  _payViewMode='list';
-  document.getElementById('pay-view-title').textContent='PAYMENTS';
-  document.getElementById('pay-list-view').style.display='block';
-  document.getElementById('pay-scan-view').style.display='none';
-  // Navigate to the week of the saved payment
-  _payCurrentWeekStart=_payGetWeekStart(new Date(date+'T12:00:00'));
-  _payUpdateWeekLabel();
-  loadPaymentWeek();
+  // Close payment overlay and return to home screen
+  payCloseAll();
 }
 
 function openDealForm(forceLoc) {

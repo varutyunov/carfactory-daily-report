@@ -11,7 +11,10 @@
 //    Function: onSheetEdit | Event: From spreadsheet | On edit
 // ============================================================
 
-var SYNC_SECRET = 'CHANGE_ME';  // Pick any secret — must match what you enter in the app
+var SYNC_SECRET = 'cf-sync-2026';
+
+// Spreadsheet ID (standalone script — references the original sheet by ID)
+var SPREADSHEET_ID = '1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE';
 
 // Supabase config
 var SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
@@ -135,7 +138,7 @@ function doPost(e) {
       return jsonResponse({ error: 'Unknown tab: ' + tabName });
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(tabName);
     if (!sheet) {
       return jsonResponse({ error: 'Sheet tab not found: ' + tabName });
