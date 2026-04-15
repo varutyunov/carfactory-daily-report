@@ -43,6 +43,7 @@ stock-*.png         — Placeholder vehicle images
 netlify.toml        — Netlify config
 scripts/            — Sync scripts (carpay-sync, gps-sync, inventory-sync)
 netlify/functions/  — Serverless (ai-proxy.js, telegram-webhook.js)
+google-apps-script.js — Container-bound Apps Script for Google Sheets two-way sync
 ```
 
 ## Supabase Tables
@@ -55,7 +56,7 @@ netlify/functions/  — Serverless (ai-proxy.js, telegram-webhook.js)
 | `deals` | Sales: customer, vehicle, payment breakdown (JSON), location |
 | `payments` | Individual payment entries: cash/card/check/zelle, tagged by week |
 | `cash_payouts` | Weekly cash payout records per location |
-| `deposits` | Vehicle intake forms (customer, vehicle, deposit amounts) |
+| `deposits` | Vehicle deposit forms. Columns: customer_name, vehicle_desc, vin, stock, deposit_amount, balance, deposit_date, withdraw_until, id_photo_url, signed_form_url, deal_type, created_by, location, esign_status, esign_signature_url, seller_signature_url. **NOTE: NO `payment_method` or `remaining_balance` columns** |
 | `invoices` | Service invoices with line items |
 | `notifications` | In-app notifications with read status |
 | `calendar_events` | Work calendar events |
@@ -64,6 +65,10 @@ netlify/functions/  — Serverless (ai-proxy.js, telegram-webhook.js)
 | `carpay_payments` | CarPay external payment sync |
 | `app_settings` | Key-value config store (net deal adjustments, etc.) |
 | `repo_gps_signals` | GPS tracking data |
+| `inventory_costs` | Inventory Sheets tab — per-car cost tracking (purchase_cost, joint_expenses, vlad_expenses, expense_notes, vlad_expense_notes, sort_order). Syncs two-way with Google Sheet |
+| `deals26` | Deals26 Sheets tab — deal financials with week grouping (expenses, expense_notes, payments, payment_notes, sold_inv_vin, sort_order). Syncs two-way with Google Sheet |
+| `esign_requests` | E-sign tracking (form_type, form_record_id, form_html, status, signed_at, auth_certificate) |
+| `void_releases` | Vehicle void/release forms |
 
 ## Supabase Helpers
 ```javascript
@@ -220,3 +225,40 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Preview:** `vrGoPreview` — builds full name from `[fname, mname, lname].filter(Boolean).join(' ')`
 - **Save flow:** `vrSignedFormTaken` (enables save btn) → `vrSave` (uploads signed photo → Supabase)
 - **E-sign button:** in Step 2, triggers `esignOpen('void_release')`
+
+### Sheets Tab (Inventory + Deals26)
+- **Overlay:** `#inv-sheets-overlay` — two sub-tabs: Inventory and Deals26
+- **Inventory tab:** Card-based layout showing per-car costs (purchase cost, joint expenses, vlad expenses, total). Clickable Joint/Vlad amounts open expense breakdown popups (`isShowExpPopup`) that read itemized notes from `expense_notes` / `vlad_expense_notes` columns. Location filter (DeBary/DeLand). Edit/save via `isEditOpen`/`isEditSave`. Link to inventory cars via `isLinkOpen`/`isLinkSave`.
+- **Deals26 tab:** Deal financials with week grouping. Expenses/payments breakdown popups (`d26ShowExpPopup`, `d26ShowPmtPopup`). Edit via `d26Edit`/`d26Save`.
+- **Data source:** `inventory_costs` and `deals26` Supabase tables
+- **Sort:** By `sort_order` column (matches Google Sheet row position)
+- **Key vars:** `_isData`, `_isLoc`, `_isEditIdx`, `_isLinkIdx`, `_shPageIdx`, `_d26Data`, `_d26EditIdx`
+
+### Google Sheets Two-Way Sync
+- **Sheet ID:** `1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE`
+- **Architecture:** Google Apps Script (container-bound) ↔ Supabase REST API (direct, no Netlify middleman)
+- **Sheet → Supabase:** Apps Script `onEdit` trigger detects changes → calls Supabase REST API directly to upsert rows
+- **App → Sheet:** `sheetsPush(tab, rowIndex, data)` function in index.html calls the Apps Script web app URL to write changes back to the sheet
+- **Apps Script URL:** Hardcoded in `sheetsPush` function (container-bound, deployed as web app)
+- **Conflict prevention:** `sync_source` field distinguishes app vs sheet edits
+
+## Recent Work (April 2026)
+
+### Completed
+- **Sheets tab restored** from git history (~700 lines) with both Inventory and Deals26 sub-tabs
+- **Google Sheets two-way sync** — removed Netlify dependency, syncs directly via Supabase REST + Apps Script
+- **Inventory Sheets redesigned** — switched from table to card layout with clickable expense popups
+- **Expense breakdown popups** — Joint/Vlad amounts are clickable, show itemized expenses from cell notes
+- **Sort by sheet position** — inventory sorted by `sort_order` matching Google Sheet row order
+- **Payment vehicle search** — added vehicle search to payment form (inventory + past deals)
+- **Customer auto-fill** — selecting a past deal auto-fills customer name in payments
+- **Deal type toggle** — Finance vs Purchased in Full in deal edit
+- **Deposit form save fix** — removed `payment_method` column (doesn't exist in deposits table)
+- **Deposit-deal matching** — VIN → vehicle desc → customer name fuzzy matching for net cash
+- **Owner payment posting** — owners can post payments like employees
+
+### Known Issues / Gotchas
+- `deposits` table has NO `payment_method` column — payment method is tracked in the `payments` table instead (via auto-posted deposit payment)
+- `deposits` table uses `balance` (NOT `remaining_balance`) for the remaining balance column
+- Service worker cache must be bumped (`sw.js`) on every deploy or changes won't show on phones
+- `git push` often needs `git fetch origin main && git merge origin/main --no-edit` first (version.json conflicts)
