@@ -1226,10 +1226,11 @@ body.light .cal-fab{background:#4488ff !important;}
 
       <!-- Payment Method Filter -->
       <div style="display:flex;gap:3px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;margin-bottom:14px;">
-        <button onclick="payFilterMethod('all')" id="pay-filter-all" style="flex:1;padding:9px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">All</button>
-        <button onclick="payFilterMethod('cash')" id="pay-filter-cash" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Cash</button>
-        <button onclick="payFilterMethod('card')" id="pay-filter-card" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Card</button>
-        <button onclick="payFilterMethod('check')" id="pay-filter-check" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Check</button>
+        <button onclick="payFilterMethod('all')" id="pay-filter-all" style="flex:1;padding:9px 2px;background:#fff;border:none;border-radius:10px;color:#000;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">All</button>
+        <button onclick="payFilterMethod('cash')" id="pay-filter-cash" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Cash</button>
+        <button onclick="payFilterMethod('card')" id="pay-filter-card" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Card</button>
+        <button onclick="payFilterMethod('check')" id="pay-filter-check" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Check</button>
+        <button onclick="payFilterMethod('money_order')" id="pay-filter-money_order" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">M.O.</button>
       </div>
 
       <!-- Add New Payment Button -->
@@ -7638,16 +7639,16 @@ function buildAISystemPrompt(){
   var dealCount = _dealsData ? _dealsData.length : 0;
   // Build this-week payment snapshot from live data
   var weekPays = (_payWeekData||[]).filter(function(p){return !p.delete_requested;});
-  var wkCash=0,wkCard=0,wkCheck=0,wkOther=0;
+  var wkCash=0,wkCard=0,wkCheck=0,wkMO=0,wkOther=0;
   weekPays.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
     var m=(p.payment_method||'cash').toLowerCase();
-    if(m==='cash') wkCash+=v; else if(m==='card') wkCard+=v; else if(m==='check') wkCheck+=v; else wkOther+=v;
+    if(m==='cash') wkCash+=v; else if(m==='card') wkCard+=v; else if(m==='check') wkCheck+=v; else if(m==='money_order') wkMO+=v; else wkOther+=v;
   });
-  var wkTotal=wkCash+wkCard+wkCheck+wkOther;
+  var wkTotal=wkCash+wkCard+wkCheck+wkMO+wkOther;
   var fmtK=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
   var weekSnap = weekPays.length
-    ? weekPays.length+' payments | Cash '+fmtK(wkCash)+' | Card '+fmtK(wkCard)+' | Check '+fmtK(wkCheck)+(wkOther?(' | Other '+fmtK(wkOther)):'')+' | Total '+fmtK(wkTotal)
+    ? weekPays.length+' payments | Cash '+fmtK(wkCash)+' | Card '+fmtK(wkCard)+' | Check '+fmtK(wkCheck)+(wkMO?(' | M.O. '+fmtK(wkMO)):'')+(wkOther?(' | Other '+fmtK(wkOther)):'')+' | Total '+fmtK(wkTotal)
     : 'No payments loaded for current week yet';
   var todayStr = new Date().toISOString().split('T')[0];
   var todayPays = weekPays.filter(function(p){return p.payment_date===todayStr;});
@@ -7834,9 +7835,9 @@ async function executeAITool(toolName, input){
       if(q4==='summary'||q4==='week'){
         // Use already-loaded week data if available, else use all fetched
         var src=(_payWeekData&&_payWeekData.length)?_payWeekData.filter(function(p){return !p.delete_requested;}):allP.slice(0,200);
-        var c4=0,cd4=0,ck4=0,ot4=0;
-        src.forEach(function(p){var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;var m=(p.payment_method||'cash').toLowerCase();if(m==='cash')c4+=v;else if(m==='card')cd4+=v;else if(m==='check')ck4+=v;else ot4+=v;});
-        return {period:'this_week',total_payments:src.length,cash:fmt4(c4),card:fmt4(cd4),check:fmt4(ck4),other:fmt4(ot4),grand_total:fmt4(c4+cd4+ck4+ot4)};
+        var c4=0,cd4=0,ck4=0,mo4=0,ot4=0;
+        src.forEach(function(p){var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;var m=(p.payment_method||'cash').toLowerCase();if(m==='cash')c4+=v;else if(m==='card')cd4+=v;else if(m==='check')ck4+=v;else if(m==='money_order')mo4+=v;else ot4+=v;});
+        return {period:'this_week',total_payments:src.length,cash:fmt4(c4),card:fmt4(cd4),check:fmt4(ck4),money_order:fmt4(mo4),other:fmt4(ot4),grand_total:fmt4(c4+cd4+ck4+mo4+ot4)};
       }
       if(q4==='today'){
         var tod=new Date().toISOString().split('T')[0];
@@ -8763,7 +8764,7 @@ async function cpOpenAccount(account){
     html+='<span style="font-size:14px;font-weight:700;color:#4ade80;">$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>';
     html+='</div>';
     pays.forEach(function(p){
-      var methodColor={'cash':'#30d158','card':'#60a5fa','check':'#fbbf24'}[p.method]||'#888';
+      var methodColor={'cash':'#30d158','card':'#60a5fa','check':'#fbbf24','money_order':'#f97316'}[p.method]||'#888';
       html+='<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;padding:12px 14px;margin-bottom:6px;">';
       html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
       html+='<div style="font-size:15px;font-weight:700;color:#fff;">'+p.amountSent+'</div>';
@@ -10779,6 +10780,7 @@ function _txInit() {
           <button onclick="invSetPayMethod('card')" id="inv-pay-card" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Card</button>
           <button onclick="invSetPayMethod('check')" id="inv-pay-check" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Check</button>
           <button onclick="invSetPayMethod('zelle')" id="inv-pay-zelle" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Zelle</button>
+          <button onclick="invSetPayMethod('money_order')" id="inv-pay-money_order" style="flex:1;min-width:70px;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">M.O.</button>
         </div>
       </div>
 
@@ -12487,7 +12489,7 @@ function invUpdateTotal(){
 
 function invSetPayMethod(m){
   _invPayMethod=m;
-  ['cash','card','check','zelle'].forEach(function(t){
+  ['cash','card','check','zelle','money_order'].forEach(function(t){
     var btn=document.getElementById('inv-pay-'+t);
     if(btn){btn.style.background=t===m?'#f59e0b':'#111';btn.style.color=t===m?'#000':'#666';btn.style.border=t===m?'none':'1px solid #1e1e1e';}
   });
@@ -13515,7 +13517,7 @@ var _payViewMode = 'list'; // 'list', 'scan', 'detail'
 var _payLocation = 'DeBary';
 var _payCurrentWeekStart = null;
 var _payWeekData = [];
-var _payBreakdown = {cash:0, card:0, check:0, other:0, total:0};
+var _payBreakdown = {cash:0, card:0, check:0, money_order:0, other:0, total:0};
 var _payIncludeDeals = false;
 var _payDealCashRows = []; // deals from current week with pickup_payment
 var _payReceiptDataUrl = null;
@@ -13881,7 +13883,7 @@ function payScanRetake(){
 
 function payMethodSelect(method){
   _payMethod=method;
-  ['cash','card','check','other'].forEach(function(m){
+  ['cash','card','check','money_order','other'].forEach(function(m){
     var btn=document.getElementById('pay-method-'+m);
     if(m===method){btn.style.background='#fff';btn.style.color='#000';}
     else{btn.style.background='none';btn.style.color='#555';}
@@ -13919,11 +13921,12 @@ function payAddMethodRow(method, amount){
   var m=method||'cash';
   row.setAttribute('data-method',m);
   row.setAttribute('data-card-fee','false');
-  var methods=['cash','card','check','other'];
+  var methods=['cash','card','check','money_order','other'];
+  var methodLabels={cash:'Cash',card:'Card',check:'Check',money_order:'M.O.',other:'Other'};
   var btns='';
   methods.forEach(function(mt){
     var active=mt===m;
-    btns+='<button onclick="payRowMethodSelect(this,\''+mt+'\')" style="flex:1;padding:9px 2px;background:'+(active?'#fff':'none')+';border:none;border-radius:10px;color:'+(active?'#000':'#555')+';font-size:12px;font-weight:700;cursor:pointer;text-align:center;">'+mt.charAt(0).toUpperCase()+mt.slice(1)+'</button>';
+    btns+='<button onclick="payRowMethodSelect(this,\''+mt+'\')" style="flex:1;padding:9px 2px;background:'+(active?'#fff':'none')+';border:none;border-radius:10px;color:'+(active?'#000':'#555')+';font-size:11px;font-weight:700;cursor:pointer;text-align:center;">'+(methodLabels[mt]||mt)+'</button>';
   });
   row.innerHTML=
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'+
@@ -13982,7 +13985,8 @@ function payRowMethodSelect(btn,method){
   row.setAttribute('data-method',method);
   var btns=row.querySelectorAll('div > button[onclick*="payRowMethodSelect"]');
   btns.forEach(function(b){
-    var bm=b.textContent.trim().toLowerCase();
+    var match=b.getAttribute('onclick').match(/payRowMethodSelect\(this,'([^']+)'\)/);
+    var bm=match?match[1]:'';
     if(bm===method){b.style.background='#fff';b.style.color='#000';}
     else{b.style.background='none';b.style.color='#555';}
   });
@@ -14021,7 +14025,7 @@ async function loadPaymentWeek(){
   if(!list)return;
   // Reset method filter
   _payMethodFilter='all';
-  ['all','cash','card','check'].forEach(function(f){
+  ['all','cash','card','check','money_order'].forEach(function(f){
     var btn=document.getElementById('pay-filter-'+f);
     if(btn){btn.style.background=f==='all'?'#fff':'none';btn.style.color=f==='all'?'#000':'#555';}
   });
@@ -14054,7 +14058,7 @@ async function loadPaymentWeek(){
 function _payUpdateStats(){
   var active=_payWeekData.filter(function(p){return !p.delete_requested;});
   var count=active.length;
-  var cash=0,card=0,check=0,other=0;
+  var cash=0,card=0,check=0,money_order=0,other=0;
   var dealTagCash=0,depositTagCash=0;
   active.forEach(function(p){
     var v=parseFloat((p.amount||'').replace(/[^0-9.]/g,''))||0;
@@ -14070,16 +14074,18 @@ function _payUpdateStats(){
         if(pm==='cash'){cash+=pv;if(isDeal)dealTagCash+=pv;if(isDeposit)depositTagCash+=pv;}
         else if(pm==='card') card+=pv;
         else if(pm==='check') check+=pv;
+        else if(pm==='money_order') money_order+=pv;
         else other+=pv;
       });
     } else {
       if(m==='cash'){cash+=v;if(isDeal)dealTagCash+=v;if(isDeposit)depositTagCash+=v;}
       else if(m==='card') card+=v;
       else if(m==='check') check+=v;
+      else if(m==='money_order') money_order+=v;
       else other+=v;
     }
   });
-  _payBreakdown={cash:cash,card:card,check:check,other:other,total:cash+card+check+other};
+  _payBreakdown={cash:cash,card:card,check:check,money_order:money_order,other:other,total:cash+card+check+money_order+other};
   _payDealTagCash=dealTagCash;
   _payDepositTagCash=depositTagCash;
   var fmt=function(v){return '$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
@@ -14497,6 +14503,7 @@ function payShowBreakdown(){
     {method:'cash', label:'Cash',value:_payBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
     {method:'card', label:'Card',value:_payBreakdown.card,color:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.2)'},
     {method:'check',label:'Check',value:_payBreakdown.check,color:'#fbbf24',bg:'rgba(251,191,36,.1)',border:'rgba(251,191,36,.2)'},
+    {method:'money_order',label:'Money Order',value:_payBreakdown.money_order,color:'#f97316',bg:'rgba(249,115,22,.1)',border:'rgba(249,115,22,.2)'},
     {method:'other',label:'Other',value:_payBreakdown.other,color:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.2)'}
   ];
   var html='';
@@ -14602,7 +14609,7 @@ function payCloseBreakdown(){
 
 function _payMethodBadge(method){
   var s='display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;';
-  var map={cash:s+'background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);',card:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',check:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);',zelle:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',money_order:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);'};
+  var map={cash:s+'background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);',card:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',check:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);',zelle:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',money_order:s+'background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.25);'};
   var def=s+'background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);';
   var m=(method||'cash');
   if(m.indexOf(',')!==-1){
@@ -14691,10 +14698,10 @@ function _payRenderCards(){
 }
 
 var _paySearchTimeout=null;
-var _payMethodFilter='all'; // 'all','cash','card','check'
+var _payMethodFilter='all'; // 'all','cash','card','check','money_order'
 function payFilterMethod(m){
   _payMethodFilter=m;
-  ['all','cash','card','check'].forEach(function(f){
+  ['all','cash','card','check','money_order'].forEach(function(f){
     var btn=document.getElementById('pay-filter-'+f);
     if(f===m){btn.style.background='#fff';btn.style.color='#000';}
     else{btn.style.background='none';btn.style.color='#555';}
@@ -15267,7 +15274,7 @@ async function runPayScanOCR(imgSrc){
     document.getElementById('pay-scan-model').value=parsed.vehicle_model||'';
     document.getElementById('pay-scan-vin').value=parsed.vehicle_vin||'';
     var parsedAmt=(parsed.amount||'').replace(/[^0-9.]/g,'');
-    var parsedMethod=(parsed.payment_method&&['cash','card','check','other'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
+    var parsedMethod=(parsed.payment_method&&['cash','card','check','money_order','other'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
     // Reset payment rows and fill with OCR data
     var ml=document.getElementById('pay-methods-list');
     if(ml)ml.innerHTML='';
@@ -16289,7 +16296,7 @@ function dealsShowBreakdown(){
     {method:'cash',label:'Cash',value:_dealsBreakdown.cash,color:'#30d158',bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.2)'},
     {method:'card',label:'Card',value:_dealsBreakdown.card,color:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.2)'},
     {method:'zelle',label:'Zelle',value:_dealsBreakdown.zelle,color:'#38bdf8',bg:'rgba(56,189,248,.1)',border:'rgba(56,189,248,.2)'},
-    {method:'money_order',label:'Money Order',value:_dealsBreakdown.money_order,color:'#fbbf24',bg:'rgba(251,191,36,.1)',border:'rgba(251,191,36,.2)'},
+    {method:'money_order',label:'Money Order',value:_dealsBreakdown.money_order,color:'#f97316',bg:'rgba(249,115,22,.1)',border:'rgba(249,115,22,.2)'},
     {method:'other',label:'Other',value:_dealsBreakdown.other,color:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.2)'}
   ];
   var html='';
@@ -16322,7 +16329,7 @@ function dealsShowMethodDetail(method){
   var backBtn=document.getElementById('deals-breakdown-back');
   if(!content)return;
   var labels={cash:'Cash',card:'Card',zelle:'Zelle',money_order:'Money Order',other:'Other'};
-  var colors={cash:'#30d158',card:'#60a5fa',zelle:'#38bdf8',money_order:'#fbbf24',other:'#a78bfa'};
+  var colors={cash:'#30d158',card:'#60a5fa',zelle:'#38bdf8',money_order:'#f97316',other:'#a78bfa'};
   if(title) title.textContent=(labels[method]||method).toUpperCase()+' PAYMENTS';
   if(backBtn) backBtn.style.display='block';
   var color=colors[method]||'#fff';
@@ -16688,7 +16695,7 @@ function _custRenderProfile(name, deals, payments) {
           if (p.method === 'cash') mColor = '#30d158';
           else if (p.method === 'card') mColor = '#60a5fa';
           else if (p.method === 'zelle') mColor = '#38bdf8';
-          else if (p.method === 'money_order') { mColor = '#fbbf24'; mLabel = 'M.O.'; }
+          else if (p.method === 'money_order') { mColor = '#f97316'; mLabel = 'M.O.'; }
           payRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">' +
             '<span style="font-size:12px;font-weight:700;color:' + mColor + ';">' + mLabel + '</span>' +
             '<span style="font-size:12px;color:#ccc;">' + fmt(parseFloat(p.amount) || 0) + '</span>' +
@@ -16735,7 +16742,7 @@ function _custRenderProfile(name, deals, payments) {
         if (mLower === 'cash') mColor = '#30d158';
         else if (mLower === 'card') mColor = '#60a5fa';
         else if (mLower === 'zelle') mColor = '#38bdf8';
-        else if (mLower === 'money_order') { mColor = '#fbbf24'; method = 'M.O.'; }
+        else if (mLower === 'money_order') { mColor = '#f97316'; method = 'M.O.'; }
         var dateStr = item.date ? months[item.date.getMonth()] + ' ' + item.date.getDate() : '';
         var vehicle = [p.vehicle_year, p.vehicle_make, p.vehicle_model].filter(Boolean).join(' ');
         var desc = p.raw_ocr_text || vehicle || '';
