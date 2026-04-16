@@ -6136,11 +6136,16 @@ function markBadgeSeen(category){
   updateHomeBadges();
 }
 // ── THE BOARD — Consolidated Work View ────────────────────────
-function boardOpen(){
+async function boardOpen(){
   var o=document.getElementById('board-overlay');
   if(!o){o=document.createElement('div');o.id='board-overlay';document.body.appendChild(o);}
   document.getElementById('app').style.display='none';
   o.style.cssText='display:flex;flex-direction:column;position:fixed;inset:0;background:#f5f5f0;z-index:9100;overflow:hidden;';
+  // Fetch inventory_costs for sheet-linked car names
+  var sheetRows=_isData&&_isData.length?_isData:[];
+  if(!sheetRows.length){
+    try{sheetRows=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500')||[];}catch(e){sheetRows=[];}
+  }
   // Gather all work across categories
   var cats=['repair','detail','photos','parts','paint'];
   var catLabels={repair:'Repair',detail:'Detail',photos:'Photos',parts:'Parts',paint:'Paint'};
@@ -6151,7 +6156,7 @@ function boardOpen(){
   var catBgDone={repair:'#bbf7d0',detail:'#bbf7d0',photos:'#bbf7d0',parts:'#bbf7d0',paint:'#bbf7d0'};
   // Build sheet-linked car name lookup: car_id → car_name from inventory_costs
   var _sheetNames={};
-  (_isData||[]).forEach(function(ic){if(ic.car_id&&ic.car_name)_sheetNames[ic.car_id]=ic.car_name;});
+  sheetRows.forEach(function(ic){if(ic.car_id&&ic.car_name)_sheetNames[ic.car_id]=ic.car_name;});
   var columns=[];
   cats.forEach(function(cat){
     var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;});
