@@ -11873,6 +11873,29 @@ function depRemovePayment(idx) {
 }
 function depUpdatePayment(idx, field, val) {
   if(_depPayments[idx]) _depPayments[idx][field] = val;
+  // Auto-add 4% when switching to card
+  if(field==='method'&&val==='card'&&_depPayments[idx]){
+    var amt=parseFloat(_depPayments[idx].amount)||0;
+    if(amt>0){
+      var withFee=Math.round(amt*1.04*100)/100;
+      _depPayments[idx].amount=withFee.toFixed(2);
+      _depPayments[idx].card_fee=true;
+      _depPayments[idx].original_amount=amt.toFixed(2);
+      depRenderPayments();
+      return;
+    }
+  }
+  // Revert 4% when switching away from card
+  if(field==='method'&&val!=='card'&&_depPayments[idx]&&_depPayments[idx].card_fee){
+    var origAmt=parseFloat(_depPayments[idx].original_amount)||0;
+    if(origAmt>0){
+      _depPayments[idx].amount=origAmt.toFixed(2);
+    }
+    _depPayments[idx].card_fee=false;
+    delete _depPayments[idx].original_amount;
+    depRenderPayments();
+    return;
+  }
   depUpdateTotal();
   depUpdateWeekToggle();
 }
@@ -13781,14 +13804,19 @@ function payEditPayment(id){
   var ml=document.getElementById('pay-methods-list');
   if(ml)ml.innerHTML='';
   payAddMethodRow(_payMethod, p.amount||'');
-  // Set card fee if applicable
-  if(_payMethod==='card'&&_payCardFeeAdded){
+  // Set card fee display if applicable (editing existing card payment with fee)
+  if(_payMethod==='card'){
     var row=ml.querySelector('.pay-method-row');
     if(row){
-      row.setAttribute('data-card-fee','true');
-      var toggle=row.querySelector('.pay-row-fee-toggle');if(toggle)toggle.checked=true;
-      var cardFeeDiv=row.querySelector('.pay-row-card-fee');if(cardFeeDiv)cardFeeDiv.style.display='block';
-      payRowCardFee(toggle);
+      if(_payCardFeeAdded){
+        row.setAttribute('data-card-fee','true');
+        var cardFeeDiv=row.querySelector('.pay-row-card-fee');if(cardFeeDiv)cardFeeDiv.style.display='block';
+        _payRowUpdateFeeDisplay(row);
+        var rmBtn=row.querySelector('.pay-row-fee-remove-btn');if(rmBtn)rmBtn.style.display='block';
+      } else {
+        // Card without fee — mark as fee removed so it doesn't auto-add
+        row.setAttribute('data-fee-removed','true');
+      }
     }
   }
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
@@ -13933,19 +13961,21 @@ function payAddMethodRow(method, amount){
       '<div style="flex:1;display:flex;gap:3px;background:#111;border:1px solid #1a1a1a;border-radius:11px;padding:2px;">'+btns+'</div>'+
       '<button onclick="payRemoveMethodRow(this)" class="pay-row-remove" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;">✕</button>'+
     '</div>'+
-    '<input placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payUpdateTotal();payRowCardFee(this)" value="'+(amount||'')+'" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1a1a1a;border-radius:10px;color:#fff;padding:12px 14px;font-size:18px;font-weight:700;outline:none;"/>'+
-    '<div class="pay-row-card-fee" style="display:none;margin-top:8px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;">'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
-        '<input type="checkbox" class="pay-row-fee-toggle" onchange="payRowCardFee(this)" style="width:16px;height:16px;accent-color:#60a5fa;"/>'+
-        '<span style="font-size:13px;color:#ccc;font-weight:600;">4% fee added?</span>'+
-      '</label>'+
-      '<div class="pay-row-fee-detail" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a1a;">'+
-        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>Original:</span><span class="pay-row-fee-orig" style="color:#fff;font-weight:600;">$0.00</span></div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>4% fee:</span><span class="pay-row-fee-amt" style="color:#fbbf24;font-weight:600;">$0.00</span></div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:13px;color:#888;"><span style="font-weight:700;">Total:</span><span class="pay-row-fee-total" style="color:#4ade80;font-weight:700;">$0.00</span></div>'+
+    '<input placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payUpdateTotal();payRowAutoCardFee(this)" onblur="payRowCardBlur(this)" value="'+(amount||'')+'" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1a1a1a;border-radius:10px;color:#fff;padding:12px 14px;font-size:18px;font-weight:700;outline:none;"/>'+
+    '<div class="pay-row-card-fee" style="display:none;margin-top:8px;">'+
+      '<div class="pay-row-fee-detail" style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;">'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>Customer pays:</span><span class="pay-row-fee-orig" style="color:#fff;font-weight:600;">$0.00</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>4% fee included:</span><span class="pay-row-fee-amt" style="color:#fbbf24;font-weight:600;">$0.00</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:13px;color:#888;"><span style="font-weight:700;">You receive:</span><span class="pay-row-fee-total" style="color:#4ade80;font-weight:700;">$0.00</span></div>'+
       '</div>'+
+      '<button onclick="payRowRemoveFee(this)" class="pay-row-fee-remove-btn" style="width:100%;margin-top:8px;padding:11px;background:transparent;border:1.5px solid #ef4444;border-radius:10px;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">Fee Not Taken — Remove 4%</button>'+
     '</div>';
   list.appendChild(row);
+  // If card method with an amount, show card fee section
+  if(m==='card'&&amount){
+    var cardFee=row.querySelector('.pay-row-card-fee');
+    if(cardFee) cardFee.style.display='block';
+  }
   payUpdateTotal();
   payUpdateRemoveButtons();
 }
@@ -13991,33 +14021,115 @@ function payRowMethodSelect(btn,method){
     else{b.style.background='none';b.style.color='#555';}
   });
   var cardFee=row.querySelector('.pay-row-card-fee');
-  if(cardFee) cardFee.style.display=method==='card'?'block':'none';
-  if(method!=='card'){
+  if(method==='card'){
+    // Reset fee-removed flag when switching to card
+    row.removeAttribute('data-fee-removed');
+    // Auto-add 4% fee when switching to card
+    var inp=row.querySelector('input[inputmode="decimal"]');
+    var rawAmt=parseFloat((inp?inp.value:'').replace(/[^0-9.]/g,''))||0;
+    if(rawAmt>0){
+      // Store original amount, apply 4% on top
+      row.setAttribute('data-original-amt',rawAmt.toFixed(2));
+      var withFee=rawAmt*1.04;
+      var rounded=Math.round(withFee*100)/100;
+      inp.value='$'+rounded.toFixed(2);
+      row.setAttribute('data-card-fee','true');
+      payUpdateTotal();
+    } else {
+      row.setAttribute('data-card-fee','true');
+    }
+    if(cardFee) cardFee.style.display='block';
+    _payRowUpdateFeeDisplay(row);
+    // Show remove button
+    var rmBtn=row.querySelector('.pay-row-fee-remove-btn');
+    if(rmBtn) rmBtn.style.display='block';
+  } else {
+    // Switching away from card — revert to original amount if fee was added
+    if(row.getAttribute('data-card-fee')==='true'){
+      var origAmt=row.getAttribute('data-original-amt');
+      if(origAmt){
+        var inp=row.querySelector('input[inputmode="decimal"]');
+        if(inp) inp.value='$'+parseFloat(origAmt).toFixed(2);
+        row.removeAttribute('data-original-amt');
+        payUpdateTotal();
+      }
+    }
     row.setAttribute('data-card-fee','false');
-    var toggle=row.querySelector('.pay-row-fee-toggle');
-    if(toggle)toggle.checked=false;
-    var detail=row.querySelector('.pay-row-fee-detail');
-    if(detail)detail.style.display='none';
+    row.removeAttribute('data-fee-removed');
+    if(cardFee) cardFee.style.display='none';
   }
 }
 
-function payRowCardFee(el){
+// Show fee preview while typing on a card row (no amount modification yet)
+function payRowAutoCardFee(el){
   var row=el.closest('.pay-method-row');
   if(!row)return;
-  var toggle=row.querySelector('.pay-row-fee-toggle');
-  var detail=row.querySelector('.pay-row-fee-detail');
-  var hasFee=toggle&&toggle.checked;
-  row.setAttribute('data-card-fee',hasFee?'true':'false');
-  if(!hasFee){if(detail)detail.style.display='none';return;}
-  if(detail)detail.style.display='block';
+  if(row.getAttribute('data-method')!=='card') return;
+  // If fee was already removed by user, don't re-show
+  if(row.getAttribute('data-fee-removed')==='true') return;
+  var rawAmt=parseFloat((el.value||'').replace(/[^0-9.]/g,''))||0;
+  var cardFee=row.querySelector('.pay-row-card-fee');
+  if(cardFee) cardFee.style.display=rawAmt>0?'block':'none';
+  // Show preview: what it will be with 4% added
+  if(rawAmt>0){
+    var withFee=rawAmt*1.04;
+    var fee=withFee-rawAmt;
+    var origEl=row.querySelector('.pay-row-fee-orig');if(origEl)origEl.textContent='$'+withFee.toFixed(2);
+    var feeEl=row.querySelector('.pay-row-fee-amt');if(feeEl)feeEl.textContent='$'+fee.toFixed(2);
+    var totalEl=row.querySelector('.pay-row-fee-total');if(totalEl)totalEl.textContent='$'+rawAmt.toFixed(2);
+  }
+}
+
+// On blur: auto-add 4% to the amount for card rows
+function payRowCardBlur(el){
+  var row=el.closest('.pay-method-row');
+  if(!row)return;
+  if(row.getAttribute('data-method')!=='card') return;
+  if(row.getAttribute('data-fee-removed')==='true') return;
+  if(row.getAttribute('data-card-fee')==='true') return; // already applied
+  var rawAmt=parseFloat((el.value||'').replace(/[^0-9.]/g,''))||0;
+  if(rawAmt<=0) return;
+  // Store original, apply 4%
+  row.setAttribute('data-original-amt',rawAmt.toFixed(2));
+  var withFee=Math.round(rawAmt*1.04*100)/100;
+  el.value='$'+withFee.toFixed(2);
+  row.setAttribute('data-card-fee','true');
+  payUpdateTotal();
+  _payRowUpdateFeeDisplay(row);
+  var cardFee=row.querySelector('.pay-row-card-fee');
+  if(cardFee) cardFee.style.display='block';
+  var rmBtn=row.querySelector('.pay-row-fee-remove-btn');
+  if(rmBtn) rmBtn.style.display='block';
+}
+
+function _payRowUpdateFeeDisplay(row){
   var inp=row.querySelector('input[inputmode="decimal"]');
-  var amtStr=(inp?inp.value:'').replace(/[^0-9.]/g,'');
-  var total=parseFloat(amtStr)||0;
+  var total=parseFloat((inp?inp.value:'').replace(/[^0-9.]/g,''))||0;
   var original=total/1.04;
   var fee=total-original;
-  var origEl=row.querySelector('.pay-row-fee-orig');if(origEl)origEl.textContent='$'+original.toFixed(2);
+  // "Customer pays" = total with fee (the input value)
+  var origEl=row.querySelector('.pay-row-fee-orig');if(origEl)origEl.textContent='$'+total.toFixed(2);
   var feeEl=row.querySelector('.pay-row-fee-amt');if(feeEl)feeEl.textContent='$'+fee.toFixed(2);
-  var totalEl=row.querySelector('.pay-row-fee-total');if(totalEl)totalEl.textContent='$'+total.toFixed(2);
+  // "You receive" = total minus fee
+  var totalEl=row.querySelector('.pay-row-fee-total');if(totalEl)totalEl.textContent='$'+original.toFixed(2);
+}
+
+function payRowRemoveFee(btn){
+  var row=btn.closest('.pay-method-row');
+  if(!row)return;
+  // Revert to original amount (before 4% was added)
+  var origAmt=row.getAttribute('data-original-amt');
+  var inp=row.querySelector('input[inputmode="decimal"]');
+  if(origAmt&&inp){
+    inp.value='$'+parseFloat(origAmt).toFixed(2);
+  }
+  row.setAttribute('data-card-fee','false');
+  row.setAttribute('data-fee-removed','true');
+  row.removeAttribute('data-original-amt');
+  // Hide fee section
+  var cardFee=row.querySelector('.pay-row-card-fee');
+  if(cardFee) cardFee.style.display='none';
+  payUpdateTotal();
 }
 
 async function loadPaymentWeek(){
@@ -15783,6 +15895,29 @@ function dealRemovePayment(idx) {
 
 function dealUpdatePayment(idx, field, val) {
   if(_dealPayments[idx]) _dealPayments[idx][field] = val;
+  // Auto-add 4% when switching to card
+  if(field==='method'&&val==='card'&&_dealPayments[idx]){
+    var amt=parseFloat(_dealPayments[idx].amount)||0;
+    if(amt>0){
+      var withFee=Math.round(amt*1.04*100)/100;
+      _dealPayments[idx].amount=withFee.toFixed(2);
+      _dealPayments[idx].card_fee=true;
+      _dealPayments[idx].original_amount=amt.toFixed(2);
+      dealRenderPayments();
+      return;
+    }
+  }
+  // Revert 4% when switching away from card
+  if(field==='method'&&val!=='card'&&_dealPayments[idx]&&_dealPayments[idx].card_fee){
+    var origAmt=parseFloat(_dealPayments[idx].original_amount)||0;
+    if(origAmt>0){
+      _dealPayments[idx].amount=origAmt.toFixed(2);
+    }
+    _dealPayments[idx].card_fee=false;
+    delete _dealPayments[idx].original_amount;
+    dealRenderPayments();
+    return;
+  }
   dealUpdateTotal();
   dealUpdateWeekToggleVisibility();
 }
@@ -17734,7 +17869,7 @@ function openDealDetail(id) {
     payments.forEach(function(p,i){
       html += '<div style="display:flex;gap:6px;align-items:center;">';
       html += '<input type="text" inputmode="decimal" value="$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'" oninput="moneyInput(this)" data-idx="'+i+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>';
-      html += '<select data-idx="'+i+'" class="de-pmt-method" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">';
+      html += '<select data-idx="'+i+'" class="de-pmt-method" onchange="deAutoCardFee(this,'+d.id+')" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">';
       html += '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>';
       html += '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>';
       html += '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>';
@@ -17888,11 +18023,30 @@ function dealEditAddPayment(id){
   var row=document.createElement('div');
   row.style.cssText='display:flex;gap:6px;align-items:center;';
   row.innerHTML='<input type="text" inputmode="decimal" value="" oninput="moneyInput(this)" placeholder="$0.00" data-idx="'+idx+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>'
-    +'<select data-idx="'+idx+'" class="de-pmt-method" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">'
+    +'<select data-idx="'+idx+'" class="de-pmt-method" onchange="deAutoCardFee(this,'+id+')" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">'
     +'<option value="cash">Cash</option><option value="card">Card</option><option value="zelle">Zelle</option><option value="money_order">Money Order</option><option value="other">Other</option></select>'
     +'<button onclick="this.parentElement.remove();dealEditRecalcCash('+id+')" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 10px;font-size:14px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
   wrap.appendChild(row);
   row.querySelector('input').focus();
+}
+
+function deAutoCardFee(sel,id){
+  var row=sel.closest('div');
+  var amtEl=row?row.querySelector('.de-pmt-amt'):null;
+  if(!amtEl)return;
+  var amt=parseFloat((amtEl.value||'').replace(/[^0-9.]/g,''))||0;
+  if(sel.value==='card'&&amt>0&&!amtEl.getAttribute('data-card-fee')){
+    amtEl.setAttribute('data-original-amt',amt.toFixed(2));
+    amtEl.setAttribute('data-card-fee','true');
+    var withFee=Math.round(amt*1.04*100)/100;
+    amtEl.value='$'+withFee.toLocaleString('en-US',{minimumFractionDigits:2});
+  } else if(sel.value!=='card'&&amtEl.getAttribute('data-card-fee')==='true'){
+    var origAmt=amtEl.getAttribute('data-original-amt');
+    if(origAmt) amtEl.value='$'+parseFloat(origAmt).toLocaleString('en-US',{minimumFractionDigits:2});
+    amtEl.removeAttribute('data-card-fee');
+    amtEl.removeAttribute('data-original-amt');
+  }
+  dealEditRecalcCash(id);
 }
 
 function dealEditRecalcCash(id){
