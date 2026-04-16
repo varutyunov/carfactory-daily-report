@@ -6191,17 +6191,18 @@ function _boardRender(o,sheetRows){
     '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">The Board</span>'+
     '<div style="width:30px;"></div>'+
   '</div>';
-  // Full-screen grid: top row 2 tiles (50/50), bottom row 3 tiles (33/33/33) — fills entire screen
+  // Full-screen grid — NO scroll, fills 100% of iPhone screen
+  // columns: 0=repair, 1=detail, 2=photos, 3=parts, 4=paint
   html+='<div style="flex:1;display:flex;flex-direction:column;gap:2px;padding:2px;overflow:hidden;background:#ddd;">';
-  // Top row: Repair + Detail
-  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;">';
+  // Top row: Repair + Parts (50/50)
+  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;overflow:hidden;">';
   _boardTile(columns[0]);
-  _boardTile(columns[1]);
-  html+='</div>';
-  // Bottom row: Photos + Parts + Paint
-  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;">';
-  _boardTile(columns[2]);
   _boardTile(columns[3]);
+  html+='</div>';
+  // Bottom row: Detail + Photos + Paint (33/33/33)
+  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;overflow:hidden;">';
+  _boardTile(columns[1]);
+  _boardTile(columns[2]);
   _boardTile(columns[4]);
   html+='</div>';
   html+='</div>';
