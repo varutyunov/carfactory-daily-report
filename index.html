@@ -18506,7 +18506,7 @@ async function dealMoveWeek(id, dir) {
 // Push app edits directly to Google Apps Script web app → writes to Google Sheet
 var _SHEETS_URL='https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec';
 var _SHEETS_SECRET='cf-sync-2026';
-function sheetsPush(tab, rowIndex, data){
+function sheetsPush(tab, rowIndex, data, action){
   var url=_SHEETS_URL;
   var secret=_SHEETS_SECRET;
   if(!url||!secret) return;
@@ -18514,7 +18514,7 @@ function sheetsPush(tab, rowIndex, data){
     fetch(url,{
       method:'POST',
       headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
-      body:JSON.stringify({secret:secret,tab:tab,action:'update',row_index:rowIndex,data:data})
+      body:JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{}})
     }).catch(function(){});
   }catch(e){}
 }
@@ -19132,7 +19132,12 @@ async function d26Save(){
 async function d26Delete(id){
   if(!confirm('Delete this deal?'))return;
   try{
+    // Find sort_order before deleting
+    var deal=_d26Data.find(function(d){return d.id===id;});
+    var so=deal?deal.sort_order:0;
     await sbDelete('deals26',id);
+    // Clear from Google Sheet
+    if(so) sheetsPush('Deals26',so,null,'delete');
     _d26Data=_d26Data.filter(function(d){return d.id!==id;});
     d26EditClose();
     d26Render();
@@ -19218,9 +19223,16 @@ async function invSheetsAddCar(){
   var name=prompt('Car name (e.g. 17 BMW 330i Black 117k):');
   if(!name||!name.trim())return;
   try{
-    await sbPost('inventory_costs',{car_name:name.trim(),purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',location:_isLoc});
+    var newCar={car_name:name.trim(),purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',vlad_expense_notes:'',location:_isLoc};
+    var res=await sbPost('inventory_costs',newCar);
     var costs=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];
+    // Push new row to Google Sheet
+    var newRow=res&&res[0]?res[0]:null;
+    if(newRow){
+      var so=newRow.sort_order||_isData.length;
+      sheetsPush('Inventory',so,newCar,'insert');
+    }
     invSheetsRender();
   }catch(e){alert('Error: '+(e.message||e));}
 }
@@ -19245,6 +19257,7 @@ function isEditOpen(idx){
     (c.car_id?'':'<button onclick="isEditClose();isLinkOpen('+idx+')" style="width:100%;margin-bottom:14px;padding:14px;background:linear-gradient(145deg,#1a1500,#3d2e00);border:1px solid rgba(245,158,11,.4);border-radius:14px;color:#f59e0b;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">&#128279; Link to Inventory Car</button>')+
     '<div id="is-edit-body" style="display:flex;flex-direction:column;gap:12px;"></div>'+
     '<button onclick="isEditSave()" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>'+
+    '<button onclick="isDeleteCar('+idx+')" style="width:100%;margin-top:12px;padding:14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:14px;color:#ef4444;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Delete Car</button>'+
     '</div>';
   document.getElementById('is-edit-body').innerHTML=field('Car Name','is-e-name',c.car_name)
     +field('Purchase Cost','is-e-cost',c.purchase_cost||'','number')
@@ -19260,6 +19273,20 @@ function isEditClose(){
   var o=document.getElementById('is-edit-overlay');
   if(o) o.style.display='none';
   _isEditIdx=-1;
+}
+
+async function isDeleteCar(idx){
+  var c=_isData[idx];if(!c)return;
+  if(!confirm('Delete "'+c.car_name+'" from inventory costs?'))return;
+  try{
+    var so=c.sort_order||(_isData.indexOf(c)+1);
+    await sbDelete('inventory_costs',c.id);
+    // Clear from Google Sheet
+    if(so) sheetsPush('Inventory',so,null,'delete');
+    _isData=_isData.filter(function(d){return d.id!==c.id;});
+    isEditClose();
+    invSheetsRender();
+  }catch(e){alert('Error deleting: '+(e.message||e));}
 }
 
 async function isEditSave(){
@@ -19278,9 +19305,9 @@ async function isEditSave(){
   try{
     await sbPatch('inventory_costs',c.id,body);
     Object.assign(c,body);
-    // Push to Google Sheet — row_index is sort_order or position in array
-    var isIdx=_isData.indexOf(c);
-    if(isIdx>=0) sheetsPush('Inventory',isIdx+1,body);
+    // Push to Google Sheet — use sort_order for reliable row matching
+    var so=c.sort_order||(_isData.indexOf(c)+1);
+    sheetsPush('Inventory',so,body);
     isEditClose();
     invSheetsRender();
   }catch(e){alert('Error: '+(e.message||e));}
@@ -19393,13 +19420,11 @@ async function isExpSave(){
     await sbPatch('inventory_costs',d.id,patch);
     d[totalField]=total;
     d[noteField]=noteStr;
-    var isIdx=_isData.indexOf(d);
-    if(isIdx>=0){
-      var pushData={};
-      pushData[totalField]=total;
-      pushData[noteField]=noteStr;
-      sheetsPush('Inventory',isIdx+1,pushData);
-    }
+    var so=d.sort_order||(_isData.indexOf(d)+1);
+    var pushData={};
+    pushData[totalField]=total;
+    pushData[noteField]=noteStr;
+    sheetsPush('Inventory',so,pushData);
     var pop=document.getElementById('is-exp-popup');
     if(pop)pop.remove();
     invSheetsRender();

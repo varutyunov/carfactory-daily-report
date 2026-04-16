@@ -31,6 +31,11 @@ var TAB_CONFIG = {
       'I': 'joint_expenses',
       'J': 'vlad_expenses'
       // K = Total (formula, don't sync)
+    },
+    // Cell notes on these columns sync to Supabase fields
+    cellNotes: {
+      'I': 'expense_notes',       // joint expenses breakdown
+      'J': 'vlad_expense_notes'   // vlad expenses breakdown
     }
   },
   'Deals26': {
@@ -73,9 +78,9 @@ function onSheetEdit(e) {
   if (!field) return;
 
   // Check if this edit came from the app (via doPost) — skip to prevent loops
-  var lock = PropertiesService.getScriptProperties().getProperty('_syncLock');
-  if (lock === 'app') {
-    PropertiesService.getScriptProperties().deleteProperty('_syncLock');
+  // Lock uses a timestamp; edits within 5 seconds of a doPost are skipped
+  var lockTime = PropertiesService.getScriptProperties().getProperty('_syncLockTime');
+  if (lockTime && (Date.now() - parseInt(lockTime)) < 5000) {
     return;
   }
 
@@ -101,21 +106,24 @@ function onSheetEdit(e) {
     }
   }
 
+  // Also read cell notes if configured (e.g. expense breakdowns)
+  if (config.cellNotes) {
+    var noteKeys = Object.keys(config.cellNotes);
+    for (var n = 0; n < noteKeys.length; n++) {
+      var nLetter = noteKeys[n];
+      var nField = config.cellNotes[nLetter];
+      var nNum = letterToColumn(nLetter);
+      var noteVal = sheet.getRange(row, nNum).getNote();
+      data[nField] = noteVal || '';
+    }
+  }
+
   data.sync_source = 'sheets';
   data.updated_at = new Date().toISOString();
 
-  // Write directly to Supabase
+  // Write directly to Supabase — always use sort_order for reliable row matching
   try {
-    if (config.table === 'deals26') {
-      // Update by sort_order
-      supabasePatch(config.table, 'sort_order=eq.' + rowIndex, data);
-    } else {
-      // inventory_costs: get the nth row by id order
-      var rows = supabaseGet(config.table, 'select=id&order=sort_order.asc,id.asc&limit=1&offset=' + (rowIndex - 1));
-      if (rows && rows.length > 0) {
-        supabasePatch(config.table, 'id=eq.' + rows[0].id, data);
-      }
-    }
+    supabasePatch(config.table, 'sort_order=eq.' + rowIndex, data);
   } catch (err) {
     Logger.log('Sheet→Supabase sync error: ' + err.message);
   }
@@ -144,34 +152,135 @@ function doPost(e) {
       return jsonResponse({ error: 'Sheet tab not found: ' + tabName });
     }
 
-    var rowIndex = body.row_index;
-    var data = body.data;
-    var targetRow = config.startRow + rowIndex - 1;
+    var action = body.action || 'update';
 
-    // Set lock so onSheetEdit knows to skip this edit
-    PropertiesService.getScriptProperties().setProperty('_syncLock', 'app');
+    // Set timestamp lock so onSheetEdit skips edits for 5 seconds
+    PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
 
-    // Write each field to its column
-    var colKeys = Object.keys(config.columns);
-    for (var j = 0; j < colKeys.length; j++) {
-      var cLetter = colKeys[j];
-      var cField = config.columns[cLetter];
-      if (data.hasOwnProperty(cField)) {
-        var cNum = letterToColumn(cLetter);
-        var val = data[cField];
-        if (cField === 'gps_sold') {
-          val = val ? 'X' : '';
-        }
-        sheet.getRange(targetRow, cNum).setValue(val);
-      }
+    // ── ACTION: UPDATE (default) ──────────────────────────────
+    if (action === 'update') {
+      var rowIndex = body.row_index;
+      var data = body.data;
+      var targetRow = config.startRow + rowIndex - 1;
+      _writeRowToSheet(sheet, config, targetRow, data);
+      SpreadsheetApp.flush();
+      return jsonResponse({ ok: true, action: 'update', row: targetRow });
     }
 
-    SpreadsheetApp.flush();
+    // ── ACTION: INSERT — add new row to sheet ─────────────────
+    if (action === 'insert') {
+      var data = body.data;
+      // Find last used row in the synced columns and insert after it
+      var lastRow = sheet.getLastRow();
+      var insertRow = lastRow + 1;
+      // If row_index is provided, calculate target position
+      if (body.row_index) {
+        insertRow = config.startRow + body.row_index - 1;
+      }
+      _writeRowToSheet(sheet, config, insertRow, data);
+      SpreadsheetApp.flush();
+      return jsonResponse({ ok: true, action: 'insert', row: insertRow });
+    }
 
-    return jsonResponse({ ok: true, row: targetRow });
+    // ── ACTION: DELETE — clear row from sheet ─────────────────
+    if (action === 'delete') {
+      var rowIndex = body.row_index;
+      var targetRow = config.startRow + rowIndex - 1;
+      // Clear all synced columns in this row
+      var colKeys = Object.keys(config.columns);
+      for (var j = 0; j < colKeys.length; j++) {
+        var cNum = letterToColumn(colKeys[j]);
+        var cell = sheet.getRange(targetRow, cNum);
+        cell.clearContent();
+        cell.clearNote();
+      }
+      // Also clear cell notes columns
+      if (config.cellNotes) {
+        var noteKeys = Object.keys(config.cellNotes);
+        for (var n = 0; n < noteKeys.length; n++) {
+          var nNum = letterToColumn(noteKeys[n]);
+          sheet.getRange(targetRow, nNum).clearNote();
+        }
+      }
+      SpreadsheetApp.flush();
+      return jsonResponse({ ok: true, action: 'delete', row: targetRow });
+    }
+
+    // ── ACTION: READ_ALL — read all rows for reconciliation ───
+    if (action === 'read_all') {
+      var rows = [];
+      var lastRow = sheet.getLastRow();
+      if (lastRow < config.startRow) {
+        return jsonResponse({ ok: true, action: 'read_all', rows: [] });
+      }
+      for (var r = config.startRow; r <= lastRow; r++) {
+        var rowData = {};
+        var hasData = false;
+        var colKeys = Object.keys(config.columns);
+        for (var c = 0; c < colKeys.length; c++) {
+          var cLetter = colKeys[c];
+          var cField = config.columns[cLetter];
+          var cNum = letterToColumn(cLetter);
+          var val = sheet.getRange(r, cNum).getValue();
+          if (cField === 'gps_sold') {
+            rowData[cField] = (val === 'X' || val === 'x' || val === true);
+          } else if (cField === 'car_name' || cField === 'car_desc') {
+            rowData[cField] = String(val || '');
+            if (val) hasData = true;
+          } else if (cField === 'deal_num') {
+            rowData[cField] = parseInt(val) || 0;
+          } else {
+            rowData[cField] = parseFloat(String(val).replace(/[$,]/g, '')) || 0;
+            if (val) hasData = true;
+          }
+        }
+        // Read cell notes
+        if (config.cellNotes) {
+          var noteKeys = Object.keys(config.cellNotes);
+          for (var n = 0; n < noteKeys.length; n++) {
+            var nLetter = noteKeys[n];
+            var nField = config.cellNotes[nLetter];
+            var nNum = letterToColumn(nLetter);
+            rowData[nField] = sheet.getRange(r, nNum).getNote() || '';
+          }
+        }
+        rowData._sheetRow = r;
+        rowData._rowIndex = r - config.startRow + 1;
+        if (hasData) rows.push(rowData);
+      }
+      return jsonResponse({ ok: true, action: 'read_all', rows: rows });
+    }
+
+    return jsonResponse({ error: 'Unknown action: ' + action });
 
   } catch (err) {
     return jsonResponse({ error: err.message });
+  }
+}
+
+// Helper: write data fields + cell notes to a sheet row
+function _writeRowToSheet(sheet, config, targetRow, data) {
+  var colKeys = Object.keys(config.columns);
+  for (var j = 0; j < colKeys.length; j++) {
+    var cLetter = colKeys[j];
+    var cField = config.columns[cLetter];
+    if (data.hasOwnProperty(cField)) {
+      var cNum = letterToColumn(cLetter);
+      var val = data[cField];
+      if (cField === 'gps_sold') val = val ? 'X' : '';
+      sheet.getRange(targetRow, cNum).setValue(val);
+    }
+  }
+  if (config.cellNotes) {
+    var noteKeys = Object.keys(config.cellNotes);
+    for (var n = 0; n < noteKeys.length; n++) {
+      var nLetter = noteKeys[n];
+      var nField = config.cellNotes[nLetter];
+      if (data.hasOwnProperty(nField)) {
+        var nNum = letterToColumn(nLetter);
+        sheet.getRange(targetRow, nNum).setNote(data[nField] || '');
+      }
+    }
   }
 }
 
@@ -208,6 +317,159 @@ function supabasePatch(table, filter, data) {
     payload: JSON.stringify(data),
     muteHttpExceptions: true
   });
+}
+
+function supabasePost(table, data) {
+  var url = SUPABASE_URL + '/rest/v1/' + table;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    payload: JSON.stringify(data),
+    muteHttpExceptions: true
+  });
+  return JSON.parse(res.getContentText());
+}
+
+function supabaseDelete(table, filter) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?' + filter;
+  UrlFetchApp.fetch(url, {
+    method: 'delete',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    },
+    muteHttpExceptions: true
+  });
+}
+
+// ============================================================
+// FULL RECONCILIATION — run on time-based trigger (every 5 min)
+// Compares sheet rows vs Supabase rows and syncs differences
+// ============================================================
+function syncFullReconcile() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var tabNames = Object.keys(TAB_CONFIG);
+
+  for (var t = 0; t < tabNames.length; t++) {
+    var tabName = tabNames[t];
+    var config = TAB_CONFIG[tabName];
+    var sheet = ss.getSheetByName(tabName);
+    if (!sheet) continue;
+
+    // Read all sheet rows
+    var lastRow = sheet.getLastRow();
+    var sheetRows = {};
+    var nameField = config.table === 'deals26' ? 'car_desc' : 'car_name';
+
+    for (var r = config.startRow; r <= lastRow; r++) {
+      var rowIndex = r - config.startRow + 1;
+      var rowData = {};
+      var hasData = false;
+      var colKeys = Object.keys(config.columns);
+
+      for (var c = 0; c < colKeys.length; c++) {
+        var cLetter = colKeys[c];
+        var cField = config.columns[cLetter];
+        var cNum = letterToColumn(cLetter);
+        var val = sheet.getRange(r, cNum).getValue();
+        if (cField === 'gps_sold') {
+          rowData[cField] = (val === 'X' || val === 'x' || val === true);
+        } else if (cField === 'car_name' || cField === 'car_desc') {
+          rowData[cField] = String(val || '');
+          if (val) hasData = true;
+        } else if (cField === 'deal_num') {
+          rowData[cField] = parseInt(val) || 0;
+        } else {
+          rowData[cField] = parseFloat(String(val).replace(/[$,]/g, '')) || 0;
+          if (val && parseFloat(String(val).replace(/[$,]/g, '')) !== 0) hasData = true;
+        }
+      }
+
+      // Read cell notes
+      if (config.cellNotes) {
+        var noteKeys = Object.keys(config.cellNotes);
+        for (var n = 0; n < noteKeys.length; n++) {
+          var nLetter = noteKeys[n];
+          var nField = config.cellNotes[nLetter];
+          var nNum = letterToColumn(nLetter);
+          rowData[nField] = sheet.getRange(r, nNum).getNote() || '';
+        }
+      }
+
+      if (hasData) {
+        sheetRows[rowIndex] = rowData;
+      }
+    }
+
+    // Read all Supabase rows
+    var dbRows = supabaseGet(config.table, 'select=*&order=sort_order.asc,id.asc&limit=500');
+    if (!Array.isArray(dbRows)) continue;
+
+    var dbMap = {};
+    for (var d = 0; d < dbRows.length; d++) {
+      var so = dbRows[d].sort_order;
+      if (so) dbMap[so] = dbRows[d];
+    }
+
+    // Reconcile: Sheet → Supabase (new rows in sheet)
+    var sheetKeys = Object.keys(sheetRows);
+    for (var s = 0; s < sheetKeys.length; s++) {
+      var sIdx = parseInt(sheetKeys[s]);
+      var sRow = sheetRows[sIdx];
+      if (!dbMap[sIdx]) {
+        // Row exists in sheet but not in Supabase → INSERT
+        sRow.sort_order = sIdx;
+        sRow.sync_source = 'sheets';
+        sRow.updated_at = new Date().toISOString();
+        if (config.table === 'inventory_costs') {
+          sRow.location = sRow.location || 'DeBary';
+        }
+        try { supabasePost(config.table, sRow); } catch (err) {
+          Logger.log('Reconcile INSERT error: ' + err.message);
+        }
+      } else {
+        // Row exists in both — sync cell notes (onEdit doesn't catch note-only changes)
+        if (config.cellNotes) {
+          var noteChanged = false;
+          var notePatch = {};
+          var noteKeys2 = Object.keys(config.cellNotes);
+          for (var n2 = 0; n2 < noteKeys2.length; n2++) {
+            var nField2 = config.cellNotes[noteKeys2[n2]];
+            var sheetNote = sRow[nField2] || '';
+            var dbNote = dbMap[sIdx][nField2] || '';
+            if (sheetNote !== dbNote) {
+              notePatch[nField2] = sheetNote;
+              noteChanged = true;
+            }
+          }
+          if (noteChanged) {
+            notePatch.sync_source = 'sheets';
+            notePatch.updated_at = new Date().toISOString();
+            try { supabasePatch(config.table, 'sort_order=eq.' + sIdx, notePatch); } catch (err) {
+              Logger.log('Reconcile note sync error: ' + err.message);
+            }
+          }
+        }
+      }
+    }
+
+    // Reconcile: Supabase → Sheet (rows deleted from sheet)
+    var dbKeys = Object.keys(dbMap);
+    for (var dk = 0; dk < dbKeys.length; dk++) {
+      var dIdx = parseInt(dbKeys[dk]);
+      if (!sheetRows[dIdx]) {
+        // Row exists in Supabase but not in sheet → DELETE from Supabase
+        try { supabaseDelete(config.table, 'id=eq.' + dbMap[dIdx].id); } catch (err) {
+          Logger.log('Reconcile DELETE error: ' + err.message);
+        }
+      }
+    }
+  }
 }
 
 // ============================================================
