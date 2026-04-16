@@ -1132,6 +1132,12 @@ body.light .cal-fab{background:#4488ff !important;}
         <div style="font-size:11px;color:rgba(74,222,128,.5);margin-top:4px;">All payments auto-posted. Prior deposit cash is subtracted to prevent double-counting.</div>
       </div>
 
+      <!-- Notes -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Notes <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
+        <textarea id="deal-upload-notes" placeholder="Any notes about this deal..." style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:15px;outline:none;min-height:80px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+
       <button onclick="dealGoStep3()" style="width:100%;padding:16px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Next — Upload Photos</button>
     </div>
 
@@ -15841,7 +15847,7 @@ function openDealForm(forceLoc) {
   var tb = document.querySelector('.tb'); if(tb) tb.style.display = 'none';
   dealShowStep(1);
   // Clear all inputs
-  ['deal-inv-search','deal-customer-fname','deal-customer-mname','deal-customer-lname','deal-gps'].forEach(function(id) {
+  ['deal-inv-search','deal-customer-fname','deal-customer-mname','deal-customer-lname','deal-gps','deal-upload-notes'].forEach(function(id) {
     var el = document.getElementById(id); if(el) el.value = '';
   });
   document.getElementById('deal-car-summary').textContent = '';
@@ -16193,6 +16199,7 @@ async function dealSubmit() {
       photo_urls: JSON.stringify(photoUrls),
       created_by: me ? me.name : '',
       location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
+      notes: (document.getElementById('deal-upload-notes').value||'').trim(),
       created_at: new Date().toISOString()
     };
     // Save pickup payment as its own columns
