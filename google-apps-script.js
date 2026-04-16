@@ -111,7 +111,7 @@ function onSheetEdit(e) {
       supabasePatch(config.table, 'sort_order=eq.' + rowIndex, data);
     } else {
       // inventory_costs: get the nth row by id order
-      var rows = supabaseGet(config.table, 'select=id&order=id.asc&limit=1&offset=' + (rowIndex - 1));
+      var rows = supabaseGet(config.table, 'select=id&order=sort_order.asc,id.asc&limit=1&offset=' + (rowIndex - 1));
       if (rows && rows.length > 0) {
         supabasePatch(config.table, 'id=eq.' + rows[0].id, data);
       }

@@ -19148,8 +19148,8 @@ function invSheetsRender(){
     var rowBg=i%2===0?'#111':'#0d0d0d';
     var jointVal=fmt(joint);
     var vladVal=fmt(vlad);
-    var jointHtml=jointVal?'<span style="border-bottom:1px dashed #f59e0b;">'+jointVal+'</span>':'';
-    var vladHtml=vladVal?'<span style="border-bottom:1px dashed #a78bfa;">'+vladVal+'</span>':'';
+    var jointHtml=jointVal?'<span style="border-bottom:1px dashed #f59e0b;">'+jointVal+'</span>':'<span style="color:#333;">—</span>';
+    var vladHtml=vladVal?'<span style="border-bottom:1px dashed #a78bfa;">'+vladVal+'</span>':'<span style="color:#333;">—</span>';
     html+='<tr onclick="isEditOpen('+realIdx+')" style="background:'+rowBg+';cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid #1a1a1a;">'+
       '<td style="'+cs+'text-align:left;color:#fff;font-weight:600;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;letter-spacing:.3px;max-width:150px;">'+carHtml+'</td>'+
       '<td style="'+ns+'color:#f87171;">'+fmt(cost)+'</td>'+
@@ -19354,6 +19354,7 @@ async function isExpSave(){
     if(isIdx>=0){
       var pushData={};
       pushData[totalField]=total;
+      pushData[noteField]=noteStr;
       sheetsPush('Inventory',isIdx+1,pushData);
     }
     var pop=document.getElementById('is-exp-popup');
