@@ -6136,16 +6136,21 @@ function markBadgeSeen(category){
   updateHomeBadges();
 }
 // ── THE BOARD — Consolidated Work View ────────────────────────
-async function boardOpen(){
+function boardOpen(){
   var o=document.getElementById('board-overlay');
   if(!o){o=document.createElement('div');o.id='board-overlay';document.body.appendChild(o);}
   document.getElementById('app').style.display='none';
   o.style.cssText='display:flex;flex-direction:column;position:fixed;inset:0;background:#f5f5f0;z-index:9100;overflow:hidden;';
-  // Fetch inventory_costs for sheet-linked car names
+  o.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;"><div class="dep-spinner"></div></div>';
+  // Fetch sheet names then render
   var sheetRows=_isData&&_isData.length?_isData:[];
+  var doRender=function(){_boardRender(o,sheetRows);};
   if(!sheetRows.length){
-    try{sheetRows=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500')||[];}catch(e){sheetRows=[];}
-  }
+    sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500').then(function(r){sheetRows=Array.isArray(r)?r:[];}).catch(function(){}).then(doRender);
+  } else { doRender(); }
+  history.pushState({board:true},'');
+}
+function _boardRender(o,sheetRows){
   // Gather all work across categories
   var cats=['repair','detail','photos','parts','paint'];
   var catLabels={repair:'Repair',detail:'Detail',photos:'Photos',parts:'Parts',paint:'Paint'};
@@ -6241,7 +6246,6 @@ async function boardOpen(){
   });
   html+='</div>';
   o.innerHTML=html;
-  history.pushState({board:true},'');
 }
 function boardClose(){
   var o=document.getElementById('board-overlay');
