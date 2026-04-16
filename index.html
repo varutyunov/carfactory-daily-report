@@ -6185,28 +6185,39 @@ function _boardRender(o,sheetRows){
     });
     columns.push({cat:cat,label:catLabels[cat],icon:catIcons[cat],color:catColors[cat],items:items});
   });
-  // Header
-  var html='<div style="background:#fff;border-bottom:2px solid #ccc;padding:10px 14px;display:flex;align-items:center;flex-shrink:0;">'+
-    '<button onclick="boardClose()" style="background:none;border:none;color:#333;font-size:24px;cursor:pointer;padding:0 6px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
-    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:#111;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">The Board</span>'+
+  // Header — minimal
+  var html='<div style="background:#222;padding:6px 14px;display:flex;align-items:center;flex-shrink:0;">'+
+    '<button onclick="boardClose()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:0 6px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">The Board</span>'+
     '<div style="width:30px;"></div>'+
   '</div>';
-  // Board grid — horizontally scrollable columns, each ~55% of screen width
-  html+='<div style="flex:1;display:flex;gap:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;">';
-  columns.forEach(function(col){
-    html+='<div style="min-width:55vw;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid #ddd;overflow-y:auto;-webkit-overflow-scrolling:touch;scroll-snap-align:start;">';
-    // Column header — dark tag style
-    html+='<div style="padding:8px 6px 6px;text-align:center;background:#222;flex-shrink:0;">';
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;text-transform:uppercase;line-height:1;">'+col.icon+' '+col.label+'</div>';
-    if(col.items.length) html+='<div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:2px;">'+col.items.length+'</div>';
+  // Full-screen grid: top row 2 tiles (50/50), bottom row 3 tiles (33/33/33) — fills entire screen
+  html+='<div style="flex:1;display:flex;flex-direction:column;gap:2px;padding:2px;overflow:hidden;background:#ddd;">';
+  // Top row: Repair + Detail
+  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;">';
+  _boardTile(columns[0]);
+  _boardTile(columns[1]);
+  html+='</div>';
+  // Bottom row: Photos + Parts + Paint
+  html+='<div style="flex:1;display:flex;gap:2px;min-height:0;">';
+  _boardTile(columns[2]);
+  _boardTile(columns[3]);
+  _boardTile(columns[4]);
+  html+='</div>';
+  html+='</div>';
+  function _boardTile(col){
+    html+='<div style="flex:1;display:flex;flex-direction:column;background:#fff;border-radius:4px;overflow:hidden;min-width:0;">';
+    // Tile header
+    html+='<div style="background:'+col.color+';padding:4px 6px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:.5px;text-transform:uppercase;line-height:1;">'+col.icon+' '+col.label+'</div>';
+    if(col.items.length) html+='<div style="font-size:9px;color:rgba(255,255,255,.7);">'+col.items.length+'</div>';
     html+='</div>';
-    // Car entries — sticky note cards
+    // Cards inside tile — vertical scroll
     if(!col.items.length){
-      html+='<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="font-size:10px;color:#ccc;">—</span></div>';
+      html+='<div style="flex:1;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:#ccc;">—</span></div>';
     } else {
-      html+='<div style="padding:6px 6px 8px;">';
+      html+='<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:3px 4px;">';
       col.items.forEach(function(item){
-        // Car name: prefer sheet name, else shorten inventory name
         var displayName='';
         if(item.sheetName){
           displayName=item.sheetName;
@@ -6217,34 +6228,27 @@ function _boardRender(o,sheetRows){
         }
         var noteBg=item.done?catBgDone[col.cat]:catBg[col.cat];
         var borderCol=item.done?'#86efac':col.color;
-        // Progress indicator
-        var progHtml='';
-        if(item.tasksTotal>0){
-          progHtml='<div style="font-size:10px;color:rgba(0,0,0,.45);margin-top:3px;">'+item.tasksDone+'/'+item.tasksTotal+(item.done?' &#10003;':'')+'</div>';
-        } else if(item.done){
-          progHtml='<div style="font-size:10px;color:#16a34a;margin-top:3px;">&#10003; Done</div>';
-        }
-        // Task detail lines (max 3)
+        // Task lines (max 2)
         var detailHtml='';
         if(item.taskTexts.length>0){
-          var shown=item.taskTexts.slice(0,3);
-          shown.forEach(function(t){
-            var deco=t.done?'text-decoration:line-through;color:rgba(0,0,0,.35);':'color:rgba(0,0,0,.6);';
-            detailHtml+='<div style="font-size:11px;line-height:1.3;'+deco+'margin-top:2px;">'+(t.done?'&#10003; ':'')+t.text+'</div>';
+          item.taskTexts.slice(0,2).forEach(function(t){
+            var deco=t.done?'text-decoration:line-through;color:rgba(0,0,0,.3);':'color:rgba(0,0,0,.55);';
+            detailHtml+='<div style="font-size:9px;line-height:1.2;'+deco+'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">'+(t.done?'&#10003; ':'')+t.text+'</div>';
           });
-          if(item.taskTexts.length>3) detailHtml+='<div style="font-size:10px;color:rgba(0,0,0,.35);margin-top:2px;">+'+(item.taskTexts.length-3)+' more</div>';
+          if(item.taskTexts.length>2) detailHtml+='<div style="font-size:8px;color:rgba(0,0,0,.3);margin-top:1px;">+'+(item.taskTexts.length-2)+' more</div>';
         }
-        html+='<div onclick="boardGoToCar('+item.car.id+',\''+col.cat+'\')" style="background:'+noteBg+';border-left:3px solid '+borderCol+';border-radius:2px;padding:8px 8px 6px;margin-bottom:5px;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:1px 1px 3px rgba(0,0,0,.1);">';
-        html+='<div style="font-size:13px;font-weight:700;color:#111;line-height:1.2;">'+displayName+'</div>';
-        html+=detailHtml;
-        html+=progHtml;
+        var progHtml='';
+        if(item.tasksTotal>0) progHtml='<div style="font-size:8px;color:rgba(0,0,0,.4);margin-top:1px;">'+item.tasksDone+'/'+item.tasksTotal+(item.done?' &#10003;':'')+'</div>';
+        else if(item.done) progHtml='<div style="font-size:8px;color:#16a34a;margin-top:1px;">&#10003;</div>';
+        html+='<div onclick="boardGoToCar('+item.car.id+',\''+col.cat+'\')" style="background:'+noteBg+';border-left:2px solid '+borderCol+';border-radius:2px;padding:4px 5px;margin-bottom:3px;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 2px rgba(0,0,0,.08);">';
+        html+='<div style="font-size:11px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+displayName+'</div>';
+        html+=detailHtml+progHtml;
         html+='</div>';
       });
       html+='</div>';
     }
     html+='</div>';
-  });
-  html+='</div>';
+  }
   o.innerHTML=html;
 }
 function boardClose(){
