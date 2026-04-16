@@ -1309,44 +1309,14 @@ body.light .cal-fab{background:#4488ff !important;}
           </div>
         </div>
 
-        <!-- Payment Method -->
+        <!-- Payment Methods (multi-row) -->
         <div style="margin-bottom:12px;">
-          <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payment Method <span style="color:#ff453a;">*</span></label>
-          <div style="display:flex;gap:4px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;margin-top:6px;">
-            <button onclick="payMethodSelect('cash')" id="pay-method-cash" style="flex:1;padding:10px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;cursor:pointer;text-align:center;">Cash</button>
-            <button onclick="payMethodSelect('card')" id="pay-method-card" style="flex:1;padding:10px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:13px;font-weight:700;cursor:pointer;text-align:center;">Card</button>
-            <button onclick="payMethodSelect('check')" id="pay-method-check" style="flex:1;padding:10px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:13px;font-weight:700;cursor:pointer;text-align:center;">Check</button>
-            <button onclick="payMethodSelect('other')" id="pay-method-other" style="flex:1;padding:10px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:13px;font-weight:700;cursor:pointer;text-align:center;">Other</button>
-          </div>
-        </div>
-
-        <!-- Amount -->
-        <div style="margin-bottom:12px;">
-          <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Amount <span style="color:#ff453a;">*</span></label>
-          <input id="pay-scan-amount" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payCalcCardFee()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:20px;font-weight:700;outline:none;"/>
-        </div>
-
-        <!-- Card Fee Section (hidden unless card selected) -->
-        <div id="pay-card-fee-section" style="display:none;margin-bottom:12px;">
-          <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:14px;">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <input type="checkbox" id="pay-card-fee-toggle" onchange="payCalcCardFee()" style="width:18px;height:18px;accent-color:#60a5fa;"/>
-              <span style="font-size:14px;color:#fff;font-weight:600;">4% processing fee added?</span>
-            </label>
-            <div id="pay-fee-breakdown" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #1e1e1e;">
-              <div style="display:flex;justify-content:space-between;font-size:13px;color:#888;margin-bottom:4px;">
-                <span>Original amount:</span>
-                <span id="pay-fee-original" style="color:#fff;font-weight:600;">$0.00</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:13px;color:#888;margin-bottom:4px;">
-                <span>4% fee:</span>
-                <span id="pay-fee-amount" style="color:#fbbf24;font-weight:600;">$0.00</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:14px;color:#888;">
-                <span style="font-weight:700;">Total charged:</span>
-                <span id="pay-fee-total" style="color:#4ade80;font-weight:700;">$0.00</span>
-              </div>
-            </div>
+          <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">Payment <span style="color:#ff453a;">*</span></label>
+          <div id="pay-methods-list" style="margin-top:6px;display:flex;flex-direction:column;gap:10px;"></div>
+          <button onclick="payAddMethodRow()" style="width:100%;margin-top:10px;padding:12px;background:transparent;border:1.5px dashed #333;border-radius:12px;color:#888;font-size:14px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;">+ Add Payment Method</button>
+          <div id="pay-total-display" style="display:none;margin-top:10px;background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:14px;color:#888;font-weight:600;">TOTAL</span>
+            <span id="pay-total-amount" style="font-size:20px;font-weight:800;color:#4ade80;">$0.00</span>
           </div>
         </div>
 
@@ -13754,16 +13724,16 @@ function openPayScanForm(){
   document.getElementById('pay-scan-fields').style.display='block';
   document.getElementById('pay-scan-capture').style.display='block';
   document.getElementById('pay-skip-photo-btn').style.display='block';
-  ['pay-scan-fname','pay-scan-mname','pay-scan-lname','pay-scan-amount','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color'].forEach(function(id){
+  ['pay-scan-fname','pay-scan-mname','pay-scan-lname','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   document.getElementById('pay-scan-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('pay-scan-time').value='';
   document.getElementById('pay-scan-raw').textContent='';
-  payMethodSelect('cash');
-  document.getElementById('pay-card-fee-toggle').checked=false;
-  document.getElementById('pay-fee-breakdown').style.display='none';
-  document.getElementById('pay-card-fee-section').style.display='none';
+  // Reset payment method rows to single empty row
+  var ml=document.getElementById('pay-methods-list');
+  if(ml)ml.innerHTML='';
+  payAddMethodRow();
 }
 
 function payEditPayment(id){
@@ -13790,7 +13760,6 @@ function payEditPayment(id){
   document.getElementById('pay-scan-mname').value=_psnParts.length>2?_psnParts.slice(1,-1).join(' '):'';
   document.getElementById('pay-scan-date').value=p.payment_date||'';
   document.getElementById('pay-scan-time').value=p.payment_time||'';
-  document.getElementById('pay-scan-amount').value=p.amount||'';
   document.getElementById('pay-scan-year').value=p.vehicle_year||'';
   document.getElementById('pay-scan-make').value=p.vehicle_make||'';
   document.getElementById('pay-scan-model').value=p.vehicle_model||'';
@@ -13798,11 +13767,20 @@ function payEditPayment(id){
   document.getElementById('pay-scan-color').value=p.vehicle_color||'';
   var noteEl=document.getElementById('pay-scan-note');if(noteEl)noteEl.value=p.notes||'';
   document.getElementById('pay-scan-raw').textContent=p.raw_ocr_text||'';
-  payMethodSelect(_payMethod);
-  var feeToggle=document.getElementById('pay-card-fee-toggle');
-  if(feeToggle)feeToggle.checked=_payCardFeeAdded;
-  document.getElementById('pay-card-fee-section').style.display=_payMethod==='card'?'block':'none';
-  if(_payCardFeeAdded) payCalcCardFee();
+  // Load single payment row for editing
+  var ml=document.getElementById('pay-methods-list');
+  if(ml)ml.innerHTML='';
+  payAddMethodRow(_payMethod, p.amount||'');
+  // Set card fee if applicable
+  if(_payMethod==='card'&&_payCardFeeAdded){
+    var row=ml.querySelector('.pay-method-row');
+    if(row){
+      row.setAttribute('data-card-fee','true');
+      var toggle=row.querySelector('.pay-row-fee-toggle');if(toggle)toggle.checked=true;
+      var cardFeeDiv=row.querySelector('.pay-row-card-fee');if(cardFeeDiv)cardFeeDiv.style.display='block';
+      payRowCardFee(toggle);
+    }
+  }
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn) saveBtn.textContent='Save Changes';
   history.pushState({payEdit:true},'');
@@ -13921,6 +13899,113 @@ function payCalcCardFee(){
   document.getElementById('pay-fee-original').textContent='$'+original.toFixed(2);
   document.getElementById('pay-fee-amount').textContent='$'+fee.toFixed(2);
   document.getElementById('pay-fee-total').textContent='$'+total.toFixed(2);
+}
+
+// ── Multi-row payment method+amount ──────────────────────────
+function payAddMethodRow(method, amount){
+  var list=document.getElementById('pay-methods-list');
+  if(!list)return;
+  var row=document.createElement('div');
+  row.className='pay-method-row';
+  row.style.cssText='background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:10px;';
+  var m=method||'cash';
+  row.setAttribute('data-method',m);
+  row.setAttribute('data-card-fee','false');
+  var methods=['cash','card','check','other'];
+  var btns='';
+  methods.forEach(function(mt){
+    var active=mt===m;
+    btns+='<button onclick="payRowMethodSelect(this,\''+mt+'\')" style="flex:1;padding:9px 2px;background:'+(active?'#fff':'none')+';border:none;border-radius:10px;color:'+(active?'#000':'#555')+';font-size:12px;font-weight:700;cursor:pointer;text-align:center;">'+mt.charAt(0).toUpperCase()+mt.slice(1)+'</button>';
+  });
+  row.innerHTML=
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'+
+      '<div style="flex:1;display:flex;gap:3px;background:#111;border:1px solid #1a1a1a;border-radius:11px;padding:2px;">'+btns+'</div>'+
+      '<button onclick="payRemoveMethodRow(this)" class="pay-row-remove" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;">✕</button>'+
+    '</div>'+
+    '<input placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payUpdateTotal();payRowCardFee(this)" value="'+(amount||'')+'" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1a1a1a;border-radius:10px;color:#fff;padding:12px 14px;font-size:18px;font-weight:700;outline:none;"/>'+
+    '<div class="pay-row-card-fee" style="display:none;margin-top:8px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;">'+
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
+        '<input type="checkbox" class="pay-row-fee-toggle" onchange="payRowCardFee(this)" style="width:16px;height:16px;accent-color:#60a5fa;"/>'+
+        '<span style="font-size:13px;color:#ccc;font-weight:600;">4% fee added?</span>'+
+      '</label>'+
+      '<div class="pay-row-fee-detail" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a1a;">'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>Original:</span><span class="pay-row-fee-orig" style="color:#fff;font-weight:600;">$0.00</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px;"><span>4% fee:</span><span class="pay-row-fee-amt" style="color:#fbbf24;font-weight:600;">$0.00</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:13px;color:#888;"><span style="font-weight:700;">Total:</span><span class="pay-row-fee-total" style="color:#4ade80;font-weight:700;">$0.00</span></div>'+
+      '</div>'+
+    '</div>';
+  list.appendChild(row);
+  payUpdateTotal();
+  payUpdateRemoveButtons();
+}
+
+function payRemoveMethodRow(btn){
+  var row=btn.closest('.pay-method-row');
+  if(row)row.remove();
+  payUpdateTotal();
+  payUpdateRemoveButtons();
+}
+
+function payUpdateRemoveButtons(){
+  var rows=document.querySelectorAll('#pay-methods-list .pay-method-row');
+  rows.forEach(function(r){
+    var rm=r.querySelector('.pay-row-remove');
+    if(rm) rm.style.display=rows.length>1?'block':'none';
+  });
+  // Show/hide total when more than 1 row
+  var td=document.getElementById('pay-total-display');
+  if(td) td.style.display=rows.length>1?'flex':'none';
+}
+
+function payUpdateTotal(){
+  var rows=document.querySelectorAll('#pay-methods-list .pay-method-row');
+  var total=0;
+  rows.forEach(function(r){
+    var inp=r.querySelector('input[inputmode="decimal"]');
+    if(inp) total+=parseFloat((inp.value||'').replace(/[^0-9.]/g,''))||0;
+  });
+  var el=document.getElementById('pay-total-amount');
+  if(el) el.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function payRowMethodSelect(btn,method){
+  var row=btn.closest('.pay-method-row');
+  if(!row)return;
+  row.setAttribute('data-method',method);
+  var btns=row.querySelectorAll('div > button[onclick*="payRowMethodSelect"]');
+  btns.forEach(function(b){
+    var bm=b.textContent.trim().toLowerCase();
+    if(bm===method){b.style.background='#fff';b.style.color='#000';}
+    else{b.style.background='none';b.style.color='#555';}
+  });
+  var cardFee=row.querySelector('.pay-row-card-fee');
+  if(cardFee) cardFee.style.display=method==='card'?'block':'none';
+  if(method!=='card'){
+    row.setAttribute('data-card-fee','false');
+    var toggle=row.querySelector('.pay-row-fee-toggle');
+    if(toggle)toggle.checked=false;
+    var detail=row.querySelector('.pay-row-fee-detail');
+    if(detail)detail.style.display='none';
+  }
+}
+
+function payRowCardFee(el){
+  var row=el.closest('.pay-method-row');
+  if(!row)return;
+  var toggle=row.querySelector('.pay-row-fee-toggle');
+  var detail=row.querySelector('.pay-row-fee-detail');
+  var hasFee=toggle&&toggle.checked;
+  row.setAttribute('data-card-fee',hasFee?'true':'false');
+  if(!hasFee){if(detail)detail.style.display='none';return;}
+  if(detail)detail.style.display='block';
+  var inp=row.querySelector('input[inputmode="decimal"]');
+  var amtStr=(inp?inp.value:'').replace(/[^0-9.]/g,'');
+  var total=parseFloat(amtStr)||0;
+  var original=total/1.04;
+  var fee=total-original;
+  var origEl=row.querySelector('.pay-row-fee-orig');if(origEl)origEl.textContent='$'+original.toFixed(2);
+  var feeEl=row.querySelector('.pay-row-fee-amt');if(feeEl)feeEl.textContent='$'+fee.toFixed(2);
+  var totalEl=row.querySelector('.pay-row-fee-total');if(totalEl)totalEl.textContent='$'+total.toFixed(2);
 }
 
 async function loadPaymentWeek(){
@@ -15152,10 +15237,11 @@ async function runPayScanOCR(imgSrc){
     document.getElementById('pay-scan-model').value=parsed.vehicle_model||'';
     document.getElementById('pay-scan-vin').value=parsed.vehicle_vin||'';
     var parsedAmt=(parsed.amount||'').replace(/[^0-9.]/g,'');
-    document.getElementById('pay-scan-amount').value=parsedAmt?'$'+parsedAmt:'';
-    if(parsed.payment_method&&['cash','card','check','other'].indexOf(parsed.payment_method)!==-1){
-      payMethodSelect(parsed.payment_method);
-    }
+    var parsedMethod=(parsed.payment_method&&['cash','card','check','other'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
+    // Reset payment rows and fill with OCR data
+    var ml=document.getElementById('pay-methods-list');
+    if(ml)ml.innerHTML='';
+    payAddMethodRow(parsedMethod, parsedAmt?'$'+parsedAmt:'');
 
     document.getElementById('pay-scan-fields').style.display='block';
   }catch(err){
@@ -15310,7 +15396,6 @@ async function payScanSave(){
   var name=[document.getElementById('pay-scan-fname').value.trim(),document.getElementById('pay-scan-mname').value.trim(),document.getElementById('pay-scan-lname').value.trim()].filter(Boolean).join(' ');
   var date=document.getElementById('pay-scan-date').value;
   var time=document.getElementById('pay-scan-time').value;
-  var amount=document.getElementById('pay-scan-amount').value.trim().replace(/[^0-9.$]/g,'');
   var year=document.getElementById('pay-scan-year').value.trim();
   var make=document.getElementById('pay-scan-make').value.trim();
   var model=document.getElementById('pay-scan-model').value.trim();
@@ -15319,11 +15404,22 @@ async function payScanSave(){
   var note=(document.getElementById('pay-scan-note')||{}).value||'';
   note=note.trim();
 
+  // Read payment rows
+  var payRows=[];
+  var rowEls=document.querySelectorAll('#pay-methods-list .pay-method-row');
+  rowEls.forEach(function(r){
+    var inp=r.querySelector('input[inputmode="decimal"]');
+    var amt=(inp?inp.value:'').trim().replace(/[^0-9.$]/g,'');
+    var meth=r.getAttribute('data-method')||'cash';
+    var hasFee=r.getAttribute('data-card-fee')==='true';
+    if(amt) payRows.push({method:meth, amount:amt, cardFee:hasFee});
+  });
+
   // Mandatory field checks
   var missing=[];
   if(!name) missing.push('Customer Name');
   if(!date) missing.push('Date');
-  if(!amount) missing.push('Amount');
+  if(!payRows.length) missing.push('Amount');
   if(!year) missing.push('Vehicle Year');
   if(!make) missing.push('Vehicle Make');
   if(!model) missing.push('Vehicle Model');
@@ -15351,62 +15447,78 @@ async function payScanSave(){
     }
   }
 
-  // Card fee calculation
-  var originalAmt='';
-  if(_payMethod==='card'&&_payCardFeeAdded){
-    var total=parseFloat(amount.replace(/[^0-9.]/g,''))||0;
-    var orig=total/1.04;
-    originalAmt='$'+orig.toFixed(2);
-  }
-
   var weekStart=_payWeekKey(new Date(date+'T12:00:00'));
-
   var isFinal=document.getElementById('pay-is-final')&&document.getElementById('pay-is-final').checked;
+  var rawOcr=document.getElementById('pay-scan-raw').textContent||null;
 
-  var record={
-    customer_name:name,
-    payment_date:date,
-    payment_time:time||null,
-    amount:amount,
-    payment_method:_payMethod,
-    card_fee_added:_payCardFeeAdded,
-    original_amount:originalAmt||null,
-    vehicle_year:year,
-    vehicle_make:make,
-    vehicle_model:model,
-    vehicle_vin:vin.toUpperCase(),
-    vehicle_color:color,
-    receipt_photo_url:photoUrl||null,
-    location:_payLocation,
-    logged_by:me?me.name:'',
-    week_start:weekStart,
-    notes:note||null,
-    raw_ocr_text:document.getElementById('pay-scan-raw').textContent||null,
-    is_final_payment:isFinal||false,
-    created_at:new Date().toISOString()
-  };
-
-  try{
-    if(_payEditId){
-      // Update existing payment
-      await sbPatch('payments', _payEditId, record);
-    } else {
-      await sbPost('payments', record);
+  // For edit mode, use single row from payRows[0]
+  if(_payEditId){
+    var pr=payRows[0];
+    var originalAmt='';
+    if(pr.method==='card'&&pr.cardFee){
+      var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
+      originalAmt='$'+(t/1.04).toFixed(2);
     }
-  }catch(e){
-    console.error('Payment save error:',e);
-    alert('Error saving payment: '+(e.message||e));
-    _paySaving=false;
-    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent=_payEditId?'Save Changes':'Save Payment';}
-    return;
-  }
-
-  // Push notification to managers on new payment (not edits)
-  if(!_payEditId){
+    var record={
+      customer_name:name,payment_date:date,payment_time:time||null,
+      amount:pr.amount,payment_method:pr.method,
+      card_fee_added:pr.cardFee,original_amount:originalAmt||null,
+      vehicle_year:year,vehicle_make:make,vehicle_model:model,
+      vehicle_vin:vin.toUpperCase(),vehicle_color:color,
+      receipt_photo_url:photoUrl||null,location:_payLocation,
+      logged_by:me?me.name:'',week_start:weekStart,
+      notes:note||null,raw_ocr_text:rawOcr,
+      is_final_payment:isFinal||false,created_at:new Date().toISOString()
+    };
+    try{
+      await sbPatch('payments', _payEditId, record);
+    }catch(e){
+      console.error('Payment save error:',e);
+      alert('Error saving payment: '+(e.message||e));
+      _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Changes';}
+      return;
+    }
+  } else {
+    // New payment — create one record per payment row
+    try{
+      for(var i=0;i<payRows.length;i++){
+        var pr=payRows[i];
+        var originalAmt='';
+        if(pr.method==='card'&&pr.cardFee){
+          var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
+          originalAmt='$'+(t/1.04).toFixed(2);
+        }
+        await sbPost('payments',{
+          customer_name:name,payment_date:date,payment_time:time||null,
+          amount:pr.amount,payment_method:pr.method,
+          card_fee_added:pr.cardFee,original_amount:originalAmt||null,
+          vehicle_year:year,vehicle_make:make,vehicle_model:model,
+          vehicle_vin:vin.toUpperCase(),vehicle_color:color,
+          receipt_photo_url:photoUrl||null,location:_payLocation,
+          logged_by:me?me.name:'',week_start:weekStart,
+          notes:note||null,raw_ocr_text:rawOcr,
+          is_final_payment:isFinal||false,created_at:new Date().toISOString()
+        });
+      }
+    }catch(e){
+      console.error('Payment save error:',e);
+      alert('Error saving payment: '+(e.message||e));
+      _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
+      return;
+    }
+    // Push notification to managers
     try{
       var mgrNames=S.employees.filter(function(e){return e.role==='manager';}).map(function(e){return e.name;});
       var finalTag=isFinal?' — FINAL':'';
-      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amount+' ('+_payMethod.toUpperCase()+') '+_payLocation+finalTag);
+      var totalAmt=0;var methodParts=[];
+      payRows.forEach(function(pr){
+        var a=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
+        totalAmt+=a;
+        methodParts.push('$'+a.toFixed(2)+' '+pr.method);
+      });
+      var amtStr='$'+totalAmt.toFixed(2);
+      var methodStr=payRows.length>1?'('+methodParts.join(' + ')+')':'('+payRows[0].method.toUpperCase()+')';
+      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amtStr+' '+methodStr+' '+_payLocation+finalTag);
     }catch(ex){console.warn('Push notify failed:',ex);}
   }
 
