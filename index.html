@@ -1227,11 +1227,10 @@ body.light .cal-fab{background:#4488ff !important;}
       <!-- Payment Method Filter -->
       <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;">View</div>
       <div style="display:flex;gap:3px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;margin-bottom:14px;">
-        <button onclick="payFilterMethod('all')" id="pay-filter-all" style="flex:1;padding:9px 2px;background:#fff;border:none;border-radius:10px;color:#000;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">All</button>
-        <button onclick="payFilterMethod('cash')" id="pay-filter-cash" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Cash</button>
-        <button onclick="payFilterMethod('card')" id="pay-filter-card" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Card</button>
-        <button onclick="payFilterMethod('check')" id="pay-filter-check" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Check</button>
-        <button onclick="payFilterMethod('money_order')" id="pay-filter-money_order" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">M.O.</button>
+        <button onclick="payFilterMethod('all')" id="pay-filter-all" style="flex:1;padding:9px 2px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">All</button>
+        <button onclick="payFilterMethod('cash')" id="pay-filter-cash" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Cash</button>
+        <button onclick="payFilterMethod('deal')" id="pay-filter-deal" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Deal</button>
+        <button onclick="payFilterMethod('deposit')" id="pay-filter-deposit" style="flex:1;padding:9px 2px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Deposit</button>
       </div>
 
       <!-- Add New Payment Button -->
@@ -14138,7 +14137,7 @@ async function loadPaymentWeek(){
   if(!list)return;
   // Reset method filter
   _payMethodFilter='all';
-  ['all','cash','card','check','money_order'].forEach(function(f){
+  ['all','cash','deal','deposit'].forEach(function(f){
     var btn=document.getElementById('pay-filter-'+f);
     if(btn){btn.style.background=f==='all'?'#fff':'none';btn.style.color=f==='all'?'#000':'#555';}
   });
@@ -14749,10 +14748,17 @@ function _payRenderCards(){
       var adj=dealAdjust[key];
       if(adj&&!adj.include) return; // excluded
     }
-    // Method filter
-    if(_payMethodFilter!=='all'){
+    // View filter
+    if(_payMethodFilter==='cash'){
+      // All cash payments (regular + deal + deposit)
       var pm=(p.payment_method||'cash').toLowerCase();
-      if(pm!==_payMethodFilter) return;
+      if(pm!=='cash') return;
+    } else if(_payMethodFilter==='deal'){
+      // Only deal cash
+      if(!p.raw_ocr_text||p.raw_ocr_text.indexOf('Deal \u2014 ')!==0) return;
+    } else if(_payMethodFilter==='deposit'){
+      // Only deposit cash
+      if(!p.raw_ocr_text||p.raw_ocr_text.indexOf('Deposit \u2014 ')!==0) return;
     }
     var d=p.payment_date||'Unknown';
     if(!groups[d])groups[d]=[];
@@ -14811,13 +14817,15 @@ function _payRenderCards(){
 }
 
 var _paySearchTimeout=null;
-var _payMethodFilter='all'; // 'all','cash','card','check','money_order'
+var _payMethodFilter='all'; // 'all','cash','deal','deposit'
 function payFilterMethod(m){
   _payMethodFilter=m;
-  ['all','cash','card','check','money_order'].forEach(function(f){
+  ['all','cash','deal','deposit'].forEach(function(f){
     var btn=document.getElementById('pay-filter-'+f);
-    if(f===m){btn.style.background='#fff';btn.style.color='#000';}
-    else{btn.style.background='none';btn.style.color='#555';}
+    if(btn){
+      if(f===m){btn.style.background='#fff';btn.style.color='#000';}
+      else{btn.style.background='none';btn.style.color='#555';}
+    }
   });
   _payRenderCards();
 }
