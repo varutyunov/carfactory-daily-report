@@ -784,36 +784,24 @@ body.light .cal-fab{background:#4488ff !important;}
           <div class="orbit-line" style="transform:rotate(280deg);"></div>
           <div class="orbit-line" style="transform:rotate(320deg);"></div>
 
-          <!-- Brain center -->
-          <div class="orbit-brain" id="orbit-brain-btn" onclick="toggleVoiceAI()">
-            <svg class="orbit-brain-icon" id="orbit-brain-icon" viewBox="0 0 64 64" fill="none">
-              <!-- Circuit brain -->
-              <circle cx="32" cy="28" r="14" stroke="url(#bg1)" stroke-width="1.5" fill="none"/>
-              <path d="M24 22c0-3 2-5 5-5s5 2 5 5" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M30 17c0-2 2-4 5-4s5 2 5 4" stroke="#818cf8" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M22 28c-3 0-4-2-4-4" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M42 28c3 0 4-2 4-4" stroke="#818cf8" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M24 34c0 3 2 5 5 5" stroke="#a78bfa" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M35 39c3 0 5-2 5-5" stroke="#818cf8" stroke-width="1.2" stroke-linecap="round"/>
-              <!-- Center dot -->
-              <circle cx="32" cy="28" r="3" fill="url(#bg1)" opacity="0.8"/>
-              <!-- Neural nodes -->
-              <circle cx="24" cy="22" r="1.5" fill="#a78bfa"/><circle cx="40" cy="22" r="1.5" fill="#818cf8"/>
-              <circle cx="22" cy="28" r="1.5" fill="#a78bfa"/><circle cx="42" cy="28" r="1.5" fill="#818cf8"/>
-              <circle cx="24" cy="34" r="1.5" fill="#a78bfa"/><circle cx="40" cy="34" r="1.5" fill="#818cf8"/>
-              <!-- Circuit lines -->
-              <line x1="25.5" y1="22" x2="32" y2="28" stroke="#a78bfa" stroke-width="0.6" opacity="0.5"/>
-              <line x1="38.5" y1="22" x2="32" y2="28" stroke="#818cf8" stroke-width="0.6" opacity="0.5"/>
-              <line x1="25.5" y1="34" x2="32" y2="28" stroke="#a78bfa" stroke-width="0.6" opacity="0.5"/>
-              <line x1="38.5" y1="34" x2="32" y2="28" stroke="#818cf8" stroke-width="0.6" opacity="0.5"/>
-              <line x1="23.5" y1="28" x2="29" y2="28" stroke="#a78bfa" stroke-width="0.6" opacity="0.5"/>
-              <line x1="35" y1="28" x2="40.5" y2="28" stroke="#818cf8" stroke-width="0.6" opacity="0.5"/>
-              <!-- Pulse rings -->
-              <circle cx="32" cy="28" r="18" stroke="#7c3aed" stroke-width="0.4" opacity="0.2" stroke-dasharray="3 3"/>
-              <defs><linearGradient id="bg1" x1="0" y1="0" x2="64" y2="64"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
+          <!-- The Board center -->
+          <div class="orbit-brain" id="orbit-brain-btn" onclick="boardOpen()" style="background:linear-gradient(145deg,#e8e8e8,#f5f5f5,#fff);border:2px solid #ccc;">
+            <svg class="orbit-brain-icon" viewBox="0 0 64 64" fill="none" style="width:45px;height:45px;">
+              <rect x="10" y="8" width="44" height="36" rx="3" stroke="#333" stroke-width="2" fill="none"/>
+              <line x1="32" y1="8" x2="32" y2="44" stroke="#ccc" stroke-width="1" stroke-dasharray="3 2"/>
+              <line x1="10" y1="22" x2="54" y2="22" stroke="#ccc" stroke-width="1" stroke-dasharray="3 2"/>
+              <rect x="14" y="12" width="14" height="3" rx="1.5" fill="#ef4444"/>
+              <rect x="14" y="17" width="10" height="2" rx="1" fill="#999"/>
+              <rect x="36" y="12" width="14" height="3" rx="1.5" fill="#3b82f6"/>
+              <rect x="36" y="17" width="10" height="2" rx="1" fill="#999"/>
+              <rect x="14" y="26" width="14" height="3" rx="1.5" fill="#f59e0b"/>
+              <rect x="14" y="31" width="10" height="2" rx="1" fill="#999"/>
+              <rect x="36" y="26" width="14" height="3" rx="1.5" fill="#10b981"/>
+              <rect x="36" y="31" width="10" height="2" rx="1" fill="#999"/>
+              <rect x="16" y="44" width="32" height="4" rx="2" fill="#888"/>
+              <rect x="24" y="48" width="16" height="3" rx="1.5" fill="#aaa"/>
             </svg>
-            <div id="orbit-brain-label" class="orbit-brain-label">Factory<br>AI</div>
-            <div id="voice-wave" class="voice-wave" style="display:none;"><span></span><span></span><span></span><span></span><span></span></div>
+            <div id="orbit-brain-label" class="orbit-brain-label" style="color:#333;text-shadow:none;">The<br>Board</div>
           </div>
 
           <!-- Orbit tiles — 9 at 40° intervals -->
@@ -6137,6 +6125,111 @@ function markBadgeSeen(category){
   localStorage.setItem('cf_seen_badges',JSON.stringify(_seenBadges));
   updateHomeBadges();
 }
+// ── THE BOARD — Consolidated Work View ────────────────────────
+function boardOpen(){
+  var o=document.getElementById('board-overlay');
+  if(!o){o=document.createElement('div');o.id='board-overlay';document.body.appendChild(o);}
+  document.getElementById('app').style.display='none';
+  o.style.cssText='display:block;position:fixed;inset:0;background:#f0f0f0;z-index:9100;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  // Gather all work across categories
+  var cats=['repair','detail','photos','parts','paint'];
+  var catLabels={repair:'Repair',detail:'Detail',photos:'Photos',parts:'Parts',paint:'Paint'};
+  var catColors={repair:'#ef4444',detail:'#818cf8',photos:'#c084fc',parts:'#f59e0b',paint:'#38bdf8'};
+  var sections=[];
+  cats.forEach(function(cat){
+    var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;});
+    if(!cars.length) return;
+    var items=[];
+    cars.forEach(function(car){
+      var ws=getWorkState(car.id);
+      var catState=ws.categories[cat]||{};
+      var taskItems=catState.items||catState.repairs||[];
+      var done=!!catState.done;
+      var doneBy=catState.doneBy||'';
+      var assignee='';
+      (S.assignments||[]).forEach(function(a){if(a.car_id===car.id)assignee=a.employee_name||'';});
+      items.push({car:car,tasks:taskItems,done:done,doneBy:doneBy,assignee:assignee,catState:catState});
+    });
+    sections.push({cat:cat,label:catLabels[cat],color:catColors[cat],items:items});
+  });
+  var html='<div class="tb" style="background:#fff;border-bottom:2px solid #ddd;">'+
+    '<button onclick="boardClose()" style="background:none;border:none;color:#333;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#111;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">The Board</span>'+
+    '<div style="width:36px;"></div>'+
+  '</div>';
+  html+='<div style="padding:16px 14px 100px;background:#f0f0f0;min-height:calc(100vh - 50px);">';
+  if(!sections.length){
+    html+='<div style="text-align:center;padding:60px 20px;color:#999;font-size:15px;">No active work on the board.</div>';
+  } else {
+    sections.forEach(function(sec){
+      // Category header — looks like a dry-erase marker section
+      html+='<div style="margin-bottom:20px;">';
+      html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:6px;border-bottom:3px solid '+sec.color+';">';
+      html+='<div style="width:8px;height:24px;border-radius:4px;background:'+sec.color+';"></div>';
+      html+='<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:#222;letter-spacing:1.5px;text-transform:uppercase;">'+sec.label+'</span>';
+      html+='<span style="font-size:13px;color:#999;font-weight:600;margin-left:auto;">'+sec.items.length+' car'+(sec.items.length===1?'':'s')+'</span>';
+      html+='</div>';
+      // Car cards
+      sec.items.forEach(function(item){
+        var borderLeft=item.done?'border-left:4px solid #22c55e;':'border-left:4px solid '+sec.color+';';
+        html+='<div onclick="boardGoToCar('+item.car.id+',\''+sec.cat+'\')" style="background:#fff;border:1px solid #ddd;'+borderLeft+'border-radius:10px;padding:14px 16px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.06);">';
+        // Car name + status
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+        html+='<div style="font-size:15px;font-weight:700;color:#111;">'+item.car.name+'</div>';
+        if(item.done){
+          html+='<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:#dcfce7;color:#16a34a;">DONE</span>';
+        } else {
+          html+='<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:#fef3c7;color:#b45309;">IN PROGRESS</span>';
+        }
+        html+='</div>';
+        // Stock + assignee
+        var meta=[];
+        if(item.car.stock) meta.push('#'+item.car.stock);
+        if(item.assignee) meta.push(item.assignee);
+        if(item.doneBy&&item.done) meta.push('by '+item.doneBy);
+        if(meta.length) html+='<div style="font-size:12px;color:#888;margin-bottom:8px;">'+meta.join(' &middot; ')+'</div>';
+        // Task items
+        if(item.tasks.length){
+          var tasksDone=0;
+          item.tasks.forEach(function(t){
+            var text=typeof t==='string'?t:(t.text||'');
+            var isDone=typeof t==='object'?!!t.done:false;
+            if(isDone) tasksDone++;
+            html+='<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">';
+            html+='<div style="width:16px;height:16px;border-radius:50%;border:2px solid '+(isDone?'#22c55e':'#ccc')+';background:'+(isDone?'#22c55e':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+            if(isDone) html+='<svg width="8" height="6" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+            html+='</div>';
+            html+='<span style="font-size:13px;color:'+(isDone?'#aaa':'#333')+';text-decoration:'+(isDone?'line-through':'none')+';">'+text+'</span>';
+            html+='</div>';
+          });
+          // Progress bar
+          var pct=item.tasks.length>0?Math.round(tasksDone/item.tasks.length*100):0;
+          html+='<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">';
+          html+='<div style="flex:1;height:4px;background:#e5e5e5;border-radius:2px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+sec.color+';border-radius:2px;"></div></div>';
+          html+='<span style="font-size:11px;color:#999;font-weight:600;flex-shrink:0;">'+tasksDone+'/'+item.tasks.length+'</span>';
+          html+='</div>';
+        } else {
+          html+='<div style="font-size:13px;color:#bbb;font-style:italic;">No tasks listed</div>';
+        }
+        html+='</div>';
+      });
+      html+='</div>';
+    });
+  }
+  html+='</div>';
+  o.innerHTML=html;
+  history.pushState({board:true},'');
+}
+function boardClose(){
+  var o=document.getElementById('board-overlay');
+  if(o) o.style.display='none';
+  document.getElementById('app').style.display='flex';
+}
+function boardGoToCar(carId,cat){
+  boardClose();
+  mgrGoSection(cat==='repair'?'repair':cat==='detail'?'detail':cat==='photos'?'photos':cat==='parts'?'parts':cat==='paint'?'paint':'progress', cat.charAt(0).toUpperCase()+cat.slice(1));
+}
+
 function updateHomeBadges(){
   var asgns=(S.assignments||[]).filter(function(a){return !a.approved;});
   var allSeen={}; asgns.forEach(function(a){allSeen[a.inventoryId]=1;});
@@ -13847,6 +13940,8 @@ function payFormSkipPhoto(){
 
 // Browser back button support for payment overlay
 window.addEventListener('popstate',function(e){
+  var boardOv=document.getElementById('board-overlay');
+  if(boardOv&&boardOv.style.display!=='none'){boardClose();return;}
   var repoAcct=document.getElementById('repo-acct-overlay');
   if(repoAcct&&repoAcct.style.display!=='none'){repoAcctClose();return;}
   var repoBrain=document.getElementById('repo-brain-overlay');
