@@ -50,6 +50,12 @@ check "esign-status-preparing"      'id="esign-status-preparing"'
 check "esign-status-ready"          'id="esign-status-ready"'
 check "esign-status-sent"           'id="esign-status-sent"'
 
+# ── DEAL UPLOAD FORM ───────────────────────────────────────────
+check "deal-overlay"                'id="deal-overlay"'
+check "deal-upload-notes"           'id="deal-upload-notes"'
+check "dealSubmit"                  'function dealSubmit'
+check "dealSubmit saves notes"      'deal-upload-notes.*value'
+
 # ── VOID/RELEASE FIELDS ────────────────────────────────────────
 check "vr-mname (middle name)"      'id="vr-mname"'
 check "vr-void-date (auto-filled)"  'id="vr-void-date"'
