@@ -785,23 +785,33 @@ body.light .cal-fab{background:#4488ff !important;}
           <div class="orbit-line" style="transform:rotate(320deg);"></div>
 
           <!-- The Board center -->
-          <div class="orbit-brain" id="orbit-brain-btn" onclick="boardOpen()" style="background:linear-gradient(145deg,#e8e8e8,#f5f5f5,#fff);border:2px solid #ccc;">
+          <div class="orbit-brain" id="orbit-brain-btn" onclick="boardOpen()" style="background:linear-gradient(145deg,#1a1a1a,#2a2a2a,#222);border:2px solid #444;">
             <svg class="orbit-brain-icon" viewBox="0 0 64 64" fill="none" style="width:45px;height:45px;">
-              <rect x="10" y="8" width="44" height="36" rx="3" stroke="#333" stroke-width="2" fill="none"/>
-              <line x1="32" y1="8" x2="32" y2="44" stroke="#ccc" stroke-width="1" stroke-dasharray="3 2"/>
-              <line x1="10" y1="22" x2="54" y2="22" stroke="#ccc" stroke-width="1" stroke-dasharray="3 2"/>
-              <rect x="14" y="12" width="14" height="3" rx="1.5" fill="#ef4444"/>
-              <rect x="14" y="17" width="10" height="2" rx="1" fill="#999"/>
-              <rect x="36" y="12" width="14" height="3" rx="1.5" fill="#3b82f6"/>
-              <rect x="36" y="17" width="10" height="2" rx="1" fill="#999"/>
-              <rect x="14" y="26" width="14" height="3" rx="1.5" fill="#f59e0b"/>
-              <rect x="14" y="31" width="10" height="2" rx="1" fill="#999"/>
-              <rect x="36" y="26" width="14" height="3" rx="1.5" fill="#10b981"/>
-              <rect x="36" y="31" width="10" height="2" rx="1" fill="#999"/>
-              <rect x="16" y="44" width="32" height="4" rx="2" fill="#888"/>
-              <rect x="24" y="48" width="16" height="3" rx="1.5" fill="#aaa"/>
+              <!-- Black board frame -->
+              <rect x="8" y="6" width="48" height="40" rx="3" fill="#111" stroke="#555" stroke-width="1.5"/>
+              <!-- Board surface texture lines -->
+              <line x1="8" y1="16" x2="56" y2="16" stroke="#2a2a2a" stroke-width=".5"/>
+              <line x1="8" y1="26" x2="56" y2="26" stroke="#2a2a2a" stroke-width=".5"/>
+              <line x1="8" y1="36" x2="56" y2="36" stroke="#2a2a2a" stroke-width=".5"/>
+              <line x1="32" y1="6" x2="32" y2="46" stroke="#2a2a2a" stroke-width=".5"/>
+              <!-- Colored sticky notes -->
+              <rect x="12" y="9" width="16" height="12" rx="1" fill="#fecaca" transform="rotate(-2 20 15)"/>
+              <rect x="36" y="9" width="16" height="12" rx="1" fill="#dbeafe" transform="rotate(1 44 15)"/>
+              <rect x="12" y="25" width="16" height="12" rx="1" fill="#fef3c7" transform="rotate(1 20 31)"/>
+              <rect x="36" y="25" width="16" height="12" rx="1" fill="#f3e8ff" transform="rotate(-1 44 31)"/>
+              <!-- Chalk-style text lines on notes -->
+              <line x1="14" y1="13" x2="24" y2="13" stroke="#b91c1c" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="14" y1="16" x2="21" y2="16" stroke="#999" stroke-width="1" stroke-linecap="round"/>
+              <line x1="38" y1="13" x2="48" y2="13" stroke="#1d4ed8" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="38" y1="16" x2="45" y2="16" stroke="#999" stroke-width="1" stroke-linecap="round"/>
+              <line x1="14" y1="29" x2="24" y2="29" stroke="#b45309" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="14" y1="32" x2="21" y2="32" stroke="#999" stroke-width="1" stroke-linecap="round"/>
+              <line x1="38" y1="29" x2="48" y2="29" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="38" y1="32" x2="45" y2="32" stroke="#999" stroke-width="1" stroke-linecap="round"/>
+              <!-- Board tray -->
+              <rect x="16" y="46" width="32" height="3" rx="1.5" fill="#444"/>
             </svg>
-            <div id="orbit-brain-label" class="orbit-brain-label" style="color:#333;text-shadow:none;">The<br>Board</div>
+            <div id="orbit-brain-label" class="orbit-brain-label" style="color:#eee;text-shadow:0 1px 3px rgba(0,0,0,.8);">The<br>Board</div>
           </div>
 
           <!-- Orbit tiles — 9 at 40° intervals -->
@@ -6136,6 +6146,12 @@ function boardOpen(){
   var catLabels={repair:'Repair',detail:'Detail',photos:'Photos',parts:'Parts',paint:'Paint'};
   var catIcons={repair:'&#128295;',detail:'&#10024;',photos:'&#128247;',parts:'&#9881;',paint:'&#127912;'};
   var catColors={repair:'#dc2626',detail:'#6366f1',photos:'#9333ea',parts:'#d97706',paint:'#0284c7'};
+  // Sticky note background colors per category (pastel)
+  var catBg={repair:'#fecaca',detail:'#e0e7ff',photos:'#f3e8ff',parts:'#fef3c7',paint:'#dbeafe'};
+  var catBgDone={repair:'#bbf7d0',detail:'#bbf7d0',photos:'#bbf7d0',parts:'#bbf7d0',paint:'#bbf7d0'};
+  // Build sheet-linked car name lookup: car_id → car_name from inventory_costs
+  var _sheetNames={};
+  (_isData||[]).forEach(function(ic){if(ic.car_id&&ic.car_name)_sheetNames[ic.car_id]=ic.car_name;});
   var columns=[];
   cats.forEach(function(cat){
     var cars=S.inventory.filter(function(car){var ws=getWorkState(car.id);return ws.categories&&ws.categories[cat]&&ws.categories[cat].sectionPool;});
@@ -6147,7 +6163,15 @@ function boardOpen(){
       var done=!!catState.done;
       var tasksDone=0;var tasksTotal=taskItems.length;
       taskItems.forEach(function(t){if(typeof t==='object'&&t.done)tasksDone++;});
-      items.push({car:car,done:done,tasksDone:tasksDone,tasksTotal:tasksTotal});
+      // Get task texts for display
+      var taskTexts=[];
+      taskItems.forEach(function(t){
+        var txt=typeof t==='object'?(t.text||t.name||''):(t||'');
+        if(txt) taskTexts.push({text:txt,done:typeof t==='object'&&!!t.done});
+      });
+      // Use sheet name if linked, else shorten inventory name
+      var sheetName=_sheetNames[car.id]||'';
+      items.push({car:car,done:done,tasksDone:tasksDone,tasksTotal:tasksTotal,taskTexts:taskTexts,sheetName:sheetName});
     });
     columns.push({cat:cat,label:catLabels[cat],icon:catIcons[cat],color:catColors[cat],items:items});
   });
@@ -6161,32 +6185,49 @@ function boardOpen(){
   html+='<div style="flex:1;display:flex;gap:0;overflow:hidden;">';
   columns.forEach(function(col){
     html+='<div style="flex:1;display:flex;flex-direction:column;border-right:1px solid #ddd;overflow-y:auto;-webkit-overflow-scrolling:touch;">';
-    // Column header
-    html+='<div style="padding:8px 4px 6px;text-align:center;border-bottom:3px solid '+col.color+';background:#fff;flex-shrink:0;">';
-    html+='<div style="font-size:14px;">'+col.icon+'</div>';
-    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:'+col.color+';letter-spacing:.5px;text-transform:uppercase;line-height:1;">'+col.label+'</div>';
-    if(col.items.length) html+='<div style="font-size:9px;color:#999;margin-top:1px;">'+col.items.length+'</div>';
+    // Column header — dark tag style
+    html+='<div style="padding:6px 4px 5px;text-align:center;background:#222;flex-shrink:0;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:800;color:#fff;letter-spacing:.5px;text-transform:uppercase;line-height:1;">'+col.icon+' '+col.label+'</div>';
+    if(col.items.length) html+='<div style="font-size:8px;color:rgba(255,255,255,.5);margin-top:2px;">'+col.items.length+'</div>';
     html+='</div>';
-    // Car entries — compact
+    // Car entries — sticky note cards
     if(!col.items.length){
       html+='<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="font-size:10px;color:#ccc;">—</span></div>';
     } else {
-      html+='<div style="padding:3px 3px 6px;">';
+      html+='<div style="padding:4px 3px 6px;">';
       col.items.forEach(function(item){
-        var name=item.car.name||'';
-        // Shorten: "2024 Toyota Camry" → "24 Camry"
-        var parts=name.split(/\s+/);
-        var short=parts.length>=3?(parts[0].slice(-2)+' '+parts.slice(2).join(' ')):(parts.length===2?(parts[0].slice(-2)+' '+parts[1]):name);
-        var dotColor=item.done?'#22c55e':(item.tasksDone>0?'#f59e0b':col.color);
-        var bg=item.done?'#f0fdf4':'#fff';
-        html+='<div onclick="boardGoToCar('+item.car.id+',\''+col.cat+'\')" style="background:'+bg+';border:1px solid '+(item.done?'#bbf7d0':'#e5e5e5')+';border-radius:6px;padding:5px 4px;margin-bottom:3px;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:center;">';
-        html+='<div style="display:flex;align-items:center;justify-content:center;gap:3px;">';
-        html+='<div style="width:6px;height:6px;border-radius:50%;background:'+dotColor+';flex-shrink:0;"></div>';
-        html+='<div style="font-size:10px;font-weight:700;color:#222;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+short+'</div>';
-        html+='</div>';
-        if(item.tasksTotal>0){
-          html+='<div style="font-size:8px;color:#999;margin-top:1px;">'+item.tasksDone+'/'+item.tasksTotal+'</div>';
+        // Car name: prefer sheet name, else shorten inventory name
+        var displayName='';
+        if(item.sheetName){
+          displayName=item.sheetName;
+        } else {
+          var name=item.car.name||'';
+          var pp=name.split(/\s+/);
+          displayName=pp.length>=3?(pp[0].slice(-2)+' '+pp.slice(2).join(' ')):(pp.length===2?(pp[0].slice(-2)+' '+pp[1]):name);
         }
+        var noteBg=item.done?catBgDone[col.cat]:catBg[col.cat];
+        var borderCol=item.done?'#86efac':col.color;
+        // Progress indicator
+        var progHtml='';
+        if(item.tasksTotal>0){
+          progHtml='<div style="font-size:8px;color:rgba(0,0,0,.45);margin-top:2px;">'+item.tasksDone+'/'+item.tasksTotal+(item.done?' &#10003;':'')+'</div>';
+        } else if(item.done){
+          progHtml='<div style="font-size:8px;color:#16a34a;margin-top:2px;">&#10003; Done</div>';
+        }
+        // Task detail lines (max 3)
+        var detailHtml='';
+        if(item.taskTexts.length>0){
+          var shown=item.taskTexts.slice(0,3);
+          shown.forEach(function(t){
+            var deco=t.done?'text-decoration:line-through;color:rgba(0,0,0,.35);':'color:rgba(0,0,0,.65);';
+            detailHtml+='<div style="font-size:8px;line-height:1.2;'+deco+'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">'+(t.done?'&#10003; ':'')+t.text+'</div>';
+          });
+          if(item.taskTexts.length>3) detailHtml+='<div style="font-size:7px;color:rgba(0,0,0,.35);margin-top:1px;">+'+(item.taskTexts.length-3)+' more</div>';
+        }
+        html+='<div onclick="boardGoToCar('+item.car.id+',\''+col.cat+'\')" style="background:'+noteBg+';border-left:3px solid '+borderCol+';border-radius:2px;padding:5px 5px 4px;margin-bottom:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:1px 1px 3px rgba(0,0,0,.1);">';
+        html+='<div style="font-size:10px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+displayName+'</div>';
+        html+=detailHtml;
+        html+=progHtml;
         html+='</div>';
       });
       html+='</div>';
