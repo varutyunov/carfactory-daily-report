@@ -18941,7 +18941,7 @@ async function d26PmtSave(){
     d.payment_notes=noteStr;
     d.payments=total;
     var so=d.sort_order||(_d26PmtIdx+1);
-    sheetsPush('Deals26',so,{payments:total});
+    sheetsPush('Deals26',so,{payments:total,payment_notes:noteStr});
     var pop=document.getElementById('d26-pmt-popup');
     if(pop)pop.remove();
     d26Render();

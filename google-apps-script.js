@@ -53,6 +53,11 @@ var TAB_CONFIG = {
       'I': 'manny',
       'J': 'deal_num',
       'K': 'gps_sold'
+    },
+    // Cell notes on these columns sync to Supabase fields
+    cellNotes: {
+      'C': 'expense_notes',    // expense breakdown
+      'G': 'payment_notes'     // payment breakdown
     }
   }
 };
