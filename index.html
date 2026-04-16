@@ -1224,6 +1224,14 @@ body.light .cal-fab{background:#4488ff !important;}
         <span style="color:#555;font-size:16px;">&#9776;</span>
       </button>
 
+      <!-- Payment Method Filter -->
+      <div style="display:flex;gap:3px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:13px;padding:3px;margin-bottom:14px;">
+        <button onclick="payFilterMethod('all')" id="pay-filter-all" style="flex:1;padding:9px 4px;background:#fff;border:none;border-radius:10px;color:#000;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">All</button>
+        <button onclick="payFilterMethod('cash')" id="pay-filter-cash" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Cash</button>
+        <button onclick="payFilterMethod('card')" id="pay-filter-card" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Card</button>
+        <button onclick="payFilterMethod('check')" id="pay-filter-check" style="flex:1;padding:9px 4px;background:none;border:none;border-radius:10px;color:#555;font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase;">Check</button>
+      </div>
+
       <!-- Add New Payment Button -->
       <button onclick="openPayScanForm()" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a1628,#122a5c,#1d4ed8);border:1px solid #3b82f6;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent;" id="pay-add-btn">
         <span style="font-size:20px;">➕</span> Add New Payment
@@ -14011,6 +14019,12 @@ function payRowCardFee(el){
 async function loadPaymentWeek(){
   var list=document.getElementById('pay-list-items');
   if(!list)return;
+  // Reset method filter
+  _payMethodFilter='all';
+  ['all','cash','card','check'].forEach(function(f){
+    var btn=document.getElementById('pay-filter-'+f);
+    if(btn){btn.style.background=f==='all'?'#fff':'none';btn.style.color=f==='all'?'#000':'#555';}
+  });
   // Clear any active search
   _paySearchActive=false;_paySearchResults=[];
   var si=document.getElementById('pay-search');if(si)si.value='';
@@ -14615,6 +14629,11 @@ function _payRenderCards(){
       var adj=dealAdjust[key];
       if(adj&&!adj.include) return; // excluded
     }
+    // Method filter
+    if(_payMethodFilter!=='all'){
+      var pm=(p.payment_method||'cash').toLowerCase();
+      if(pm!==_payMethodFilter) return;
+    }
     var d=p.payment_date||'Unknown';
     if(!groups[d])groups[d]=[];
     groups[d].push(p);
@@ -14672,6 +14691,17 @@ function _payRenderCards(){
 }
 
 var _paySearchTimeout=null;
+var _payMethodFilter='all'; // 'all','cash','card','check'
+function payFilterMethod(m){
+  _payMethodFilter=m;
+  ['all','cash','card','check'].forEach(function(f){
+    var btn=document.getElementById('pay-filter-'+f);
+    if(f===m){btn.style.background='#fff';btn.style.color='#000';}
+    else{btn.style.background='none';btn.style.color='#555';}
+  });
+  _payRenderCards();
+}
+
 var _paySearchActive=false;
 var _paySearchResults=[];
 function paySearchAll(q){
