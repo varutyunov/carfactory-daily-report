@@ -369,12 +369,16 @@ function supabaseGet(table, query) {
     },
     muteHttpExceptions: true
   });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log('supabaseGet ERROR ' + code + ' ' + table + '?' + query + ' → ' + res.getContentText().substring(0, 200));
+  }
   return JSON.parse(res.getContentText());
 }
 
 function supabasePatch(table, filter, data) {
   var url = SUPABASE_URL + '/rest/v1/' + table + '?' + filter;
-  UrlFetchApp.fetch(url, {
+  var res = UrlFetchApp.fetch(url, {
     method: 'patch',
     headers: {
       'apikey': SUPABASE_KEY,
@@ -385,6 +389,10 @@ function supabasePatch(table, filter, data) {
     payload: JSON.stringify(data),
     muteHttpExceptions: true
   });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log('supabasePatch ERROR ' + code + ' ' + table + '?' + filter + ' → ' + res.getContentText().substring(0, 200));
+  }
 }
 
 function supabasePost(table, data) {
@@ -400,12 +408,17 @@ function supabasePost(table, data) {
     payload: JSON.stringify(data),
     muteHttpExceptions: true
   });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log('supabasePost ERROR ' + code + ' ' + table + ' → ' + res.getContentText().substring(0, 200));
+    Logger.log('supabasePost payload: ' + JSON.stringify(data).substring(0, 300));
+  }
   return JSON.parse(res.getContentText());
 }
 
 function supabaseDelete(table, filter) {
   var url = SUPABASE_URL + '/rest/v1/' + table + '?' + filter;
-  UrlFetchApp.fetch(url, {
+  var res = UrlFetchApp.fetch(url, {
     method: 'delete',
     headers: {
       'apikey': SUPABASE_KEY,
@@ -413,6 +426,10 @@ function supabaseDelete(table, filter) {
     },
     muteHttpExceptions: true
   });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log('supabaseDelete ERROR ' + code + ' ' + table + '?' + filter + ' → ' + res.getContentText().substring(0, 200));
+  }
 }
 
 // ============================================================
@@ -423,6 +440,7 @@ function supabaseDelete(table, filter) {
 // Uses batch reads (getValues/getNotes) for speed.
 // ============================================================
 function syncFullReconcile() {
+  Logger.log('syncFullReconcile START');
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var tabNames = Object.keys(TAB_CONFIG);
 
@@ -525,8 +543,11 @@ function syncFullReconcile() {
           sRow.updated_at = new Date().toISOString();
           sRow.location = sRow.location || 'DeBary';
         }
-        try { supabasePost(config.table, sRow); } catch (err) {
-          Logger.log('Reconcile INSERT error: ' + err.message);
+        try {
+          Logger.log('Reconcile INSERT: ' + tabName + ' → "' + sName + '" sort=' + newSortOrder);
+          supabasePost(config.table, sRow);
+        } catch (err) {
+          Logger.log('Reconcile INSERT error for "' + sName + '": ' + err.message);
         }
       } else {
         // Exists in both — check for value/note/sort_order changes
@@ -582,8 +603,11 @@ function syncFullReconcile() {
           if (config.table === 'inventory_costs') {
             patch.updated_at = new Date().toISOString();
           }
-          try { supabasePatch(config.table, 'id=eq.' + dbRec.id, patch); } catch (err) {
-            Logger.log('Reconcile UPDATE error: ' + err.message);
+          try {
+            Logger.log('Reconcile UPDATE: ' + tabName + ' → "' + sName + '" id=' + dbRec.id + ' fields=' + Object.keys(patch).join(','));
+            supabasePatch(config.table, 'id=eq.' + dbRec.id, patch);
+          } catch (err) {
+            Logger.log('Reconcile UPDATE error for "' + sName + '": ' + err.message);
           }
         }
       }
@@ -594,12 +618,18 @@ function syncFullReconcile() {
     for (var dk = 0; dk < dbNames.length; dk++) {
       var dkName = dbNames[dk];
       if (!sheetByName[dkName]) {
-        try { supabaseDelete(config.table, 'id=eq.' + dbByName[dkName].id); } catch (err) {
-          Logger.log('Reconcile DELETE error: ' + err.message);
+        try {
+          Logger.log('Reconcile DELETE: ' + tabName + ' → "' + dkName + '" id=' + dbByName[dkName].id);
+          supabaseDelete(config.table, 'id=eq.' + dbByName[dkName].id);
+        } catch (err) {
+          Logger.log('Reconcile DELETE error for "' + dkName + '": ' + err.message);
         }
       }
     }
+
+    Logger.log('Reconcile ' + tabName + ': sheet=' + sheetOrder.length + ' rows, db=' + dbRows.length + ' rows');
   }
+  Logger.log('syncFullReconcile DONE');
 }
 
 // ============================================================
