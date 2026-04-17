@@ -5435,6 +5435,8 @@ async function syncLocation(loc){
             inserted.forEach(function(row){
               S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
             });
+            // Auto-create inventory_costs rows for new cars → syncs to Google Sheet
+            try{ await _autoCreateInventoryCosts(inserted); }catch(e){ console.warn('Auto inventory_costs failed:',e); }
           }
         }catch(e){console.error('Insert batch error:',e);}
       }
@@ -5519,10 +5521,14 @@ async function syncNow(){
       for(var i=0;i<toInsertSB.length;i+=50){
         try{
           var inserted=await sbPost('inventory',toInsertSB.slice(i,i+50));
-          if(Array.isArray(inserted)) inserted.forEach(function(row){
-            if(row.miles) saveCarMilesLocal(row.id, row.miles);
-            S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
-          });
+          if(Array.isArray(inserted)){
+            inserted.forEach(function(row){
+              if(row.miles) saveCarMilesLocal(row.id, row.miles);
+              S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
+            });
+            // Auto-create inventory_costs rows for new cars → syncs to Google Sheet
+            try{ await _autoCreateInventoryCosts(inserted); }catch(e){ console.warn('Auto inventory_costs failed:',e); }
+          }
         }catch(e){console.error('Insert error:',e);}
       }
     }
@@ -16531,6 +16537,56 @@ async function _updateDeals26FromDeal(dealRecord) {
         break;
       }
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTO-CREATE INVENTORY_COSTS FROM NEW INVENTORY CARS (CSV SYNC)
+// ══════════════════════════════════════════════════════════════
+async function _autoCreateInventoryCosts(insertedRows) {
+  if (!Array.isArray(insertedRows) || !insertedRows.length) return;
+
+  // Get current sort_order max
+  var allIc = [];
+  try { allIc = await sbGet('inventory_costs', 'select=id,car_id&limit=500'); } catch(e) {}
+  var existingCarIds = new Set();
+  if (Array.isArray(allIc)) allIc.forEach(function(r) { if (r.car_id) existingCarIds.add(r.car_id); });
+  var nextSort = Array.isArray(allIc) ? allIc.length + 1 : 1;
+
+  for (var i = 0; i < insertedRows.length; i++) {
+    var row = insertedRows[i];
+    if (!row || !row.id) continue;
+    // Skip if this car already has an inventory_costs row
+    if (existingCarIds.has(row.id)) continue;
+
+    // Build short name: "05 Ranger white 185k"
+    var nameParts = (row.name || '').split(' ');
+    var fullYear = nameParts[0] || '';
+    var shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
+    // Skip make (index 1), use model (index 2+)
+    var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : (nameParts[1] || '');
+    var color = (row.color || '').toLowerCase();
+    var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
+    var carName = [shortYr, model, color, milesK].filter(Boolean).join(' ');
+
+    var icRow = {
+      car_name: carName,
+      car_id: row.id,
+      purchase_cost: 0,
+      joint_expenses: 0,
+      vlad_expenses: 0,
+      expense_notes: '',
+      vlad_expense_notes: '',
+      location: row.location || 'DeBary',
+      sort_order: nextSort,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      await sbPost('inventory_costs', icRow);
+      sheetsPush('Inventory', nextSort, icRow, 'insert');
+      nextSort++;
+    } catch(e) { console.warn('Auto inventory_costs insert failed for ' + carName + ':', e); }
   }
 }
 
