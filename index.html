@@ -16415,7 +16415,11 @@ async function _autopopulateDeals26(record, car) {
   }
 
   // 3. Build car_desc: prefer inventory_costs.car_name, fall back to deal vehicle_desc
+  //    Append customer last name to match sheet format (e.g. "14 Accord black 204k Colon")
   var carDesc = (ic && ic.car_name) ? ic.car_name : (record.vehicle_desc || (car && car.name) || '');
+  var custParts = (record.customer_name || '').trim().split(/\s+/);
+  var custLast = custParts.length > 0 ? custParts[custParts.length - 1] : '';
+  if (custLast) carDesc = carDesc + ' ' + custLast;
 
   // 4. Pull cost + expenses from inventory_costs
   var cost = ic ? (parseFloat(ic.purchase_cost) || 0) : 0;
