@@ -11640,6 +11640,7 @@ function formDepRenderMethodEdit(el){
     html+='<option value="card"'+(r.method==='card'?' selected':'')+'>Card</option>';
     html+='<option value="zelle"'+(r.method==='zelle'?' selected':'')+'>Zelle</option>';
     html+='<option value="money_order"'+(r.method==='money_order'?' selected':'')+'>M.O.</option>';
+    html+='<option value="trade_in"'+(r.method==='trade_in'?' selected':'')+'>Trade-In</option>';
     html+='<option value="other"'+(r.method==='other'?' selected':'')+'>Other</option>';
     html+='</select>';
     if(_formDepMethodRows.length>1) html+='<button onclick="_formDepMethodRows.splice('+i+',1);formDepRenderMethodEdit()" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>';
@@ -12077,6 +12078,7 @@ function depRenderPayments() {
         '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>' +
         '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>' +
         '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>' +
+        '<option value="trade_in"'+(p.method==='trade_in'?' selected':'')+'>Trade-In</option>' +
         '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>' +
       '</select>' +
       (_depPayments.length > 1 ? '<button onclick="depRemovePayment('+i+')" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>' : '') +
@@ -14890,13 +14892,13 @@ function payCloseBreakdown(){
 
 function _payMethodBadge(method){
   var s='display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;';
-  var map={cash:s+'background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);',card:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',check:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);',zelle:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',money_order:s+'background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.25);'};
+  var map={cash:s+'background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.25);',card:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',check:s+'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.25);',zelle:s+'background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.25);',money_order:s+'background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.25);',trade_in:s+'background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.25);'};
   var def=s+'background:rgba(255,255,255,.08);color:#888;border:1px solid rgba(255,255,255,.1);';
   var m=(method||'cash');
   if(m.indexOf(',')!==-1){
-    return m.split(',').map(function(t){t=t.trim();var k=t.replace(/\$[\d,.]+\s*/,'').toLowerCase().trim();return '<span style="'+(map[k]||def)+'">'+t.toUpperCase().replace(/MONEY_ORDER/g,'M.O.')+'</span>';}).join(' ');
+    return m.split(',').map(function(t){t=t.trim();var k=t.replace(/\$[\d,.]+\s*/,'').toLowerCase().trim();return '<span style="'+(map[k]||def)+'">'+t.toUpperCase().replace(/MONEY_ORDER/g,'M.O.').replace(/TRADE_IN/g,'TRADE-IN')+'</span>';}).join(' ');
   }
-  return '<span style="'+(map[m.toLowerCase()]||def)+'">'+m.toUpperCase().replace('MONEY_ORDER','M.O.')+'</span>';
+  return '<span style="'+(map[m.toLowerCase()]||def)+'">'+m.toUpperCase().replace('MONEY_ORDER','M.O.').replace('TRADE_IN','TRADE-IN')+'</span>';
 }
 function _payRenderCards(){
   var list=document.getElementById('pay-list-items');
@@ -15220,6 +15222,7 @@ function payRenderDepMethodEdit(){
     html+='<option value="card"'+(r.method==='card'?' selected':'')+'>Card</option>';
     html+='<option value="zelle"'+(r.method==='zelle'?' selected':'')+'>Zelle</option>';
     html+='<option value="money_order"'+(r.method==='money_order'?' selected':'')+'>M.O.</option>';
+    html+='<option value="trade_in"'+(r.method==='trade_in'?' selected':'')+'>Trade-In</option>';
     html+='<option value="other"'+(r.method==='other'?' selected':'')+'>Other</option>';
     html+='</select>';
     if(_payDepMethodRows.length>1) html+='<button onclick="_payDepMethodRows.splice('+i+',1);payRenderDepMethodEdit()" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>';
@@ -16096,6 +16099,18 @@ function dealUpdatePayment(idx, field, val) {
     dealRenderPayments();
     return;
   }
+  // Show/hide trade-in fields when method changes
+  if(field==='method'&&(val==='trade_in'||_dealPayments[idx].trade_year!==undefined)){
+    if(val!=='trade_in'){
+      delete _dealPayments[idx].trade_year;
+      delete _dealPayments[idx].trade_make;
+      delete _dealPayments[idx].trade_model;
+      delete _dealPayments[idx].trade_color;
+      delete _dealPayments[idx].trade_miles;
+    }
+    dealRenderPayments();
+    return;
+  }
   dealUpdateTotal();
   dealUpdateWeekToggleVisibility();
 }
@@ -16103,17 +16118,34 @@ function dealUpdatePayment(idx, field, val) {
 function dealRenderPayments() {
   var el = document.getElementById('deal-payments');
   el.innerHTML = _dealPayments.map(function(p, i) {
-    return '<div style="display:flex;gap:8px;align-items:center;">' +
+    var isTrade = p.method === 'trade_in';
+    var row = '<div style="display:flex;gap:8px;align-items:center;">' +
       '<input type="text" inputmode="decimal" placeholder="$0.00" value="'+(p.amount?'$'+p.amount:'')+'" oninput="moneyInput(this);dealUpdatePayment('+i+',\'amount\',this.value.replace(/[^0-9.]/g,\'\'))" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:16px;outline:none;min-width:0;"/>' +
       '<select onchange="dealUpdatePayment('+i+',\'method\',this.value)" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px 8px;font-size:14px;outline:none;appearance:auto;">' +
         '<option value="cash"'+(p.method==='cash'?' selected':'')+'>Cash</option>' +
         '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>' +
         '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>' +
         '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>' +
+        '<option value="trade_in"'+(isTrade?' selected':'')+'>Trade-In</option>' +
         '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>' +
       '</select>' +
       (_dealPayments.length > 1 ? '<button onclick="dealRemovePayment('+i+')" style="background:none;border:none;color:#ef4444;font-size:20px;cursor:pointer;padding:4px;">×</button>' : '') +
     '</div>';
+    if (isTrade) {
+      row += '<div style="background:#0a0f1a;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-top:4px;display:flex;flex-direction:column;gap:6px;">' +
+        '<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Trade-In Vehicle</div>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<input type="text" placeholder="Year" value="'+(p.trade_year||'')+'" oninput="dealUpdatePayment('+i+',\'trade_year\',this.value)" style="width:60px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;" inputmode="numeric" maxlength="4"/>' +
+          '<input type="text" placeholder="Make" value="'+(p.trade_make||'')+'" oninput="dealUpdatePayment('+i+',\'trade_make\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>' +
+          '<input type="text" placeholder="Model" value="'+(p.trade_model||'')+'" oninput="dealUpdatePayment('+i+',\'trade_model\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<input type="text" placeholder="Color" value="'+(p.trade_color||'')+'" oninput="dealUpdatePayment('+i+',\'trade_color\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>' +
+          '<input type="text" placeholder="Miles" value="'+(p.trade_miles||'')+'" oninput="dealUpdatePayment('+i+',\'trade_miles\',this.value)" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;" inputmode="numeric"/>' +
+        '</div>' +
+      '</div>';
+    }
+    return row;
   }).join('');
   dealUpdateTotal();
 }
@@ -16219,7 +16251,15 @@ async function dealSubmit() {
 
     // Build payments JSON
     var payments = _dealPayments.filter(function(p){ return parseFloat(p.amount) > 0; }).map(function(p) {
-      return { amount: parseFloat(p.amount), method: p.method };
+      var obj = { amount: parseFloat(p.amount), method: p.method };
+      if (p.method === 'trade_in') {
+        if (p.trade_year) obj.trade_year = p.trade_year;
+        if (p.trade_make) obj.trade_make = p.trade_make;
+        if (p.trade_model) obj.trade_model = p.trade_model;
+        if (p.trade_color) obj.trade_color = p.trade_color;
+        if (p.trade_miles) obj.trade_miles = p.trade_miles;
+      }
+      return obj;
     });
 
     var record = {
@@ -16344,12 +16384,142 @@ async function dealSubmit() {
       }
     }
 
+    // Auto-populate Deals26 sheet
+    try { await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
+
     // Close deal form and return to main page
     closeDealForm();
   } catch(err) {
     console.error('Deal submit error:', err);
     alert('Error submitting deal: ' + (err.message || err));
     if(btn) { btn.textContent = 'Submit Deal'; btn.disabled = false; }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTO-POPULATE DEALS26 FROM DEAL UPLOAD
+// ══════════════════════════════════════════════════════════════
+async function _autopopulateDeals26(record, car) {
+  var vin = (record.vin || '').trim();
+  if (!vin) return;
+
+  // 1. Find inventory car by VIN to get inventory.id
+  var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
+  var invId = (Array.isArray(invRows) && invRows[0]) ? invRows[0].id : null;
+
+  // 2. Find inventory_costs row linked to this inventory car
+  var ic = null;
+  if (invId) {
+    var icRows = await sbGet('inventory_costs', 'car_id=eq.' + invId + '&limit=1');
+    if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
+  }
+
+  // 3. Build car_desc: prefer inventory_costs.car_name, fall back to deal vehicle_desc
+  var carDesc = (ic && ic.car_name) ? ic.car_name : (record.vehicle_desc || (car && car.name) || '');
+
+  // 4. Pull cost + expenses from inventory_costs
+  var cost = ic ? (parseFloat(ic.purchase_cost) || 0) : 0;
+  var jointExp = ic ? (parseFloat(ic.joint_expenses) || 0) : 0;
+  var vladExp = ic ? (parseFloat(ic.vlad_expenses) || 0) : 0;
+  var expenses = jointExp + vladExp;
+
+  // 5. Combine expense notes
+  var expNotes = [];
+  if (ic && ic.expense_notes) expNotes.push(ic.expense_notes);
+  if (ic && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
+  var expenseNotes = expNotes.join(', ');
+
+  // 6. Calculate deal_num — find highest deal_num in current week group
+  var dealNum = 1;
+  try {
+    var recentD26 = await sbGet('deals26', 'order=sort_order.desc&limit=50&select=deal_num');
+    if (Array.isArray(recentD26) && recentD26.length > 0) {
+      // Walk from most recent backward; the current week is everything after the last deal_num=1
+      var maxInWeek = 0;
+      for (var i = 0; i < recentD26.length; i++) {
+        var dn = parseInt(recentD26[i].deal_num) || 0;
+        if (dn > maxInWeek) maxInWeek = dn;
+        if (dn === 1) break; // hit the start of the current week
+      }
+      dealNum = maxInWeek + 1;
+    }
+  } catch (e) { /* default to 1 */ }
+
+  // 7. Get sort_order — total rows + 1
+  var sortOrder = 1;
+  try {
+    var allD26 = await sbGet('deals26', 'select=id&limit=500');
+    if (Array.isArray(allD26)) sortOrder = allD26.length + 1;
+  } catch (e) {}
+
+  // 8. Build deals26 object
+  var d26Obj = {
+    car_desc: carDesc,
+    cost: cost,
+    expenses: expenses,
+    expense_notes: expenseNotes,
+    taxes: 0,
+    money: parseFloat(record.total_collected) || 0,
+    owed: 0,
+    payments: 0,
+    payment_notes: '',
+    dealer_fee: 399,
+    manny: 0,
+    deal_num: dealNum,
+    gps_sold: !!(record.gps_serial),
+    sold_inv_vin: vin,
+    notes: '',
+    sort_order: sortOrder
+  };
+
+  // 9. Insert into Supabase
+  var res = await sbPost('deals26', d26Obj);
+
+  // 10. Push to Google Sheet
+  sheetsPush('Deals26', sortOrder, d26Obj);
+
+  // 11. Update local _d26Data if it's loaded
+  if (Array.isArray(_d26Data) && res && res[0]) {
+    _d26Data.push(res[0]);
+  }
+}
+
+// Update existing deals26 row when a deal is edited
+async function _updateDeals26FromDeal(dealRecord) {
+  var vin = (dealRecord.vin || '').trim();
+  if (!vin) return;
+
+  // Find existing deals26 row by VIN
+  var existing = await sbGet('deals26', 'sold_inv_vin=eq.' + encodeURIComponent(vin) + '&limit=1');
+  if (!Array.isArray(existing) || !existing[0]) {
+    // No existing row — create one
+    await _autopopulateDeals26(dealRecord, null);
+    return;
+  }
+
+  var d26Row = existing[0];
+  var patch = { money: parseFloat(dealRecord.total_collected) || 0 };
+
+  // Update GPS if changed
+  if (dealRecord.gps_serial !== undefined) {
+    patch.gps_sold = !!(dealRecord.gps_serial);
+  }
+
+  await sbPatch('deals26', d26Row.id, patch);
+
+  // Push update to Google Sheet
+  if (d26Row.sort_order) {
+    sheetsPush('Deals26', d26Row.sort_order, patch);
+  }
+
+  // Update local _d26Data if loaded
+  if (Array.isArray(_d26Data)) {
+    for (var i = 0; i < _d26Data.length; i++) {
+      if (_d26Data[i].id === d26Row.id) {
+        Object.assign(_d26Data[i], patch);
+        break;
+      }
+    }
   }
 }
 
@@ -18046,6 +18216,7 @@ function openDealDetail(id) {
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Payments</div>';
     html += '<div id="de-payments-'+d.id+'" style="display:flex;flex-direction:column;gap:6px;">';
     payments.forEach(function(p,i){
+      var isTrade = p.method === 'trade_in';
       html += '<div style="display:flex;gap:6px;align-items:center;">';
       html += '<input type="text" inputmode="decimal" value="$'+parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})+'" oninput="moneyInput(this)" data-idx="'+i+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>';
       html += '<select data-idx="'+i+'" class="de-pmt-method" onchange="deAutoCardFee(this,'+d.id+')" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">';
@@ -18053,10 +18224,24 @@ function openDealDetail(id) {
       html += '<option value="card"'+(p.method==='card'?' selected':'')+'>Card</option>';
       html += '<option value="zelle"'+(p.method==='zelle'?' selected':'')+'>Zelle</option>';
       html += '<option value="money_order"'+(p.method==='money_order'?' selected':'')+'>Money Order</option>';
+      html += '<option value="trade_in"'+(isTrade?' selected':'')+'>Trade-In</option>';
       html += '<option value="other"'+(p.method==='other'?' selected':'')+'>Other</option>';
       html += '</select>';
       html += '<button onclick="this.parentElement.remove();dealEditRecalcCash('+d.id+')" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 10px;font-size:14px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
       html += '</div>';
+      if (isTrade) {
+        html += '<div class="de-trade-fields" data-idx="'+i+'" style="background:#0a0f1a;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;flex-direction:column;gap:6px;">';
+        html += '<div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Trade-In Vehicle</div>';
+        html += '<div style="display:flex;gap:6px;">';
+        html += '<input type="text" placeholder="Year" value="'+(p.trade_year||'')+'" class="de-trade-year" style="width:60px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;" inputmode="numeric" maxlength="4"/>';
+        html += '<input type="text" placeholder="Make" value="'+(p.trade_make||'')+'" class="de-trade-make" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
+        html += '<input type="text" placeholder="Model" value="'+(p.trade_model||'')+'" class="de-trade-model" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:6px;">';
+        html += '<input type="text" placeholder="Color" value="'+(p.trade_color||'')+'" class="de-trade-color" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
+        html += '<input type="text" placeholder="Miles" value="'+(p.trade_miles||'')+'" class="de-trade-miles" style="flex:1;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;" inputmode="numeric"/>';
+        html += '</div></div>';
+      }
     });
     html += '</div>';
     html += '<button onclick="dealEditAddPayment('+d.id+')" style="margin-top:6px;width:100%;padding:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">+ Add Payment</button>';
@@ -18203,7 +18388,7 @@ function dealEditAddPayment(id){
   row.style.cssText='display:flex;gap:6px;align-items:center;';
   row.innerHTML='<input type="text" inputmode="decimal" value="" oninput="moneyInput(this)" placeholder="$0.00" data-idx="'+idx+'" class="de-pmt-amt" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:15px;outline:none;min-width:0;"/>'
     +'<select data-idx="'+idx+'" class="de-pmt-method" onchange="deAutoCardFee(this,'+id+')" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px 8px;font-size:13px;outline:none;appearance:auto;">'
-    +'<option value="cash">Cash</option><option value="card">Card</option><option value="zelle">Zelle</option><option value="money_order">Money Order</option><option value="other">Other</option></select>'
+    +'<option value="cash">Cash</option><option value="card">Card</option><option value="zelle">Zelle</option><option value="money_order">Money Order</option><option value="trade_in">Trade-In</option><option value="other">Other</option></select>'
     +'<button onclick="this.parentElement.remove();dealEditRecalcCash('+id+')" style="background:none;border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 10px;font-size:14px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">✕</button>';
   wrap.appendChild(row);
   row.querySelector('input').focus();
@@ -18358,11 +18543,29 @@ async function dealEditSave(id){
     // Payments
     var amtEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-amt');
     var methodEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-method');
+    var tradeFields=document.querySelectorAll('#de-payments-'+id+' .de-trade-fields');
     var newPayments=[];var newTotal=0;
     for(var i=0;i<amtEls.length;i++){
       var a=parseFloat((amtEls[i].value||'').replace(/[^0-9.]/g,''))||0;
       var m=methodEls[i]?methodEls[i].value:'cash';
-      if(a>0){newPayments.push({amount:a,method:m});newTotal+=a;}
+      if(a>0){
+        var pObj={amount:a,method:m};
+        if(m==='trade_in'){
+          // Find matching trade fields container
+          var tf=null;
+          for(var ti=0;ti<tradeFields.length;ti++){
+            if(parseInt(tradeFields[ti].getAttribute('data-idx'))===i){tf=tradeFields[ti];break;}
+          }
+          if(tf){
+            var ty=tf.querySelector('.de-trade-year');if(ty)pObj.trade_year=ty.value||'';
+            var tk=tf.querySelector('.de-trade-make');if(tk)pObj.trade_make=tk.value||'';
+            var tl=tf.querySelector('.de-trade-model');if(tl)pObj.trade_model=tl.value||'';
+            var tc=tf.querySelector('.de-trade-color');if(tc)pObj.trade_color=tc.value||'';
+            var tm=tf.querySelector('.de-trade-miles');if(tm)pObj.trade_miles=tm.value||'';
+          }
+        }
+        newPayments.push(pObj);newTotal+=a;
+      }
     }
     patch.payments=JSON.stringify(newPayments);
     patch.total_collected=newTotal;
@@ -18472,6 +18675,9 @@ async function dealEditSave(id){
         _netDealSave();
       }
     }
+    // Update Deals26 if this deal's VIN has a row there
+    try { await _updateDeals26FromDeal(d); } catch(e) { console.warn('Deals26 update failed:', e); }
+
     if(btn){btn.textContent='Saved!';btn.style.background='#065f46';btn.style.borderColor='#10b981';}
     setTimeout(function(){
       openDealDetail(id);
