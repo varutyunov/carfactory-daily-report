@@ -256,6 +256,12 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'read_all', rows: rows });
     }
 
+    // ── ACTION: SETUP_TRIGGER — create the 5-min reconcile trigger ──
+    if (action === 'setup_trigger') {
+      setupReconcileTrigger();
+      return jsonResponse({ ok: true, action: 'setup_trigger', message: 'Reconcile trigger created (every 5 min)' });
+    }
+
     return jsonResponse({ error: 'Unknown action: ' + action });
 
   } catch (err) {
@@ -354,7 +360,9 @@ function supabaseDelete(table, filter) {
 
 // ============================================================
 // FULL RECONCILIATION — run on time-based trigger (every 5 min)
-// Compares sheet rows vs Supabase rows and syncs differences
+// Matches by car_name/car_desc (NOT row position) so row
+// deletions and insertions in the sheet don't scramble data.
+// Google Sheet is the source of truth.
 // ============================================================
 function syncFullReconcile() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -366,13 +374,14 @@ function syncFullReconcile() {
     var sheet = ss.getSheetByName(tabName);
     if (!sheet) continue;
 
-    // Read all sheet rows
-    var lastRow = sheet.getLastRow();
-    var sheetRows = {};
     var nameField = config.table === 'deals26' ? 'car_desc' : 'car_name';
 
+    // Read all sheet rows, keyed by name
+    var lastRow = sheet.getLastRow();
+    var sheetByName = {};
+    var sheetOrder = [];
+
     for (var r = config.startRow; r <= lastRow; r++) {
-      var rowIndex = r - config.startRow + 1;
       var rowData = {};
       var hasData = false;
       var colKeys = Object.keys(config.columns);
@@ -406,29 +415,32 @@ function syncFullReconcile() {
         }
       }
 
-      if (hasData) {
-        sheetRows[rowIndex] = rowData;
+      var rowName = rowData[nameField] || '';
+      if (hasData && rowName) {
+        sheetByName[rowName] = rowData;
+        sheetOrder.push(rowName);
       }
     }
 
-    // Read all Supabase rows
+    // Read all Supabase rows, keyed by name
     var dbRows = supabaseGet(config.table, 'select=*&order=sort_order.asc,id.asc&limit=500');
     if (!Array.isArray(dbRows)) continue;
 
-    var dbMap = {};
+    var dbByName = {};
     for (var d = 0; d < dbRows.length; d++) {
-      var so = dbRows[d].sort_order;
-      if (so) dbMap[so] = dbRows[d];
+      var dName = dbRows[d][nameField] || '';
+      if (dName) dbByName[dName] = dbRows[d];
     }
 
-    // Reconcile: Sheet → Supabase (new rows in sheet)
-    var sheetKeys = Object.keys(sheetRows);
-    for (var s = 0; s < sheetKeys.length; s++) {
-      var sIdx = parseInt(sheetKeys[s]);
-      var sRow = sheetRows[sIdx];
-      if (!dbMap[sIdx]) {
-        // Row exists in sheet but not in Supabase → INSERT
-        sRow.sort_order = sIdx;
+    // Sheet → Supabase: add new cars, update changed values + sort_order
+    for (var si = 0; si < sheetOrder.length; si++) {
+      var sName = sheetOrder[si];
+      var sRow = sheetByName[sName];
+      var newSortOrder = si + 1;
+
+      if (!dbByName[sName]) {
+        // New in sheet → INSERT to Supabase
+        sRow.sort_order = newSortOrder;
         sRow.sync_source = 'sheets';
         sRow.updated_at = new Date().toISOString();
         if (config.table === 'inventory_costs') {
@@ -438,43 +450,95 @@ function syncFullReconcile() {
           Logger.log('Reconcile INSERT error: ' + err.message);
         }
       } else {
-        // Row exists in both — sync cell notes (onEdit doesn't catch note-only changes)
-        if (config.cellNotes) {
-          var noteChanged = false;
-          var notePatch = {};
-          var noteKeys2 = Object.keys(config.cellNotes);
-          for (var n2 = 0; n2 < noteKeys2.length; n2++) {
-            var nField2 = config.cellNotes[noteKeys2[n2]];
-            var sheetNote = sRow[nField2] || '';
-            var dbNote = dbMap[sIdx][nField2] || '';
-            if (sheetNote !== dbNote) {
-              notePatch[nField2] = sheetNote;
-              noteChanged = true;
+        // Exists in both — check for value/note/sort_order changes
+        var dbRec = dbByName[sName];
+        var patch = {};
+        var changed = false;
+
+        // Check sort_order
+        if (dbRec.sort_order !== newSortOrder) {
+          patch.sort_order = newSortOrder;
+          changed = true;
+        }
+
+        // Check column values
+        var colKeys2 = Object.keys(config.columns);
+        for (var c2 = 0; c2 < colKeys2.length; c2++) {
+          var cf = config.columns[colKeys2[c2]];
+          if (cf === nameField) continue; // skip the name field itself
+          var sheetVal = sRow[cf];
+          var dbVal = dbRec[cf];
+          // Compare numbers with tolerance, strings exact
+          if (typeof sheetVal === 'number') {
+            if (Math.abs((sheetVal || 0) - (parseFloat(dbVal) || 0)) > 0.01) {
+              patch[cf] = sheetVal;
+              changed = true;
+            }
+          } else if (typeof sheetVal === 'boolean') {
+            if (sheetVal !== !!dbVal) {
+              patch[cf] = sheetVal;
+              changed = true;
+            }
+          } else {
+            if ((sheetVal || '') !== (dbVal || '')) {
+              patch[cf] = sheetVal;
+              changed = true;
             }
           }
-          if (noteChanged) {
-            notePatch.sync_source = 'sheets';
-            notePatch.updated_at = new Date().toISOString();
-            try { supabasePatch(config.table, 'sort_order=eq.' + sIdx, notePatch); } catch (err) {
-              Logger.log('Reconcile note sync error: ' + err.message);
+        }
+
+        // Check cell notes
+        if (config.cellNotes) {
+          var noteKeys3 = Object.keys(config.cellNotes);
+          for (var n3 = 0; n3 < noteKeys3.length; n3++) {
+            var nf = config.cellNotes[noteKeys3[n3]];
+            if ((sRow[nf] || '') !== (dbRec[nf] || '')) {
+              patch[nf] = sRow[nf] || '';
+              changed = true;
             }
+          }
+        }
+
+        if (changed) {
+          patch.sync_source = 'sheets';
+          patch.updated_at = new Date().toISOString();
+          try { supabasePatch(config.table, 'id=eq.' + dbRec.id, patch); } catch (err) {
+            Logger.log('Reconcile UPDATE error: ' + err.message);
           }
         }
       }
     }
 
-    // Reconcile: Supabase → Sheet (rows deleted from sheet)
-    var dbKeys = Object.keys(dbMap);
-    for (var dk = 0; dk < dbKeys.length; dk++) {
-      var dIdx = parseInt(dbKeys[dk]);
-      if (!sheetRows[dIdx]) {
-        // Row exists in Supabase but not in sheet → DELETE from Supabase
-        try { supabaseDelete(config.table, 'id=eq.' + dbMap[dIdx].id); } catch (err) {
+    // Supabase → delete: cars in DB but not in sheet anymore
+    var dbNames = Object.keys(dbByName);
+    for (var dk = 0; dk < dbNames.length; dk++) {
+      var dkName = dbNames[dk];
+      if (!sheetByName[dkName]) {
+        try { supabaseDelete(config.table, 'id=eq.' + dbByName[dkName].id); } catch (err) {
           Logger.log('Reconcile DELETE error: ' + err.message);
         }
       }
     }
   }
+}
+
+// ============================================================
+// TRIGGER SETUP — run once to create the 5-min reconcile trigger
+// ============================================================
+function setupReconcileTrigger() {
+  // Remove any existing reconcile triggers
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'syncFullReconcile') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  // Create new 5-minute trigger
+  ScriptApp.newTrigger('syncFullReconcile')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  Logger.log('Created syncFullReconcile trigger (every 5 minutes)');
 }
 
 // ============================================================
