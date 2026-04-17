@@ -123,8 +123,10 @@ function onSheetEdit(e) {
     }
   }
 
-  data.sync_source = 'sheets';
-  data.updated_at = new Date().toISOString();
+  // Only set updated_at for tables that have it (inventory_costs does, deals26 doesn't)
+  if (config.table === 'inventory_costs') {
+    data.updated_at = new Date().toISOString();
+  }
 
   // Write directly to Supabase — always use sort_order for reliable row matching
   try {
@@ -262,6 +264,12 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'setup_trigger', message: 'Reconcile trigger created (every 5 min)' });
     }
 
+    // ── ACTION: RUN_SYNC — manually trigger full reconciliation ──
+    if (action === 'run_sync') {
+      syncFullReconcile();
+      return jsonResponse({ ok: true, action: 'run_sync', message: 'Full reconciliation completed' });
+    }
+
     return jsonResponse({ error: 'Unknown action: ' + action });
 
   } catch (err) {
@@ -280,6 +288,10 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var val = data[cField];
       if (cField === 'gps_sold') val = val ? 'X' : '';
       sheet.getRange(targetRow, cNum).setValue(val);
+      // Color column B (car_desc) based on car color in description
+      if (cField === 'car_desc' || cField === 'car_name') {
+        _applyCarColor(sheet, targetRow, cNum, String(val));
+      }
     }
   }
   if (config.cellNotes) {
@@ -292,6 +304,51 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
         sheet.getRange(targetRow, nNum).setNote(data[nField] || '');
       }
     }
+  }
+}
+
+// Apply car color as cell background on column B
+function _applyCarColor(sheet, row, col, desc) {
+  var COLOR_MAP = {
+    'black':     '#000000',
+    'white':     '#ffffff',
+    'grey':      '#999999',
+    'gray':      '#999999',
+    'silver':    '#c0c0c0',
+    'blue':      '#4a86c8',
+    'red':       '#cc0000',
+    'green':     '#38761d',
+    'gold':      '#bf9000',
+    'tan':       '#d2b48c',
+    'maroon':    '#800000',
+    'brown':     '#783f04',
+    'orange':    '#e69138',
+    'yellow':    '#ffd966',
+    'purple':    '#674ea7',
+    'beige':     '#f5f0e1',
+    'burgundy':  '#800020',
+    'champagne': '#f7e7ce',
+    'nardo':     '#767b7e',
+    'charcoal':  '#464646',
+    'bronze':    '#cd7f32'
+  };
+  // Light text for dark backgrounds
+  var DARK_COLORS = ['black','maroon','brown','burgundy','charcoal','green','red','purple','blue','nardo'];
+
+  var words = desc.toLowerCase().split(/\s+/);
+  var bgColor = null;
+  var colorName = null;
+  for (var i = 0; i < words.length; i++) {
+    if (COLOR_MAP[words[i]]) {
+      bgColor = COLOR_MAP[words[i]];
+      colorName = words[i];
+      break;
+    }
+  }
+  var cell = sheet.getRange(row, col);
+  if (bgColor) {
+    cell.setBackground(bgColor);
+    cell.setFontColor(DARK_COLORS.indexOf(colorName) !== -1 ? '#ffffff' : '#000000');
   }
 }
 
@@ -363,6 +420,7 @@ function supabaseDelete(table, filter) {
 // Matches by car_name/car_desc (NOT row position) so row
 // deletions and insertions in the sheet don't scramble data.
 // Google Sheet is the source of truth.
+// Uses batch reads (getValues/getNotes) for speed.
 // ============================================================
 function syncFullReconcile() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -375,22 +433,46 @@ function syncFullReconcile() {
     if (!sheet) continue;
 
     var nameField = config.table === 'deals26' ? 'car_desc' : 'car_name';
-
-    // Read all sheet rows, keyed by name
     var lastRow = sheet.getLastRow();
+    if (lastRow < config.startRow) continue;
+    var numRows = lastRow - config.startRow + 1;
+
+    // Determine column range for batch read
+    var colKeys = Object.keys(config.columns);
+    var colNums = colKeys.map(function(l){ return letterToColumn(l); });
+    var minCol = Math.min.apply(null, colNums);
+    var maxCol = Math.max.apply(null, colNums);
+    var numCols = maxCol - minCol + 1;
+
+    // Batch read all values and notes in one call each
+    var dataRange = sheet.getRange(config.startRow, minCol, numRows, numCols);
+    var allValues = dataRange.getValues();
+
+    // Batch read notes for cellNotes columns
+    var allNotes = {};
+    if (config.cellNotes) {
+      var noteKeys = Object.keys(config.cellNotes);
+      for (var nk = 0; nk < noteKeys.length; nk++) {
+        var nCol = letterToColumn(noteKeys[nk]);
+        var noteRange = sheet.getRange(config.startRow, nCol, numRows, 1);
+        allNotes[noteKeys[nk]] = noteRange.getNotes(); // 2D array
+      }
+    }
+
+    // Parse sheet rows keyed by name
     var sheetByName = {};
     var sheetOrder = [];
 
-    for (var r = config.startRow; r <= lastRow; r++) {
+    for (var r = 0; r < numRows; r++) {
       var rowData = {};
       var hasData = false;
-      var colKeys = Object.keys(config.columns);
 
       for (var c = 0; c < colKeys.length; c++) {
         var cLetter = colKeys[c];
         var cField = config.columns[cLetter];
-        var cNum = letterToColumn(cLetter);
-        var val = sheet.getRange(r, cNum).getValue();
+        var cIdx = letterToColumn(cLetter) - minCol; // index into allValues row
+        var val = allValues[r][cIdx];
+
         if (cField === 'gps_sold') {
           rowData[cField] = (val === 'X' || val === 'x' || val === true);
         } else if (cField === 'car_name' || cField === 'car_desc') {
@@ -404,14 +486,12 @@ function syncFullReconcile() {
         }
       }
 
-      // Read cell notes
+      // Read cell notes from batch
       if (config.cellNotes) {
-        var noteKeys = Object.keys(config.cellNotes);
-        for (var n = 0; n < noteKeys.length; n++) {
-          var nLetter = noteKeys[n];
-          var nField = config.cellNotes[nLetter];
-          var nNum = letterToColumn(nLetter);
-          rowData[nField] = sheet.getRange(r, nNum).getNote() || '';
+        var nKeys = Object.keys(config.cellNotes);
+        for (var n = 0; n < nKeys.length; n++) {
+          var nField = config.cellNotes[nKeys[n]];
+          rowData[nField] = (allNotes[nKeys[n]] && allNotes[nKeys[n]][r]) ? allNotes[nKeys[n]][r][0] || '' : '';
         }
       }
 
@@ -441,9 +521,8 @@ function syncFullReconcile() {
       if (!dbByName[sName]) {
         // New in sheet → INSERT to Supabase
         sRow.sort_order = newSortOrder;
-        sRow.sync_source = 'sheets';
-        sRow.updated_at = new Date().toISOString();
         if (config.table === 'inventory_costs') {
+          sRow.updated_at = new Date().toISOString();
           sRow.location = sRow.location || 'DeBary';
         }
         try { supabasePost(config.table, sRow); } catch (err) {
@@ -500,8 +579,9 @@ function syncFullReconcile() {
         }
 
         if (changed) {
-          patch.sync_source = 'sheets';
-          patch.updated_at = new Date().toISOString();
+          if (config.table === 'inventory_costs') {
+            patch.updated_at = new Date().toISOString();
+          }
           try { supabasePatch(config.table, 'id=eq.' + dbRec.id, patch); } catch (err) {
             Logger.log('Reconcile UPDATE error: ' + err.message);
           }
