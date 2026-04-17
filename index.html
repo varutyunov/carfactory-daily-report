@@ -16387,6 +16387,13 @@ async function dealSubmit() {
     // Auto-populate Deals26 sheet
     try { await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
 
+    // Auto-create trade-in cars in inventory + inventory_costs
+    for (var ti = 0; ti < payments.length; ti++) {
+      if (payments[ti].method === 'trade_in') {
+        try { await _createTradeInCar(payments[ti], record); } catch(e) { console.warn('Trade-in car creation failed:', e); }
+      }
+    }
+
     // Close deal form and return to main page
     closeDealForm();
   } catch(err) {
@@ -16524,6 +16531,73 @@ async function _updateDeals26FromDeal(dealRecord) {
         break;
       }
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTO-CREATE TRADE-IN CAR IN INVENTORY + INVENTORY_COSTS
+// ══════════════════════════════════════════════════════════════
+async function _createTradeInCar(payment, dealRecord) {
+  var yr = (payment.trade_year || '').trim();
+  var make = (payment.trade_make || '').trim();
+  var model = (payment.trade_model || '').trim();
+  var color = (payment.trade_color || '').trim();
+  var rawMiles = (payment.trade_miles || '').toString().replace(/[^0-9]/g, '');
+  var milesNum = parseInt(rawMiles) || null;
+  var tradeValue = parseFloat(payment.amount) || 0;
+
+  if (!yr && !make && !model) return; // no vehicle info
+
+  // 1. Build inventory name: "2005 Ford Ranger"
+  var invName = [yr, make, model].filter(Boolean).join(' ');
+
+  // 2. Insert into inventory table
+  var invRow = {
+    name: invName,
+    stock: '',
+    vin: '',
+    color: color.toLowerCase(),
+    miles: milesNum,
+    location: dealRecord.location || 'DeBary',
+    photo: null
+  };
+  var invRes = await sbPost('inventory', invRow);
+  var newInvId = (invRes && invRes[0]) ? invRes[0].id : null;
+  if (!newInvId) return;
+
+  // 3. Build inventory_costs car_name: "05 Ranger white 185k trade"
+  var shortYr = yr.length === 4 ? yr.slice(2) : yr;
+  var milesK = milesNum ? Math.round(milesNum / 1000) + 'k' : '';
+  var carName = [shortYr, model, color.toLowerCase(), milesK, 'trade'].filter(Boolean).join(' ');
+
+  // 4. Get next sort_order
+  var sortOrder = 1;
+  try {
+    var allIc = await sbGet('inventory_costs', 'select=id&limit=500');
+    if (Array.isArray(allIc)) sortOrder = allIc.length + 1;
+  } catch (e) {}
+
+  // 5. Insert into inventory_costs, linked to the inventory car
+  var icRow = {
+    car_name: carName,
+    car_id: newInvId,
+    purchase_cost: tradeValue,
+    joint_expenses: 0,
+    vlad_expenses: 0,
+    expense_notes: '',
+    vlad_expense_notes: '',
+    location: dealRecord.location || 'DeBary',
+    sort_order: sortOrder,
+    updated_at: new Date().toISOString()
+  };
+  await sbPost('inventory_costs', icRow);
+
+  // 6. Push to Google Sheet
+  sheetsPush('Inventory', sortOrder, icRow, 'insert');
+
+  // 7. Refresh local inventory
+  if (Array.isArray(S.inventory) && invRes && invRes[0]) {
+    S.inventory.push(invRes[0]);
   }
 }
 
