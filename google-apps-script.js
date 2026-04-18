@@ -292,10 +292,20 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
         continue;
       }
-      // Column F (owed) in Deals26 is a formula: =E-A-C-D-H (money - cost - expenses - taxes - dealer_fee)
+      // Column F (owed) in Deals26 — copy formula from the row above
       if (config.table === 'deals26' && cField === 'owed') {
-        var r = targetRow;
-        cell.setFormula('=E' + r + '-A' + r + '-C' + r + '-D' + r + '-H' + r);
+        var srcRow = targetRow - 1;
+        if (srcRow >= config.startRow) {
+          var srcCell = sheet.getRange(srcRow, cNum);
+          var srcFormula = srcCell.getFormula();
+          if (srcFormula) {
+            srcCell.copyTo(cell);
+          } else {
+            // Fallback if no formula above
+            var r = targetRow;
+            cell.setFormula('=E' + r + '-A' + r + '-C' + r + '-D' + r + '-H' + r);
+          }
+        }
         cell.setNumberFormat('$#,##0');
       } else {
         cell.setValue(val);
