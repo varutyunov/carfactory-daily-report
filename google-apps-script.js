@@ -13,54 +13,60 @@
 
 var SYNC_SECRET = 'cf-sync-2026';
 
-// Spreadsheet ID (standalone script — references the original sheet by ID)
-var SPREADSHEET_ID = '1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE';
+// Spreadsheet IDs — one per location
+var SPREADSHEET_IDS = {
+  'DeBary': '1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE',
+  'DeLand': '1pNF6h9AX5MQsNoT-UxvrAOaT-7lulvGiWd_oTFkqyzM'
+};
+// Backward compat
+var SPREADSHEET_ID = SPREADSHEET_IDS['DeBary'];
 
 // Supabase config
 var SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
 
-// Tab config — maps sheet tab names to Supabase tables + column layouts
-var TAB_CONFIG = {
-  'Inventory': {
-    table: 'inventory_costs',
-    startRow: 20,    // First data row in the sheet (1-indexed)
-    columns: {
-      'G': 'purchase_cost',
-      'H': 'car_name',
-      'I': 'joint_expenses',
-      'J': 'vlad_expenses'
-      // K = Total (formula, don't sync)
+// Tab config per location — maps sheet tab names to Supabase tables + column layouts
+var LOCATION_CONFIGS = {
+  'DeBary': {
+    'Inventory': {
+      table: 'inventory_costs',
+      startRow: 20,
+      columns: { 'G': 'purchase_cost', 'H': 'car_name', 'I': 'joint_expenses', 'J': 'vlad_expenses' },
+      cellNotes: { 'I': 'expense_notes', 'J': 'vlad_expense_notes' }
     },
-    // Cell notes on these columns sync to Supabase fields
-    cellNotes: {
-      'I': 'expense_notes',       // joint expenses breakdown
-      'J': 'vlad_expense_notes'   // vlad expenses breakdown
+    'Deals26': {
+      table: 'deals26',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
     }
   },
-  'Deals26': {
-    table: 'deals26',
-    startRow: 2,     // First data row (row 1 = header)
-    columns: {
-      'A': 'cost',
-      'B': 'car_desc',
-      'C': 'expenses',
-      'D': 'taxes',
-      'E': 'money',
-      'F': 'owed',
-      'G': 'payments',
-      'H': 'dealer_fee',
-      'I': 'manny',
-      'J': 'deal_num',
-      'K': 'gps_sold'
+  'DeLand': {
+    'Inventory': {
+      table: 'inventory_costs',
+      startRow: 17,
+      columns: { 'G': 'purchase_cost', 'H': 'car_name', 'I': 'joint_expenses', 'J': 'vlad_expenses' },
+      cellNotes: { 'I': 'expense_notes', 'J': 'vlad_expense_notes' }
     },
-    // Cell notes on these columns sync to Supabase fields
-    cellNotes: {
-      'C': 'expense_notes',    // expense breakdown
-      'G': 'payment_notes'     // payment breakdown
+    'Deals26': {
+      table: 'deals26',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
     }
   }
 };
+
+// Default TAB_CONFIG for backward compat (DeBary)
+var TAB_CONFIG = LOCATION_CONFIGS['DeBary'];
+
+// Helper: get config for a location
+function _getConfig(location) {
+  return LOCATION_CONFIGS[location] || LOCATION_CONFIGS['DeBary'];
+}
+function _getSpreadsheetId(location) {
+  return SPREADSHEET_IDS[location] || SPREADSHEET_IDS['DeBary'];
+}
 
 // ============================================================
 // DIRECTION 1: Google Sheet → Supabase (on cell edit)
@@ -70,7 +76,14 @@ function onSheetEdit(e) {
 
   var sheet = e.range.getSheet();
   var tabName = sheet.getName();
-  var config = TAB_CONFIG[tabName];
+
+  // Determine which location this spreadsheet belongs to
+  var ssId = e.source ? e.source.getId() : '';
+  var loc = 'DeBary';
+  if (ssId === SPREADSHEET_IDS['DeLand']) loc = 'DeLand';
+
+  var locConfig = _getConfig(loc);
+  var config = locConfig[tabName];
   if (!config) return;
 
   var row = e.range.getRow();
@@ -128,11 +141,11 @@ function onSheetEdit(e) {
     data.updated_at = new Date().toISOString();
   }
 
-  // Write directly to Supabase — always use sort_order for reliable row matching
+  // Write directly to Supabase — filter by sort_order + location for reliable row matching
   try {
-    supabasePatch(config.table, 'sort_order=eq.' + rowIndex, data);
+    supabasePatch(config.table, 'sort_order=eq.' + rowIndex + '&location=eq.' + encodeURIComponent(loc), data);
   } catch (err) {
-    Logger.log('Sheet→Supabase sync error: ' + err.message);
+    Logger.log('Sheet→Supabase sync error (' + loc + '): ' + err.message);
   }
 }
 
@@ -148,12 +161,14 @@ function doPost(e) {
     }
 
     var tabName = body.tab;
-    var config = TAB_CONFIG[tabName];
+    var location = body.location || 'DeBary';
+    var locConfig = _getConfig(location);
+    var config = locConfig[tabName];
     if (!config) {
       return jsonResponse({ error: 'Unknown tab: ' + tabName });
     }
 
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
     var sheet = ss.getSheetByName(tabName);
     if (!sheet) {
       return jsonResponse({ error: 'Sheet tab not found: ' + tabName });
@@ -482,12 +497,19 @@ function supabaseDelete(table, filter) {
 // ============================================================
 function syncFullReconcile() {
   Logger.log('syncFullReconcile START');
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var tabNames = Object.keys(TAB_CONFIG);
+  var locations = Object.keys(SPREADSHEET_IDS);
+
+  for (var li = 0; li < locations.length; li++) {
+    var loc = locations[li];
+    var ssId = SPREADSHEET_IDS[loc];
+    var locConfig = _getConfig(loc);
+    var ss;
+    try { ss = SpreadsheetApp.openById(ssId); } catch(e) { Logger.log('Cannot open ' + loc + ' sheet: ' + e.message); continue; }
+    var tabNames = Object.keys(locConfig);
 
   for (var t = 0; t < tabNames.length; t++) {
     var tabName = tabNames[t];
-    var config = TAB_CONFIG[tabName];
+    var config = locConfig[tabName];
     var sheet = ss.getSheetByName(tabName);
     if (!sheet) continue;
 
@@ -561,8 +583,9 @@ function syncFullReconcile() {
       }
     }
 
-    // Read all Supabase rows, keyed by name
-    var dbRows = supabaseGet(config.table, 'select=*&order=sort_order.asc,id.asc&limit=500');
+    // Read Supabase rows for this location, keyed by name
+    var locFilter = 'location=eq.' + encodeURIComponent(loc) + '&';
+    var dbRows = supabaseGet(config.table, locFilter + 'select=*&order=sort_order.asc,id.asc&limit=500');
     if (!Array.isArray(dbRows)) continue;
 
     var dbByName = {};
@@ -580,9 +603,9 @@ function syncFullReconcile() {
       if (!dbByName[sName]) {
         // New in sheet → INSERT to Supabase
         sRow.sort_order = newSortOrder;
+        sRow.location = loc;
         if (config.table === 'inventory_costs') {
           sRow.updated_at = new Date().toISOString();
-          sRow.location = sRow.location || 'DeBary';
         }
         try {
           Logger.log('Reconcile INSERT: ' + tabName + ' → "' + sName + '" sort=' + newSortOrder);
@@ -668,8 +691,9 @@ function syncFullReconcile() {
       }
     }
 
-    Logger.log('Reconcile ' + tabName + ': sheet=' + sheetOrder.length + ' rows, db=' + dbRows.length + ' rows');
-  }
+    Logger.log('Reconcile ' + loc + '/' + tabName + ': sheet=' + sheetOrder.length + ' rows, db=' + dbRows.length + ' rows');
+  } // end tab loop
+  } // end location loop
   Logger.log('syncFullReconcile DONE');
 }
 
