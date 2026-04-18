@@ -162,6 +162,13 @@ function doPost(e) {
 
     var tabName = body.tab;
     var location = body.location || 'DeBary';
+    var action = body.action || 'update';
+
+    // ── Profit26 actions — handled before tab config lookup ──
+    if (action === 'read_profit' || action === 'update_profit') {
+      return _handleProfitAction(action, location, body.data || {});
+    }
+
     var locConfig = _getConfig(location);
     var config = locConfig[tabName];
     if (!config) {
@@ -173,8 +180,6 @@ function doPost(e) {
     if (!sheet) {
       return jsonResponse({ error: 'Sheet tab not found: ' + tabName });
     }
-
-    var action = body.action || 'update';
 
     // Set timestamp lock so onSheetEdit skips edits for 5 seconds
     PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
@@ -747,6 +752,107 @@ function letterToColumn(letter) {
   return col;
 }
 
+
+// ============================================================
+// PROFIT26 TAB — Read/Write
+// ============================================================
+function _handleProfitAction(action, location, data) {
+  var ssId = _getSpreadsheetId(location);
+  var ss = SpreadsheetApp.openById(ssId);
+  var sheet = ss.getSheetByName('Profit26');
+  if (!sheet) return jsonResponse({ error: 'Profit26 tab not found' });
+
+  if (action === 'read_profit') {
+    // Layout: 4 months across, each month = 3 cols (label, value, spacer), starting at col D (4)
+    // 3 blocks of 4 months stacked: rows 1-22 (Jan-Apr), rows 24-45 (May-Aug), rows 47-68 (Sep-Dec)
+    // Row 1 of each block = month name header, rows 2-22 = bill items
+    var MONTHS_PER_ROW = 4;
+    var COLS_PER_MONTH = 3; // label, value, spacer
+    var START_COL = 4; // column D
+    var BLOCK_ROWS = 22; // header + 21 data rows
+    var BLOCK_GAP = 1;   // blank row between blocks
+    var monthNames = ['Jan','Feb','March','April','May','June','July','August','September','October','November','December'];
+
+    // Find the start row — look for "Jan" in col D
+    var startRow = 1;
+    for (var sr = 1; sr <= 20; sr++) {
+      var cellVal = String(sheet.getRange(sr, START_COL).getValue()).trim();
+      if (cellVal === 'Jan' || cellVal === 'January') { startRow = sr; break; }
+    }
+
+    var months = [];
+    for (var block = 0; block < 3; block++) {
+      var blockStart = startRow + (block * (BLOCK_ROWS + BLOCK_GAP));
+      for (var m = 0; m < MONTHS_PER_ROW; m++) {
+        var labelCol = START_COL + (m * COLS_PER_MONTH);
+        var valueCol = labelCol + 1;
+        var monthIdx = block * MONTHS_PER_ROW + m;
+        if (monthIdx >= 12) break;
+
+        var monthData = { name: monthNames[monthIdx], items: [] };
+        for (var row = 1; row < BLOCK_ROWS; row++) {
+          var r = blockStart + row;
+          var label = String(sheet.getRange(r, labelCol).getValue()).trim();
+          var rawVal = sheet.getRange(r, valueCol).getValue();
+          var note = sheet.getRange(r, valueCol).getNote() || '';
+          var labelNote = sheet.getRange(r, labelCol).getNote() || '';
+          var val = 0;
+          if (rawVal !== '' && rawVal !== null) {
+            val = parseFloat(String(rawVal).replace(/[$,]/g, '')) || 0;
+          }
+          if (label || val || note || labelNote) {
+            monthData.items.push({ label: label, value: val, note: note || labelNote, row: r, col: valueCol });
+          }
+        }
+        months.push(monthData);
+      }
+    }
+
+    // Read yearly summary table — search after the 3 blocks
+    var summarySearchStart = startRow + (3 * (BLOCK_ROWS + BLOCK_GAP));
+    var summary = [];
+    for (var ss2 = summarySearchStart; ss2 < summarySearchStart + 15; ss2++) {
+      var h = String(sheet.getRange(ss2, START_COL).getValue()).trim().toLowerCase();
+      if (h === 'month') {
+        for (var si = 1; si <= 14; si++) {
+          var sRow = ss2 + si;
+          var sMonth = String(sheet.getRange(sRow, START_COL).getValue()).trim();
+          if (!sMonth) break;
+          var sProfit = parseFloat(String(sheet.getRange(sRow, START_COL + 1).getValue()).replace(/[$,]/g, '')) || 0;
+          var sAvg = parseFloat(String(sheet.getRange(sRow, START_COL + 2).getValue()).replace(/[$,]/g, '')) || 0;
+          summary.push({ month: sMonth, profit: sProfit, avg: sAvg });
+        }
+        break;
+      }
+    }
+
+    return jsonResponse({ ok: true, action: 'read_profit', months: months, summary: summary });
+  }
+
+  if (action === 'update_profit') {
+    var row = parseInt(data.row) || 0;
+    var col = parseInt(data.col) || 0;
+    var val = data.value;
+    var note = data.note;
+
+    if (row > 0 && col > 0) {
+      PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+      var cell = sheet.getRange(row, col);
+      if (val !== undefined && val !== null) {
+        var numVal = parseFloat(String(val).replace(/[$,]/g, '')) || 0;
+        cell.setValue(numVal);
+        cell.setNumberFormat('$#,##0');
+      }
+      if (note !== undefined) {
+        cell.setNote(note || '');
+      }
+    }
+
+    return jsonResponse({ ok: true, action: 'update_profit', row: row, col: col });
+  }
+
+  return jsonResponse({ error: 'Unknown profit action: ' + action });
+}
 
 function fixTotalRow() {
   var ss = SpreadsheetApp.openById('1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE');

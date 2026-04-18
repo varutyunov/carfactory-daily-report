@@ -19036,8 +19036,9 @@ async function openInvSheets(){
       '</div>'+
       // Page tabs (big, below)
       '<div style="display:flex;gap:8px;padding:8px 12px;">'+
-        '<div id="sh-tab-inv" onclick="shSetPage(0)" style="flex:1;padding:14px;border-radius:12px;border:2px solid #4ade80;background:rgba(74,222,128,.1);color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Inventory</div>'+
-        '<div id="sh-tab-deals" onclick="shSetPage(1)" style="flex:1;padding:14px;border-radius:12px;border:1px solid #333;background:#111;color:#555;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Deals26</div>'+
+        '<div id="sh-tab-inv" onclick="shSetPage(0)" style="flex:1;padding:12px 4px;border-radius:12px;border:2px solid #4ade80;background:rgba(74,222,128,.1);color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Inventory</div>'+
+        '<div id="sh-tab-deals" onclick="shSetPage(1)" style="flex:1;padding:12px 4px;border-radius:12px;border:1px solid #333;background:#111;color:#555;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Deals26</div>'+
+        '<div id="sh-tab-profit" onclick="shSetPage(2)" style="flex:1;padding:12px 4px;border-radius:12px;border:1px solid #333;background:#111;color:#555;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Profit</div>'+
       '</div>'+
     '</div>'+
     // Page 0: Inventory
@@ -19050,6 +19051,10 @@ async function openInvSheets(){
     // Page 1: Deals26
     '<div id="sh-page-1" style="flex:1;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;display:none;">'+
       '<div id="sh-deals-body" style="padding-bottom:40px;"></div>'+
+    '</div>'+
+    // Page 2: Profit
+    '<div id="sh-page-2" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;">'+
+      '<div id="sh-profit-body" style="padding:0 8px 80px;"></div>'+
     '</div>';
   invSheetsSetLoc(_isLoc);
   document.getElementById('is-car-items').innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
@@ -19064,7 +19069,7 @@ async function openInvSheets(){
 }
 
 function closeInvSheets(){
-  _sheetsOpen=false;_shDealsLoaded=false;
+  _sheetsOpen=false;_shDealsLoaded=false;_profitLoaded=false;
   var o=document.getElementById('inv-sheets-overlay');
   if(o) o.style.display='none';
   var d26o=document.getElementById('d26-edit-overlay');
@@ -19073,29 +19078,204 @@ function closeInvSheets(){
 }
 
 function shSetPage(idx){
-  if(idx<0||idx>1)return;
+  if(idx<0||idx>2)return;
   _shPageIdx=idx;
   var p0=document.getElementById('sh-page-0');
   var p1=document.getElementById('sh-page-1');
+  var p2=document.getElementById('sh-page-2');
   var t0=document.getElementById('sh-tab-inv');
   var t1=document.getElementById('sh-tab-deals');
+  var t2=document.getElementById('sh-tab-profit');
   var addBtn=document.getElementById('sh-add-btn');
+  var activeStyle='color:#4ade80;border:2px solid #4ade80;background:rgba(74,222,128,.1);';
+  var inactiveStyle='color:#555;border:1px solid #333;background:#111;';
+  // Hide all pages, deactivate all tabs
+  if(p0)p0.style.display='none';
+  if(p1)p1.style.display='none';
+  if(p2)p2.style.display='none';
+  if(t0)t0.style.cssText+=inactiveStyle;
+  if(t1)t1.style.cssText+=inactiveStyle;
+  if(t2)t2.style.cssText+=inactiveStyle;
   if(idx===0){
     if(p0)p0.style.display='';
-    if(p1)p1.style.display='none';
-    if(t0){t0.style.color='#4ade80';t0.style.border='2px solid #4ade80';t0.style.background='rgba(74,222,128,.1)';}
-    if(t1){t1.style.color='#555';t1.style.border='1px solid #333';t1.style.background='#111';}
+    if(t0)t0.style.cssText+=activeStyle;
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','invSheetsAddCar()');}
-  }else{
-    if(p0)p0.style.display='none';
+  }else if(idx===1){
     if(p1)p1.style.display='';
-    if(t0){t0.style.color='#555';t0.style.border='1px solid #333';t0.style.background='#111';}
-    if(t1){t1.style.color='#4ade80';t1.style.border='2px solid #4ade80';t1.style.background='rgba(74,222,128,.1)';}
+    if(t1)t1.style.cssText+=activeStyle;
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','d26Edit(-1)');}
     if(!_shDealsLoaded){_shDealsLoaded=true;shLoadDeals();}
+  }else if(idx===2){
+    if(p2)p2.style.display='';
+    if(t2)t2.style.cssText+=activeStyle;
+    if(addBtn)addBtn.style.display='none';
+    if(!_profitLoaded){_profitLoaded=true;shLoadProfit();}
   }
 }
 
+// ── PROFIT TAB ──────────────────────────────────────────────────────
+var _profitData={months:[],summary:[]};
+var _profitLoaded=false;
+var _profitEditItem=null; // {monthIdx, itemIdx, row, col}
+
+async function shLoadProfit(){
+  var body=document.getElementById('sh-profit-body');
+  if(!body)return;
+  body.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading profit...</div>';
+  try{
+    var loc=_isLoc||'DeBary';
+    var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'read_profit',location:loc})});
+    var data=await resp.json();
+    if(data.ok){
+      _profitData=data;
+      profitRender();
+    }else{
+      body.innerHTML='<div style="text-align:center;color:#f87171;padding:40px 0;">Error: '+(data.error||'unknown')+'</div>';
+    }
+  }catch(e){
+    body.innerHTML='<div style="text-align:center;color:#f87171;padding:40px 0;">Error loading profit data</div>';
+  }
+}
+
+function profitRender(){
+  var body=document.getElementById('sh-profit-body');
+  if(!body)return;
+  var months=_profitData.months||[];
+  var summary=_profitData.summary||[];
+  if(!months.length){body.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No data</div>';return;}
+
+  var html='';
+  // Render 3 blocks of 4 months
+  for(var block=0;block<3;block++){
+    var blockMonths=months.slice(block*4,(block+1)*4);
+    if(!blockMonths.length)continue;
+
+    // Month headers
+    html+='<div style="display:flex;gap:1px;margin-top:'+(block>0?'16px':'8px')+';background:#111;">';
+    for(var m=0;m<blockMonths.length;m++){
+      html+='<div style="flex:1;padding:8px 4px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;color:#4ade80;background:#0a0a0a;text-transform:uppercase;">'+blockMonths[m].name+'</div>';
+    }
+    html+='</div>';
+
+    // Find max items across these 4 months
+    var maxItems=0;
+    for(var m=0;m<blockMonths.length;m++){if(blockMonths[m].items.length>maxItems)maxItems=blockMonths[m].items.length;}
+
+    // Render rows — each row shows the same item index across all 4 months
+    for(var i=0;i<maxItems;i++){
+      html+='<div style="display:flex;gap:1px;background:#111;">';
+      for(var m=0;m<blockMonths.length;m++){
+        var item=blockMonths[m].items[i];
+        var mIdx=block*4+m;
+        if(!item){
+          html+='<div style="flex:1;background:#0a0a0a;padding:4px;min-height:24px;"></div>';
+          continue;
+        }
+        var label=item.label||'';
+        var val=item.value||0;
+        var note=item.note||'';
+        var isSubtotal=label==='Core Bills'||label==='Total Bills';
+        var isProfit=label==='Net Profit';
+        var isRevenue=label==='Payments'||label==='Cash Sales'||label==='Extras';
+        var bgColor=isSubtotal?'#111':isProfit?'#0d1a0d':'#0a0a0a';
+        var labelColor=isSubtotal||isProfit?'#fff':'#888';
+        var valColor=isProfit?(val>=0?'#4ade80':'#f87171'):isRevenue?'#60a5fa':'#fff';
+        var fontWeight=isSubtotal||isProfit?'700':'400';
+        var hasNote=note&&note.trim().length>0;
+
+        html+='<div style="flex:1;background:'+bgColor+';padding:3px 6px;display:flex;justify-content:space-between;align-items:center;min-height:24px;border-bottom:1px solid #111;">';
+        html+='<span style="font-size:10px;color:'+labelColor+';font-weight:'+fontWeight+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;">'+label+'</span>';
+        var valStr=val?'$'+Math.abs(val).toLocaleString():'';
+        if(val<0)valStr='-'+valStr;
+        var clickAction=hasNote?'profitShowNote('+mIdx+','+i+')':'profitEditStart('+mIdx+','+i+')';
+        html+='<span onclick="'+clickAction+'" style="font-size:11px;color:'+valColor+';font-weight:'+fontWeight+';cursor:pointer;'+(hasNote?'text-decoration:underline dotted #555;':'')+'">'+valStr+'</span>';
+        html+='</div>';
+      }
+      html+='</div>';
+    }
+  }
+
+  // Yearly summary table
+  if(summary.length){
+    html+='<div style="margin-top:20px;border:1px solid #222;border-radius:10px;overflow:hidden;">';
+    html+='<div style="display:flex;background:#111;padding:8px;">';
+    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;">Month</div>';
+    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;text-align:right;">Profit</div>';
+    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;text-align:right;">Average</div>';
+    html+='</div>';
+    for(var s=0;s<summary.length;s++){
+      var sr=summary[s];
+      var pColor=sr.profit>=0?'#4ade80':'#f87171';
+      var isYearly=sr.month.toLowerCase().indexOf('year')!==-1;
+      html+='<div style="display:flex;padding:6px 8px;border-top:1px solid #111;'+(isYearly?'background:#111;font-weight:700;':'')+'">';
+      html+='<div style="flex:2;font-size:12px;color:#ccc;">'+sr.month+'</div>';
+      html+='<div style="flex:2;font-size:12px;color:'+pColor+';text-align:right;">'+(sr.profit>=0?'$':'-$')+Math.abs(sr.profit).toLocaleString()+'</div>';
+      html+='<div style="flex:2;font-size:12px;color:#888;text-align:right;">$'+sr.avg.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+
+  body.innerHTML=html;
+}
+
+function profitShowNote(mIdx,itemIdx){
+  var months=_profitData.months||[];
+  if(mIdx>=months.length)return;
+  var item=months[mIdx].items[itemIdx];
+  if(!item||!item.note)return;
+  var monthName=months[mIdx].name;
+  // Show popup with note breakdown
+  var o=document.getElementById('profit-note-popup');
+  if(!o){o=document.createElement('div');o.id='profit-note-popup';document.body.appendChild(o);}
+  var lines=item.note.split('\n').filter(function(l){return l.trim();});
+  var linesHtml=lines.map(function(l){return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a1a1a;font-size:14px;color:#ccc;">'+l.trim()+'</div>';}).join('');
+  o.style.cssText='position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);';
+  o.innerHTML=
+    '<div style="background:#111;border:1px solid #333;border-radius:14px;padding:20px;width:85%;max-width:350px;max-height:70vh;overflow-y:auto;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'+
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#4ade80;letter-spacing:1px;">'+monthName+' — '+item.label+'</span>'+
+        '<button onclick="profitCloseNote()" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;">✕</button>'+
+      '</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:12px;">$'+Math.abs(item.value).toLocaleString()+'</div>'+
+      '<div style="border-top:1px solid #222;padding-top:8px;">'+linesHtml+'</div>'+
+      '<button onclick="profitEditStart('+mIdx+','+itemIdx+');profitCloseNote();" style="width:100%;margin-top:12px;padding:12px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:10px;color:#4ade80;font-size:14px;font-weight:600;cursor:pointer;">Edit Value</button>'+
+    '</div>';
+  o.onclick=function(e){if(e.target===o)profitCloseNote();};
+}
+function profitCloseNote(){
+  var o=document.getElementById('profit-note-popup');
+  if(o)o.style.display='none';
+}
+
+function profitEditStart(mIdx,itemIdx){
+  var months=_profitData.months||[];
+  if(mIdx>=months.length)return;
+  var item=months[mIdx].items[itemIdx];
+  if(!item)return;
+  var monthName=months[mIdx].name;
+  var val=prompt(monthName+' — '+item.label+'\n\nCurrent: $'+item.value.toLocaleString()+'\n\nEnter new value:',item.value||'');
+  if(val===null)return;
+  var numVal=parseFloat(String(val).replace(/[$,]/g,''))||0;
+  // Save to sheet
+  profitSaveValue(mIdx,itemIdx,numVal,item.row,item.col);
+}
+
+async function profitSaveValue(mIdx,itemIdx,value,row,col){
+  try{
+    var loc=_isLoc||'DeBary';
+    await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'update_profit',location:loc,data:{row:row,col:col,value:value}})});
+    // Update local data
+    if(_profitData.months[mIdx]&&_profitData.months[mIdx].items[itemIdx]){
+      _profitData.months[mIdx].items[itemIdx].value=value;
+    }
+    profitRender();
+  }catch(e){
+    alert('Error saving: '+e.message);
+  }
+}
+
+// ── DEALS26 TAB ─────────────────────────────────────────────────────
 var _d26Data=[];    // deals26 rows from Supabase
 var _d26EditIdx=-1; // index into _d26Data being edited
 
@@ -19647,6 +19827,8 @@ function invSheetsSetLoc(loc){
   invSheetsRender();
   // Reload deals26 for the new location if deals tab is visible
   if(_shPageIdx===1){_shDealsLoaded=false;shLoadDeals();}
+  // Reload profit for the new location if profit tab is visible
+  if(_shPageIdx===2){_profitLoaded=false;shLoadProfit();}
 }
 
 function invSheetsRender(){
