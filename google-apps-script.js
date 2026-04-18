@@ -339,6 +339,11 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       if (cField === 'car_desc' || cField === 'car_name') {
         _applyCarColor(sheet, targetRow, cNum, String(val));
       }
+      // Column K (gps_sold) — red background = not registered yet
+      if (cField === 'gps_sold') {
+        cell.setBackground('#ff0000');
+        cell.setFontColor('#ffffff');
+      }
     }
   }
   if (config.cellNotes) {
