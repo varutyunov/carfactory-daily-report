@@ -15727,9 +15727,17 @@ function payDealSelect(dealId){
 }
 
 var _paySaving = false;
+var _paySavingTime = 0;
 async function payScanSave(){
-  if(_paySaving) return;
+  if(_paySaving){
+    // Safety: if stuck for more than 10s, force reset
+    if(_paySavingTime && (Date.now()-_paySavingTime)>10000){
+      _paySaving=false;
+      console.warn('_paySaving was stuck, force reset');
+    } else { return; }
+  }
   _paySaving = true;
+  _paySavingTime = Date.now();
   var isEdit=!!_payEditId;
   var saveBtn = document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
