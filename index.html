@@ -16570,6 +16570,76 @@ async function _updateDeals26FromDeal(dealRecord) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// PERIODIC TAX FILL — keeps trying to populate taxes from Pending Sales CSV
+// ══════════════════════════════════════════════════════════════
+var _taxFillRunning = false;
+async function _fillMissingTaxes() {
+  if (_taxFillRunning) return;
+  _taxFillRunning = true;
+  try {
+    // Find deals26 rows with taxes=0 and a VIN
+    var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc&limit=50');
+    if (!Array.isArray(missing) || !missing.length) { _taxFillRunning = false; return; }
+
+    // Fetch Pending Sales CSV
+    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/PendingSalesDebary.csv?t=' + Date.now();
+    var psResp = await fetch(psUrl);
+    if (!psResp.ok) { _taxFillRunning = false; return; }
+    var psCsv = await psResp.text();
+    var psLines = psCsv.trim().split('\n');
+    var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+    var vinIdx = psHdr.indexOf('vin');
+    var taxIdx = psHdr.indexOf('salestax');
+    var tagIdx = psHdr.indexOf('tagfee');
+    var titleIdx = psHdr.indexOf('titlefee');
+    if (vinIdx < 0 || taxIdx < 0) { _taxFillRunning = false; return; }
+
+    // Build VIN -> tax lookup
+    var taxByVin = {};
+    for (var i = 1; i < psLines.length; i++) {
+      var vals = psLines[i].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+      var pVin = (vals[vinIdx] || '').trim();
+      if (!pVin) continue;
+      var st = parseFloat(vals[taxIdx]) || 0;
+      var tg = tagIdx >= 0 ? (parseFloat(vals[tagIdx]) || 0) : 0;
+      var tt = titleIdx >= 0 ? (parseFloat(vals[titleIdx]) || 0) : 0;
+      taxByVin[pVin] = Math.round((st + tg + tt) * 100) / 100;
+    }
+
+    // Match and update
+    var filled = 0;
+    for (var m = 0; m < missing.length; m++) {
+      var row = missing[m];
+      var vin = (row.sold_inv_vin || '').trim();
+      // Try matching by full VIN or prefix
+      var tax = null;
+      var keys = Object.keys(taxByVin);
+      for (var k = 0; k < keys.length; k++) {
+        if (vin.indexOf(keys[k]) === 0 || keys[k].indexOf(vin) === 0) {
+          tax = taxByVin[keys[k]];
+          break;
+        }
+      }
+      if (tax && tax > 0) {
+        await sbPatch('deals26', row.id, { taxes: tax });
+        sheetsPush('Deals26', row.sort_order, { taxes: tax, owed: 0 });
+        filled++;
+        console.log('Tax filled: ' + (row.car_desc || '') + ' = $' + tax);
+      }
+    }
+    if (filled) console.log('_fillMissingTaxes: filled ' + filled + ' rows');
+  } catch (e) {
+    console.warn('_fillMissingTaxes error:', e);
+  }
+  _taxFillRunning = false;
+}
+
+// Run every 30 minutes
+setInterval(_fillMissingTaxes, 30 * 60 * 1000);
+// Also run 30 seconds after page load
+setTimeout(_fillMissingTaxes, 30000);
+
+// ══════════════════════════════════════════════════════════════
 // AUTO-CREATE INVENTORY_COSTS FROM NEW INVENTORY CARS (CSV SYNC)
 // ══════════════════════════════════════════════════════════════
 async function _autoCreateInventoryCosts(insertedRows) {
