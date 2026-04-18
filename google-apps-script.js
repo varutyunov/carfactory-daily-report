@@ -288,6 +288,10 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var val = data[cField];
       if (cField === 'gps_sold') val = val ? 'X' : '';
       var cell = sheet.getRange(targetRow, cNum);
+      // Column G (payments) in Deals26 — skip writing if zero, leave empty for manual entry
+      if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
+        continue;
+      }
       // Column F (owed) in Deals26 is a formula: =E-A-C-D-H (money - cost - expenses - taxes - dealer_fee)
       if (config.table === 'deals26' && cField === 'owed') {
         var r = targetRow;
