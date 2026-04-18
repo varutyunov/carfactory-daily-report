@@ -13690,15 +13690,17 @@ async function formDeleteFinal(tableName,id){
       for(var i=0;i<esReqs.length;i++)await sbDelete('esign_requests',esReqs[i].id);
     }catch(e2){}
     await sbDelete(tableName,id);
-    // When deleting a deposit, also delete its auto-posted payment
+    // When deleting a deposit, also delete its auto-posted payment (same day only)
     if(tableName==='deposits'){
       try{
         var depRec=_formsData.find(function(d){return d.id===id;});
         if(depRec){
           var depVeh=(depRec.vehicle_desc||'').trim();
           var depCust=(depRec.customer_name||'').trim();
-          if(depVeh){
-            var depPayments=await sbGet('payments','raw_ocr_text=ilike.Deposit*'+encodeURIComponent(depVeh)+'&customer_name=ilike.*'+encodeURIComponent(depCust.split(/\s+/)[0])+'*&select=id&limit=5');
+          // Match the deposit's creation date to only delete the payment from that specific deposit
+          var depDate=(depRec.created_at||'').substring(0,10); // YYYY-MM-DD
+          if(depVeh&&depDate){
+            var depPayments=await sbGet('payments','raw_ocr_text=ilike.Deposit*'+encodeURIComponent(depVeh)+'&customer_name=ilike.*'+encodeURIComponent(depCust.split(/\s+/)[0])+'*&payment_date=eq.'+depDate+'&select=id&limit=1');
             if(Array.isArray(depPayments)){
               for(var dp=0;dp<depPayments.length;dp++) await sbDelete('payments',depPayments[dp].id);
             }
