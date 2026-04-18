@@ -287,7 +287,12 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var cNum = letterToColumn(cLetter);
       var val = data[cField];
       if (cField === 'gps_sold') val = val ? 'X' : '';
-      sheet.getRange(targetRow, cNum).setValue(val);
+      var cell = sheet.getRange(targetRow, cNum);
+      cell.setValue(val);
+      // Format currency columns as $#,##0
+      if (cField !== 'car_desc' && cField !== 'car_name' && cField !== 'deal_num' && cField !== 'gps_sold' && typeof val === 'number') {
+        cell.setNumberFormat('$#,##0');
+      }
       // Color column B (car_desc) based on car color in description
       if (cField === 'car_desc' || cField === 'car_name') {
         _applyCarColor(sheet, targetRow, cNum, String(val));
