@@ -18995,19 +18995,20 @@ async function openInvSheets(){
         '<span id="sh-title" style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#4ade80;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">SHEETS</span>'+
         '<button id="sh-add-btn" onclick="invSheetsAddCar()" style="background:none;border:none;color:#4ade80;font-size:13px;font-weight:800;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;">+ ADD</button>'+
       '</div>'+
-      // Tabs: Inventory | Deals26
+      // Location tabs (small, top)
       '<div style="display:flex;gap:0;border-bottom:1px solid #222;">'+
-        '<div id="sh-tab-inv" onclick="shSetPage(0)" style="flex:1;text-align:center;padding:10px 0 8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#4ade80;border-bottom:2px solid #4ade80;-webkit-tap-highlight-color:transparent;">Inventory</div>'+
-        '<div id="sh-tab-deals" onclick="shSetPage(1)" style="flex:1;text-align:center;padding:10px 0 8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#555;border-bottom:2px solid transparent;-webkit-tap-highlight-color:transparent;">Deals26</div>'+
+        '<div id="is-loc-debary" onclick="invSheetsSetLoc(\'DeBary\')" style="flex:1;text-align:center;padding:8px 0 6px;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#4ade80;border-bottom:2px solid #4ade80;-webkit-tap-highlight-color:transparent;">DeBary</div>'+
+        '<div id="is-loc-deland" onclick="invSheetsSetLoc(\'DeLand\')" style="flex:1;text-align:center;padding:8px 0 6px;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#555;border-bottom:2px solid transparent;-webkit-tap-highlight-color:transparent;">DeLand</div>'+
+      '</div>'+
+      // Page tabs (big, below)
+      '<div style="display:flex;gap:8px;padding:8px 12px;">'+
+        '<div id="sh-tab-inv" onclick="shSetPage(0)" style="flex:1;padding:14px;border-radius:12px;border:2px solid #4ade80;background:rgba(74,222,128,.1);color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Inventory</div>'+
+        '<div id="sh-tab-deals" onclick="shSetPage(1)" style="flex:1;padding:14px;border-radius:12px;border:1px solid #333;background:#111;color:#555;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">Deals26</div>'+
       '</div>'+
     '</div>'+
     // Page 0: Inventory
     '<div id="sh-page-0" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+
       '<div style="padding:0 12px;">'+
-        '<div style="display:flex;gap:8px;padding:8px 4px;">'+
-          '<div id="is-loc-debary" onclick="invSheetsSetLoc(\'DeBary\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeBary</div>'+
-          '<div id="is-loc-deland" onclick="invSheetsSetLoc(\'DeLand\')" style="flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;">DeLand</div>'+
-        '</div>'+
         '<div id="is-totals-bar" style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:#888;"></div>'+
         '<div id="is-car-items" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px;"></div>'+
       '</div>'+
@@ -19048,14 +19049,14 @@ function shSetPage(idx){
   if(idx===0){
     if(p0)p0.style.display='';
     if(p1)p1.style.display='none';
-    if(t0){t0.style.color='#4ade80';t0.style.borderBottom='2px solid #4ade80';}
-    if(t1){t1.style.color='#555';t1.style.borderBottom='2px solid transparent';}
+    if(t0){t0.style.color='#4ade80';t0.style.border='2px solid #4ade80';t0.style.background='rgba(74,222,128,.1)';}
+    if(t1){t1.style.color='#555';t1.style.border='1px solid #333';t1.style.background='#111';}
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','invSheetsAddCar()');}
   }else{
     if(p0)p0.style.display='none';
     if(p1)p1.style.display='';
-    if(t0){t0.style.color='#555';t0.style.borderBottom='2px solid transparent';}
-    if(t1){t1.style.color='#4ade80';t1.style.borderBottom='2px solid #4ade80';}
+    if(t0){t0.style.color='#555';t0.style.border='1px solid #333';t0.style.background='#111';}
+    if(t1){t1.style.color='#4ade80';t1.style.border='2px solid #4ade80';t1.style.background='rgba(74,222,128,.1)';}
     if(addBtn){addBtn.style.display='';addBtn.setAttribute('onclick','d26Edit(-1)');}
     if(!_shDealsLoaded){_shDealsLoaded=true;shLoadDeals();}
   }
@@ -19601,11 +19602,11 @@ function invSheetsSetLoc(loc){
   var db=document.getElementById('is-loc-debary'),dl=document.getElementById('is-loc-deland');
   if(!db||!dl)return;
   if(loc==='DeBary'){
-    db.style.background='#4ade80';db.style.color='#000';db.style.borderColor='#4ade80';
-    dl.style.background='#111';dl.style.color='#888';dl.style.borderColor='#333';
+    db.style.color='#4ade80';db.style.borderBottom='2px solid #4ade80';
+    dl.style.color='#555';dl.style.borderBottom='2px solid transparent';
   }else{
-    dl.style.background='#4ade80';dl.style.color='#000';dl.style.borderColor='#4ade80';
-    db.style.background='#111';db.style.color='#888';db.style.borderColor='#333';
+    dl.style.color='#4ade80';dl.style.borderBottom='2px solid #4ade80';
+    db.style.color='#555';db.style.borderBottom='2px solid transparent';
   }
   invSheetsRender();
 }
