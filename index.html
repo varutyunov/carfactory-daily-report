@@ -15730,8 +15730,10 @@ var _paySaving = false;
 async function payScanSave(){
   if(_paySaving) return;
   _paySaving = true;
+  var isEdit=!!_payEditId;
   var saveBtn = document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  try{
   // Validate all required fields
   var name=[document.getElementById('pay-scan-fname').value.trim(),document.getElementById('pay-scan-mname').value.trim(),document.getElementById('pay-scan-lname').value.trim()].filter(Boolean).join(' ');
   var date=document.getElementById('pay-scan-date').value;
@@ -15766,13 +15768,8 @@ async function payScanSave(){
   if(!color) missing.push('Vehicle Color');
   if(missing.length){
     alert('Please fill in all required fields:\n\n• '+missing.join('\n• '));
-    _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
     return;
   }
-
-  // Highlight color field if empty (extra emphasis)
-  var colorEl=document.getElementById('pay-scan-color');
-  if(!color){colorEl.style.borderColor='#ff453a';colorEl.focus();_paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}return;}
 
   // Upload receipt photo if available
   var photoUrl='';
@@ -15812,41 +15809,27 @@ async function payScanSave(){
     };
     // Only update photo if a new one was taken (don't erase existing)
     if(photoUrl) record.receipt_photo_url=photoUrl;
-    try{
-      await sbPatch('payments', _payEditId, record);
-    }catch(e){
-      console.error('Payment save error:',e);
-      alert('Error saving payment: '+(e.message||e));
-      _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Changes';}
-      return;
-    }
+    await sbPatch('payments', _payEditId, record);
   } else {
     // New payment — create one record per payment row
-    try{
-      for(var i=0;i<payRows.length;i++){
-        var pr=payRows[i];
-        var originalAmt='';
-        if(pr.method==='card'&&pr.cardFee){
-          var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
-          originalAmt='$'+(t/1.04).toFixed(2);
-        }
-        await sbPost('payments',{
-          customer_name:name,payment_date:date,payment_time:time||null,
-          amount:pr.amount,payment_method:pr.method,
-          card_fee_added:pr.cardFee,original_amount:originalAmt||null,
-          vehicle_year:year,vehicle_make:make,vehicle_model:model,
-          vehicle_vin:vin.toUpperCase(),vehicle_color:color,
-          receipt_photo_url:photoUrl||null,location:_payLocation,
-          logged_by:me?me.name:'',week_start:weekStart,
-          notes:note||null,raw_ocr_text:rawOcr,
-          is_final_payment:isFinal||false,created_at:new Date().toISOString()
-        });
+    for(var i=0;i<payRows.length;i++){
+      var pr=payRows[i];
+      var originalAmt='';
+      if(pr.method==='card'&&pr.cardFee){
+        var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
+        originalAmt='$'+(t/1.04).toFixed(2);
       }
-    }catch(e){
-      console.error('Payment save error:',e);
-      alert('Error saving payment: '+(e.message||e));
-      _paySaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Payment';}
-      return;
+      await sbPost('payments',{
+        customer_name:name,payment_date:date,payment_time:time||null,
+        amount:pr.amount,payment_method:pr.method,
+        card_fee_added:pr.cardFee,original_amount:originalAmt||null,
+        vehicle_year:year,vehicle_make:make,vehicle_model:model,
+        vehicle_vin:vin.toUpperCase(),vehicle_color:color,
+        receipt_photo_url:photoUrl||null,location:_payLocation,
+        logged_by:me?me.name:'',week_start:weekStart,
+        notes:note||null,raw_ocr_text:rawOcr,
+        is_final_payment:isFinal||false,created_at:new Date().toISOString()
+      });
     }
     // Push notification to managers
     try{
@@ -15864,13 +15847,24 @@ async function payScanSave(){
     }catch(ex){console.warn('Push notify failed:',ex);}
   }
 
-  _paySaving=false;
+  // Success — go back to payment list with fresh data
   _payEditId=null;
-  var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
-  if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='Save Payment'; }
   if(document.getElementById('pay-is-final')) document.getElementById('pay-is-final').checked=false;
-  // Close payment overlay and return to home screen
-  payCloseAll();
+  _payViewMode='list';
+  document.getElementById('pay-view-title').textContent='PAYMENTS';
+  document.getElementById('pay-list-view').style.display='block';
+  document.getElementById('pay-scan-view').style.display='none';
+  document.getElementById('pay-detail-view').style.display='none';
+  try{loadPaymentWeek();}catch(e){}
+
+  }catch(e){
+    console.error('Payment save error:',e);
+    alert('Error saving: '+(e.message||e));
+  }finally{
+    _paySaving=false;
+    var sb=document.querySelector('button[onclick="payScanSave()"]');
+    if(sb){sb.disabled=false;sb.textContent=isEdit?'Save Changes':'Save Payment';}
+  }
 }
 
 function openDealForm(forceLoc) {
