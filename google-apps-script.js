@@ -288,10 +288,17 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var val = data[cField];
       if (cField === 'gps_sold') val = val ? 'X' : '';
       var cell = sheet.getRange(targetRow, cNum);
-      cell.setValue(val);
-      // Format currency columns as $#,##0
-      if (cField !== 'car_desc' && cField !== 'car_name' && cField !== 'deal_num' && cField !== 'gps_sold' && typeof val === 'number') {
+      // Column F (owed) in Deals26 is a formula: =E-A-C-D-H (money - cost - expenses - taxes - dealer_fee)
+      if (config.table === 'deals26' && cField === 'owed') {
+        var r = targetRow;
+        cell.setFormula('=E' + r + '-A' + r + '-C' + r + '-D' + r + '-H' + r);
         cell.setNumberFormat('$#,##0');
+      } else {
+        cell.setValue(val);
+        // Format currency columns as $#,##0
+        if (cField !== 'car_desc' && cField !== 'car_name' && cField !== 'deal_num' && cField !== 'gps_sold' && typeof val === 'number') {
+          cell.setNumberFormat('$#,##0');
+        }
       }
       // Color column B (car_desc) based on car color in description
       if (cField === 'car_desc' || cField === 'car_name') {
@@ -309,6 +316,15 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
         sheet.getRange(targetRow, nNum).setNote(data[nField] || '');
       }
     }
+  }
+  // Week separator: thick top border when deal_num = 1 (Deals26 only)
+  if (config.table === 'deals26' && data.hasOwnProperty('deal_num') && parseInt(data.deal_num) === 1) {
+    var allColKeys = Object.keys(config.columns);
+    var allColNums = allColKeys.map(function(l){ return letterToColumn(l); });
+    var minC = Math.min.apply(null, allColNums);
+    var maxC = Math.max.apply(null, allColNums);
+    var rowRange = sheet.getRange(targetRow, minC, 1, maxC - minC + 1);
+    rowRange.setBorder(true, null, null, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_THICK);
   }
 }
 
