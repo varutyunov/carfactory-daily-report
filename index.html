@@ -13938,6 +13938,7 @@ function openPayScanForm(){
   document.getElementById('pay-scan-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('pay-scan-time').value='';
   document.getElementById('pay-scan-raw').textContent='';
+  _paySaving=false;
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn){ saveBtn.textContent='Save Payment'; saveBtn.disabled=false; }
   // Reset payment method rows to single empty row
@@ -13996,6 +13997,7 @@ function payEditPayment(id){
       }
     }
   }
+  _paySaving=false;
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
   if(saveBtn){ saveBtn.textContent='Save Changes'; saveBtn.disabled=false; }
   history.pushState({payEdit:true},'');
@@ -15803,11 +15805,13 @@ async function payScanSave(){
       card_fee_added:pr.cardFee,original_amount:originalAmt||null,
       vehicle_year:year,vehicle_make:make,vehicle_model:model,
       vehicle_vin:vin.toUpperCase(),vehicle_color:color,
-      receipt_photo_url:photoUrl||null,location:_payLocation,
+      location:_payLocation,
       logged_by:me?me.name:'',week_start:weekStart,
       notes:note||null,raw_ocr_text:rawOcr,
-      is_final_payment:isFinal||false,created_at:new Date().toISOString()
+      is_final_payment:isFinal||false
     };
+    // Only update photo if a new one was taken (don't erase existing)
+    if(photoUrl) record.receipt_photo_url=photoUrl;
     try{
       await sbPatch('payments', _payEditId, record);
     }catch(e){
