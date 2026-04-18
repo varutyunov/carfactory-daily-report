@@ -270,6 +270,12 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'run_sync', message: 'Full reconciliation completed' });
     }
 
+    // ── ACTION: FIX_TOTAL — fix Total row formatting ──
+    if (action === 'fix_total') {
+      fixTotalRow();
+      return jsonResponse({ ok: true, action: 'fix_total', message: 'Total row fixed' });
+    }
+
     return jsonResponse({ error: 'Unknown action: ' + action });
 
   } catch (err) {
@@ -710,4 +716,51 @@ function letterToColumn(letter) {
     col = col * 26 + (letter.charCodeAt(i) - 64);
   }
   return col;
+}
+
+
+function fixTotalRow() {
+  var ss = SpreadsheetApp.openById('1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE');
+  var sheet = ss.getSheetByName('Inventory');
+  
+  // Row 136 = Ram (should be white bg, NOT green)
+  // Row 137 = Total (should be green bg with SUM formulas)
+  
+  var ramRow = 136;
+  var totalRow = 137;
+  
+  // Fix Ram row 136 � clear green, set white background on column H
+  var ramRange = sheet.getRange(ramRow, 1, 1, 11); // columns A-K
+  ramRange.setBackground(null); // clear any background
+  
+  // Set column H (car name) to white background with black text for Ram
+  var ramH = sheet.getRange(ramRow, 8); // column H
+  ramH.setBackground('#ffffff');
+  ramH.setFontColor('#000000');
+  
+  // Fix columns I, J � clear any formulas, set to $0
+  sheet.getRange(ramRow, 9).setValue(0).setNumberFormat('$#,##0'); // I
+  sheet.getRange(ramRow, 10).setValue(0).setNumberFormat('$#,##0'); // J
+  
+  // Fix column K � should be formula =G+I+J for Ram, clear the SUM
+  sheet.getRange(ramRow, 11).setFormula('=G' + ramRow + '+I' + ramRow + '+J' + ramRow).setNumberFormat('$#,##0');
+  
+  // Fix Total row 137 � green background
+  var totalRange = sheet.getRange(totalRow, 1, 1, 11);
+  totalRange.setBackground('#00ff00');
+  totalRange.setFontColor('#000000');
+  totalRange.setFontWeight('bold');
+  
+  // Set Total formulas � SUM of data rows (20 to 136)
+  sheet.getRange(totalRow, 7).setFormula('=SUM(G20:G136)').setNumberFormat('$#,##0');  // G = purchase_cost
+  sheet.getRange(totalRow, 8).setValue('Total'); // H = label
+  sheet.getRange(totalRow, 9).setFormula('=SUM(I20:I136)').setNumberFormat('$#,##0');  // I = joint_expenses
+  sheet.getRange(totalRow, 10).setFormula('=SUM(J20:J136)').setNumberFormat('$#,##0'); // J = vlad_expenses
+  sheet.getRange(totalRow, 11).setFormula('=SUM(K20:K136)').setNumberFormat('$#,##0'); // K = total
+  
+  // Also set column F total if it exists
+  sheet.getRange(totalRow, 6).setFormula('=SUM(F20:F136)').setNumberFormat('$#,##0');  // F
+  
+  SpreadsheetApp.flush();
+  Logger.log('Fixed Total row formatting and formulas');
 }

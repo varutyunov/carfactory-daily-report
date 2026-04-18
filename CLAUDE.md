@@ -242,6 +242,28 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Apps Script URL:** Hardcoded in `sheetsPush` function (container-bound, deployed as web app)
 - **Conflict prevention:** `sync_source` field distinguishes app vs sheet edits
 
+### Trade-In Payment Method
+- **Payment option:** `trade_in` added to all 6 payment method dropdowns (deal upload, deal edit, deposit forms)
+- **Vehicle fields:** When "Trade-In" selected, expands year/make/model/color/miles inputs
+- **Stored in JSON:** `{method:'trade_in', amount, trade_year, trade_make, trade_model, trade_color, trade_miles}`
+- **Display:** Purple badge (`#a855f7`), vehicle details shown in deal detail view
+- **Auto-creates inventory:** `_createTradeInCar()` creates `inventory` + `inventory_costs` rows (short name + "trade" suffix, linked via `car_id`, inserts before Total row)
+
+### Deals26 Auto-Populate (from deal upload)
+- **On deal submit:** `_autopopulateDeals26(record, car)` creates deals26 row with: car_desc (inventory_costs.car_name + customer last name), cost, expenses, money (total_collected), dealer_fee=$399, deal_num (auto-incremented), gps_sold, sold_inv_vin
+- **On deal edit:** `_updateDeals26FromDeal()` updates money/gps if deal is edited
+- **Tax lookup:** Fetches `PendingSalesDebary.csv` from GitHub, matches by VIN, pulls salestax + tagfee + titlefee
+- **Periodic tax fill:** `_fillMissingTaxes()` runs every 30 min + on page load. Retries until CSV has the data.
+
+### Inventory Auto-Create (CSV Sync → App Sheets)
+- **On CSV sync:** `_autoCreateInventoryCosts(insertedRows)` creates `inventory_costs` row with short name format, linked via `car_id`
+- **Inserts before Total row:** Finds "Total" row and inserts above it, bumps Total's sort_order
+
+### Apps Script Auto-Deploy
+- **Deploy script:** `python scripts/deploy-apps-script.py "description"` — pushes code + creates version + updates deployment
+- **OAuth credentials:** `scripts/.google-credentials.json` + `scripts/.google-token.json` (both in .gitignore)
+- **Features deployed:** Car color coding on column B, currency formatting ($#,##0), week separator borders (deal_num=1), column F formula (copies from row above), column G skip (leaves empty for manual payments), error logging on all Supabase calls
+
 ## Recent Work (April 2026)
 
 ### Completed
@@ -256,6 +278,11 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Deposit form save fix** — removed `payment_method` column (doesn't exist in deposits table)
 - **Deposit-deal matching** — VIN → vehicle desc → customer name fuzzy matching for net cash
 - **Owner payment posting** — owners can post payments like employees
+- **Trade-In payment method** — new payment type with vehicle detail fields + auto inventory creation
+- **Deals26 auto-populate** — deals auto-create deals26 rows with cost/expenses/taxes from inventory_costs + Pending Sales CSV
+- **Inventory auto-create from CSV** — new cars from InventoryMaster sync auto-create inventory_costs rows
+- **Apps Script deploy pipeline** — automated deployment from CLI, no manual pasting
+- **Sheets tab layout swap** — DeBary/DeLand small tabs on top, Inventory/Deals26 big buttons below
 
 ### Known Issues / Gotchas
 - `deposits` table has NO `payment_method` column — payment method is tracked in the `payments` table instead (via auto-posted deposit payment)

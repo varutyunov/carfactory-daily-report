@@ -143,6 +143,49 @@ check "Counter-sign pad uses black ink" "penColor.*#000"
 # _injectFormSignatures must target the void customer sig spot
 check "_injectFormSignatures targets sig spots" "esign-void-cust-sig"
 
+# ── SHEETS TAB (Inventory + Deals26) ──────────────────────────
+check "openInvSheets"                'async function openInvSheets'
+check "closeInvSheets"               'function closeInvSheets'
+check "shSetPage"                    'function shSetPage'
+check "invSheetsSetLoc"              'function invSheetsSetLoc'
+check "invSheetsRender"              'function invSheetsRender'
+check "invSheetsAddCar"              'async function invSheetsAddCar'
+check "isEditOpen"                   'function isEditOpen'
+check "isEditSave"                   'async function isEditSave'
+check "isShowExpPopup"               'function isShowExpPopup'
+check "isExpSave"                    'async function isExpSave'
+check "isLinkOpen"                   'function isLinkOpen'
+check "isLinkSelect"                 'async function isLinkSelect'
+check "isDeleteCar"                  'async function isDeleteCar'
+check "d26Render"                    'function d26Render'
+check "d26Edit"                      'function d26Edit'
+check "d26Save"                      'async function d26Save'
+check "d26Delete"                    'async function d26Delete'
+check "d26ShowExpPopup"              'function d26ShowExpPopup'
+check "d26ExpSave"                   'async function d26ExpSave'
+check "d26ShowPmtPopup"              'function d26ShowPmtPopup'
+check "d26PmtSave"                   'async function d26PmtSave'
+check "sheetsPush"                   'function sheetsPush'
+check "shLoadDeals"                  'async function shLoadDeals'
+
+# ── DEALS26 AUTO-POPULATE ─────────────────────────────────────
+check "_autopopulateDeals26"         'async function _autopopulateDeals26'
+check "_updateDeals26FromDeal"       'async function _updateDeals26FromDeal'
+check "_fillMissingTaxes"            'async function _fillMissingTaxes'
+check "dealSubmit calls autopopulate" '_autopopulateDeals26.*record.*car'
+check "dealEditSave calls update"    '_updateDeals26FromDeal'
+
+# ── TRADE-IN PAYMENT METHOD ──────────────────────────────────
+check "trade_in option in dealRenderPayments" "value=\"trade_in\".*Trade-In|trade_in.*Trade"
+check "_createTradeInCar"            'async function _createTradeInCar'
+check "dealSubmit calls createTradeIn" '_createTradeInCar'
+check "Trade-in badge color"         'trade_in.*a855f7'
+
+# ── INVENTORY AUTO-CREATE FROM CSV SYNC ───────────────────────
+check "_autoCreateInventoryCosts"    'async function _autoCreateInventoryCosts'
+check "syncLocation calls autoCreate" '_autoCreateInventoryCosts.*inserted'
+check "syncNow calls autoCreate"     '_autoCreateInventoryCosts.*inserted'
+
 echo ""
 if [ $ERRORS -eq 0 ]; then
   echo "✅ All protected features & implementation checks passed."
