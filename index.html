@@ -13938,6 +13938,8 @@ function openPayScanForm(){
   document.getElementById('pay-scan-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('pay-scan-time').value='';
   document.getElementById('pay-scan-raw').textContent='';
+  var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
+  if(saveBtn){ saveBtn.textContent='Save Payment'; saveBtn.disabled=false; }
   // Reset payment method rows to single empty row
   var ml=document.getElementById('pay-methods-list');
   if(ml)ml.innerHTML='';
@@ -13995,7 +13997,7 @@ function payEditPayment(id){
     }
   }
   var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
-  if(saveBtn) saveBtn.textContent='Save Changes';
+  if(saveBtn){ saveBtn.textContent='Save Changes'; saveBtn.disabled=false; }
   history.pushState({payEdit:true},'');
 }
 
@@ -15860,6 +15862,8 @@ async function payScanSave(){
 
   _paySaving=false;
   _payEditId=null;
+  var saveBtn=document.querySelector('button[onclick="payScanSave()"]');
+  if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='Save Payment'; }
   if(document.getElementById('pay-is-final')) document.getElementById('pay-is-final').checked=false;
   // Close payment overlay and return to home screen
   payCloseAll();
