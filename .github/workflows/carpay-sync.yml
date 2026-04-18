@@ -1,9 +1,9 @@
-name: CarPay Sync
+name: CarPay Sync (PAUSED — will be rebuilt)
 
 on:
-  schedule:
-    # Every 2 hours during business hours (Mon-Sat, 8am-8pm ET = 12-24 UTC)
-    - cron: '0 12,14,16,18,20,22,0 * * 1-6'
+  # PAUSED — schedule disabled, will be rebuilt later
+  # schedule:
+  #   - cron: '0 12,14,16,18,20,22,0 * * 1-6'
   workflow_dispatch:
 
 jobs:
