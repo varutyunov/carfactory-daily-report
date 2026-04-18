@@ -16469,13 +16469,42 @@ async function _autopopulateDeals26(record, car) {
     if (Array.isArray(allD26)) sortOrder = allD26.length + 1;
   } catch (e) {}
 
+  // 7b. Look up taxes from Pending Sales CSV (salestax + tagfee + titlefee)
+  var taxes = 0;
+  try {
+    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/PendingSalesDebary.csv?t=' + Date.now();
+    var psResp = await fetch(psUrl);
+    if (psResp.ok) {
+      var psCsv = await psResp.text();
+      var psLines = psCsv.trim().split('\n');
+      var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+      var vinIdx = psHdr.indexOf('vin');
+      var taxIdx = psHdr.indexOf('salestax');
+      var tagIdx = psHdr.indexOf('tagfee');
+      var titleIdx = psHdr.indexOf('titlefee');
+      if (vinIdx >= 0 && taxIdx >= 0) {
+        for (var pi = 1; pi < psLines.length; pi++) {
+          var psVals = psLines[pi].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+          var psVin = (psVals[vinIdx] || '').trim();
+          if (psVin && vin.indexOf(psVin) === 0) {
+            var st = parseFloat(psVals[taxIdx]) || 0;
+            var tg = tagIdx >= 0 ? (parseFloat(psVals[tagIdx]) || 0) : 0;
+            var tt = titleIdx >= 0 ? (parseFloat(psVals[titleIdx]) || 0) : 0;
+            taxes = Math.round((st + tg + tt) * 100) / 100;
+            break;
+          }
+        }
+      }
+    }
+  } catch (e) { /* taxes stays 0 */ }
+
   // 8. Build deals26 object
   var d26Obj = {
     car_desc: carDesc,
     cost: cost,
     expenses: expenses,
     expense_notes: expenseNotes,
-    taxes: 0,
+    taxes: taxes,
     money: parseFloat(record.total_collected) || 0,
     owed: 0,
     payments: 0,
