@@ -13690,7 +13690,22 @@ async function formDeleteFinal(tableName,id){
       for(var i=0;i<esReqs.length;i++)await sbDelete('esign_requests',esReqs[i].id);
     }catch(e2){}
     await sbDelete(tableName,id);
-    if(tableName==='deposits'){_formsData=_formsData.filter(function(d){return d.id!==id;});_formsFiltered=_formsFiltered.filter(function(d){return d.id!==id;});}
+    // When deleting a deposit, also delete its auto-posted payment
+    if(tableName==='deposits'){
+      try{
+        var depRec=_formsData.find(function(d){return d.id===id;});
+        if(depRec){
+          var depVeh=(depRec.vehicle_desc||'').trim();
+          var depCust=(depRec.customer_name||'').trim();
+          if(depVeh){
+            var depPayments=await sbGet('payments','raw_ocr_text=ilike.Deposit*'+encodeURIComponent(depVeh)+'&customer_name=ilike.*'+encodeURIComponent(depCust.split(/\s+/)[0])+'*&select=id&limit=5');
+            if(Array.isArray(depPayments)){
+              for(var dp=0;dp<depPayments.length;dp++) await sbDelete('payments',depPayments[dp].id);
+            }
+          }
+        }
+      }catch(e3){console.warn('Failed to delete deposit auto-posted payment:',e3);}
+      _formsData=_formsData.filter(function(d){return d.id!==id;});_formsFiltered=_formsFiltered.filter(function(d){return d.id!==id;});}
     else if(tableName==='invoices'){_invData_list=_invData_list.filter(function(d){return d.id!==id;});_invFiltered=_invFiltered.filter(function(d){return d.id!==id;});}
     else if(tableName==='void_releases'){_vrData_list=_vrData_list.filter(function(d){return d.id!==id;});_vrFiltered=_vrFiltered.filter(function(d){return d.id!==id;});}
     formsBack();
