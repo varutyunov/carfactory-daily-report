@@ -11599,6 +11599,9 @@ function openFormDetail(id) {
   if(dep.location) html += 'Location: ' + dep.location;
   html += '</div>';
 
+  // Add Payment button
+  html += '<button onclick="depAddPaymentOpen('+dep.id+')" style="width:100%;margin-top:16px;padding:14px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:14px;color:#4ade80;font-size:15px;font-weight:600;cursor:pointer;">+ Add Payment to Deposit</button>';
+
   // Delete button
   html += '<button id="dep-delete-btn" onclick="depDeleteConfirm1(' + dep.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
 
@@ -11608,6 +11611,115 @@ function openFormDetail(id) {
   body.innerHTML = html;
 
   if(dep.esign_status==='signed'&&!dep.seller_signature_url){_initCounterSignPad();}
+}
+
+// ── DEPOSIT ADD PAYMENT (update existing deposit) ──────────────────
+function depAddPaymentOpen(depId){
+  var dep=_formsData.find(function(d){return d.id===depId;});
+  if(!dep)return;
+  var body=document.getElementById('forms-body');
+  if(!body)return;
+  var curAmt=parseFloat(dep.deposit_amount)||0;
+  var html='<div style="padding:16px 12px 40px;">';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:800;color:#4ade80;letter-spacing:1px;margin-bottom:16px;">ADD PAYMENT</div>';
+  // Current deposit summary
+  html+='<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:16px;">';
+  html+='<div style="font-size:12px;color:#555;text-transform:uppercase;margin-bottom:4px;">Current Deposit Total</div>';
+  html+='<div style="font-size:24px;font-weight:700;color:#4ade80;">$'+curAmt.toLocaleString('en-US',{minimumFractionDigits:2})+'</div>';
+  html+='<div style="font-size:13px;color:#888;margin-top:4px;">'+dep.customer_name+' — '+(dep.vehicle_desc||'')+'</div>';
+  html+='</div>';
+  // Payment amount
+  html+='<div style="margin-bottom:16px;">';
+  html+='<label style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:700;">New Payment Amount</label>';
+  html+='<input id="dep-add-amt" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this)" style="width:100%;box-sizing:border-box;margin-top:6px;background:#111;border:1px solid #1a1a1a;border-radius:12px;color:#fff;padding:14px 16px;font-size:20px;font-weight:700;outline:none;"/>';
+  html+='</div>';
+  // Payment method
+  html+='<div style="margin-bottom:16px;">';
+  html+='<label style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Payment Method</label>';
+  html+='<div id="dep-add-methods" style="display:flex;gap:4px;margin-top:6px;background:#111;border:1px solid #1a1a1a;border-radius:12px;padding:3px;">';
+  var methods=[{k:'cash',l:'Cash'},{k:'card',l:'Card'},{k:'zelle',l:'Zelle'},{k:'money_order',l:'M.O.'}];
+  methods.forEach(function(m){
+    var active=m.k==='cash';
+    html+='<button onclick="depAddSetMethod(\''+m.k+'\')" id="dep-add-m-'+m.k+'" style="flex:1;padding:10px 2px;background:'+(active?'#fff':'none')+';border:none;border-radius:10px;color:'+(active?'#000':'#555')+';font-size:12px;font-weight:700;cursor:pointer;">'+m.l+'</button>';
+  });
+  html+='</div></div>';
+  // New signed form photo
+  html+='<div style="margin-bottom:16px;">';
+  html+='<label style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Updated Signed Form (optional)</label>';
+  html+='<input type="file" accept="image/*" capture="environment" id="dep-add-photo" style="margin-top:6px;color:#888;font-size:14px;"/>';
+  html+='</div>';
+  // Save button
+  html+='<button id="dep-add-save-btn" onclick="depAddPaymentSave('+depId+')" style="width:100%;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Save Payment</button>';
+  html+='<button onclick="openFormDetail('+depId+')" style="width:100%;margin-top:8px;padding:14px;background:none;border:1px solid #333;border-radius:14px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>';
+  html+='</div>';
+  body.innerHTML=html;
+  window._depAddMethod='cash';
+}
+
+function depAddSetMethod(m){
+  window._depAddMethod=m;
+  ['cash','card','zelle','money_order'].forEach(function(k){
+    var btn=document.getElementById('dep-add-m-'+k);
+    if(!btn)return;
+    if(k===m){btn.style.background='#fff';btn.style.color='#000';}
+    else{btn.style.background='none';btn.style.color='#555';}
+  });
+}
+
+async function depAddPaymentSave(depId){
+  var dep=_formsData.find(function(d){return d.id===depId;});
+  if(!dep)return;
+  var amtEl=document.getElementById('dep-add-amt');
+  var amt=parseFloat((amtEl?amtEl.value:'').replace(/[^0-9.]/g,''))||0;
+  if(!amt){alert('Please enter a payment amount');return;}
+  var method=window._depAddMethod||'cash';
+  var btn=document.getElementById('dep-add-save-btn');
+  if(btn){btn.disabled=true;btn.textContent='Saving...';}
+  try{
+    // 1. Update signed form photo if provided
+    var photoInput=document.getElementById('dep-add-photo');
+    if(photoInput&&photoInput.files&&photoInput.files[0]){
+      var file=photoInput.files[0];
+      var sfPath='deposits/'+Date.now()+'_signed.jpg';
+      await sbUpload(sfPath,file);
+      var sfUrl=SB_URL+'/storage/v1/object/public/car-photos/'+sfPath;
+      await sbPatch('deposits',depId,{signed_form_url:sfUrl});
+      dep.signed_form_url=sfUrl;
+    }
+    // 2. Update deposit amount (add new payment to running total)
+    var oldAmt=parseFloat(dep.deposit_amount)||0;
+    var newTotal=oldAmt+amt;
+    var newBal=Math.max(0,(parseFloat(dep.balance)||0)-amt);
+    await sbPatch('deposits',depId,{deposit_amount:newTotal,balance:String(newBal)});
+    dep.deposit_amount=newTotal;
+    dep.balance=String(newBal);
+    // 3. Post payment to weekly payments
+    var today=new Date();
+    var todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    var weekKey=_payWeekKey(today);
+    var amtStr='$'+amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var vehParts=(dep.vehicle_desc||'').split(/\s+/);
+    var vYear=vehParts[0]||'';var vMake=vehParts[1]||'';var vModel=vehParts.slice(2).join(' ')||'';
+    await sbPost('payments',{
+      customer_name:dep.customer_name,
+      payment_date:todayStr,
+      amount:amtStr,
+      payment_method:method,
+      card_fee_added:false,
+      vehicle_year:vYear,vehicle_make:vMake,vehicle_model:vModel,
+      vehicle_vin:dep.vin||'',vehicle_color:'',
+      location:dep.location||'DeBary',
+      logged_by:me?me.name:'',
+      week_start:weekKey,
+      raw_ocr_text:'Deposit \u2014 '+(dep.vehicle_desc||''),
+      is_final_payment:false
+    });
+    // 4. Show updated detail
+    openFormDetail(depId);
+  }catch(e){
+    alert('Error saving: '+(e.message||e));
+    if(btn){btn.disabled=false;btn.textContent='Save Payment';}
+  }
 }
 
 var _formDepMethodPayId=null;
