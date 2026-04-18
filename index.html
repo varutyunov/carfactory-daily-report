@@ -16472,7 +16472,8 @@ async function _autopopulateDeals26(record, car) {
   // 7b. Look up taxes from Pending Sales CSV (salestax + tagfee + titlefee)
   var taxes = 0;
   try {
-    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/PendingSalesDebary.csv?t=' + Date.now();
+    var psFile = (record.location === 'DeLand') ? 'PendingSalesDeland.csv' : 'PendingSalesDebary.csv';
+    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/' + psFile + '?t=' + Date.now();
     var psResp = await fetch(psUrl);
     if (psResp.ok) {
       var psCsv = await psResp.text();
@@ -16579,32 +16580,42 @@ async function _fillMissingTaxes() {
   _taxFillRunning = true;
   try {
     // Find deals26 rows with taxes=0 and a VIN
-    var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc&limit=50');
+    var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc,location&limit=50');
     if (!Array.isArray(missing) || !missing.length) { _taxFillRunning = false; return; }
 
-    // Fetch Pending Sales CSV
-    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/PendingSalesDebary.csv?t=' + Date.now();
-    var psResp = await fetch(psUrl);
-    if (!psResp.ok) { _taxFillRunning = false; return; }
-    var psCsv = await psResp.text();
-    var psLines = psCsv.trim().split('\n');
-    var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
-    var vinIdx = psHdr.indexOf('vin');
-    var taxIdx = psHdr.indexOf('salestax');
-    var tagIdx = psHdr.indexOf('tagfee');
-    var titleIdx = psHdr.indexOf('titlefee');
-    if (vinIdx < 0 || taxIdx < 0) { _taxFillRunning = false; return; }
+    // Fetch Pending Sales CSVs (DeBary + DeLand)
+    var hasDeLand = missing.some(function(r) { return r.location === 'DeLand'; });
+    var hasDeBary = missing.some(function(r) { return !r.location || r.location === 'DeBary'; });
+    // Build VIN -> tax map from a CSV string
+    function _parseTaxCsv(csvText) {
+      var map = {};
+      var lines = csvText.trim().split('\n');
+      var hdr = lines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+      var vinIdx = hdr.indexOf('vin'), taxIdx = hdr.indexOf('salestax');
+      var tagIdx = hdr.indexOf('tagfee'), titleIdx = hdr.indexOf('titlefee');
+      if (vinIdx < 0 || taxIdx < 0) return map;
+      for (var i = 1; i < lines.length; i++) {
+        var vals = lines[i].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+        var pVin = (vals[vinIdx] || '').trim();
+        if (!pVin) continue;
+        var st = parseFloat(vals[taxIdx]) || 0;
+        var tg = tagIdx >= 0 ? (parseFloat(vals[tagIdx]) || 0) : 0;
+        var tt = titleIdx >= 0 ? (parseFloat(vals[titleIdx]) || 0) : 0;
+        map[pVin] = Math.round((st + tg + tt) * 100) / 100;
+      }
+      return map;
+    }
 
-    // Build VIN -> tax lookup
-    var taxByVin = {};
-    for (var i = 1; i < psLines.length; i++) {
-      var vals = psLines[i].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
-      var pVin = (vals[vinIdx] || '').trim();
-      if (!pVin) continue;
-      var st = parseFloat(vals[taxIdx]) || 0;
-      var tg = tagIdx >= 0 ? (parseFloat(vals[tagIdx]) || 0) : 0;
-      var tt = titleIdx >= 0 ? (parseFloat(vals[titleIdx]) || 0) : 0;
-      taxByVin[pVin] = Math.round((st + tg + tt) * 100) / 100;
+    // Fetch both CSVs as needed
+    var taxByVinDeBary = {}, taxByVinDeLand = {};
+    var baseUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/';
+    if (hasDeBary) {
+      var r1 = await fetch(baseUrl + 'PendingSalesDebary.csv?t=' + Date.now());
+      if (r1.ok) taxByVinDeBary = _parseTaxCsv(await r1.text());
+    }
+    if (hasDeLand) {
+      var r2 = await fetch(baseUrl + 'PendingSalesDeland.csv?t=' + Date.now());
+      if (r2.ok) taxByVinDeLand = _parseTaxCsv(await r2.text());
     }
 
     // Match and update
@@ -16612,6 +16623,7 @@ async function _fillMissingTaxes() {
     for (var m = 0; m < missing.length; m++) {
       var row = missing[m];
       var vin = (row.sold_inv_vin || '').trim();
+      var taxByVin = (row.location === 'DeLand') ? taxByVinDeLand : taxByVinDeBary;
       // Try matching by full VIN or prefix
       var tax = null;
       var keys = Object.keys(taxByVin);
@@ -16623,7 +16635,7 @@ async function _fillMissingTaxes() {
       }
       if (tax && tax > 0) {
         await sbPatch('deals26', row.id, { taxes: tax });
-        sheetsPush('Deals26', row.sort_order, { taxes: tax, owed: 0 }, 'update', 'DeBary');
+        sheetsPush('Deals26', row.sort_order, { taxes: tax, owed: 0 }, 'update', (row.location || 'DeBary'));
         filled++;
         console.log('Tax filled: ' + (row.car_desc || '') + ' = $' + tax);
       }
