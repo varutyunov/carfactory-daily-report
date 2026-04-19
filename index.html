@@ -15957,6 +15957,27 @@ async function payScanSave(){
     // Only update photo if a new one was taken (don't erase existing)
     if(photoUrl) record.receipt_photo_url=photoUrl;
     await sbPatch('payments', _payEditId, record);
+    // Any additional rows added during edit → insert as NEW payments
+    // (same customer/vehicle/date/location metadata, distinct method+amount)
+    for(var _eRow=1;_eRow<payRows.length;_eRow++){
+      var _epr=payRows[_eRow];
+      var _eOrig='';
+      if(_epr.method==='card'&&_epr.cardFee){
+        var _et=parseFloat(_epr.amount.replace(/[^0-9.]/g,''))||0;
+        _eOrig='$'+(_et/1.04).toFixed(2);
+      }
+      await sbPost('payments',{
+        customer_name:name,payment_date:date,payment_time:time||null,
+        amount:_epr.amount,payment_method:_epr.method,
+        card_fee_added:_epr.cardFee,original_amount:_eOrig||null,
+        vehicle_year:year,vehicle_make:make,vehicle_model:model,
+        vehicle_vin:vin.toUpperCase(),vehicle_color:color,
+        receipt_photo_url:photoUrl||null,location:_payLocation,
+        logged_by:me?me.name:'',week_start:weekStart,
+        notes:note||null,raw_ocr_text:rawOcr,
+        is_final_payment:isFinal||false,created_at:new Date().toISOString()
+      });
+    }
   } else {
     // New payment — create one record per payment row
     for(var i=0;i<payRows.length;i++){
