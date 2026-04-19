@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Profit Tab — Design Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;min-height:100vh;}
+body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
+
+/* Mock location tabs */
+.loc-tabs{display:flex;gap:6px;margin-bottom:14px;}
+.loc-tab{flex:1;padding:10px;border-radius:12px;border:1px solid #333;background:#111;color:#888;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;}
+.loc-tab.on{background:#fff;color:#000;border-color:#fff;}
+
+/* === HERO === */
+.hero{
+  background:linear-gradient(155deg,#0a1f14 0%,#0a0a0a 55%);
+  border:1px solid #1a2a1a;
+  border-radius:18px;
+  padding:18px 18px 14px;
+  margin-bottom:20px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::after{
+  content:'';position:absolute;top:-40px;right:-40px;
+  width:180px;height:180px;
+  background:radial-gradient(circle,rgba(74,222,128,.10) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;color:#4ade80;text-transform:uppercase;margin-bottom:4px;}
+.hero-num{font-family:'Barlow Condensed',sans-serif;font-size:42px;font-weight:900;letter-spacing:-1px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;margin-bottom:8px;}
+.hero-num .cents{font-size:22px;color:#888;font-weight:700;}
+.hero-meta{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.hero-delta{font-size:12px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.12);padding:4px 9px;border-radius:6px;letter-spacing:.3px;font-variant-numeric:tabular-nums;}
+.hero-sub{font-size:11px;color:#666;letter-spacing:.4px;text-transform:uppercase;font-weight:600;}
+
+.spark{display:flex;align-items:flex-end;gap:4px;height:42px;margin-top:4px;}
+.spark-bar{flex:1;background:#1a2a1a;border-radius:3px 3px 0 0;min-height:3px;position:relative;}
+.spark-bar.pos{background:linear-gradient(to top,#16a34a,#4ade80);}
+.spark-bar.neg{background:linear-gradient(to top,#b91c1c,#f87171);}
+.spark-bar.current{outline:1.5px solid #4ade80;outline-offset:2px;}
+.spark-labels{display:flex;gap:4px;margin-top:7px;}
+.spark-lbl{flex:1;text-align:center;font-size:9px;color:#555;letter-spacing:.5px;text-transform:uppercase;font-weight:600;}
+.spark-lbl.active{color:#4ade80;font-weight:800;}
+
+/* === QUARTER DIVIDER === */
+.q-divider{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:22px 4px 12px;
+}
+.q-divider-line{flex:1;height:1px;background:linear-gradient(to right,transparent,#1e1e1e,transparent);}
+.q-divider-label{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:2.5px;
+  color:#555;
+  text-transform:uppercase;
+}
+
+/* === MONTH CARD === */
+.month{
+  background:linear-gradient(165deg,#0d0d0d 0%,#080808 100%);
+  border:1px solid #1a1a1a;
+  border-radius:16px;
+  overflow:hidden;
+  margin-bottom:12px;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+}
+.month-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 16px 12px;
+  border-bottom:1px solid #161616;
+  background:linear-gradient(to bottom,#111,#0a0a0a);
+}
+.month-head .left{display:flex;align-items:baseline;gap:10px;}
+.month-name{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:2px;
+  color:#fff;
+  text-transform:uppercase;
+  line-height:1;
+}
+.month-year{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:2px;
+  color:#444;
+  text-transform:uppercase;
+}
+.month-net{
+  font-size:16px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.2px;
+  padding:5px 11px;
+  border-radius:8px;
+}
+.month-net.pos{color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.22);}
+.month-net.neg{color:#f87171;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.22);}
+.month-net.empty{color:#444;background:transparent;border:none;font-size:14px;}
+
+/* Section grouping */
+.m-section{padding:6px 0;}
+.m-section + .m-section{border-top:1px solid #141414;}
+.m-section-label{
+  font-size:9px;
+  color:#444;
+  font-weight:700;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  padding:4px 16px 2px;
+}
+
+.m-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:9px 16px;
+  gap:10px;
+  min-height:38px;
+}
+.m-row + .m-row{border-top:1px solid #101010;}
+.m-row:hover{background:rgba(255,255,255,.02);}
+.m-label{
+  font-size:13px;
+  color:#aaa;
+  font-weight:500;
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.m-val{
+  font-size:14px;
+  color:#e5e5e5;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  flex-shrink:0;
+  cursor:pointer;
+  letter-spacing:-.2px;
+}
+
+/* Revenue */
+.m-row.revenue .m-label{color:#60a5fa;}
+.m-row.revenue .m-val{color:#93c5fd;font-weight:700;}
+
+/* Subtotal rows */
+.m-row.subtotal{background:#0a0a0a;border-top:1px solid #1c1c1c;}
+.m-row.subtotal .m-label{color:#ccc;font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.6px;}
+.m-row.subtotal .m-val{color:#fff;font-weight:800;font-size:15px;}
+
+/* Net Profit */
+.m-profit{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px 16px;
+  background:linear-gradient(to right,rgba(74,222,128,.10),rgba(74,222,128,.03));
+  border-top:1.5px solid rgba(74,222,128,.25);
+}
+.m-profit.neg{
+  background:linear-gradient(to right,rgba(248,113,113,.10),rgba(248,113,113,.03));
+  border-top:1.5px solid rgba(248,113,113,.25);
+}
+.m-profit-label{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;
+  font-weight:900;
+  color:#86efac;
+  text-transform:uppercase;
+  letter-spacing:2px;
+}
+.m-profit.neg .m-profit-label{color:#fca5a5;}
+.m-profit-val{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:20px;
+  font-weight:900;
+  color:#4ade80;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.5px;
+  cursor:pointer;
+}
+.m-profit.neg .m-profit-val{color:#f87171;}
+
+/* Empty month (collapsed) */
+.month.empty .month-head{padding:11px 16px;border-bottom:none;}
+.month.empty .month-name{font-size:17px;color:#555;}
+.month.empty .month-year{color:#2a2a2a;}
+
+/* Dotted underline for values with notes */
+.has-note{text-decoration:underline dotted currentColor;text-underline-offset:3px;}
+
+/* === YEARLY SUMMARY === */
+.ys{
+  background:linear-gradient(165deg,#0d0d0d 0%,#080808 100%);
+  border:1px solid #1a1a1a;
+  border-radius:16px;
+  overflow:hidden;
+  margin-top:22px;
+}
+.ys-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 18px 12px;
+  background:linear-gradient(to bottom,#111,#0a0a0a);
+  border-bottom:1px solid #1a1a1a;
+}
+.ys-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:17px;
+  font-weight:900;
+  letter-spacing:2px;
+  color:#fff;
+  text-transform:uppercase;
+}
+.ys-year-chip{
+  font-size:11px;
+  font-weight:700;
+  color:#4ade80;
+  background:rgba(74,222,128,.12);
+  padding:4px 10px;
+  border-radius:6px;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.5px;
+}
+.ys-row{padding:11px 18px;}
+.ys-row + .ys-row{border-top:1px solid #121212;}
+.ys-row.year{
+  background:linear-gradient(to right,rgba(74,222,128,.06) 0%,transparent 100%);
+  padding:16px 18px;
+}
+.ys-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;gap:10px;}
+.ys-month{font-size:12px;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:.7px;}
+.ys-row.year .ys-month{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:#fff;letter-spacing:1.8px;}
+.ys-profit{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.2px;}
+.ys-row.year .ys-profit{font-size:17px;font-weight:900;letter-spacing:-.3px;}
+.ys-profit.pos{color:#4ade80;}
+.ys-profit.neg{color:#f87171;}
+.ys-bar-wrap{height:5px;background:#111;border-radius:3px;overflow:hidden;}
+.ys-row.year .ys-bar-wrap{height:7px;}
+.ys-bar{height:100%;border-radius:3px;transition:width .3s ease;}
+.ys-bar.pos{background:linear-gradient(to right,#16a34a,#4ade80,#86efac);}
+.ys-bar.neg{background:linear-gradient(to right,#b91c1c,#f87171);}
+.ys-avg{margin-top:6px;text-align:right;font-size:10px;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.3px;}
+
+/* Note banner */
+.note-banner{margin-bottom:14px;padding:9px 12px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;font-size:11px;color:#93c5fd;text-align:center;letter-spacing:.3px;}
+</style>
+</head>
+<body>
+
+<div class="note-banner">🎨 Design Preview — mock data, each month is its own card</div>
+
+<div class="loc-tabs">
+  <div class="loc-tab on">DeBary</div>
+  <div class="loc-tab">DeLand</div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-label">Year to Date · Net Profit</div>
+  <div class="hero-num">$60,810<span class="cents">.00</span></div>
+  <div class="hero-meta">
+    <span class="hero-delta">↑ 14.2% vs 2025</span>
+    <span class="hero-sub">through apr</span>
+  </div>
+  <div class="spark" id="sparkBars"></div>
+  <div class="spark-labels" id="sparkLabels"></div>
+</div>
+
+<!-- Q1 DIVIDER -->
+<div class="q-divider">
+  <div class="q-divider-line"></div>
+  <div class="q-divider-label">Q1 · 2026</div>
+  <div class="q-divider-line"></div>
+</div>
+
+<!-- JAN -->
+<div class="month">
+  <div class="month-head">
+    <div class="left">
+      <div class="month-name">January</div>
+      <div class="month-year">2026</div>
+    </div>
+    <div class="month-net pos">+$14,200</div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Revenue</div>
+    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$42,100</span></div>
+    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$8,500</span></div>
+    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$2,100</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Fixed Bills</div>
+    <div class="m-row"><span class="m-label">Rent</span><span class="m-val has-note">$4,800</span></div>
+    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
+    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val has-note">$680</span></div>
+    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,900</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Variable</div>
+    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$18,200</span></div>
+    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val has-note">$5,600</span></div>
+    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,400</span></div>
+    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
+    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$34,600</span></div>
+  </div>
+
+  <div class="m-profit">
+    <div class="m-profit-label">Net Profit</div>
+    <div class="m-profit-val">+$14,200</div>
+  </div>
+</div>
+
+<!-- FEB -->
+<div class="month">
+  <div class="month-head">
+    <div class="left">
+      <div class="month-name">February</div>
+      <div class="month-year">2026</div>
+    </div>
+    <div class="month-net pos">+$16,880</div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Revenue</div>
+    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$48,220</span></div>
+    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$12,000</span></div>
+    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$1,850</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Fixed Bills</div>
+    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
+    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
+    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$720</span></div>
+    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,940</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Variable</div>
+    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$19,800</span></div>
+    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$7,450</span></div>
+    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,600</span></div>
+    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
+    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$38,290</span></div>
+  </div>
+
+  <div class="m-profit">
+    <div class="m-profit-label">Net Profit</div>
+    <div class="m-profit-val">+$16,880</div>
+  </div>
+</div>
+
+<!-- MAR -->
+<div class="month">
+  <div class="month-head">
+    <div class="left">
+      <div class="month-name">March</div>
+      <div class="month-year">2026</div>
+    </div>
+    <div class="month-net pos">+$17,240</div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Revenue</div>
+    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$51,800</span></div>
+    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$14,500</span></div>
+    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$2,400</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Fixed Bills</div>
+    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
+    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
+    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$590</span></div>
+    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,810</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Variable</div>
+    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$21,400</span></div>
+    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$8,900</span></div>
+    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,800</span></div>
+    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
+    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$41,410</span></div>
+  </div>
+
+  <div class="m-profit">
+    <div class="m-profit-label">Net Profit</div>
+    <div class="m-profit-val">+$17,240</div>
+  </div>
+</div>
+
+<!-- Q2 DIVIDER -->
+<div class="q-divider">
+  <div class="q-divider-line"></div>
+  <div class="q-divider-label">Q2 · 2026</div>
+  <div class="q-divider-line"></div>
+</div>
+
+<!-- APR -->
+<div class="month">
+  <div class="month-head">
+    <div class="left">
+      <div class="month-name">April</div>
+      <div class="month-year">2026</div>
+    </div>
+    <div class="month-net pos">+$12,490</div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Revenue</div>
+    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$44,900</span></div>
+    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$6,200</span></div>
+    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$1,200</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Fixed Bills</div>
+    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
+    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
+    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$640</span></div>
+    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,860</span></div>
+  </div>
+
+  <div class="m-section">
+    <div class="m-section-label">Variable</div>
+    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val">$17,900</span></div>
+    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$6,200</span></div>
+    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,200</span></div>
+    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
+    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$34,660</span></div>
+  </div>
+
+  <div class="m-profit">
+    <div class="m-profit-label">Net Profit</div>
+    <div class="m-profit-val">+$12,490</div>
+  </div>
+</div>
+
+<!-- EMPTY MONTHS -->
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">May</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">June</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+
+<!-- Q3 -->
+<div class="q-divider">
+  <div class="q-divider-line"></div>
+  <div class="q-divider-label">Q3 · 2026</div>
+  <div class="q-divider-line"></div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">July</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">August</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">September</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+
+<!-- Q4 -->
+<div class="q-divider">
+  <div class="q-divider-line"></div>
+  <div class="q-divider-label">Q4 · 2026</div>
+  <div class="q-divider-line"></div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">October</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">November</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+<div class="month empty">
+  <div class="month-head">
+    <div class="left"><div class="month-name">December</div><div class="month-year">2026</div></div>
+    <div class="month-net empty">—</div>
+  </div>
+</div>
+
+<!-- YEARLY SUMMARY -->
+<div class="ys">
+  <div class="ys-head">
+    <div class="ys-title">Yearly Summary</div>
+    <div class="ys-year-chip">2026</div>
+  </div>
+
+  <div class="ys-row">
+    <div class="ys-top"><span class="ys-month">Jan</span><span class="ys-profit pos">$14,200</span></div>
+    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:82%;"></div></div>
+    <div class="ys-avg">avg $14,200</div>
+  </div>
+  <div class="ys-row">
+    <div class="ys-top"><span class="ys-month">Feb</span><span class="ys-profit pos">$16,880</span></div>
+    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:97%;"></div></div>
+    <div class="ys-avg">avg $15,540</div>
+  </div>
+  <div class="ys-row">
+    <div class="ys-top"><span class="ys-month">Mar</span><span class="ys-profit pos">$17,240</span></div>
+    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:100%;"></div></div>
+    <div class="ys-avg">avg $16,107</div>
+  </div>
+  <div class="ys-row">
+    <div class="ys-top"><span class="ys-month">Apr</span><span class="ys-profit pos">$12,490</span></div>
+    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:72%;"></div></div>
+    <div class="ys-avg">avg $15,202</div>
+  </div>
+  <div class="ys-row year">
+    <div class="ys-top"><span class="ys-month">Year Total</span><span class="ys-profit pos">$60,810</span></div>
+    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:100%;"></div></div>
+    <div class="ys-avg">avg monthly $15,202</div>
+  </div>
+</div>
+
+<script>
+var months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+var values=[14200,16880,17240,12490,0,0,0,0,0,0,0,0];
+var currentMonthIdx=3;
+var maxVal=Math.max.apply(null,values.filter(function(v){return v!==0;}));
+var bars=document.getElementById('sparkBars');
+var labels=document.getElementById('sparkLabels');
+for(var i=0;i<12;i++){
+  var b=document.createElement('div');
+  b.className='spark-bar';
+  if(values[i]>0){b.classList.add('pos');b.style.height=Math.max(3,values[i]/maxVal*100)+'%';}
+  else if(values[i]<0){b.classList.add('neg');b.style.height=Math.max(3,Math.abs(values[i])/maxVal*100)+'%';}
+  else{b.style.height='3px';}
+  if(i===currentMonthIdx)b.classList.add('current');
+  bars.appendChild(b);
+  var l=document.createElement('div');
+  l.className='spark-lbl';
+  if(i===currentMonthIdx)l.classList.add('active');
+  l.textContent=months[i];
+  labels.appendChild(l);
+}
+</script>
+
+</body>
+</html>
