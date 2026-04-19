@@ -3,303 +3,122 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Profit Tab — Color Tiles</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<title>Profit Tab — Live Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow','Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
+html,body{background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;min-height:100vh;overflow-x:hidden;}
 body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
 
 /* Location tabs */
 .loc-tabs{display:flex;gap:6px;margin-bottom:14px;}
-.loc-tab{flex:1;padding:10px;border-radius:12px;border:1px solid #222;background:#141414;color:#888;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;}
+.loc-tab{flex:1;padding:10px;border-radius:12px;border:1px solid #222;background:#141414;color:#888;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;cursor:pointer;}
 .loc-tab.on{background:#fff;color:#000;border-color:#fff;}
 
-/* === HERO (subtle, lets tiles pop) === */
+/* Loading state */
+.loading{padding:80px 20px;text-align:center;color:#666;}
+.spinner{width:24px;height:24px;border:2px solid #222;border-top-color:#4ade80;border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* HERO */
 .hero{
-  background:#111;
-  border:1px solid #222;
-  border-radius:18px;
-  padding:16px 18px 14px;
-  margin-bottom:18px;
+  background:#111;border:1px solid #222;border-radius:18px;
+  padding:16px 18px 14px;margin-bottom:18px;
 }
-.hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
-.hero-label{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:11px;font-weight:800;letter-spacing:2.5px;color:#888;
-  text-transform:uppercase;margin-bottom:4px;
-}
-.hero-num{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:36px;font-weight:900;letter-spacing:-1px;color:#fff;
-  line-height:1;font-variant-numeric:tabular-nums;
-}
-.hero-delta{
-  font-size:11px;font-weight:800;color:#10b981;
-  background:rgba(16,185,129,.12);padding:4px 9px;border-radius:6px;
-  font-variant-numeric:tabular-nums;letter-spacing:.3px;
-  border:1px solid rgba(16,185,129,.22);
-  align-self:flex-start;margin-top:4px;
-}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;}
+.hero-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;color:#888;text-transform:uppercase;margin-bottom:4px;}
+.hero-num{font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;letter-spacing:-1px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
+.hero-delta{font-size:11px;font-weight:800;background:rgba(16,185,129,.12);padding:4px 9px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.3px;border:1px solid rgba(16,185,129,.22);color:#10b981;align-self:flex-start;margin-top:4px;white-space:nowrap;}
+.hero-delta.neg{color:#f87171;background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.22);}
 .spark{display:flex;align-items:flex-end;gap:3px;height:32px;}
 .spark-bar{flex:1;background:#1a1a1a;border-radius:2px;min-height:3px;}
 .spark-bar.pos{background:linear-gradient(to top,#10b981,#34d399);}
+.spark-bar.neg{background:linear-gradient(to top,#dc2626,#f87171);}
 .spark-bar.current{outline:1.5px solid #34d399;outline-offset:2px;}
 
-/* === SECTION HEAD === */
-.section-head{
-  display:flex;align-items:center;gap:10px;
-  margin:20px 2px 10px;
-}
+/* SECTION HEAD */
+.section-head{display:flex;align-items:center;gap:10px;margin:20px 2px 10px;}
 .section-head-line{flex:1;height:1px;background:linear-gradient(to right,transparent,#222,transparent);}
-.section-head-label{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:10px;font-weight:900;letter-spacing:2.5px;color:#555;
-  text-transform:uppercase;
-}
+.section-head-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:900;letter-spacing:2.5px;color:#555;text-transform:uppercase;}
 
-/* === TILE GRID === */
-.tile-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:9px;
-}
+/* TILE GRID */
+.tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
 .tile{
   aspect-ratio:1/1.08;
-  border-radius:14px;
-  padding:12px 11px 11px;
-  cursor:pointer;
-  position:relative;
-  overflow:hidden;
+  border-radius:14px;padding:12px 11px 11px;
+  cursor:pointer;position:relative;overflow:hidden;
   transition:transform .12s ease;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
+  display:flex;flex-direction:column;justify-content:space-between;
   box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 4px 12px rgba(0,0,0,.3);
 }
 .tile:active{transform:scale(.95);}
+.tile::after{content:'';position:absolute;bottom:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.06);pointer-events:none;}
+.tile-month{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;line-height:1;position:relative;z-index:1;}
+.tile-year{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:.45;margin-top:3px;position:relative;z-index:1;}
+.tile-net{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:-.5px;line-height:1;font-variant-numeric:tabular-nums;position:relative;z-index:1;}
+.tile-meta{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;opacity:.6;margin-top:5px;font-variant-numeric:tabular-nums;position:relative;z-index:1;}
 
-/* Decorative corner shape on each tile */
-.tile::after{
-  content:'';
-  position:absolute;
-  bottom:-30px;right:-30px;
-  width:100px;height:100px;
-  border-radius:50%;
-  background:rgba(255,255,255,.06);
-  pointer-events:none;
-}
-.tile.light::after{background:rgba(0,0,0,.05);}
+/* Color palette */
+.c-0{background:linear-gradient(145deg,#1e40af 0%,#1e3a8a 100%);color:#fff;}
+.c-1{background:linear-gradient(145deg,#be123c 0%,#9f1239 100%);color:#fff;}
+.c-2{background:linear-gradient(145deg,#059669 0%,#047857 100%);color:#fff;}
+.c-3{background:linear-gradient(145deg,#f59e0b 0%,#d97706 100%);color:#1c1917;}
+.c-4{background:linear-gradient(145deg,#7c3aed 0%,#6d28d9 100%);color:#fff;}
+.c-5{background:linear-gradient(145deg,#0891b2 0%,#0e7490 100%);color:#fff;}
+.c-6{background:linear-gradient(145deg,#db2777 0%,#be185d 100%);color:#fff;}
+.c-7{background:linear-gradient(145deg,#65a30d 0%,#4d7c0f 100%);color:#fff;}
+.c-8{background:linear-gradient(145deg,#4f46e5 0%,#3730a3 100%);color:#fff;}
+.c-9{background:linear-gradient(145deg,#ea580c 0%,#c2410c 100%);color:#fff;}
+.c-10{background:linear-gradient(145deg,#15803d 0%,#14532d 100%);color:#fff;}
+.c-11{background:linear-gradient(145deg,#9333ea 0%,#7e22ce 100%);color:#fff;}
 
-.tile-month{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:18px;font-weight:900;letter-spacing:2px;
-  text-transform:uppercase;line-height:1;
-  position:relative;z-index:1;
-}
-.tile-year{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:9px;font-weight:700;letter-spacing:1.5px;
-  text-transform:uppercase;opacity:.45;
-  margin-top:3px;
-  position:relative;z-index:1;
-}
-.tile-net{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:22px;font-weight:900;letter-spacing:-.5px;
-  line-height:1;
-  font-variant-numeric:tabular-nums;
-  position:relative;z-index:1;
-}
-.tile-meta{
-  display:flex;justify-content:space-between;align-items:center;
-  font-size:9px;font-weight:700;letter-spacing:.4px;
-  text-transform:uppercase;opacity:.6;
-  margin-top:5px;
-  font-variant-numeric:tabular-nums;
-  position:relative;z-index:1;
-}
-
-/* === COLOR PALETTE (one per month, designer-inspired) === */
-.c-jan{background:linear-gradient(145deg,#1e40af 0%,#1e3a8a 100%);color:#fff;}
-.c-feb{background:linear-gradient(145deg,#be123c 0%,#9f1239 100%);color:#fff;}
-.c-mar{background:linear-gradient(145deg,#059669 0%,#047857 100%);color:#fff;}
-.c-apr{background:linear-gradient(145deg,#f59e0b 0%,#d97706 100%);color:#422006;}
-.c-may{background:linear-gradient(145deg,#7c3aed 0%,#6d28d9 100%);color:#fff;}
-.c-jun{background:linear-gradient(145deg,#0891b2 0%,#0e7490 100%);color:#fff;}
-.c-jul{background:linear-gradient(145deg,#db2777 0%,#be185d 100%);color:#fff;}
-.c-aug{background:linear-gradient(145deg,#65a30d 0%,#4d7c0f 100%);color:#fff;}
-.c-sep{background:linear-gradient(145deg,#4f46e5 0%,#3730a3 100%);color:#fff;}
-.c-oct{background:linear-gradient(145deg,#ea580c 0%,#c2410c 100%);color:#fff;}
-.c-nov{background:linear-gradient(145deg,#15803d 0%,#14532d 100%);color:#fff;}
-.c-dec{background:linear-gradient(145deg,#9333ea 0%,#7e22ce 100%);color:#fff;}
-
-.c-apr.tile{color:#1c1917;}
-.c-apr .tile-net{color:#0a0a0a;}
-
-/* Light tile variant for the amber month (April) */
-.tile.c-apr{color:#1c1917;}
-.tile.c-apr .tile-meta{opacity:.55;}
-
-/* Empty tile */
-.tile.empty{
-  background:#141414;
-  border:1px solid #1f1f1f;
-  color:#3a3a3a;
-  box-shadow:none;
-}
+.tile.empty{background:#141414;border:1px solid #1f1f1f;color:#3a3a3a;box-shadow:none;}
 .tile.empty::after{display:none;}
-.tile.empty:active{transform:none;}
 .tile.empty .tile-net{font-size:20px;opacity:.4;}
 
-/* Current month highlight */
-.tile.current{
-  box-shadow:0 0 0 2px rgba(255,255,255,.4), 0 4px 18px rgba(0,0,0,.5);
-}
+.tile.current{box-shadow:0 0 0 2px rgba(255,255,255,.4), 0 4px 18px rgba(0,0,0,.5);}
 
-/* === FULL-SCREEN OVERLAY === */
-.overlay{
-  position:fixed;inset:0;
-  background:#0a0a0a;
-  z-index:100;
-  display:none;
-  flex-direction:column;
-  overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
-}
+/* FULL-SCREEN OVERLAY */
+.overlay{position:fixed;inset:0;background:#0a0a0a;z-index:100;display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .overlay.on{display:flex;}
+.ov-hero{padding:18px 18px 22px;position:relative;overflow:hidden;}
+.ov-hero::after{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none;}
+.ov-back{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);color:#fff;width:36px;height:36px;border-radius:10px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;z-index:1;margin-bottom:14px;}
+.ov-hero.c-3 .ov-back{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.2);color:#1c1917;}
+.ov-month{font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:2px;text-transform:uppercase;line-height:1;position:relative;z-index:1;margin-bottom:2px;}
+.ov-year{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;opacity:.5;text-transform:uppercase;position:relative;z-index:1;margin-bottom:16px;}
+.ov-net-big{font-family:'Barlow Condensed',sans-serif;font-size:44px;font-weight:900;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums;position:relative;z-index:1;margin-bottom:4px;}
+.ov-net-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;opacity:.6;position:relative;z-index:1;}
 
-.ov-hero{
-  padding:22px 18px 20px;
-  position:relative;
-  overflow:hidden;
-}
-.ov-hero::after{
-  content:'';position:absolute;top:-60px;right:-60px;
-  width:220px;height:220px;border-radius:50%;
-  background:rgba(255,255,255,.08);pointer-events:none;
-}
-.ov-back{
-  background:rgba(0,0,0,.3);
-  backdrop-filter:blur(8px);
-  border:1px solid rgba(255,255,255,.15);
-  color:#fff;
-  width:36px;height:36px;border-radius:10px;
-  font-size:18px;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;
-  position:relative;z-index:1;
-  margin-bottom:16px;
-}
-.ov-hero.c-apr .ov-back{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.2);color:#1c1917;}
-
-.ov-month{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:40px;font-weight:900;letter-spacing:2px;
-  text-transform:uppercase;line-height:1;
-  position:relative;z-index:1;
-  margin-bottom:2px;
-}
-.ov-year{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:14px;font-weight:700;letter-spacing:2px;
-  opacity:.5;text-transform:uppercase;
-  position:relative;z-index:1;
-  margin-bottom:18px;
-}
-.ov-net-big{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:48px;font-weight:900;letter-spacing:-1.5px;
-  line-height:1;font-variant-numeric:tabular-nums;
-  position:relative;z-index:1;
-  margin-bottom:4px;
-}
-.ov-net-label{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:11px;font-weight:800;letter-spacing:2.5px;
-  text-transform:uppercase;opacity:.6;
-  position:relative;z-index:1;
-}
-
-.ov-body{
-  padding:16px 14px 80px;
-  flex:1;
-  max-width:420px;
-  margin:0 auto;
-  width:100%;
-  background:#0a0a0a;
-}
+.ov-body{padding:16px 14px 80px;flex:1;max-width:420px;margin:0 auto;width:100%;background:#0a0a0a;}
 
 /* Section card */
-.ov-section{
-  background:#141414;
-  border:1px solid #1f1f1f;
-  border-radius:14px;
-  overflow:hidden;
-  margin-bottom:12px;
-}
-.ov-section-head{
-  padding:11px 14px 9px;
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:11px;font-weight:900;letter-spacing:2px;
-  text-transform:uppercase;
-  color:#888;
-  border-bottom:1px solid #1a1a1a;
-  background:#101010;
-}
-.ov-section-head .head-total{
-  float:right;
-  font-size:13px;font-weight:800;
-  color:#fff;font-variant-numeric:tabular-nums;
-  letter-spacing:-.2px;
-}
+.ov-section{background:#141414;border:1px solid #1f1f1f;border-radius:14px;overflow:hidden;margin-bottom:12px;}
+.ov-section-head{padding:11px 14px 9px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#888;border-bottom:1px solid #1a1a1a;background:#101010;display:flex;justify-content:space-between;align-items:center;}
+.ov-section-head .head-total{font-size:13px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:-.2px;text-transform:none;}
 
-.ov-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 14px;min-height:44px;gap:10px;
-}
+.ov-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;min-height:44px;gap:10px;}
 .ov-row + .ov-row{border-top:1px solid #1a1a1a;}
-.ov-label{font-size:14px;color:#d4d4d4;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ov-label{font-size:14px;color:#d4d4d4;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.ov-label .lock{font-size:10px;opacity:.5;}
 .ov-val{font-size:15px;color:#fff;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0;cursor:pointer;letter-spacing:-.2px;}
+.ov-val.formula{color:#a3a3a3;cursor:not-allowed;}
 
 .ov-row.revenue .ov-label{color:#7dd3fc;}
 .ov-row.revenue .ov-val{color:#93c5fd;}
+.ov-row.subtotal{background:#0f0f0f;border-top:1px solid #1f1f1f;}
+.ov-row.subtotal .ov-label{color:#fff;font-weight:800;text-transform:uppercase;font-size:13px;letter-spacing:.6px;}
+.ov-row.subtotal .ov-val{color:#fff;font-weight:900;font-size:16px;}
 
-.ov-profit-card{
-  background:linear-gradient(135deg,#064e3b 0%,#065f46 100%);
-  border-radius:14px;
-  padding:20px 20px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  margin-bottom:12px;
-}
+.ov-profit-card{background:linear-gradient(135deg,#064e3b 0%,#065f46 100%);border-radius:14px;padding:20px 20px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
 .ov-profit-card.neg{background:linear-gradient(135deg,#7f1d1d 0%,#991b1b 100%);}
-.ov-profit-label{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:12px;font-weight:900;letter-spacing:2.5px;
-  color:rgba(255,255,255,.7);
-  text-transform:uppercase;
-}
-.ov-profit-val{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:38px;font-weight:900;letter-spacing:-1px;
-  color:#fff;
-  font-variant-numeric:tabular-nums;
-  line-height:1;
-  cursor:pointer;
-}
+.ov-profit-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:900;letter-spacing:2.5px;color:rgba(255,255,255,.7);text-transform:uppercase;}
+.ov-profit-val{font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:-1px;color:#fff;font-variant-numeric:tabular-nums;line-height:1;}
 
 .has-note{text-decoration:underline dotted currentColor;text-underline-offset:3px;}
 
-/* === YEARLY SUMMARY === */
-.ys{
-  background:#141414;
-  border:1px solid #1f1f1f;
-  border-radius:16px;
-  overflow:hidden;
-  margin-top:22px;
-}
+/* YEARLY SUMMARY */
+.ys{background:#141414;border:1px solid #1f1f1f;border-radius:16px;overflow:hidden;margin-top:22px;}
 .ys-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px 11px;background:#101010;border-bottom:1px solid #1f1f1f;}
 .ys-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:2px;color:#fff;text-transform:uppercase;}
 .ys-year-chip{font-size:11px;font-weight:700;color:#34d399;background:rgba(16,185,129,.12);padding:3px 9px;border-radius:6px;font-variant-numeric:tabular-nums;border:1px solid rgba(16,185,129,.22);}
@@ -317,89 +136,23 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
 .ys-row.year .ys-bar-wrap{height:7px;}
 .ys-bar{height:100%;border-radius:3px;}
 .ys-bar.pos{background:linear-gradient(to right,#059669,#10b981,#34d399);}
+.ys-bar.neg{background:linear-gradient(to right,#b91c1c,#f87171);}
+.ys-avg{margin-top:5px;text-align:right;font-size:10px;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.3px;}
 
 .note-banner{margin-bottom:12px;padding:9px 12px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;font-size:11px;color:#93c5fd;text-align:center;letter-spacing:.3px;}
 </style>
 </head>
 <body>
 
-<div class="note-banner">🎨 Color tile design · tap a month</div>
+<div class="note-banner">🔴 LIVE · pulling from DeBary Google Sheet · formulas locked 🔒</div>
 
 <div class="loc-tabs">
-  <div class="loc-tab on">DeBary</div>
-  <div class="loc-tab">DeLand</div>
+  <div class="loc-tab on" id="loc-debary" onclick="switchLoc('DeBary')">DeBary</div>
+  <div class="loc-tab" id="loc-deland" onclick="switchLoc('DeLand')">DeLand</div>
 </div>
 
-<!-- HERO -->
-<div class="hero">
-  <div class="hero-top">
-    <div>
-      <div class="hero-label">YTD · Net Profit</div>
-      <div class="hero-num">$60,810</div>
-    </div>
-    <div class="hero-delta">↑ 14.2%</div>
-  </div>
-  <div class="spark" id="sparkBars"></div>
-</div>
-
-<!-- Q1 -->
-<div class="section-head">
-  <div class="section-head-line"></div>
-  <div class="section-head-label">Q1 · Jan – Mar</div>
-  <div class="section-head-line"></div>
-</div>
-<div class="tile-grid" id="q1"></div>
-
-<!-- Q2 -->
-<div class="section-head">
-  <div class="section-head-line"></div>
-  <div class="section-head-label">Q2 · Apr – Jun</div>
-  <div class="section-head-line"></div>
-</div>
-<div class="tile-grid" id="q2"></div>
-
-<!-- Q3 -->
-<div class="section-head">
-  <div class="section-head-line"></div>
-  <div class="section-head-label">Q3 · Jul – Sep</div>
-  <div class="section-head-line"></div>
-</div>
-<div class="tile-grid" id="q3"></div>
-
-<!-- Q4 -->
-<div class="section-head">
-  <div class="section-head-line"></div>
-  <div class="section-head-label">Q4 · Oct – Dec</div>
-  <div class="section-head-line"></div>
-</div>
-<div class="tile-grid" id="q4"></div>
-
-<!-- YEARLY SUMMARY -->
-<div class="ys">
-  <div class="ys-head">
-    <div class="ys-title">Yearly Summary</div>
-    <div class="ys-year-chip">2026</div>
-  </div>
-  <div class="ys-row">
-    <div class="ys-top"><span class="ys-month">Jan</span><span class="ys-profit pos">$14,200</span></div>
-    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:82%;"></div></div>
-  </div>
-  <div class="ys-row">
-    <div class="ys-top"><span class="ys-month">Feb</span><span class="ys-profit pos">$16,880</span></div>
-    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:97%;"></div></div>
-  </div>
-  <div class="ys-row">
-    <div class="ys-top"><span class="ys-month">Mar</span><span class="ys-profit pos">$17,240</span></div>
-    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:100%;"></div></div>
-  </div>
-  <div class="ys-row">
-    <div class="ys-top"><span class="ys-month">Apr</span><span class="ys-profit pos">$12,490</span></div>
-    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:72%;"></div></div>
-  </div>
-  <div class="ys-row year">
-    <div class="ys-top"><span class="ys-month">Year Total</span><span class="ys-profit pos">$60,810</span></div>
-    <div class="ys-bar-wrap"><div class="ys-bar pos" style="width:100%;"></div></div>
-  </div>
+<div id="root">
+  <div class="loading"><div class="spinner"></div>Loading live profit data...</div>
 </div>
 
 <!-- FULL-SCREEN DETAIL OVERLAY -->
@@ -415,138 +168,258 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
 </div>
 
 <script>
-var PALETTE=['c-jan','c-feb','c-mar','c-apr','c-may','c-jun','c-jul','c-aug','c-sep','c-oct','c-nov','c-dec'];
+var SHEETS_URL='https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec';
+var SHEETS_SECRET='cf-sync-2026';
+var _loc='DeBary';
+var _data=null;
+var _currentMonthIdx=new Date().getMonth(); // 0=Jan … 11=Dec
 
-var MONTHS=[
-  {name:'JAN',idx:0,data:makeMonth(42100,8500,2100, 4800,1420,680,  18200,5600,2400,1500)},
-  {name:'FEB',idx:1,data:makeMonth(48220,12000,1850, 4800,1420,720, 19800,7450,2600,1500)},
-  {name:'MAR',idx:2,data:makeMonth(51800,14500,2400, 4800,1420,590, 21400,8900,2800,1500)},
-  {name:'APR',idx:3,data:makeMonth(44900,6200,1200,  4800,1420,640, 17900,6200,2200,1500), current:true},
-  {name:'MAY',idx:4,data:null},
-  {name:'JUN',idx:5,data:null},
-  {name:'JUL',idx:6,data:null},
-  {name:'AUG',idx:7,data:null},
-  {name:'SEP',idx:8,data:null},
-  {name:'OCT',idx:9,data:null},
-  {name:'NOV',idx:10,data:null},
-  {name:'DEC',idx:11,data:null}
-];
+function fmt(n){if(n==null||isNaN(n))return '—';return (n<0?'-$':'+$')+Math.abs(Math.round(n)).toLocaleString();}
+function fmtPlain(n){if(n==null||isNaN(n))return '—';return '$'+Math.abs(Math.round(n)).toLocaleString();}
+function fmtShort(n){if(n==null||isNaN(n))return '';if(n>=1000)return '$'+(n/1000).toFixed(1).replace('.0','')+'k';return '$'+Math.round(n);}
 
-function makeMonth(pay,cash,extra, rent,ins,util, payroll,parts,ad,gps){
-  var rev=pay+cash+extra;
-  var core=rent+ins+util;
-  var varBills=payroll+parts+ad+gps;
-  var totalBills=core+varBills;
-  var net=rev-totalBills;
-  return {pay:pay,cash:cash,extra:extra,rent:rent,ins:ins,util:util,payroll:payroll,parts:parts,ad:ad,gps:gps,rev:rev,core:core,varBills:varBills,totalBills:totalBills,net:net};
+// Pull net profit from summary if present, else compute from items
+function computeMonthNet(mo, summary, monthIdx){
+  // Prefer the sheet's summary value
+  var monthFull=['January','February','March','April','May','June','July','August','September','October','November','December'][monthIdx];
+  if(summary){
+    for(var i=0;i<summary.length;i++){
+      if((summary[i].month||'').toLowerCase()===monthFull.toLowerCase()) return summary[i].profit;
+    }
+  }
+  // Fallback: compute from items — sum labels 'Payments','Cash Sales' minus 'Total Bills'
+  var pay=0,cash=0,total=0;
+  for(var i=0;i<mo.items.length;i++){
+    var it=mo.items[i];var L=(it.label||'').toLowerCase();
+    if(L==='payments')pay=it.value;
+    else if(L==='cash sales')cash=it.value;
+    else if(L==='total bills')total=it.value;
+  }
+  return pay+cash-total;
 }
 
-function fmt(n){if(n==null)return'—';return (n<0?'-$':'+$')+Math.abs(n).toLocaleString();}
-function fmtPlain(n){return '$'+Math.abs(n).toLocaleString();}
-function fmtShort(n){
-  if(n>=1000){return '$'+(n/1000).toFixed(1).replace('.0','')+'k';}
-  return '$'+n;
+// Check if a month has any data (non-zero total bills or revenue)
+function monthHasData(mo){
+  for(var i=0;i<mo.items.length;i++){
+    var L=(mo.items[i].label||'').toLowerCase();
+    var v=mo.items[i].value;
+    if((L==='payments'||L==='cash sales'||L==='total bills')&&v!==0)return true;
+  }
+  return false;
 }
 
-// Render tiles
-function renderTiles(){
-  var quarters=[['q1',0],['q2',3],['q3',6],['q4',9]];
-  quarters.forEach(function(q){
-    var el=document.getElementById(q[0]);
-    var start=q[1];
-    var h='';
-    for(var i=start;i<start+3;i++){
-      var m=MONTHS[i];
-      var color=PALETTE[i];
-      if(!m.data){
-        h+='<div class="tile empty">'+
-          '<div>'+
-            '<div class="tile-month">'+m.name+'</div>'+
-            '<div class="tile-year">2026</div>'+
-          '</div>'+
-          '<div class="tile-net">—</div>'+
-          '</div>';
+function fetchProfit(){
+  var root=document.getElementById('root');
+  root.innerHTML='<div class="loading"><div class="spinner"></div>Loading '+_loc+'…</div>';
+  fetch(SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:SHEETS_SECRET,action:'read_profit',location:_loc})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){root.innerHTML='<div class="loading">Error: '+(d.error||'unknown')+'</div>';return;}
+      _data=d;
+      render();
+    })
+    .catch(function(e){root.innerHTML='<div class="loading">Fetch error: '+e.message+'</div>';});
+}
+
+function switchLoc(loc){
+  if(loc===_loc)return;
+  _loc=loc;
+  document.getElementById('loc-debary').classList.toggle('on',loc==='DeBary');
+  document.getElementById('loc-deland').classList.toggle('on',loc==='DeLand');
+  fetchProfit();
+}
+
+function render(){
+  var root=document.getElementById('root');
+  var months=_data.months||[];
+  var summary=_data.summary||[];
+
+  // YTD hero: sum nets for months that have data
+  var ytdNet=0;
+  var monthNets=[];
+  for(var i=0;i<months.length;i++){
+    var n=computeMonthNet(months[i],summary,i);
+    monthNets.push(n);
+    if(monthHasData(months[i])) ytdNet+=n;
+  }
+
+  var html='';
+
+  // HERO
+  html+='<div class="hero">';
+  html+='<div class="hero-top">';
+  html+='<div><div class="hero-label">YTD · Net Profit</div>';
+  html+='<div class="hero-num">'+fmt(ytdNet)+'</div></div>';
+  html+='</div>';
+  html+='<div class="spark">';
+  var absMax=0;monthNets.forEach(function(v){if(Math.abs(v)>absMax)absMax=Math.abs(v);});
+  for(var i=0;i<12;i++){
+    var v=monthNets[i];var has=monthHasData(months[i]);
+    var cls='spark-bar';
+    if(has){cls+=v>=0?' pos':' neg';}
+    if(i===_currentMonthIdx)cls+=' current';
+    var h=has&&absMax>0?Math.max(3,Math.abs(v)/absMax*100)+'%':'3px';
+    html+='<div class="'+cls+'" style="height:'+h+';"></div>';
+  }
+  html+='</div>';
+  html+='</div>';
+
+  // Tile grid — 3 columns, 4 rows (quarters)
+  for(var q=0;q<4;q++){
+    var qStart=q*3;
+    var qNames=['Q1 · Jan – Mar','Q2 · Apr – Jun','Q3 · Jul – Sep','Q4 · Oct – Dec'][q];
+    html+='<div class="section-head"><div class="section-head-line"></div><div class="section-head-label">'+qNames+'</div><div class="section-head-line"></div></div>';
+    html+='<div class="tile-grid">';
+    for(var mi=qStart;mi<qStart+3;mi++){
+      var mo=months[mi];
+      if(!mo){continue;}
+      var has=monthHasData(mo);
+      var net=monthNets[mi];
+      var mName=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][mi];
+      if(!has){
+        html+='<div class="tile empty"><div><div class="tile-month">'+mName+'</div><div class="tile-year">2026</div></div><div class="tile-net">—</div></div>';
       }else{
-        var cur=m.current?' current':'';
-        h+='<div class="tile '+color+cur+'" onclick="openOverlay('+i+')">'+
-          '<div>'+
-            '<div class="tile-month">'+m.name+'</div>'+
-            '<div class="tile-year">2026</div>'+
-          '</div>'+
-          '<div>'+
-            '<div class="tile-net">'+fmt(m.data.net)+'</div>'+
-            '<div class="tile-meta"><span>rev '+fmtShort(m.data.rev)+'</span><span>bills '+fmtShort(m.data.totalBills)+'</span></div>'+
-          '</div>'+
-          '</div>';
+        var color='c-'+mi;
+        var cur=mi===_currentMonthIdx?' current':'';
+        // Find rev and bills for the meta line
+        var pay=0,cash=0,totalB=0;
+        for(var k=0;k<mo.items.length;k++){
+          var L=(mo.items[k].label||'').toLowerCase();
+          if(L==='payments')pay=mo.items[k].value;
+          else if(L==='cash sales')cash=mo.items[k].value;
+          else if(L==='total bills')totalB=mo.items[k].value;
+        }
+        var rev=pay+cash;
+        html+='<div class="tile '+color+cur+'" onclick="openOverlay('+mi+')">';
+        html+='<div><div class="tile-month">'+mName+'</div><div class="tile-year">2026</div></div>';
+        html+='<div><div class="tile-net">'+fmt(net)+'</div>';
+        html+='<div class="tile-meta"><span>rev '+fmtShort(rev)+'</span><span>bills '+fmtShort(totalB)+'</span></div>';
+        html+='</div></div>';
       }
     }
-    el.innerHTML=h;
-  });
+    html+='</div>';
+  }
+
+  // Yearly Summary (from sheet summary section)
+  if(summary.length){
+    var maxP=0;summary.forEach(function(s){if(Math.abs(s.profit||0)>maxP)maxP=Math.abs(s.profit);});
+    html+='<div class="ys">';
+    html+='<div class="ys-head"><div class="ys-title">Yearly Summary</div><div class="ys-year-chip">2026</div></div>';
+    for(var s=0;s<summary.length;s++){
+      var sr=summary[s];
+      var pos=sr.profit>=0;
+      var pct=maxP>0?Math.min(100,Math.abs(sr.profit)/maxP*100):0;
+      var isYear=(sr.month||'').toLowerCase().indexOf('year')!==-1;
+      html+='<div class="ys-row'+(isYear?' year':'')+'">';
+      html+='<div class="ys-top"><span class="ys-month">'+sr.month+'</span><span class="ys-profit '+(pos?'pos':'neg')+'">'+(pos?'+$':'-$')+Math.abs(Math.round(sr.profit)).toLocaleString()+'</span></div>';
+      html+='<div class="ys-bar-wrap"><div class="ys-bar '+(pos?'pos':'neg')+'" style="width:'+pct+'%;"></div></div>';
+      if(sr.avg)html+='<div class="ys-avg">avg $'+Math.round(sr.avg).toLocaleString()+'</div>';
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+
+  root.innerHTML=html;
 }
 
-// Overlay
 function openOverlay(idx){
-  var m=MONTHS[idx];
-  if(!m.data)return;
-  var color=PALETTE[idx];
+  var mo=_data.months[idx];
+  if(!mo)return;
+  var color='c-'+idx;
+  var mName=['January','February','March','April','May','June','July','August','September','October','November','December'][idx];
+  var net=computeMonthNet(mo,_data.summary,idx);
+
   var heroEl=document.getElementById('ov-hero');
   heroEl.className='ov-hero '+color;
-  document.getElementById('ov-month').textContent=m.name+' 2026'.substring(0,0) + m.name;
-  document.getElementById('ov-month').textContent=m.name;
+  document.getElementById('ov-month').textContent=mName;
   document.getElementById('ov-year').textContent='2026';
-  document.getElementById('ov-net').textContent=fmt(m.data.net);
+  document.getElementById('ov-net').textContent=fmt(net);
 
+  // Build grouped sections from sheet order. Sheet layout:
+  //   rows 2-13: Fixed Bills
+  //   row 14:    Core Bills (subtotal, formula)
+  //   rows 15-19: Variable
+  //   row 20:    Total Bills (subtotal, formula)
+  //   row 21:    Payments
+  //   row 22:    Cash Sales
   var h='';
-  h+='<div class="ov-section">';
-  h+='<div class="ov-section-head">Revenue<span class="head-total">'+fmtPlain(m.data.rev)+'</span></div>';
-  h+='<div class="ov-row revenue"><span class="ov-label">Payments</span><span class="ov-val">'+fmtPlain(m.data.pay)+'</span></div>';
-  h+='<div class="ov-row revenue"><span class="ov-label">Cash Sales</span><span class="ov-val">'+fmtPlain(m.data.cash)+'</span></div>';
-  h+='<div class="ov-row revenue"><span class="ov-label">Extras</span><span class="ov-val">'+fmtPlain(m.data.extra)+'</span></div>';
-  h+='</div>';
+  // Collect by row grouping
+  var fixed=[],variable=[],revenue=[],coreBills=null,totalBills=null;
+  for(var i=0;i<mo.items.length;i++){
+    var it=mo.items[i];
+    var L=(it.label||'').toLowerCase();
+    var offset=(it.row-2)%23; // approx row-in-block, 0..20
+    // Identify by label directly (more reliable than row math across blocks)
+    if(L==='core bills')coreBills=it;
+    else if(L==='total bills')totalBills=it;
+    else if(L==='payments'||L==='cash sales')revenue.push(it);
+    else{
+      // Decide fixed vs variable by whether it's above or below Core Bills
+      // Items we know are variable: Costs, Credits, Dealer Sign, Clover, Carpay
+      if(L==='costs'||L==='credits'||L==='dealer sign'||L==='clover'||L==='carpay')variable.push(it);
+      else fixed.push(it);
+    }
+  }
 
-  h+='<div class="ov-section">';
-  h+='<div class="ov-section-head">Core Bills<span class="head-total">'+fmtPlain(m.data.core)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Rent</span><span class="ov-val has-note">'+fmtPlain(m.data.rent)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Insurance</span><span class="ov-val">'+fmtPlain(m.data.ins)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Utilities</span><span class="ov-val has-note">'+fmtPlain(m.data.util)+'</span></div>';
-  h+='</div>';
+  function rowHtml(it, revenueStyle){
+    var cls='ov-row';
+    if(revenueStyle)cls+=' revenue';
+    var valCls='ov-val';
+    if(it.isFormula)valCls+=' formula';
+    var lockIcon=it.isFormula?'<span class="lock" title="Formula: '+(it.formula||'').replace(/"/g,'&quot;')+'">🔒</span>':'';
+    var noteHas=it.note||it.labelNote;
+    var valStr=fmtPlain(it.value);
+    var noteCls=noteHas?' has-note':'';
+    return '<div class="'+cls+'"><span class="ov-label">'+it.label+lockIcon+'</span><span class="'+valCls+noteCls+'">'+valStr+'</span></div>';
+  }
 
-  h+='<div class="ov-section">';
-  h+='<div class="ov-section-head">Variable<span class="head-total">'+fmtPlain(m.data.varBills)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Payroll</span><span class="ov-val has-note">'+fmtPlain(m.data.payroll)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Parts & Repair</span><span class="ov-val has-note">'+fmtPlain(m.data.parts)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">Advertising</span><span class="ov-val">'+fmtPlain(m.data.ad)+'</span></div>';
-  h+='<div class="ov-row"><span class="ov-label">GPS / Fees</span><span class="ov-val">'+fmtPlain(m.data.gps)+'</span></div>';
-  h+='</div>';
+  // Revenue
+  if(revenue.length){
+    var rT=0;revenue.forEach(function(it){rT+=it.value;});
+    h+='<div class="ov-section"><div class="ov-section-head">Revenue<span class="head-total">'+fmtPlain(rT)+'</span></div>';
+    revenue.forEach(function(it){h+=rowHtml(it,true);});
+    h+='</div>';
+  }
 
-  var pc=m.data.net>=0?'':' neg';
+  // Core Bills (fixed items + subtotal)
+  if(fixed.length||coreBills){
+    h+='<div class="ov-section"><div class="ov-section-head">Core Bills'+(coreBills?'<span class="head-total">'+fmtPlain(coreBills.value)+'</span>':'')+'</div>';
+    fixed.forEach(function(it){h+=rowHtml(it,false);});
+    if(coreBills){
+      var subCls='ov-val';if(coreBills.isFormula)subCls+=' formula';
+      var lockIcon=coreBills.isFormula?'<span class="lock">🔒</span>':'';
+      h+='<div class="ov-row subtotal"><span class="ov-label">'+coreBills.label+lockIcon+'</span><span class="'+subCls+'">'+fmtPlain(coreBills.value)+'</span></div>';
+    }
+    h+='</div>';
+  }
+
+  // Variable + Total Bills
+  if(variable.length||totalBills){
+    h+='<div class="ov-section"><div class="ov-section-head">Variable'+(totalBills?'<span class="head-total">total bills '+fmtPlain(totalBills.value)+'</span>':'')+'</div>';
+    variable.forEach(function(it){h+=rowHtml(it,false);});
+    if(totalBills){
+      var subCls='ov-val';if(totalBills.isFormula)subCls+=' formula';
+      var lockIcon=totalBills.isFormula?'<span class="lock">🔒</span>':'';
+      h+='<div class="ov-row subtotal"><span class="ov-label">'+totalBills.label+lockIcon+'</span><span class="'+subCls+'">'+fmtPlain(totalBills.value)+'</span></div>';
+    }
+    h+='</div>';
+  }
+
+  // Net Profit card
+  var pc=net>=0?'':' neg';
   h+='<div class="ov-profit-card'+pc+'">';
-  h+='<div class="ov-profit-label">Net Profit</div>';
-  h+='<div class="ov-profit-val">'+fmt(m.data.net)+'</div>';
+  h+='<div class="ov-profit-label">Net Profit · computed</div>';
+  h+='<div class="ov-profit-val">'+fmt(net)+'</div>';
   h+='</div>';
 
   document.getElementById('ov-body').innerHTML=h;
   document.getElementById('ov').classList.add('on');
   window.scrollTo(0,0);
 }
+
 function closeOverlay(){document.getElementById('ov').classList.remove('on');}
 
-// Sparkline
-(function(){
-  var values=[14200,16880,17240,12490,0,0,0,0,0,0,0,0];
-  var maxVal=Math.max.apply(null,values.filter(function(v){return v!==0;}));
-  var bars=document.getElementById('sparkBars');
-  for(var i=0;i<12;i++){
-    var b=document.createElement('div');
-    b.className='spark-bar';
-    if(values[i]>0){b.classList.add('pos');b.style.height=Math.max(3,values[i]/maxVal*100)+'%';}
-    else{b.style.height='3px';}
-    if(i===3)b.classList.add('current');
-    bars.appendChild(b);
-  }
-})();
-
-renderTiles();
+fetchProfit();
 </script>
 
 </body>

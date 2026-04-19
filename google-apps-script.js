@@ -792,16 +792,30 @@ function _handleProfitAction(action, location, data) {
         var monthData = { name: monthNames[monthIdx], items: [] };
         for (var row = 1; row < BLOCK_ROWS; row++) {
           var r = blockStart + row;
-          var label = String(sheet.getRange(r, labelCol).getValue()).trim();
-          var rawVal = sheet.getRange(r, valueCol).getValue();
-          var note = sheet.getRange(r, valueCol).getNote() || '';
-          var labelNote = sheet.getRange(r, labelCol).getNote() || '';
+          var labelCell = sheet.getRange(r, labelCol);
+          var valueCell = sheet.getRange(r, valueCol);
+          var label = String(labelCell.getValue()).trim();
+          var rawVal = valueCell.getValue();
+          var formula = valueCell.getFormula() || '';
+          var note = valueCell.getNote() || '';
+          var labelNote = labelCell.getNote() || '';
+          var displayValue = valueCell.getDisplayValue() || '';
           var val = 0;
           if (rawVal !== '' && rawVal !== null) {
             val = parseFloat(String(rawVal).replace(/[$,]/g, '')) || 0;
           }
-          if (label || val || note || labelNote) {
-            monthData.items.push({ label: label, value: val, note: note || labelNote, row: r, col: valueCol });
+          if (label || val || note || labelNote || formula) {
+            monthData.items.push({
+              label: label,
+              value: val,
+              displayValue: displayValue,
+              note: note,
+              labelNote: labelNote,
+              formula: formula,
+              isFormula: !!formula,
+              row: r,
+              col: valueCol
+            });
           }
         }
         months.push(monthData);
@@ -836,8 +850,13 @@ function _handleProfitAction(action, location, data) {
     var note = data.note;
 
     if (row > 0 && col > 0) {
-      PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
       var cell = sheet.getRange(row, col);
+      // Protect formula cells — refuse to overwrite value; notes still allowed
+      var existingFormula = cell.getFormula() || '';
+      if (val !== undefined && val !== null && existingFormula) {
+        return jsonResponse({ ok: false, error: 'formula_protected', formula: existingFormula, row: row, col: col });
+      }
+      PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
       if (val !== undefined && val !== null) {
         var numVal = parseFloat(String(val).replace(/[$,]/g, '')) || 0;
         cell.setValue(numVal);
