@@ -19311,15 +19311,31 @@ function profitRender(){
   if(!months.length){body.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No data</div>';return;}
 
   var html='';
-  // Render 3 blocks of 4 months
+  // Helper — pull a month's Net Profit for the header mini-stat
+  function _prMNet(mo){
+    for(var k=0;k<mo.items.length;k++){if(mo.items[k].label==='Net Profit')return mo.items[k].value||0;}
+    return 0;
+  }
+
+  // Render 3 quarter cards of 4 months each
   for(var block=0;block<3;block++){
     var blockMonths=months.slice(block*4,(block+1)*4);
     if(!blockMonths.length)continue;
 
-    // Month headers
-    html+='<div style="display:flex;gap:1px;margin-top:'+(block>0?'16px':'8px')+';background:#111;">';
+    // Quarter card wrapper
+    html+='<div style="margin-top:'+(block>0?'18px':'10px')+';background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;overflow:hidden;">';
+
+    // Month headers — month name + net profit mini-stat
+    html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#000;border-bottom:1px solid #1a1a1a;">';
     for(var m=0;m<blockMonths.length;m++){
-      html+='<div style="flex:1;padding:8px 4px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;color:#4ade80;background:#0a0a0a;text-transform:uppercase;">'+blockMonths[m].name+'</div>';
+      var _moh=blockMonths[m];
+      var _moNet=_prMNet(_moh);
+      var _moNetColor=_moNet>=0?'#4ade80':'#f87171';
+      var _hSep=m<3?'border-right:1px solid #151515;':'';
+      html+='<div style="padding:11px 4px 9px;text-align:center;'+_hSep+'">'+
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:900;letter-spacing:1.2px;color:#fff;text-transform:uppercase;line-height:1;">'+_moh.name+'</div>'+
+        '<div style="margin-top:5px;font-size:10px;font-weight:700;color:'+_moNetColor+';font-variant-numeric:tabular-nums;letter-spacing:.2px;">'+(_moNet>=0?'+$':'-$')+Math.abs(_moNet).toLocaleString()+'</div>'+
+        '</div>';
     }
     html+='</div>';
 
@@ -19329,12 +19345,13 @@ function profitRender(){
 
     // Render rows — each row shows the same item index across all 4 months
     for(var i=0;i<maxItems;i++){
-      html+='<div style="display:flex;gap:1px;background:#111;">';
+      html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);">';
       for(var m=0;m<blockMonths.length;m++){
         var item=blockMonths[m].items[i];
         var mIdx=block*4+m;
+        var _cSep=m<3?'border-right:1px solid #111;':'';
         if(!item){
-          html+='<div style="flex:1;background:#0a0a0a;padding:4px;min-height:24px;"></div>';
+          html+='<div style="padding:5px 7px;min-height:28px;background:#0a0a0a;'+_cSep+'border-top:1px solid #0d0d0d;"></div>';
           continue;
         }
         var label=item.label||'';
@@ -19343,40 +19360,80 @@ function profitRender(){
         var isSubtotal=label==='Core Bills'||label==='Total Bills';
         var isProfit=label==='Net Profit';
         var isRevenue=label==='Payments'||label==='Cash Sales'||label==='Extras';
-        var bgColor=isSubtotal?'#111':isProfit?'#0d1a0d':'#0a0a0a';
-        var labelColor=isSubtotal||isProfit?'#fff':'#888';
-        var valColor=isProfit?(val>=0?'#4ade80':'#f87171'):isRevenue?'#60a5fa':'#fff';
-        var fontWeight=isSubtotal||isProfit?'700':'400';
-        var hasNote=note&&note.trim().length>0;
 
-        html+='<div style="flex:1;background:'+bgColor+';padding:3px 6px;display:flex;justify-content:space-between;align-items:center;min-height:24px;border-bottom:1px solid #111;">';
-        html+='<span style="font-size:10px;color:'+labelColor+';font-weight:'+fontWeight+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;">'+label+'</span>';
-        var valStr=val?'$'+Math.abs(val).toLocaleString():'';
+        // Color + background system
+        var bgColor='#0a0a0a';
+        var labelColor='#777';
+        var valColor='#d4d4d4';
+        var fontWeight='500';
+        var rowBorder='border-top:1px solid #0d0d0d;';
+        var upcase='';
+
+        if(isProfit){
+          bgColor=val>=0?'rgba(74,222,128,.13)':'rgba(248,113,113,.13)';
+          labelColor=val>=0?'#86efac':'#fca5a5';
+          valColor=val>=0?'#4ade80':'#f87171';
+          fontWeight='800';
+          rowBorder='border-top:1px solid #222;';
+          upcase='text-transform:uppercase;letter-spacing:.5px;';
+        } else if(isSubtotal){
+          bgColor='#0f0f0f';
+          labelColor='#bbb';
+          valColor='#fff';
+          fontWeight='700';
+          rowBorder='border-top:1px solid #1c1c1c;';
+          upcase='text-transform:uppercase;letter-spacing:.4px;';
+        } else if(isRevenue){
+          labelColor='#60a5fa';
+          valColor='#93c5fd';
+          fontWeight='600';
+        }
+
+        var hasNote=note&&note.trim().length>0;
+        var valStr=val?'$'+Math.abs(val).toLocaleString():'—';
         if(val<0)valStr='-'+valStr;
         var clickAction=hasNote?'profitShowNote('+mIdx+','+i+')':'profitEditStart('+mIdx+','+i+')';
-        html+='<span onclick="'+clickAction+'" style="font-size:11px;color:'+valColor+';font-weight:'+fontWeight+';cursor:pointer;'+(hasNote?'text-decoration:underline dotted #555;':'')+'">'+valStr+'</span>';
+
+        html+='<div style="padding:6px 7px;min-height:28px;background:'+bgColor+';'+_cSep+rowBorder+'display:flex;justify-content:space-between;align-items:center;gap:4px;">';
+        html+='<span style="font-size:10.5px;color:'+labelColor+';font-weight:'+fontWeight+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;'+upcase+'">'+label+'</span>';
+        html+='<span onclick="'+clickAction+'" style="font-size:11.5px;color:'+valColor+';font-weight:'+fontWeight+';cursor:pointer;font-variant-numeric:tabular-nums;flex-shrink:0;'+(hasNote?'text-decoration:underline dotted '+valColor+';text-underline-offset:2px;':'')+'">'+valStr+'</span>';
         html+='</div>';
       }
       html+='</div>';
     }
+
+    html+='</div>'; // /quarter card
   }
 
-  // Yearly summary table
+  // Yearly summary — visual bar list
   if(summary.length){
-    html+='<div style="margin-top:20px;border:1px solid #222;border-radius:10px;overflow:hidden;">';
-    html+='<div style="display:flex;background:#111;padding:8px;">';
-    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;">Month</div>';
-    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;text-align:right;">Profit</div>';
-    html+='<div style="flex:2;font-size:11px;font-weight:700;color:#888;text-align:right;">Average</div>';
+    var _maxProfit=0;
+    for(var s=0;s<summary.length;s++){if(Math.abs(summary[s].profit||0)>_maxProfit)_maxProfit=Math.abs(summary[s].profit);}
+
+    html+='<div style="margin-top:22px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;overflow:hidden;">';
+    html+='<div style="padding:12px 16px 10px;border-bottom:1px solid #1a1a1a;background:#000;">';
+    html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:900;letter-spacing:1.5px;color:#fff;text-transform:uppercase;">Yearly Summary</div>';
     html+='</div>';
+
     for(var s=0;s<summary.length;s++){
       var sr=summary[s];
       var pColor=sr.profit>=0?'#4ade80':'#f87171';
-      var isYearly=sr.month.toLowerCase().indexOf('year')!==-1;
-      html+='<div style="display:flex;padding:6px 8px;border-top:1px solid #111;'+(isYearly?'background:#111;font-weight:700;':'')+'">';
-      html+='<div style="flex:2;font-size:12px;color:#ccc;">'+sr.month+'</div>';
-      html+='<div style="flex:2;font-size:12px;color:'+pColor+';text-align:right;">'+(sr.profit>=0?'$':'-$')+Math.abs(sr.profit).toLocaleString()+'</div>';
-      html+='<div style="flex:2;font-size:12px;color:#888;text-align:right;">$'+sr.avg.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
+      var isYearly=(sr.month||'').toLowerCase().indexOf('year')!==-1;
+      var barPct=_maxProfit>0?Math.min(100,Math.abs(sr.profit||0)/_maxProfit*100):0;
+
+      html+='<div style="padding:'+(isYearly?'12':'9')+'px 16px;'+(isYearly?'background:rgba(74,222,128,.05);':'')+(s>0?'border-top:1px solid #111;':'')+'">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:10px;">';
+      html+='<span style="font-size:'+(isYearly?'13':'12')+'px;font-weight:'+(isYearly?'900':'700')+';color:'+(isYearly?'#fff':'#ccc')+';text-transform:uppercase;letter-spacing:'+(isYearly?'1.2':'.5')+'px;'+(isYearly?'font-family:\'Barlow Condensed\',sans-serif;':'')+'">'+(sr.month||'')+'</span>';
+      html+='<span style="font-size:'+(isYearly?'14':'13')+'px;color:'+pColor+';font-weight:'+(isYearly?'800':'700')+';font-variant-numeric:tabular-nums;">'+(sr.profit>=0?'$':'-$')+Math.abs(sr.profit||0).toLocaleString()+'</span>';
+      html+='</div>';
+      // Progress bar
+      html+='<div style="height:'+(isYearly?'5':'3')+'px;background:#111;border-radius:3px;overflow:hidden;">';
+      html+='<div style="height:100%;width:'+barPct+'%;background:'+pColor+';border-radius:3px;transition:width .3s ease;"></div>';
+      html+='</div>';
+      // Average (right-aligned, dim)
+      if(sr.avg){
+        html+='<div style="margin-top:4px;text-align:right;font-size:10px;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.3px;">avg $'+(sr.avg).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})+'</div>';
+      }
       html+='</div>';
     }
     html+='</div>';
