@@ -809,7 +809,10 @@ function _handleProfitAction(action, location, data) {
               label: label,
               value: val,
               displayValue: displayValue,
-              note: note,
+              // Keep backward-compatible: note = valueNote || labelNote (pre-v30 behavior).
+              // New fields valueNote + labelNote expose them separately.
+              note: note || labelNote,
+              valueNote: note,
               labelNote: labelNote,
               formula: formula,
               isFormula: !!formula,
