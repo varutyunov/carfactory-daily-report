@@ -11326,6 +11326,76 @@ function _txInit() {
   body.printing-vr #vr-release-form,
   #vr-overlay.print-active #vr-release-form { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: white !important; page-break-inside: avoid; page-break-after: always; }
 }
+
+/* ══════════════════════════════════════════════════════════════ */
+/*  PROFIT TAB — tile grid + full-screen detail overlay          */
+/* ══════════════════════════════════════════════════════════════ */
+.pf-hero{background:#111;border:1px solid #222;border-radius:18px;padding:16px 18px 14px;margin-bottom:18px;}
+.pf-hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;}
+.pf-hero-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;color:#888;text-transform:uppercase;margin-bottom:4px;}
+.pf-hero-num{font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;letter-spacing:-1px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
+.pf-spark{display:flex;align-items:flex-end;gap:3px;height:32px;}
+.pf-spark-bar{flex:1;background:#1a1a1a;border-radius:2px;min-height:3px;}
+.pf-spark-bar.pos{background:linear-gradient(to top,#10b981,#34d399);}
+.pf-spark-bar.neg{background:linear-gradient(to top,#dc2626,#f87171);}
+.pf-spark-bar.cur{outline:1.5px solid #34d399;outline-offset:2px;}
+.pf-sh{display:flex;align-items:center;gap:10px;margin:20px 2px 10px;}
+.pf-sh-line{flex:1;height:1px;background:linear-gradient(to right,transparent,#222,transparent);}
+.pf-sh-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:900;letter-spacing:2.5px;color:#555;text-transform:uppercase;}
+.pf-tg{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
+.pf-t{aspect-ratio:1/1.08;border-radius:14px;padding:12px 11px 11px;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s ease;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 4px 12px rgba(0,0,0,.3);}
+.pf-t:active{transform:scale(.95);}
+.pf-t::after{content:'';position:absolute;bottom:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.06);pointer-events:none;}
+.pf-t-m{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;line-height:1;position:relative;z-index:1;}
+.pf-t-y{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:.45;margin-top:3px;position:relative;z-index:1;}
+.pf-t-n{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:-.5px;line-height:1;font-variant-numeric:tabular-nums;position:relative;z-index:1;}
+.pf-t-meta{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;opacity:.6;margin-top:5px;font-variant-numeric:tabular-nums;position:relative;z-index:1;}
+.pf-c0{background:linear-gradient(145deg,#1e40af,#1e3a8a);color:#fff;}
+.pf-c1{background:linear-gradient(145deg,#be123c,#9f1239);color:#fff;}
+.pf-c2{background:linear-gradient(145deg,#059669,#047857);color:#fff;}
+.pf-c3{background:linear-gradient(145deg,#f59e0b,#d97706);color:#1c1917;}
+.pf-c4{background:linear-gradient(145deg,#7c3aed,#6d28d9);color:#fff;}
+.pf-c5{background:linear-gradient(145deg,#0891b2,#0e7490);color:#fff;}
+.pf-c6{background:linear-gradient(145deg,#db2777,#be185d);color:#fff;}
+.pf-c7{background:linear-gradient(145deg,#65a30d,#4d7c0f);color:#fff;}
+.pf-c8{background:linear-gradient(145deg,#4f46e5,#3730a3);color:#fff;}
+.pf-c9{background:linear-gradient(145deg,#ea580c,#c2410c);color:#fff;}
+.pf-c10{background:linear-gradient(145deg,#15803d,#14532d);color:#fff;}
+.pf-c11{background:linear-gradient(145deg,#9333ea,#7e22ce);color:#fff;}
+.pf-t.empty{background:#141414;border:1px solid #1f1f1f;color:#3a3a3a;box-shadow:none;}
+.pf-t.empty::after{display:none;}
+.pf-t.empty .pf-t-n{font-size:20px;opacity:.4;}
+.pf-t.cur{box-shadow:0 0 0 2px rgba(255,255,255,.4),0 4px 18px rgba(0,0,0,.5);}
+.pf-ov{position:fixed;inset:0;background:#0a0a0a;z-index:1000;display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.pf-ov.on{display:flex;}
+.pf-ov-h{padding:18px 18px 22px;position:relative;overflow:hidden;}
+.pf-ov-h::after{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none;}
+.pf-ov-bk{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);color:#fff;width:36px;height:36px;border-radius:10px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;z-index:1;margin-bottom:14px;}
+.pf-ov-h.pf-c3 .pf-ov-bk{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.2);color:#1c1917;}
+.pf-ov-m{font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:2px;text-transform:uppercase;line-height:1;position:relative;z-index:1;margin-bottom:2px;}
+.pf-ov-y{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;opacity:.5;text-transform:uppercase;position:relative;z-index:1;margin-bottom:16px;}
+.pf-ov-nb{font-family:'Barlow Condensed',sans-serif;font-size:44px;font-weight:900;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums;position:relative;z-index:1;margin-bottom:4px;}
+.pf-ov-nl{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;opacity:.6;position:relative;z-index:1;}
+.pf-ov-b{padding:16px 14px 80px;flex:1;background:#0a0a0a;}
+.pf-sec{background:#141414;border:1px solid #1f1f1f;border-radius:14px;overflow:hidden;margin-bottom:12px;}
+.pf-sec-h{padding:11px 14px 9px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#888;border-bottom:1px solid #1a1a1a;background:#101010;display:flex;justify-content:space-between;align-items:center;}
+.pf-sec-t{font-size:13px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:-.2px;text-transform:none;}
+.pf-r{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;min-height:44px;gap:10px;}
+.pf-r + .pf-r{border-top:1px solid #1a1a1a;}
+.pf-r-l{font-size:14px;color:#d4d4d4;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.pf-lock{font-size:10px;opacity:.5;}
+.pf-r-v{font-size:15px;color:#fff;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0;cursor:pointer;letter-spacing:-.2px;}
+.pf-r-v.formula{color:#a3a3a3;cursor:not-allowed;}
+.pf-r.rev .pf-r-l{color:#7dd3fc;}
+.pf-r.rev .pf-r-v{color:#93c5fd;}
+.pf-r.sub{background:#0f0f0f;border-top:1px solid #1f1f1f;}
+.pf-r.sub .pf-r-l{color:#fff;font-weight:800;text-transform:uppercase;font-size:13px;letter-spacing:.6px;}
+.pf-r.sub .pf-r-v{color:#fff;font-weight:900;font-size:16px;}
+.pf-r-v.has-note{text-decoration:underline dotted currentColor;text-underline-offset:3px;}
+.pf-pc{background:linear-gradient(135deg,#064e3b,#065f46);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.pf-pc.neg{background:linear-gradient(135deg,#7f1d1d,#991b1b);}
+.pf-pc-l{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:900;letter-spacing:2.5px;color:rgba(255,255,255,.7);text-transform:uppercase;}
+.pf-pc-v{font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:-1px;color:#fff;font-variant-numeric:tabular-nums;line-height:1;}
 </style>
 
 <script>
@@ -14165,6 +14235,8 @@ function payFormSkipPhoto(){
 
 // Browser back button support for payment overlay
 window.addEventListener('popstate',function(e){
+  var pfOv=document.getElementById('pf-ov');
+  if(pfOv&&pfOv.classList.contains('on')){pfOv.classList.remove('on');return;}
   var boardOv=document.getElementById('board-overlay');
   if(boardOv&&boardOv.style.display!=='none'){boardClose();return;}
   var repoAcct=document.getElementById('repo-acct-overlay');
@@ -19284,6 +19356,37 @@ var _profitData={months:[],summary:[]};
 var _profitLoaded=false;
 var _profitEditItem=null; // {monthIdx, itemIdx, row, col}
 
+// Profit helpers (module scope so profitOpenDetail can use them too)
+function _prFmt(n){if(n==null||isNaN(n))return '—';return (n<0?'-$':'+$')+Math.abs(Math.round(n)).toLocaleString();}
+function _prFmtShort(n){if(n==null||isNaN(n))return '';if(Math.abs(n)>=1000)return '$'+(n/1000).toFixed(1).replace('.0','')+'k';return '$'+Math.round(n);}
+function _prFmtPlain(n){if(n==null||isNaN(n))return '—';return '$'+Math.abs(Math.round(n)).toLocaleString();}
+function _prMoNet(mIdx){
+  var months=_profitData.months||[];var summary=_profitData.summary||[];
+  var mo=months[mIdx];if(!mo)return 0;
+  var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var full=monthNames[mIdx];
+  for(var i=0;i<summary.length;i++){
+    if(((summary[i].month)||'').toLowerCase()===full.toLowerCase())return summary[i].profit||0;
+  }
+  var pay=0,cash=0,tot=0;
+  for(var i=0;i<mo.items.length;i++){
+    var L=(mo.items[i].label||'').toLowerCase();
+    if(L==='payments')pay=mo.items[i].value;
+    else if(L==='cash sales')cash=mo.items[i].value;
+    else if(L==='total bills')tot=mo.items[i].value;
+  }
+  return pay+cash-tot;
+}
+function _prMoHasData(mIdx){
+  var mo=(_profitData.months||[])[mIdx];if(!mo)return false;
+  for(var i=0;i<mo.items.length;i++){
+    var L=(mo.items[i].label||'').toLowerCase();
+    var v=mo.items[i].value;
+    if((L==='payments'||L==='cash sales'||L==='total bills')&&v!==0)return true;
+  }
+  return false;
+}
+
 async function shLoadProfit(){
   var body=document.getElementById('sh-profit-body');
   if(!body)return;
@@ -19311,101 +19414,68 @@ function profitRender(){
   if(!months.length){body.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;">No data</div>';return;}
 
   var html='';
-  // Helper — pull a month's Net Profit for the header mini-stat
-  function _prMNet(mo){
-    for(var k=0;k<mo.items.length;k++){if(mo.items[k].label==='Net Profit')return mo.items[k].value||0;}
-    return 0;
+  var monthShort=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  var curIdx=new Date().getMonth();
+  var curYear=new Date().getFullYear();
+
+  // Compute all 12 month nets + YTD
+  var monthNets=[];var ytd=0;
+  for(var i=0;i<12;i++){
+    var n=_prMoNet(i);monthNets.push(n);
+    if(_prMoHasData(i))ytd+=n;
   }
 
-  // Render 3 quarter cards of 4 months each
-  for(var block=0;block<3;block++){
-    var blockMonths=months.slice(block*4,(block+1)*4);
-    if(!blockMonths.length)continue;
+  // === HERO (YTD + sparkline) ===
+  html+='<div class="pf-hero">';
+  html+='<div class="pf-hero-top"><div>';
+  html+='<div class="pf-hero-label">YTD · Net Profit</div>';
+  html+='<div class="pf-hero-num">'+_prFmt(ytd)+'</div>';
+  html+='</div></div>';
+  var absMax=0;monthNets.forEach(function(v){if(Math.abs(v)>absMax)absMax=Math.abs(v);});
+  html+='<div class="pf-spark">';
+  for(var i=0;i<12;i++){
+    var v=monthNets[i]||0;var has=_prMoHasData(i);
+    var cls='pf-spark-bar';
+    if(has){cls+=v>=0?' pos':' neg';}
+    if(i===curIdx)cls+=' cur';
+    var h=has&&absMax>0?Math.max(3,Math.abs(v)/absMax*100)+'%':'3px';
+    html+='<div class="'+cls+'" style="height:'+h+';"></div>';
+  }
+  html+='</div></div>';
 
-    // Quarter card wrapper
-    html+='<div style="margin-top:'+(block>0?'18px':'10px')+';background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;overflow:hidden;">';
-
-    // Month headers — month name + net profit mini-stat
-    html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#000;border-bottom:1px solid #1a1a1a;">';
-    for(var m=0;m<blockMonths.length;m++){
-      var _moh=blockMonths[m];
-      var _moNet=_prMNet(_moh);
-      var _moNetColor=_moNet>=0?'#4ade80':'#f87171';
-      var _hSep=m<3?'border-right:1px solid #151515;':'';
-      html+='<div style="padding:11px 4px 9px;text-align:center;'+_hSep+'">'+
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:900;letter-spacing:1.2px;color:#fff;text-transform:uppercase;line-height:1;">'+_moh.name+'</div>'+
-        '<div style="margin-top:5px;font-size:10px;font-weight:700;color:'+_moNetColor+';font-variant-numeric:tabular-nums;letter-spacing:.2px;">'+(_moNet>=0?'+$':'-$')+Math.abs(_moNet).toLocaleString()+'</div>'+
-        '</div>';
-    }
-    html+='</div>';
-
-    // Find max items across these 4 months
-    var maxItems=0;
-    for(var m=0;m<blockMonths.length;m++){if(blockMonths[m].items.length>maxItems)maxItems=blockMonths[m].items.length;}
-
-    // Render rows — each row shows the same item index across all 4 months
-    for(var i=0;i<maxItems;i++){
-      html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);">';
-      for(var m=0;m<blockMonths.length;m++){
-        var item=blockMonths[m].items[i];
-        var mIdx=block*4+m;
-        var _cSep=m<3?'border-right:1px solid #111;':'';
-        if(!item){
-          html+='<div style="padding:5px 7px;min-height:28px;background:#0a0a0a;'+_cSep+'border-top:1px solid #0d0d0d;"></div>';
-          continue;
+  // === TILE GRID per quarter ===
+  var qNames=['Q1 · Jan – Mar','Q2 · Apr – Jun','Q3 · Jul – Sep','Q4 · Oct – Dec'];
+  for(var q=0;q<4;q++){
+    html+='<div class="pf-sh"><div class="pf-sh-line"></div><div class="pf-sh-label">'+qNames[q]+'</div><div class="pf-sh-line"></div></div>';
+    html+='<div class="pf-tg">';
+    for(var mi=q*3;mi<q*3+3;mi++){
+      var mo=months[mi];
+      var has=mo?_prMoHasData(mi):false;
+      var net=monthNets[mi]||0;
+      if(!has){
+        html+='<div class="pf-t empty"><div><div class="pf-t-m">'+monthShort[mi]+'</div><div class="pf-t-y">'+curYear+'</div></div><div class="pf-t-n">—</div></div>';
+      }else{
+        var color='pf-c'+mi;
+        var cur=mi===curIdx?' cur':'';
+        var pay=0,cash=0,tot=0;
+        for(var k=0;k<mo.items.length;k++){
+          var L=(mo.items[k].label||'').toLowerCase();
+          if(L==='payments')pay=mo.items[k].value;
+          else if(L==='cash sales')cash=mo.items[k].value;
+          else if(L==='total bills')tot=mo.items[k].value;
         }
-        var label=item.label||'';
-        var val=item.value||0;
-        var note=item.note||'';
-        var isSubtotal=label==='Core Bills'||label==='Total Bills';
-        var isProfit=label==='Net Profit';
-        var isRevenue=label==='Payments'||label==='Cash Sales'||label==='Extras';
-
-        // Color + background system
-        var bgColor='#0a0a0a';
-        var labelColor='#777';
-        var valColor='#d4d4d4';
-        var fontWeight='500';
-        var rowBorder='border-top:1px solid #0d0d0d;';
-        var upcase='';
-
-        if(isProfit){
-          bgColor=val>=0?'rgba(74,222,128,.13)':'rgba(248,113,113,.13)';
-          labelColor=val>=0?'#86efac':'#fca5a5';
-          valColor=val>=0?'#4ade80':'#f87171';
-          fontWeight='800';
-          rowBorder='border-top:1px solid #222;';
-          upcase='text-transform:uppercase;letter-spacing:.5px;';
-        } else if(isSubtotal){
-          bgColor='#0f0f0f';
-          labelColor='#bbb';
-          valColor='#fff';
-          fontWeight='700';
-          rowBorder='border-top:1px solid #1c1c1c;';
-          upcase='text-transform:uppercase;letter-spacing:.4px;';
-        } else if(isRevenue){
-          labelColor='#60a5fa';
-          valColor='#93c5fd';
-          fontWeight='600';
-        }
-
-        var hasNote=note&&note.trim().length>0;
-        var valStr=val?'$'+Math.abs(val).toLocaleString():'—';
-        if(val<0)valStr='-'+valStr;
-        var clickAction=hasNote?'profitShowNote('+mIdx+','+i+')':'profitEditStart('+mIdx+','+i+')';
-
-        html+='<div style="padding:6px 7px;min-height:28px;background:'+bgColor+';'+_cSep+rowBorder+'display:flex;justify-content:space-between;align-items:center;gap:4px;">';
-        html+='<span style="font-size:10.5px;color:'+labelColor+';font-weight:'+fontWeight+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;'+upcase+'">'+label+'</span>';
-        html+='<span onclick="'+clickAction+'" style="font-size:11.5px;color:'+valColor+';font-weight:'+fontWeight+';cursor:pointer;font-variant-numeric:tabular-nums;flex-shrink:0;'+(hasNote?'text-decoration:underline dotted '+valColor+';text-underline-offset:2px;':'')+'">'+valStr+'</span>';
+        var rev=pay+cash;
+        html+='<div class="pf-t '+color+cur+'" onclick="profitOpenDetail('+mi+')">';
+        html+='<div><div class="pf-t-m">'+monthShort[mi]+'</div><div class="pf-t-y">'+curYear+'</div></div>';
+        html+='<div><div class="pf-t-n">'+_prFmt(net)+'</div>';
+        html+='<div class="pf-t-meta"><span>rev '+_prFmtShort(rev)+'</span><span>bills '+_prFmtShort(tot)+'</span></div></div>';
         html+='</div>';
       }
-      html+='</div>';
     }
-
-    html+='</div>'; // /quarter card
+    html+='</div>';
   }
 
-  // Yearly summary — visual bar list
+  // Yearly summary — visual bar list (unchanged)
   if(summary.length){
     var _maxProfit=0;
     for(var s=0;s<summary.length;s++){if(Math.abs(summary[s].profit||0)>_maxProfit)_maxProfit=Math.abs(summary[s].profit);}
@@ -19442,6 +19512,104 @@ function profitRender(){
   body.innerHTML=html;
 }
 
+// ── PROFIT: FULL-SCREEN MONTH DETAIL OVERLAY ────────────────
+function profitOpenDetail(mIdx){
+  var months=_profitData.months||[];
+  if(mIdx>=months.length)return;
+  var mo=months[mIdx];
+  if(!mo)return;
+  var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var mName=monthNames[mIdx]||mo.name||'';
+  var color='pf-c'+mIdx;
+  var net=_prMoNet(mIdx);
+  // Classify items into sections (label-based)
+  var fixed=[],variable=[],revenue=[],coreBills=null,totBills=null;
+  for(var i=0;i<mo.items.length;i++){
+    var it=mo.items[i];
+    it._idx=i; // preserve original index for click handlers
+    var L=(it.label||'').toLowerCase();
+    if(L==='core bills')coreBills=it;
+    else if(L==='total bills')totBills=it;
+    else if(L==='payments'||L==='cash sales')revenue.push(it);
+    else if(L==='costs'||L==='credits'||L==='dealer sign'||L==='clover'||L==='carpay')variable.push(it);
+    else fixed.push(it);
+  }
+  function _pfRow(it, isRev){
+    var cls='pf-r'+(isRev?' rev':'');
+    var valCls='pf-r-v';
+    if(it.isFormula)valCls+=' formula';
+    var note=it.note||it.labelNote;
+    var hasNote=note&&note.trim().length>0;
+    if(hasNote&&!it.isFormula)valCls+=' has-note';
+    var lockIcon=it.isFormula?'<span class="pf-lock" title="Formula protected">🔒</span>':'';
+    // Click: formula → profitEditStart (shows locked alert); note present → profitShowNote; else profitEditStart
+    var clickAction;
+    if(!it.isFormula&&hasNote)clickAction='profitShowNote('+mIdx+','+it._idx+')';
+    else clickAction='profitEditStart('+mIdx+','+it._idx+')';
+    return '<div class="'+cls+'"><span class="pf-r-l">'+(it.label||'')+lockIcon+'</span><span class="'+valCls+'" onclick="'+clickAction+'">'+_prFmtPlain(it.value||0)+'</span></div>';
+  }
+
+  var h='';
+  h+='<div class="pf-ov-h '+color+'">';
+  h+='<div class="pf-ov-bk" onclick="profitCloseDetail()">←</div>';
+  h+='<div class="pf-ov-m">'+mName+'</div>';
+  h+='<div class="pf-ov-y">'+(new Date().getFullYear())+'</div>';
+  h+='<div class="pf-ov-nb">'+_prFmt(net)+'</div>';
+  h+='<div class="pf-ov-nl">Net Profit</div>';
+  h+='</div>';
+  h+='<div class="pf-ov-b">';
+
+  if(revenue.length){
+    var rT=0;revenue.forEach(function(it){rT+=it.value||0;});
+    h+='<div class="pf-sec"><div class="pf-sec-h">Revenue<span class="pf-sec-t">'+_prFmtPlain(rT)+'</span></div>';
+    revenue.forEach(function(it){h+=_pfRow(it,true);});
+    h+='</div>';
+  }
+
+  if(fixed.length||coreBills){
+    h+='<div class="pf-sec"><div class="pf-sec-h">Core Bills'+(coreBills?'<span class="pf-sec-t">'+_prFmtPlain(coreBills.value||0)+'</span>':'')+'</div>';
+    fixed.forEach(function(it){h+=_pfRow(it,false);});
+    if(coreBills){
+      var subCls='pf-r-v';if(coreBills.isFormula)subCls+=' formula';
+      var lock=coreBills.isFormula?'<span class="pf-lock" title="Formula protected">🔒</span>':'';
+      h+='<div class="pf-r sub"><span class="pf-r-l">'+coreBills.label+lock+'</span><span class="'+subCls+'" onclick="profitEditStart('+mIdx+','+coreBills._idx+')">'+_prFmtPlain(coreBills.value||0)+'</span></div>';
+    }
+    h+='</div>';
+  }
+
+  if(variable.length||totBills){
+    h+='<div class="pf-sec"><div class="pf-sec-h">Variable'+(totBills?'<span class="pf-sec-t">total '+_prFmtPlain(totBills.value||0)+'</span>':'')+'</div>';
+    variable.forEach(function(it){h+=_pfRow(it,false);});
+    if(totBills){
+      var subCls='pf-r-v';if(totBills.isFormula)subCls+=' formula';
+      var lock=totBills.isFormula?'<span class="pf-lock" title="Formula protected">🔒</span>':'';
+      h+='<div class="pf-r sub"><span class="pf-r-l">'+totBills.label+lock+'</span><span class="'+subCls+'" onclick="profitEditStart('+mIdx+','+totBills._idx+')">'+_prFmtPlain(totBills.value||0)+'</span></div>';
+    }
+    h+='</div>';
+  }
+
+  var pc=net>=0?'':' neg';
+  h+='<div class="pf-pc'+pc+'">';
+  h+='<div class="pf-pc-l">Net Profit · computed</div>';
+  h+='<div class="pf-pc-v">'+_prFmt(net)+'</div>';
+  h+='</div>';
+
+  h+='</div>'; // /pf-ov-b
+
+  var ov=document.getElementById('pf-ov');
+  if(!ov){ov=document.createElement('div');ov.id='pf-ov';ov.className='pf-ov';document.body.appendChild(ov);}
+  ov.innerHTML=h;
+  ov.classList.add('on');
+  try{history.pushState({profitDetail:true},'');}catch(e){}
+  window.scrollTo(0,0);
+}
+
+function profitCloseDetail(){
+  var ov=document.getElementById('pf-ov');
+  if(ov)ov.classList.remove('on');
+  try{if(history.state&&history.state.profitDetail)history.back();}catch(e){}
+}
+
 function profitShowNote(mIdx,itemIdx){
   var months=_profitData.months||[];
   if(mIdx>=months.length)return;
@@ -19476,6 +19644,11 @@ function profitEditStart(mIdx,itemIdx){
   if(mIdx>=months.length)return;
   var item=months[mIdx].items[itemIdx];
   if(!item)return;
+  // Formula cells are protected — show a read-only alert instead of prompt
+  if(item.isFormula){
+    alert('🔒 This cell is a formula in the Google Sheet and can\'t be edited from the app.\n\n'+(item.formula?'Formula: '+item.formula:''));
+    return;
+  }
   var monthName=months[mIdx].name;
   var val=prompt(monthName+' — '+item.label+'\n\nCurrent: $'+item.value.toLocaleString()+'\n\nEnter new value:',item.value||'');
   if(val===null)return;
@@ -19487,12 +19660,20 @@ function profitEditStart(mIdx,itemIdx){
 async function profitSaveValue(mIdx,itemIdx,value,row,col){
   try{
     var loc=_isLoc||'DeBary';
-    await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'update_profit',location:loc,data:{row:row,col:col,value:value}})});
+    var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'update_profit',location:loc,data:{row:row,col:col,value:value}})});
+    var json=null;try{json=await resp.json();}catch(e){}
+    if(json&&json.ok===false&&json.error==='formula_protected'){
+      alert('🔒 Protected by formula in the sheet. Change was not saved.');
+      return;
+    }
     // Update local data
     if(_profitData.months[mIdx]&&_profitData.months[mIdx].items[itemIdx]){
       _profitData.months[mIdx].items[itemIdx].value=value;
     }
     profitRender();
+    // If the month-detail overlay is open, re-render it with fresh values
+    var ov=document.getElementById('pf-ov');
+    if(ov&&ov.classList.contains('on'))profitOpenDetail(mIdx);
   }catch(e){
     alert('Error saving: '+e.message);
   }
