@@ -19391,11 +19391,52 @@ async function shLoadProfit(){
   var body=document.getElementById('sh-profit-body');
   if(!body)return;
   body.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading profit...</div>';
+  var loc=_isLoc||'DeBary';
+
+  // 1) Try Supabase mirror (same pattern as inventory_costs / deals26)
   try{
-    var loc=_isLoc||'DeBary';
+    var rows=await sbGet('profit','location=eq.'+encodeURIComponent(loc)+'&order=month_idx.asc,item_idx.asc&limit=2000');
+    if(rows&&rows.length){
+      var monthNames=['Jan','Feb','March','April','May','June','July','August','September','October','November','December'];
+      var monthsMap={};
+      for(var i=0;i<12;i++)monthsMap[i]={name:monthNames[i],items:[]};
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i];var mi=r.month_idx;
+        if(mi==null||mi<0||mi>11)continue;
+        monthsMap[mi].items.push({
+          label:r.label||'',
+          value:Number(r.value)||0,
+          displayValue:r.display_value||'',
+          note:r.note||r.label_note||'',
+          valueNote:r.note||'',
+          labelNote:r.label_note||'',
+          formula:r.formula||'',
+          isFormula:!!r.is_formula,
+          row:r.sheet_row,
+          col:r.sheet_col
+        });
+      }
+      var months=[];
+      for(var i=0;i<12;i++){
+        monthsMap[i].items.sort(function(a,b){return (a.row||0)-(b.row||0);});
+        months.push(monthsMap[i]);
+      }
+      var sumRows=await sbGet('profit_summary','location=eq.'+encodeURIComponent(loc)+'&order=sort_order.asc&limit=50');
+      var summary=(sumRows||[]).map(function(s){return {month:s.month||'',profit:Number(s.profit)||0,avg:Number(s.avg)||0};});
+      _profitData={ok:true,action:'read_profit',months:months,summary:summary,source:'supabase'};
+      profitRender();
+      return;
+    }
+  }catch(e){
+    console.warn('Profit Supabase read failed, falling back to live sheet:',e);
+  }
+
+  // 2) Fallback: live call to Apps Script read_profit (pre-Phase-B behavior)
+  try{
     var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'read_profit',location:loc})});
     var data=await resp.json();
     if(data.ok){
+      data.source='live';
       _profitData=data;
       profitRender();
     }else{

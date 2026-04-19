@@ -82,6 +82,15 @@ function onSheetEdit(e) {
   var loc = 'DeBary';
   if (ssId === SPREADSHEET_IDS['DeLand']) loc = 'DeLand';
 
+  // Profit26 tab has a non-column-based layout — handled separately.
+  // Any edit triggers a full sheet re-read (captures formula cascades).
+  if (tabName === 'Profit26') {
+    var _profitLock = PropertiesService.getScriptProperties().getProperty('_syncLockTime');
+    if (_profitLock && (Date.now() - parseInt(_profitLock)) < 5000) return;
+    try { _syncProfitFromSheet(loc); } catch (e2) { Logger.log('onSheetEdit Profit26 sync err: ' + e2.message); }
+    return;
+  }
+
   var locConfig = _getConfig(loc);
   var config = locConfig[tabName];
   if (!config) return;
@@ -167,6 +176,11 @@ function doPost(e) {
     // ── Profit26 actions — handled before tab config lookup ──
     if (action === 'read_profit' || action === 'update_profit') {
       return _handleProfitAction(action, location, body.data || {});
+    }
+    if (action === 'sync_profit') {
+      // Backfill / on-demand sync — reads full Profit26 sheet and upserts to Supabase
+      var n = _syncProfitFromSheet(location);
+      return jsonResponse({ ok: true, action: 'sync_profit', location: location, rowsUpserted: n });
     }
 
     var locConfig = _getConfig(location);
@@ -703,6 +717,10 @@ function syncFullReconcile() {
 
     Logger.log('Reconcile ' + loc + '/' + tabName + ': sheet=' + sheetOrder.length + ' rows, db=' + dbRows.length + ' rows');
   } // end tab loop
+
+  // Profit26 — full sheet → Supabase mirror
+  try { _syncProfitFromSheet(loc); } catch (pe) { Logger.log('Reconcile Profit26 error for ' + loc + ': ' + pe.message); }
+
   } // end location loop
   Logger.log('syncFullReconcile DONE');
 }
@@ -874,6 +892,152 @@ function _handleProfitAction(action, location, data) {
   }
 
   return jsonResponse({ error: 'Unknown profit action: ' + action });
+}
+
+// ============================================================
+// PROFIT26 MIRROR SYNC — sheet → Supabase (profit + profit_summary)
+// Reads the full sheet in batch and upserts. Called from onSheetEdit
+// (any Profit26 edit) and from syncFullReconcile (periodic).
+// ============================================================
+function _syncProfitFromSheet(location) {
+  var ssId = _getSpreadsheetId(location);
+  var ss;
+  try { ss = SpreadsheetApp.openById(ssId); }
+  catch (e) { Logger.log('_syncProfitFromSheet: cannot open ' + location + ': ' + e.message); return 0; }
+  var sheet = ss.getSheetByName('Profit26');
+  if (!sheet) { Logger.log('_syncProfitFromSheet: Profit26 tab not found in ' + location); return 0; }
+
+  var START_COL = 4;
+  // Find start row — look for 'Jan' in col D
+  var startRow = 1;
+  for (var sr = 1; sr <= 20; sr++) {
+    var cellVal = String(sheet.getRange(sr, START_COL).getValue()).trim();
+    if (cellVal === 'Jan' || cellVal === 'January') { startRow = sr; break; }
+  }
+
+  var MONTHS_PER_ROW = 4;
+  var COLS_PER_MONTH = 3;
+  var BLOCK_ROWS = 22;
+  var BLOCK_GAP = 1;
+  var totalRows = 3 * BLOCK_ROWS + 2 * BLOCK_GAP;
+  var totalCols = MONTHS_PER_ROW * COLS_PER_MONTH;
+
+  // Batch reads — one API call each
+  var range = sheet.getRange(startRow, START_COL, totalRows, totalCols);
+  var values = range.getValues();
+  var formulas = range.getFormulas();
+  var notes = range.getNotes();
+  var displayValues = range.getDisplayValues();
+
+  // Build upsert payload
+  var rows = [];
+  var nowIso = new Date().toISOString();
+  for (var block = 0; block < 3; block++) {
+    var blockStartInner = block * (BLOCK_ROWS + BLOCK_GAP);
+    for (var m = 0; m < MONTHS_PER_ROW; m++) {
+      var labelColInner = m * COLS_PER_MONTH;
+      var valueColInner = labelColInner + 1;
+      var monthIdx = block * MONTHS_PER_ROW + m;
+      if (monthIdx >= 12) break;
+      for (var rin = 1; rin < BLOCK_ROWS; rin++) {
+        var rInner = blockStartInner + rin;
+        if (rInner >= totalRows) continue;
+        var label = String(values[rInner][labelColInner] || '').trim();
+        var rawVal = values[rInner][valueColInner];
+        var formula = formulas[rInner][valueColInner] || '';
+        var note = notes[rInner][valueColInner] || '';
+        var labelNote = notes[rInner][labelColInner] || '';
+        var displayValue = displayValues[rInner][valueColInner] || '';
+        var val = 0;
+        if (rawVal !== '' && rawVal !== null) {
+          val = parseFloat(String(rawVal).replace(/[$,]/g, '')) || 0;
+        }
+        if (label || val || note || labelNote || formula) {
+          rows.push({
+            location: location,
+            sheet_row: startRow + rInner,
+            sheet_col: START_COL + valueColInner,
+            month_idx: monthIdx,
+            item_idx: rin - 1,
+            label: label,
+            value: val,
+            display_value: displayValue,
+            formula: formula,
+            is_formula: !!formula,
+            note: note,
+            label_note: labelNote,
+            updated_at: nowIso
+          });
+        }
+      }
+    }
+  }
+
+  try {
+    _supabaseUpsert('profit', rows, 'location,sheet_row,sheet_col');
+    Logger.log('_syncProfitFromSheet ' + location + ': upserted ' + rows.length + ' cells');
+  } catch (e) {
+    Logger.log('_syncProfitFromSheet ' + location + ' profit upsert error: ' + e.message);
+  }
+
+  // Yearly summary section — search for 'Month' header after the 3 blocks
+  var summarySearchStart = startRow + 3 * (BLOCK_ROWS + BLOCK_GAP);
+  var summaryRows = [];
+  for (var ss2 = summarySearchStart; ss2 < summarySearchStart + 15; ss2++) {
+    var h = String(sheet.getRange(ss2, START_COL).getValue()).trim().toLowerCase();
+    if (h === 'month') {
+      for (var si = 1; si <= 14; si++) {
+        var sRow = ss2 + si;
+        var sMonth = String(sheet.getRange(sRow, START_COL).getValue()).trim();
+        if (!sMonth) break;
+        var sProfit = parseFloat(String(sheet.getRange(sRow, START_COL + 1).getValue()).replace(/[$,]/g, '')) || 0;
+        var sAvg = parseFloat(String(sheet.getRange(sRow, START_COL + 2).getValue()).replace(/[$,]/g, '')) || 0;
+        summaryRows.push({
+          location: location,
+          sheet_row: sRow,
+          month: sMonth,
+          profit: sProfit,
+          avg: sAvg,
+          sort_order: si,
+          updated_at: nowIso
+        });
+      }
+      break;
+    }
+  }
+
+  if (summaryRows.length) {
+    try {
+      _supabaseUpsert('profit_summary', summaryRows, 'location,sheet_row');
+      Logger.log('_syncProfitFromSheet ' + location + ': upserted ' + summaryRows.length + ' summary rows');
+    } catch (e) {
+      Logger.log('_syncProfitFromSheet ' + location + ' summary upsert error: ' + e.message);
+    }
+  }
+
+  return rows.length + summaryRows.length;
+}
+
+// Bulk upsert helper — uses on_conflict for merge-duplicates
+function _supabaseUpsert(table, rows, onConflict) {
+  if (!rows || !rows.length) return;
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?on_conflict=' + encodeURIComponent(onConflict);
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    payload: JSON.stringify(rows),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log('_supabaseUpsert ERROR ' + code + ' ' + table + ' → ' + res.getContentText().substring(0, 300));
+    throw new Error('Upsert failed: ' + code);
+  }
 }
 
 function fixTotalRow() {
