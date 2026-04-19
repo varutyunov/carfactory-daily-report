@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Profit Tab — Design Preview</title>
+<title>Profit Tab — Tile Design</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;min-height:100vh;}
+html,body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Barlow',sans-serif;min-height:100vh;overflow-x:hidden;}
 body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
 
 /* Mock location tabs */
@@ -20,8 +20,8 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   background:linear-gradient(155deg,#0a1f14 0%,#0a0a0a 55%);
   border:1px solid #1a2a1a;
   border-radius:18px;
-  padding:18px 18px 14px;
-  margin-bottom:20px;
+  padding:16px 16px 12px;
+  margin-bottom:16px;
   position:relative;
   overflow:hidden;
 }
@@ -31,151 +31,231 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   background:radial-gradient(circle,rgba(74,222,128,.10) 0%,transparent 70%);
   pointer-events:none;
 }
-.hero-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;color:#4ade80;text-transform:uppercase;margin-bottom:4px;}
-.hero-num{font-family:'Barlow Condensed',sans-serif;font-size:42px;font-weight:900;letter-spacing:-1px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;margin-bottom:8px;}
-.hero-num .cents{font-size:22px;color:#888;font-weight:700;}
-.hero-meta{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
-.hero-delta{font-size:12px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.12);padding:4px 9px;border-radius:6px;letter-spacing:.3px;font-variant-numeric:tabular-nums;}
-.hero-sub{font-size:11px;color:#666;letter-spacing:.4px;text-transform:uppercase;font-weight:600;}
+.hero-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;color:#4ade80;text-transform:uppercase;margin-bottom:3px;}
+.hero-num{font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:900;letter-spacing:-1px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+.hero-num .cents{font-size:18px;color:#888;font-weight:700;}
+.hero-meta{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.hero-delta{font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.12);padding:3px 8px;border-radius:6px;font-variant-numeric:tabular-nums;}
+.hero-sub{font-size:10px;color:#666;letter-spacing:.4px;text-transform:uppercase;font-weight:600;}
 
-.spark{display:flex;align-items:flex-end;gap:4px;height:42px;margin-top:4px;}
-.spark-bar{flex:1;background:#1a2a1a;border-radius:3px 3px 0 0;min-height:3px;position:relative;}
+.spark{display:flex;align-items:flex-end;gap:3px;height:36px;margin-top:4px;}
+.spark-bar{flex:1;background:#1a2a1a;border-radius:2px 2px 0 0;min-height:3px;}
 .spark-bar.pos{background:linear-gradient(to top,#16a34a,#4ade80);}
 .spark-bar.neg{background:linear-gradient(to top,#b91c1c,#f87171);}
 .spark-bar.current{outline:1.5px solid #4ade80;outline-offset:2px;}
-.spark-labels{display:flex;gap:4px;margin-top:7px;}
-.spark-lbl{flex:1;text-align:center;font-size:9px;color:#555;letter-spacing:.5px;text-transform:uppercase;font-weight:600;}
+.spark-labels{display:flex;gap:3px;margin-top:6px;}
+.spark-lbl{flex:1;text-align:center;font-size:8.5px;color:#555;letter-spacing:.5px;text-transform:uppercase;font-weight:600;}
 .spark-lbl.active{color:#4ade80;font-weight:800;}
 
-/* === QUARTER DIVIDER === */
-.q-divider{
+/* === TILE GRID === */
+.tile-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-bottom:6px;
+}
+.tile{
+  background:linear-gradient(165deg,#0f0f0f 0%,#080808 100%);
+  border:1px solid #1a1a1a;
+  border-radius:14px;
+  padding:12px 10px 11px;
+  cursor:pointer;
+  position:relative;
+  overflow:hidden;
+  transition:transform .12s, border-color .15s;
+  min-height:104px;
+  display:flex;
+  flex-direction:column;
+}
+.tile:active{transform:scale(.96);}
+.tile.pos{border-color:rgba(74,222,128,.18);}
+.tile.neg{border-color:rgba(248,113,113,.18);}
+.tile.empty{border-color:#141414;background:#0a0a0a;}
+
+.tile-month{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:16px;
+  font-weight:900;
+  letter-spacing:1.5px;
+  color:#fff;
+  text-transform:uppercase;
+  line-height:1;
+  margin-bottom:2px;
+}
+.tile.empty .tile-month{color:#444;}
+.tile-year{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:1.5px;
+  color:#3a3a3a;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+.tile-net{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:19px;
+  font-weight:900;
+  letter-spacing:-.3px;
+  font-variant-numeric:tabular-nums;
+  line-height:1;
+  margin-top:auto;
+}
+.tile.pos .tile-net{color:#4ade80;}
+.tile.neg .tile-net{color:#f87171;}
+.tile.empty .tile-net{color:#2a2a2a;font-size:16px;}
+
+/* Stacked mini-bar at bottom showing revenue vs bills */
+.tile-bar{
+  display:flex;
+  height:3px;
+  background:#111;
+  border-radius:2px;
+  overflow:hidden;
+  margin-top:8px;
+  gap:1px;
+}
+.tile-bar-rev{background:linear-gradient(to right,#3b82f6,#60a5fa);}
+.tile-bar-bill{background:linear-gradient(to right,#525252,#737373);}
+.tile.empty .tile-bar{display:none;}
+
+.tile-caption{
+  display:flex;
+  justify-content:space-between;
+  font-size:8.5px;
+  color:#555;
+  margin-top:5px;
+  letter-spacing:.3px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.tile.empty .tile-caption{display:none;}
+
+/* Section label between tile rows */
+.section-head{
   display:flex;
   align-items:center;
   gap:10px;
-  margin:22px 4px 12px;
+  margin:18px 2px 10px;
 }
-.q-divider-line{flex:1;height:1px;background:linear-gradient(to right,transparent,#1e1e1e,transparent);}
-.q-divider-label{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:11px;
-  font-weight:900;
-  letter-spacing:2.5px;
-  color:#555;
-  text-transform:uppercase;
-}
+.section-head-line{flex:1;height:1px;background:linear-gradient(to right,transparent,#1e1e1e,transparent);}
+.section-head-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:900;letter-spacing:2.5px;color:#555;text-transform:uppercase;}
 
-/* === MONTH CARD === */
-.month{
-  background:linear-gradient(165deg,#0d0d0d 0%,#080808 100%);
-  border:1px solid #1a1a1a;
-  border-radius:16px;
-  overflow:hidden;
-  margin-bottom:12px;
-  box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+/* === FULL-SCREEN OVERLAY (month detail) === */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:#000;
+  z-index:100;
+  display:none;
+  flex-direction:column;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
 }
-.month-head{
+.overlay.on{display:flex;}
+.ov-head{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  padding:14px 16px 12px;
-  border-bottom:1px solid #161616;
-  background:linear-gradient(to bottom,#111,#0a0a0a);
+  gap:12px;
+  padding:14px 16px;
+  background:linear-gradient(to bottom,#0a0a0a,#000);
+  border-bottom:1px solid #1a1a1a;
+  position:sticky;
+  top:0;
+  z-index:2;
 }
-.month-head .left{display:flex;align-items:baseline;gap:10px;}
-.month-name{
+.ov-back{
+  background:#111;
+  border:1px solid #222;
+  color:#fff;
+  width:34px;height:34px;
+  border-radius:10px;
+  font-size:18px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.ov-title{
   font-family:'Barlow Condensed',sans-serif;
   font-size:22px;
   font-weight:900;
   letter-spacing:2px;
   color:#fff;
   text-transform:uppercase;
-  line-height:1;
+  flex:1;
 }
-.month-year{
+.ov-net-chip{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;
+  font-weight:900;
+  padding:6px 10px;
+  border-radius:8px;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.2px;
+}
+.ov-net-chip.pos{color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.22);}
+.ov-net-chip.neg{color:#f87171;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.22);}
+
+.ov-body{
+  padding:14px 14px 80px;
+  flex:1;
+  max-width:420px;
+  margin:0 auto;
+  width:100%;
+}
+
+/* Section within overlay */
+.ov-section{
+  background:linear-gradient(165deg,#0d0d0d,#080808);
+  border:1px solid #1a1a1a;
+  border-radius:14px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.ov-section-head{
+  padding:10px 14px 8px;
   font-family:'Barlow Condensed',sans-serif;
   font-size:11px;
-  font-weight:700;
+  font-weight:900;
   letter-spacing:2px;
-  color:#444;
+  color:#666;
   text-transform:uppercase;
+  border-bottom:1px solid #141414;
+  background:#0a0a0a;
 }
-.month-net{
-  font-size:16px;
-  font-weight:800;
-  font-variant-numeric:tabular-nums;
-  letter-spacing:-.2px;
-  padding:5px 11px;
-  border-radius:8px;
-}
-.month-net.pos{color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.22);}
-.month-net.neg{color:#f87171;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.22);}
-.month-net.empty{color:#444;background:transparent;border:none;font-size:14px;}
-
-/* Section grouping */
-.m-section{padding:6px 0;}
-.m-section + .m-section{border-top:1px solid #141414;}
-.m-section-label{
-  font-size:9px;
-  color:#444;
-  font-weight:700;
-  letter-spacing:1.5px;
-  text-transform:uppercase;
-  padding:4px 16px 2px;
-}
-
-.m-row{
+.ov-row{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:9px 16px;
+  padding:11px 14px;
+  min-height:42px;
   gap:10px;
-  min-height:38px;
 }
-.m-row + .m-row{border-top:1px solid #101010;}
-.m-row:hover{background:rgba(255,255,255,.02);}
-.m-label{
-  font-size:13px;
-  color:#aaa;
-  font-weight:500;
-  flex:1;
-  min-width:0;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-.m-val{
-  font-size:14px;
-  color:#e5e5e5;
-  font-weight:600;
-  font-variant-numeric:tabular-nums;
-  flex-shrink:0;
-  cursor:pointer;
-  letter-spacing:-.2px;
-}
+.ov-row + .ov-row{border-top:1px solid #111;}
+.ov-label{font-size:14px;color:#aaa;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ov-val{font-size:15px;color:#e5e5e5;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0;cursor:pointer;letter-spacing:-.2px;}
 
-/* Revenue */
-.m-row.revenue .m-label{color:#60a5fa;}
-.m-row.revenue .m-val{color:#93c5fd;font-weight:700;}
+.ov-row.revenue .ov-label{color:#60a5fa;}
+.ov-row.revenue .ov-val{color:#93c5fd;font-weight:700;}
 
-/* Subtotal rows */
-.m-row.subtotal{background:#0a0a0a;border-top:1px solid #1c1c1c;}
-.m-row.subtotal .m-label{color:#ccc;font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.6px;}
-.m-row.subtotal .m-val{color:#fff;font-weight:800;font-size:15px;}
+.ov-row.subtotal{background:#0f0f0f;border-top:1px solid #1c1c1c;}
+.ov-row.subtotal .ov-label{color:#ccc;font-weight:700;text-transform:uppercase;font-size:13px;letter-spacing:.6px;}
+.ov-row.subtotal .ov-val{color:#fff;font-weight:800;font-size:16px;}
 
-/* Net Profit */
-.m-profit{
+.ov-profit-card{
+  background:linear-gradient(135deg,rgba(74,222,128,.12),rgba(74,222,128,.03));
+  border:1px solid rgba(74,222,128,.25);
+  border-radius:14px;
+  padding:16px 18px;
+  margin-bottom:12px;
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:14px 16px;
-  background:linear-gradient(to right,rgba(74,222,128,.10),rgba(74,222,128,.03));
-  border-top:1.5px solid rgba(74,222,128,.25);
 }
-.m-profit.neg{
-  background:linear-gradient(to right,rgba(248,113,113,.10),rgba(248,113,113,.03));
-  border-top:1.5px solid rgba(248,113,113,.25);
+.ov-profit-card.neg{
+  background:linear-gradient(135deg,rgba(248,113,113,.12),rgba(248,113,113,.03));
+  border-color:rgba(248,113,113,.25);
 }
-.m-profit-label{
+.ov-profit-label{
   font-family:'Barlow Condensed',sans-serif;
   font-size:14px;
   font-weight:900;
@@ -183,24 +263,18 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   text-transform:uppercase;
   letter-spacing:2px;
 }
-.m-profit.neg .m-profit-label{color:#fca5a5;}
-.m-profit-val{
+.ov-profit-card.neg .ov-profit-label{color:#fca5a5;}
+.ov-profit-val{
   font-family:'Barlow Condensed',sans-serif;
-  font-size:20px;
+  font-size:26px;
   font-weight:900;
   color:#4ade80;
   font-variant-numeric:tabular-nums;
   letter-spacing:-.5px;
   cursor:pointer;
 }
-.m-profit.neg .m-profit-val{color:#f87171;}
+.ov-profit-card.neg .ov-profit-val{color:#f87171;}
 
-/* Empty month (collapsed) */
-.month.empty .month-head{padding:11px 16px;border-bottom:none;}
-.month.empty .month-name{font-size:17px;color:#555;}
-.month.empty .month-year{color:#2a2a2a;}
-
-/* Dotted underline for values with notes */
 .has-note{text-decoration:underline dotted currentColor;text-underline-offset:3px;}
 
 /* === YEARLY SUMMARY === */
@@ -209,61 +283,34 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   border:1px solid #1a1a1a;
   border-radius:16px;
   overflow:hidden;
-  margin-top:22px;
+  margin-top:20px;
 }
-.ys-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:14px 18px 12px;
-  background:linear-gradient(to bottom,#111,#0a0a0a);
-  border-bottom:1px solid #1a1a1a;
-}
-.ys-title{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:17px;
-  font-weight:900;
-  letter-spacing:2px;
-  color:#fff;
-  text-transform:uppercase;
-}
-.ys-year-chip{
-  font-size:11px;
-  font-weight:700;
-  color:#4ade80;
-  background:rgba(74,222,128,.12);
-  padding:4px 10px;
-  border-radius:6px;
-  font-variant-numeric:tabular-nums;
-  letter-spacing:.5px;
-}
-.ys-row{padding:11px 18px;}
-.ys-row + .ys-row{border-top:1px solid #121212;}
-.ys-row.year{
-  background:linear-gradient(to right,rgba(74,222,128,.06) 0%,transparent 100%);
-  padding:16px 18px;
-}
-.ys-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;gap:10px;}
-.ys-month{font-size:12px;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:.7px;}
-.ys-row.year .ys-month{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:#fff;letter-spacing:1.8px;}
-.ys-profit{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.2px;}
-.ys-row.year .ys-profit{font-size:17px;font-weight:900;letter-spacing:-.3px;}
+.ys-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;background:linear-gradient(to bottom,#111,#0a0a0a);border-bottom:1px solid #1a1a1a;}
+.ys-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:2px;color:#fff;text-transform:uppercase;}
+.ys-year-chip{font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.12);padding:3px 9px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+.ys-row{padding:10px 16px;}
+.ys-row + .ys-row{border-top:1px solid #111;}
+.ys-row.year{background:linear-gradient(to right,rgba(74,222,128,.06) 0%,transparent 100%);padding:14px 16px;}
+.ys-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:10px;}
+.ys-month{font-size:12px;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:.6px;}
+.ys-row.year .ys-month{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:900;color:#fff;letter-spacing:1.6px;}
+.ys-profit{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.2px;}
+.ys-row.year .ys-profit{font-size:16px;font-weight:900;}
 .ys-profit.pos{color:#4ade80;}
 .ys-profit.neg{color:#f87171;}
-.ys-bar-wrap{height:5px;background:#111;border-radius:3px;overflow:hidden;}
-.ys-row.year .ys-bar-wrap{height:7px;}
-.ys-bar{height:100%;border-radius:3px;transition:width .3s ease;}
+.ys-bar-wrap{height:4px;background:#111;border-radius:3px;overflow:hidden;}
+.ys-row.year .ys-bar-wrap{height:6px;}
+.ys-bar{height:100%;border-radius:3px;}
 .ys-bar.pos{background:linear-gradient(to right,#16a34a,#4ade80,#86efac);}
 .ys-bar.neg{background:linear-gradient(to right,#b91c1c,#f87171);}
-.ys-avg{margin-top:6px;text-align:right;font-size:10px;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.3px;}
+.ys-avg{margin-top:5px;text-align:right;font-size:10px;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.3px;}
 
-/* Note banner */
-.note-banner{margin-bottom:14px;padding:9px 12px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;font-size:11px;color:#93c5fd;text-align:center;letter-spacing:.3px;}
+.note-banner{margin-bottom:12px;padding:9px 12px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;font-size:11px;color:#93c5fd;text-align:center;letter-spacing:.3px;}
 </style>
 </head>
 <body>
 
-<div class="note-banner">🎨 Design Preview — mock data, each month is its own card</div>
+<div class="note-banner">🎨 Tile grid · tap a month to open detail</div>
 
 <div class="loc-tabs">
   <div class="loc-tab on">DeBary</div>
@@ -282,243 +329,37 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   <div class="spark-labels" id="sparkLabels"></div>
 </div>
 
-<!-- Q1 DIVIDER -->
-<div class="q-divider">
-  <div class="q-divider-line"></div>
-  <div class="q-divider-label">Q1 · 2026</div>
-  <div class="q-divider-line"></div>
+<!-- Q1 -->
+<div class="section-head">
+  <div class="section-head-line"></div>
+  <div class="section-head-label">Q1 · 2026</div>
+  <div class="section-head-line"></div>
 </div>
+<div class="tile-grid" id="q1"></div>
 
-<!-- JAN -->
-<div class="month">
-  <div class="month-head">
-    <div class="left">
-      <div class="month-name">January</div>
-      <div class="month-year">2026</div>
-    </div>
-    <div class="month-net pos">+$14,200</div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Revenue</div>
-    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$42,100</span></div>
-    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$8,500</span></div>
-    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$2,100</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Fixed Bills</div>
-    <div class="m-row"><span class="m-label">Rent</span><span class="m-val has-note">$4,800</span></div>
-    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
-    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val has-note">$680</span></div>
-    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,900</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Variable</div>
-    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$18,200</span></div>
-    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val has-note">$5,600</span></div>
-    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,400</span></div>
-    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
-    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$34,600</span></div>
-  </div>
-
-  <div class="m-profit">
-    <div class="m-profit-label">Net Profit</div>
-    <div class="m-profit-val">+$14,200</div>
-  </div>
+<!-- Q2 -->
+<div class="section-head">
+  <div class="section-head-line"></div>
+  <div class="section-head-label">Q2 · 2026</div>
+  <div class="section-head-line"></div>
 </div>
-
-<!-- FEB -->
-<div class="month">
-  <div class="month-head">
-    <div class="left">
-      <div class="month-name">February</div>
-      <div class="month-year">2026</div>
-    </div>
-    <div class="month-net pos">+$16,880</div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Revenue</div>
-    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$48,220</span></div>
-    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$12,000</span></div>
-    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$1,850</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Fixed Bills</div>
-    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
-    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
-    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$720</span></div>
-    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,940</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Variable</div>
-    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$19,800</span></div>
-    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$7,450</span></div>
-    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,600</span></div>
-    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
-    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$38,290</span></div>
-  </div>
-
-  <div class="m-profit">
-    <div class="m-profit-label">Net Profit</div>
-    <div class="m-profit-val">+$16,880</div>
-  </div>
-</div>
-
-<!-- MAR -->
-<div class="month">
-  <div class="month-head">
-    <div class="left">
-      <div class="month-name">March</div>
-      <div class="month-year">2026</div>
-    </div>
-    <div class="month-net pos">+$17,240</div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Revenue</div>
-    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$51,800</span></div>
-    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$14,500</span></div>
-    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$2,400</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Fixed Bills</div>
-    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
-    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
-    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$590</span></div>
-    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,810</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Variable</div>
-    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val has-note">$21,400</span></div>
-    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$8,900</span></div>
-    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,800</span></div>
-    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
-    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$41,410</span></div>
-  </div>
-
-  <div class="m-profit">
-    <div class="m-profit-label">Net Profit</div>
-    <div class="m-profit-val">+$17,240</div>
-  </div>
-</div>
-
-<!-- Q2 DIVIDER -->
-<div class="q-divider">
-  <div class="q-divider-line"></div>
-  <div class="q-divider-label">Q2 · 2026</div>
-  <div class="q-divider-line"></div>
-</div>
-
-<!-- APR -->
-<div class="month">
-  <div class="month-head">
-    <div class="left">
-      <div class="month-name">April</div>
-      <div class="month-year">2026</div>
-    </div>
-    <div class="month-net pos">+$12,490</div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Revenue</div>
-    <div class="m-row revenue"><span class="m-label">Payments</span><span class="m-val">$44,900</span></div>
-    <div class="m-row revenue"><span class="m-label">Cash Sales</span><span class="m-val">$6,200</span></div>
-    <div class="m-row revenue"><span class="m-label">Extras</span><span class="m-val">$1,200</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Fixed Bills</div>
-    <div class="m-row"><span class="m-label">Rent</span><span class="m-val">$4,800</span></div>
-    <div class="m-row"><span class="m-label">Insurance</span><span class="m-val">$1,420</span></div>
-    <div class="m-row"><span class="m-label">Utilities</span><span class="m-val">$640</span></div>
-    <div class="m-row subtotal"><span class="m-label">Core Bills</span><span class="m-val">$6,860</span></div>
-  </div>
-
-  <div class="m-section">
-    <div class="m-section-label">Variable</div>
-    <div class="m-row"><span class="m-label">Payroll</span><span class="m-val">$17,900</span></div>
-    <div class="m-row"><span class="m-label">Parts & Repair</span><span class="m-val">$6,200</span></div>
-    <div class="m-row"><span class="m-label">Advertising</span><span class="m-val">$2,200</span></div>
-    <div class="m-row"><span class="m-label">GPS / Fees</span><span class="m-val">$1,500</span></div>
-    <div class="m-row subtotal"><span class="m-label">Total Bills</span><span class="m-val">$34,660</span></div>
-  </div>
-
-  <div class="m-profit">
-    <div class="m-profit-label">Net Profit</div>
-    <div class="m-profit-val">+$12,490</div>
-  </div>
-</div>
-
-<!-- EMPTY MONTHS -->
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">May</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">June</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
+<div class="tile-grid" id="q2"></div>
 
 <!-- Q3 -->
-<div class="q-divider">
-  <div class="q-divider-line"></div>
-  <div class="q-divider-label">Q3 · 2026</div>
-  <div class="q-divider-line"></div>
+<div class="section-head">
+  <div class="section-head-line"></div>
+  <div class="section-head-label">Q3 · 2026</div>
+  <div class="section-head-line"></div>
 </div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">July</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">August</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">September</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
+<div class="tile-grid" id="q3"></div>
 
 <!-- Q4 -->
-<div class="q-divider">
-  <div class="q-divider-line"></div>
-  <div class="q-divider-label">Q4 · 2026</div>
-  <div class="q-divider-line"></div>
+<div class="section-head">
+  <div class="section-head-line"></div>
+  <div class="section-head-label">Q4 · 2026</div>
+  <div class="section-head-line"></div>
 </div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">October</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">November</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
-<div class="month empty">
-  <div class="month-head">
-    <div class="left"><div class="month-name">December</div><div class="month-year">2026</div></div>
-    <div class="month-net empty">—</div>
-  </div>
-</div>
+<div class="tile-grid" id="q4"></div>
 
 <!-- YEARLY SUMMARY -->
 <div class="ys">
@@ -554,27 +395,161 @@ body{max-width:420px;margin:0 auto;padding:14px 12px 80px;}
   </div>
 </div>
 
+<!-- FULL-SCREEN DETAIL OVERLAY -->
+<div class="overlay" id="ov">
+  <div class="ov-head">
+    <div class="ov-back" onclick="closeOverlay()">←</div>
+    <div class="ov-title" id="ov-title">Month</div>
+    <div class="ov-net-chip pos" id="ov-chip">+$0</div>
+  </div>
+  <div class="ov-body" id="ov-body"></div>
+</div>
+
 <script>
-var months=['J','F','M','A','M','J','J','A','S','O','N','D'];
-var values=[14200,16880,17240,12490,0,0,0,0,0,0,0,0];
-var currentMonthIdx=3;
-var maxVal=Math.max.apply(null,values.filter(function(v){return v!==0;}));
-var bars=document.getElementById('sparkBars');
-var labels=document.getElementById('sparkLabels');
-for(var i=0;i<12;i++){
-  var b=document.createElement('div');
-  b.className='spark-bar';
-  if(values[i]>0){b.classList.add('pos');b.style.height=Math.max(3,values[i]/maxVal*100)+'%';}
-  else if(values[i]<0){b.classList.add('neg');b.style.height=Math.max(3,Math.abs(values[i])/maxVal*100)+'%';}
-  else{b.style.height='3px';}
-  if(i===currentMonthIdx)b.classList.add('current');
-  bars.appendChild(b);
-  var l=document.createElement('div');
-  l.className='spark-lbl';
-  if(i===currentMonthIdx)l.classList.add('active');
-  l.textContent=months[i];
-  labels.appendChild(l);
+// === Mock data ===
+var MONTHS=[
+  {name:'JAN',idx:0,data:makeMonth(42100,8500,2100, 4800,1420,680,  18200,5600,2400,1500)},
+  {name:'FEB',idx:1,data:makeMonth(48220,12000,1850, 4800,1420,720, 19800,7450,2600,1500)},
+  {name:'MAR',idx:2,data:makeMonth(51800,14500,2400, 4800,1420,590, 21400,8900,2800,1500)},
+  {name:'APR',idx:3,data:makeMonth(44900,6200,1200,  4800,1420,640, 17900,6200,2200,1500)},
+  {name:'MAY',idx:4,data:null},
+  {name:'JUN',idx:5,data:null},
+  {name:'JUL',idx:6,data:null},
+  {name:'AUG',idx:7,data:null},
+  {name:'SEP',idx:8,data:null},
+  {name:'OCT',idx:9,data:null},
+  {name:'NOV',idx:10,data:null},
+  {name:'DEC',idx:11,data:null}
+];
+
+function makeMonth(pay,cash,extra, rent,ins,util, payroll,parts,ad,gps){
+  var rev=pay+cash+extra;
+  var core=rent+ins+util;
+  var varBills=payroll+parts+ad+gps;
+  var totalBills=core+varBills;
+  var net=rev-totalBills;
+  return {pay:pay,cash:cash,extra:extra,rent:rent,ins:ins,util:util,payroll:payroll,parts:parts,ad:ad,gps:gps,rev:rev,core:core,totalBills:totalBills,net:net};
 }
+
+function fmt(n){
+  if(n==null) return '—';
+  var neg=n<0;
+  return (neg?'-$':'+$')+Math.abs(n).toLocaleString();
+}
+function fmtPlain(n){
+  return '$'+Math.abs(n).toLocaleString();
+}
+
+// === Render tiles ===
+function renderTiles(){
+  var quarters=[['q1',0],['q2',3],['q3',6],['q4',9]];
+  quarters.forEach(function(q){
+    var el=document.getElementById(q[0]);
+    var start=q[1];
+    var h='';
+    for(var i=start;i<start+3;i++){
+      var m=MONTHS[i];
+      if(!m.data){
+        h+='<div class="tile empty">'+
+          '<div class="tile-month">'+m.name+'</div>'+
+          '<div class="tile-year">2026</div>'+
+          '<div class="tile-net">—</div>'+
+          '</div>';
+      }else{
+        var pos=m.data.net>=0;
+        // bar split: revenue share vs bills share of (rev+bills) total
+        var total=m.data.rev+m.data.totalBills;
+        var revPct=total>0?(m.data.rev/total*100):50;
+        h+='<div class="tile '+(pos?'pos':'neg')+'" onclick="openOverlay('+i+')">'+
+          '<div class="tile-month">'+m.name+'</div>'+
+          '<div class="tile-year">2026</div>'+
+          '<div class="tile-net">'+fmt(m.data.net)+'</div>'+
+          '<div class="tile-bar">'+
+            '<div class="tile-bar-rev" style="flex:'+revPct.toFixed(1)+';"></div>'+
+            '<div class="tile-bar-bill" style="flex:'+(100-revPct).toFixed(1)+';"></div>'+
+          '</div>'+
+          '<div class="tile-caption"><span>rev '+Math.round(revPct)+'%</span><span>'+fmtPlain(m.data.rev/1000).replace('.00','')+'k</span></div>'+
+          '</div>';
+      }
+    }
+    el.innerHTML=h;
+  });
+}
+
+// === Overlay (full-screen month detail) ===
+function openOverlay(idx){
+  var m=MONTHS[idx];
+  if(!m.data)return;
+  document.getElementById('ov-title').textContent=m.name+' 2026';
+  var chip=document.getElementById('ov-chip');
+  chip.className='ov-net-chip '+(m.data.net>=0?'pos':'neg');
+  chip.textContent=fmt(m.data.net);
+  var h='';
+  // Revenue section
+  h+='<div class="ov-section">';
+  h+='<div class="ov-section-head">Revenue</div>';
+  h+='<div class="ov-row revenue"><span class="ov-label">Payments</span><span class="ov-val">'+fmtPlain(m.data.pay)+'</span></div>';
+  h+='<div class="ov-row revenue"><span class="ov-label">Cash Sales</span><span class="ov-val">'+fmtPlain(m.data.cash)+'</span></div>';
+  h+='<div class="ov-row revenue"><span class="ov-label">Extras</span><span class="ov-val">'+fmtPlain(m.data.extra)+'</span></div>';
+  h+='</div>';
+  // Fixed bills
+  h+='<div class="ov-section">';
+  h+='<div class="ov-section-head">Fixed Bills</div>';
+  h+='<div class="ov-row"><span class="ov-label">Rent</span><span class="ov-val has-note">'+fmtPlain(m.data.rent)+'</span></div>';
+  h+='<div class="ov-row"><span class="ov-label">Insurance</span><span class="ov-val">'+fmtPlain(m.data.ins)+'</span></div>';
+  h+='<div class="ov-row"><span class="ov-label">Utilities</span><span class="ov-val has-note">'+fmtPlain(m.data.util)+'</span></div>';
+  h+='<div class="ov-row subtotal"><span class="ov-label">Core Bills</span><span class="ov-val">'+fmtPlain(m.data.core)+'</span></div>';
+  h+='</div>';
+  // Variable
+  h+='<div class="ov-section">';
+  h+='<div class="ov-section-head">Variable</div>';
+  h+='<div class="ov-row"><span class="ov-label">Payroll</span><span class="ov-val has-note">'+fmtPlain(m.data.payroll)+'</span></div>';
+  h+='<div class="ov-row"><span class="ov-label">Parts & Repair</span><span class="ov-val has-note">'+fmtPlain(m.data.parts)+'</span></div>';
+  h+='<div class="ov-row"><span class="ov-label">Advertising</span><span class="ov-val">'+fmtPlain(m.data.ad)+'</span></div>';
+  h+='<div class="ov-row"><span class="ov-label">GPS / Fees</span><span class="ov-val">'+fmtPlain(m.data.gps)+'</span></div>';
+  h+='<div class="ov-row subtotal"><span class="ov-label">Total Bills</span><span class="ov-val">'+fmtPlain(m.data.totalBills)+'</span></div>';
+  h+='</div>';
+  // Net profit
+  var pc=m.data.net>=0?'':' neg';
+  h+='<div class="ov-profit-card'+pc+'">';
+  h+='<div class="ov-profit-label">Net Profit</div>';
+  h+='<div class="ov-profit-val">'+fmt(m.data.net)+'</div>';
+  h+='</div>';
+
+  document.getElementById('ov-body').innerHTML=h;
+  document.getElementById('ov').classList.add('on');
+  window.scrollTo(0,0);
+}
+function closeOverlay(){
+  document.getElementById('ov').classList.remove('on');
+}
+
+// === Sparkline ===
+function renderSparkline(){
+  var months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+  var values=[14200,16880,17240,12490,0,0,0,0,0,0,0,0];
+  var currentMonthIdx=3;
+  var maxVal=Math.max.apply(null,values.filter(function(v){return v!==0;}));
+  var bars=document.getElementById('sparkBars');
+  var labels=document.getElementById('sparkLabels');
+  for(var i=0;i<12;i++){
+    var b=document.createElement('div');
+    b.className='spark-bar';
+    if(values[i]>0){b.classList.add('pos');b.style.height=Math.max(3,values[i]/maxVal*100)+'%';}
+    else if(values[i]<0){b.classList.add('neg');b.style.height=Math.max(3,Math.abs(values[i])/maxVal*100)+'%';}
+    else{b.style.height='3px';}
+    if(i===currentMonthIdx)b.classList.add('current');
+    bars.appendChild(b);
+    var l=document.createElement('div');
+    l.className='spark-lbl';
+    if(i===currentMonthIdx)l.classList.add('active');
+    l.textContent=months[i];
+    labels.appendChild(l);
+  }
+}
+
+renderTiles();
+renderSparkline();
 </script>
 
 </body>
