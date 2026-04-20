@@ -18692,9 +18692,13 @@ function openPayrollView(){
     o=document.createElement('div');
     o.id='payroll-overlay';
   }
-  // Ensure it's a direct child of body (not inside #app which we just hid)
+  // Ensure it's a direct child of body (not inside #app which we just hid).
+  // html,body have overflow:hidden globally, so the document never scrolls —
+  // the overlay must be its own scroll container. Use position:fixed+inset:0
+  // so the overlay covers the viewport, and put overflow-y:auto on it so the
+  // long payroll list scrolls inside the overlay.
   document.body.appendChild(o);
-  o.style.cssText='display:block;background:#000;min-height:100vh;';
+  o.style.cssText='display:block;position:fixed;inset:0;z-index:100;background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   o.innerHTML=
     '<div class="tb">'+
     '<button onclick="payrollViewBack()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>'+
@@ -18702,8 +18706,8 @@ function openPayrollView(){
     '<button onclick="doSync()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;">&#x21BB;</button>'+
     '<button onclick="doLogout()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-weight:300;">&#x2715;</button>'+
     '</div>'+
-    '<div id="payroll-view-content" style="padding:0 0 80px;"></div>';
-  window.scrollTo(0,0);
+    '<div id="payroll-view-content" style="padding:0 0 120px;"></div>';
+  o.scrollTop=0;
   renderPayrollView();
 }
 function payrollViewBack(){
