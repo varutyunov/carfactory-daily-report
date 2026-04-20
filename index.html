@@ -18329,23 +18329,23 @@ function payrollOpen(who){
   _payrollDeductions=[];
   // Hide original cash payouts sheet
   document.getElementById('cash-payouts-sheet').style.display='none';
-  // Show payroll calc as its own full-screen overlay — flex column with an
-  // inner scrollable body. Matches the iOS-tested pattern used by the other
-  // overlays in this app (see #forms-body, #deal-body, #pay-view-body).
-  // The outer container has overflow:hidden and is a flex parent; the inner
-  // body is flex:1 + overflow-y:auto, which scrolls reliably on iOS PWA.
+  // Show payroll calc as its own full-screen overlay — matches the
+  // #forms-body / #deal-body pattern that reliably scrolls on iOS PWA:
+  // outer is position:fixed+inset:0 (resolves to 100vh height), inner body
+  // is height:100% with overflow-y:auto and box-sizing:border-box so padding
+  // doesn't spill past the viewport.
   var ov=document.getElementById('payroll-calc-overlay');
   if(!ov){
     ov=document.createElement('div');
     ov.id='payroll-calc-overlay';
-    ov.style.cssText='position:fixed;inset:0;z-index:9500;background:#0d0d0d;display:flex;flex-direction:column;overflow:hidden;';
-    ov.innerHTML='<div id="cp-payroll-content" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 120px;"></div>';
+    ov.style.cssText='position:fixed;inset:0;z-index:9500;background:#0d0d0d;';
+    ov.innerHTML='<div id="cp-payroll-content" style="height:100%;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 120px;"></div>';
     document.body.appendChild(ov);
   } else {
     var _body=ov.querySelector('#cp-payroll-content');
     _body.innerHTML='';
     _body.scrollTop=0;
-    ov.style.display='flex';
+    ov.style.display='block';
   }
   payrollRender(who);
 }
