@@ -1518,6 +1518,7 @@ body.light .cal-fab{background:#4488ff !important;}
         </div>
         <div id="payroll-row-manny" style="display:flex;gap:8px;margin-bottom:14px;">
           <button id="payroll-btn-manny" onclick="payrollOpen('manny')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a0a00,#3d1f00);border:1px solid rgba(251,146,60,.3);border-radius:12px;color:#fb923c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Manny Payroll</button>
+          <button id="payroll-btn-richard" onclick="payrollOpen('richard')" style="flex:1;padding:12px;background:linear-gradient(145deg,#1a1a00,#3d3d00);border:1px solid rgba(250,204,21,.3);border-radius:12px;color:#facc15;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Richard Payroll</button>
         </div>
       </div>
     </div>
@@ -18362,11 +18363,15 @@ function payrollRender(who){
   var isRicky=who==='ricky';
   var isManny=who==='manny';
   var isJesse=who==='jesse';
-  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':'Scott';
-  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
-  var color=isRicky?'#a78bfa':isManny?'#fb923c':isJesse?'#34d399':'#60a5fa';
-  var bg=isRicky?'rgba(167,139,250,.1)':isManny?'rgba(251,146,60,.1)':isJesse?'rgba(52,211,153,.1)':'rgba(96,165,250,.1)';
-  var border=isRicky?'rgba(167,139,250,.2)':isManny?'rgba(251,146,60,.2)':isJesse?'rgba(52,211,153,.2)':'rgba(96,165,250,.2)';
+  var isRichard=who==='richard';
+  // Richard: daily rate only ($120/day), no car commission (like Ricky).
+  // isDailyOnly controls whether to render the Cars Sold / Full Sales sections.
+  var isDailyOnly=isRicky||isRichard;
+  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':isRichard?'Richard':'Scott';
+  var dayRate=isRicky?170:isManny?100:isJesse?100:isRichard?120:125;
+  var color=isRicky?'#a78bfa':isManny?'#fb923c':isJesse?'#34d399':isRichard?'#facc15':'#60a5fa';
+  var bg=isRicky?'rgba(167,139,250,.1)':isManny?'rgba(251,146,60,.1)':isJesse?'rgba(52,211,153,.1)':isRichard?'rgba(250,204,21,.1)':'rgba(96,165,250,.1)';
+  var border=isRicky?'rgba(167,139,250,.2)':isManny?'rgba(251,146,60,.2)':isJesse?'rgba(52,211,153,.2)':isRichard?'rgba(250,204,21,.2)':'rgba(96,165,250,.2)';
 
   var html='<div style="margin-bottom:14px;">';
   // Back button + title
@@ -18386,8 +18391,8 @@ function payrollRender(who){
 
   html+='</div></div>';
 
-  // Cars sold (Scott + Manny + Jesse)
-  if(!isRicky){
+  // Cars sold (Scott + Manny + Jesse — NOT Ricky or Richard, both daily-only)
+  if(!isDailyOnly){
     html+='<div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:10px;">';
     html+='<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Cars Sold</div>';
     html+='<div style="display:flex;align-items:center;gap:12px;">';
@@ -18580,14 +18585,16 @@ function payrollRecalc(who){
   var isRicky=who==='ricky';
   var isManny=who==='manny';
   var isJesse=who==='jesse';
-  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
+  var isRichard=who==='richard';
+  var isDailyOnly=isRicky||isRichard;
+  var dayRate=isRicky?170:isManny?100:isJesse?100:isRichard?120:125;
   var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
   var daysTotal=days*dayRate;
   var dt=document.getElementById('pr-days-total');
   if(dt) dt.textContent='$'+daysTotal.toLocaleString();
 
   var carsTotal=0;
-  if(!isRicky){
+  if(!isDailyOnly){
     var cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
     carsTotal=isManny?mannyCarPay(cars):isJesse?cars*300:cars*100;
     var ct=document.getElementById('pr-cars-total');
@@ -18619,11 +18626,13 @@ async function payrollSubmit(who){
   var isRicky=who==='ricky';
   var isManny=who==='manny';
   var isJesse=who==='jesse';
-  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':'Scott';
-  var dayRate=isRicky?170:isManny?100:isJesse?100:125;
+  var isRichard=who==='richard';
+  var isDailyOnly=isRicky||isRichard;
+  var name=isRicky?'Ricky':isManny?'Manny':isJesse?'Jesse':isRichard?'Richard':'Scott';
+  var dayRate=isRicky?170:isManny?100:isJesse?100:isRichard?120:125;
   var days=parseInt((document.getElementById('pr-days')||{}).textContent)||0;
   var cars=0;
-  if(!isRicky) cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
+  if(!isDailyOnly) cars=parseInt((document.getElementById('pr-cars')||{}).textContent)||0;
   var fullSales=0;
   if(isManny||isJesse) fullSales=parseInt((document.getElementById('pr-fullsales')||{}).textContent)||0;
   var daysTotal=days*dayRate;
@@ -18638,7 +18647,7 @@ async function payrollSubmit(who){
 
   // Build description
   var desc=days+' day'+(days===1?'':'s')+' ($'+daysTotal+')';
-  if(!isRicky&&cars>0) desc+=', '+cars+' car'+(cars===1?'':'s')+' ($'+carsTotal+')';
+  if(!isDailyOnly&&cars>0) desc+=', '+cars+' car'+(cars===1?'':'s')+' ($'+carsTotal+')';
   if((isManny||isJesse)&&fullSales>0) desc+=', '+fullSales+' full sale'+(fullSales===1?'':'s')+' ($'+fullSalesTotal+')';
   if(_payrollExtras.length){
     _payrollExtras.forEach(function(e){var sign=(e.sign||1);desc+=', '+e.reason+' ('+(sign>0?'+':'-')+'$'+e.amount+')';});
@@ -18672,7 +18681,7 @@ var _prPeriodStart=null;
 var _prDeals=[];
 var _prPayouts=[];
 var _PR_REV=399;
-var _PR_DB_EMP=['Ricky','Scott','Manny','Dennis'];
+var _PR_DB_EMP=['Ricky','Scott','Manny','Dennis','Richard'];
 var _PR_DL_EMP=['Jesse'];
 var _PR_ANCHOR=new Date(2025,0,12);
 
@@ -18818,8 +18827,11 @@ function _prRender(){
   h+='<div style="padding:14px 16px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;font-family:\'Barlow Condensed\',sans-serif;">Payroll</div><div style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;background:#1a0a0a;color:#f87171;">'+(totalPayroll>0?'-'+_prFmt$(totalPayroll):'$0.00')+'</div></div>';
   employees.forEach(function(name){
     var ep=empPayroll[name];
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a1a;">';
-    h+='<div><div style="font-size:15px;font-weight:700;color:#ddd;">'+name+'</div>';
+    var safeName=name.replace(/'/g,"\\'");
+    // Tap row to see week-by-week breakdown of the 2-week cycle
+    h+='<div onclick="_prShowEmpBreakdown(\''+safeName+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a1a;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    h+='<div>';
+    h+='<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:15px;font-weight:700;color:#ddd;">'+name+'</span><span style="color:#444;font-size:14px;">›</span></div>';
     if(ep.amount>0&&ep.details.length) h+='<div style="font-size:12px;color:#666;margin-top:2px;max-width:200px;">'+ep.details[0]+'</div>';
     h+='</div>';
     if(ep.amount>0) h+='<div style="font-size:17px;font-weight:800;color:#f87171;">-'+_prFmt$(ep.amount)+'</div>';
@@ -18848,6 +18860,87 @@ function _prRender(){
   if(totalOther>0) h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;"><div style="font-size:14px;color:#888;">Other Payouts</div><div style="font-size:15px;font-weight:700;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
   h+='</div>';
   var el=document.getElementById('pr-data');if(el)el.innerHTML=h;
+}
+
+// Tap an employee row in the payroll view to see their 2-week breakdown.
+// Splits payouts by week_start (wks[0] = week 1, wks[1] = week 2) and shows
+// the parsed "logged_by" detail string for each payout so the user can see
+// days worked, cars sold, bonuses, extras, etc. behind each pay.
+function _prShowEmpBreakdown(empName){
+  var ps=_prPeriodStart; if(!ps)return;
+  var wks=_prWeekKeys(ps);
+  var w1Start=new Date(ps);
+  var w2Start=new Date(ps); w2Start.setDate(w2Start.getDate()+7);
+  var w1End=new Date(w2Start); w1End.setDate(w1End.getDate()-1);
+  var w2End=_prGetPeriodEnd(ps);
+  var nameLc=empName.toLowerCase();
+  var rows=(_prPayouts||[]).filter(function(p){
+    if(p.location!==_prLocation) return false;
+    var paidLc=(p.paid_to||'').toLowerCase();
+    if(paidLc.indexOf('payroll')===-1) return false;
+    var stripped=paidLc.replace(/\s*[—–\-]\s*payroll.*/,'').trim();
+    return stripped===nameLc;
+  });
+  var w1Rows=rows.filter(function(p){return p.week_start===wks[0];});
+  var w2Rows=rows.filter(function(p){return p.week_start===wks[1];});
+  var w1Total=0; w1Rows.forEach(function(p){w1Total+=parseFloat(p.amount)||0;});
+  var w2Total=0; w2Rows.forEach(function(p){w2Total+=parseFloat(p.amount)||0;});
+  var grand=w1Total+w2Total;
+
+  function fmtWk(rows,start,end,total){
+    var out='<div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;margin-bottom:12px;overflow:hidden;">';
+    out+='<div style="padding:12px 14px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;">';
+    out+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;">Week '+(_prFmtDate(start)+' – '+_prFmtDate(end))+'</div>';
+    out+='<div style="font-size:15px;font-weight:800;color:'+(total>0?'#f87171':'#444')+';">'+(total>0?'-'+_prFmt$(total):'$0.00')+'</div>';
+    out+='</div>';
+    if(!rows.length){
+      out+='<div style="padding:16px;color:#444;font-size:13px;font-style:italic;text-align:center;">No payouts this week</div>';
+    } else {
+      rows.forEach(function(p){
+        var dt=p.created_at?new Date(p.created_at):null;
+        var ds=dt?(dt.getMonth()+1)+'/'+dt.getDate():'';
+        var amt=parseFloat(p.amount)||0;
+        // logged_by format: "ActorName | desc" — grab the desc part
+        var detail=(p.logged_by||'').split('|').slice(1).join('|').trim();
+        out+='<div style="padding:10px 14px;border-bottom:1px solid #1a1a1a;">';
+        out+='<div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:13px;color:#aaa;">'+ds+'</div><div style="font-size:14px;font-weight:700;color:#f87171;">-'+_prFmt$(amt)+'</div></div>';
+        if(detail) out+='<div style="font-size:12px;color:#777;margin-top:3px;line-height:1.4;">'+detail+'</div>';
+        out+='</div>';
+      });
+    }
+    out+='</div>';
+    return out;
+  }
+
+  var html='';
+  html+='<div style="padding:14px 16px;">';
+  html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
+  html+='<button onclick="_prCloseEmpBreakdown()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:0 6px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#fff;flex:1;">'+empName+' — Breakdown</div>';
+  html+='</div>';
+  html+='<div style="font-size:13px;color:#666;margin-bottom:14px;">Period: '+_prFmtDate(ps)+' – '+_prFmtDate(w2End)+', '+w2End.getFullYear()+' · '+_prLocation+'</div>';
+  html+=fmtWk(w1Rows,w1Start,w1End,w1Total);
+  html+=fmtWk(w2Rows,w2Start,w2End,w2Total);
+  // Period total
+  html+='<div style="background:#0d1117;border:1px solid #1e1e1e;border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between;">';
+  html+='<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;">Period Total</div>';
+  html+='<div style="font-size:20px;font-weight:900;color:'+(grand>0?'#f87171':'#444')+';">'+(grand>0?'-'+_prFmt$(grand):'$0.00')+'</div>';
+  html+='</div>';
+  html+='</div>';
+
+  var ov=document.getElementById('pr-emp-breakdown-overlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='pr-emp-breakdown-overlay';
+    document.body.appendChild(ov);
+  }
+  ov.style.cssText='display:block;position:fixed;inset:0;z-index:200;background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  ov.innerHTML=html;
+  ov.scrollTop=0;
+}
+function _prCloseEmpBreakdown(){
+  var ov=document.getElementById('pr-emp-breakdown-overlay');
+  if(ov) ov.style.display='none';
 }
 
 async function _prLoadHistory(){
