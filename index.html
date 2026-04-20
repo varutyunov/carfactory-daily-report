@@ -15640,6 +15640,10 @@ async function payDeleteFinal(id){
       }catch(logErr){ console.warn('Audit log error:',logErr); }
     }
     await sbDelete('payments',id);
+    // D2b: propagate the delete to Profit Payments (only for regular payments)
+    if(p && _profitShouldPropagate(p)){
+      try{ await _removePaymentFromProfit(p); }catch(erp){ console.warn('Profit Payments remove failed:',erp); }
+    }
     _payWeekData=_payWeekData.filter(function(x){return x.id!==id;});
     payViewBack();
   }catch(e){
@@ -15975,6 +15979,140 @@ function payDealSelect(dealId){
   payVehicleSearchClose();
 }
 
+// ══════════════════════════════════════════════════════════════
+// D2: APPEND APP PAYMENT → PROFIT PAYMENTS ROW
+// Posts a +amount to the Profit26 Payments cell for the payment's
+// month, and appends a matching 'amount year make model lastname'
+// line to that cell's note. Called from payScanSave after each
+// successful sbPost('payments', ...) for NEW payments only.
+// Does not fire for deal auto-posts (those flow through dealSubmit
+// and go to Cash Sales via D3) or deposit auto-posts (separate).
+// ══════════════════════════════════════════════════════════════
+async function _appendPaymentToProfit(payload){
+  try{
+    if(!payload) return;
+    // Don't propagate Deal or Deposit auto-posts (they flow through separate paths)
+    if(!_profitShouldPropagate(payload)) return;
+    // Month from payment_date; fall back to today
+    var d = payload.payment_date ? new Date(payload.payment_date+'T12:00:00') : new Date();
+    var monthIdx = d.getMonth();
+    var loc = payload.location || (me ? me.location : 'DeBary');
+    var amt = parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,''))||0;
+    if(amt === 0) return;
+    // Description: '<year> <make> <model> <lastname>' — matches existing sheet note style
+    var descParts = [];
+    if(payload.vehicle_year) descParts.push(String(payload.vehicle_year).trim());
+    if(payload.vehicle_make) descParts.push(String(payload.vehicle_make).trim());
+    if(payload.vehicle_model) descParts.push(String(payload.vehicle_model).trim());
+    if(payload.customer_name){
+      var cp = String(payload.customer_name).trim().split(/\s+/);
+      if(cp.length){
+        var last = cp[cp.length-1];
+        if(last) descParts.push(last);
+      }
+    }
+    var desc = descParts.filter(Boolean).join(' ').trim();
+    var resp = await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      secret:_SHEETS_SECRET,
+      action:'profit_append_entry',
+      location:loc,
+      data:{month_idx:monthIdx,row_type:'payments',amount:amt,description:desc}
+    })});
+    var data=null;try{data=await resp.json();}catch(e){}
+    if(!data || data.ok===false){
+      console.warn('Profit Payments append failed:',data);
+      return;
+    }
+    // Background: keep the Supabase profit mirror fresh for the next Profit tab load
+    try{
+      fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+        secret:_SHEETS_SECRET,action:'sync_profit',location:loc
+      })});
+    }catch(e){}
+  }catch(e){
+    console.warn('Profit Payments append error:',e);
+  }
+}
+
+// Build the description string for a payment payload exactly as
+// _appendPaymentToProfit writes it, so we can match / update / remove
+// the corresponding entry later.
+function _profitDescFromPayment(payload){
+  if(!payload) return '';
+  var parts=[];
+  if(payload.vehicle_year) parts.push(String(payload.vehicle_year).trim());
+  if(payload.vehicle_make) parts.push(String(payload.vehicle_make).trim());
+  if(payload.vehicle_model) parts.push(String(payload.vehicle_model).trim());
+  if(payload.customer_name){
+    var cp=String(payload.customer_name).trim().split(/\s+/);
+    if(cp.length){var last=cp[cp.length-1];if(last) parts.push(last);}
+  }
+  return parts.filter(Boolean).join(' ').trim();
+}
+function _profitAmountFromPayment(payload){
+  return parseFloat(String((payload&&payload.amount)||'').replace(/[^0-9.\-]/g,''))||0;
+}
+function _profitMonthFromPayment(payload){
+  var d=payload&&payload.payment_date?new Date(payload.payment_date+'T12:00:00'):new Date();
+  return d.getMonth();
+}
+
+// D2b: UPDATE an existing entry in Profit Payments (patch formula + note).
+async function _updatePaymentInProfit(oldPayload, newPayload){
+  try{
+    if(!oldPayload || !newPayload) return;
+    var loc=newPayload.location||oldPayload.location||(me?me.location:'DeBary');
+    var monthIdx=_profitMonthFromPayment(newPayload);
+    var oldAmt=_profitAmountFromPayment(oldPayload);
+    var newAmt=_profitAmountFromPayment(newPayload);
+    if(oldAmt===0 && newAmt===0) return;
+    var oldDesc=_profitDescFromPayment(oldPayload);
+    var newDesc=_profitDescFromPayment(newPayload);
+    var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      secret:_SHEETS_SECRET,
+      action:'profit_update_entry',
+      location:loc,
+      data:{month_idx:monthIdx,row_type:'payments',
+            old_amount:oldAmt,old_description:oldDesc,
+            new_amount:newAmt,new_description:newDesc}
+    })});
+    var data=null;try{data=await resp.json();}catch(e){}
+    if(!data||data.ok===false){console.warn('Profit Payments update failed:',data);return;}
+    try{fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});}catch(e){}
+  }catch(e){console.warn('Profit Payments update error:',e);}
+}
+
+// D2b: REMOVE an entry from Profit Payments (trim formula + note line).
+async function _removePaymentFromProfit(payload){
+  try{
+    if(!payload) return;
+    var loc=payload.location||(me?me.location:'DeBary');
+    var monthIdx=_profitMonthFromPayment(payload);
+    var amt=_profitAmountFromPayment(payload);
+    if(amt===0) return;
+    var desc=_profitDescFromPayment(payload);
+    var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      secret:_SHEETS_SECRET,
+      action:'profit_remove_entry',
+      location:loc,
+      data:{month_idx:monthIdx,row_type:'payments',amount:amt,description:desc}
+    })});
+    var data=null;try{data=await resp.json();}catch(e){}
+    if(!data||data.ok===false){console.warn('Profit Payments remove failed:',data);return;}
+    try{fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});}catch(e){}
+  }catch(e){console.warn('Profit Payments remove error:',e);}
+}
+
+// Only propagate to Profit for regular user-entered payments.
+// Deal auto-posts and Deposit auto-posts have a '— ' prefix in raw_ocr_text.
+function _profitShouldPropagate(payload){
+  if(!payload) return false;
+  var raw=String(payload.raw_ocr_text||'');
+  if(raw.indexOf('Deal \u2014 ')===0) return false;
+  if(raw.indexOf('Deposit \u2014 ')===0) return false;
+  return true;
+}
+
 var _paySaving = false;
 var _paySavingTime = 0;
 async function payScanSave(){
@@ -16053,6 +16191,11 @@ async function payScanSave(){
       var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
       originalAmt='$'+(t/1.04).toFixed(2);
     }
+    // Snapshot the OLD payment (for D2b Profit update — amount/desc may change)
+    var _oldPayment = null;
+    try{
+      _oldPayment = (_payWeekData||[]).find(function(x){return x.id===_payEditId;}) || null;
+    }catch(e){}
     var record={
       customer_name:name,payment_date:date,payment_time:time||null,
       amount:pr.amount,payment_method:pr.method,
@@ -16067,6 +16210,10 @@ async function payScanSave(){
     // Only update photo if a new one was taken (don't erase existing)
     if(photoUrl) record.receipt_photo_url=photoUrl;
     await sbPatch('payments', _payEditId, record);
+    // D2b: propagate the edit to Profit Payments (only for regular user payments)
+    if(_oldPayment && _profitShouldPropagate(_oldPayment) && _profitShouldPropagate(record)){
+      try{ await _updatePaymentInProfit(_oldPayment, record); }catch(eup){ console.warn('Profit Payments update failed:',eup); }
+    }
     // Any additional rows added during edit → insert as NEW payments
     // (same customer/vehicle/date/location metadata, distinct method+amount)
     for(var _eRow=1;_eRow<payRows.length;_eRow++){
@@ -16076,7 +16223,7 @@ async function payScanSave(){
         var _et=parseFloat(_epr.amount.replace(/[^0-9.]/g,''))||0;
         _eOrig='$'+(_et/1.04).toFixed(2);
       }
-      await sbPost('payments',{
+      var _ePayload={
         customer_name:name,payment_date:date,payment_time:time||null,
         amount:_epr.amount,payment_method:_epr.method,
         card_fee_added:_epr.cardFee,original_amount:_eOrig||null,
@@ -16086,7 +16233,10 @@ async function payScanSave(){
         logged_by:me?me.name:'',week_start:weekStart,
         notes:note||null,raw_ocr_text:rawOcr,
         is_final_payment:isFinal||false,created_at:new Date().toISOString()
-      });
+      };
+      await sbPost('payments',_ePayload);
+      // D2: also auto-link these "added during edit" rows to Profit Payments
+      try{ await _appendPaymentToProfit(_ePayload); }catch(eap){ console.warn('Profit Payments auto-link failed:',eap); }
     }
   } else {
     // New payment — create one record per payment row
@@ -16097,7 +16247,7 @@ async function payScanSave(){
         var t=parseFloat(pr.amount.replace(/[^0-9.]/g,''))||0;
         originalAmt='$'+(t/1.04).toFixed(2);
       }
-      await sbPost('payments',{
+      var _payPayload={
         customer_name:name,payment_date:date,payment_time:time||null,
         amount:pr.amount,payment_method:pr.method,
         card_fee_added:pr.cardFee,original_amount:originalAmt||null,
@@ -16107,7 +16257,10 @@ async function payScanSave(){
         logged_by:me?me.name:'',week_start:weekStart,
         notes:note||null,raw_ocr_text:rawOcr,
         is_final_payment:isFinal||false,created_at:new Date().toISOString()
-      });
+      };
+      await sbPost('payments',_payPayload);
+      // D2: auto-append to Profit Payments row for this payment's month/location
+      try{ await _appendPaymentToProfit(_payPayload); }catch(eap){ console.warn('Profit Payments auto-link failed:',eap); }
     }
     // Push notification to managers
     try{

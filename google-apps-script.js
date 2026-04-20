@@ -997,6 +997,19 @@ function _handleProfitAction(action, location, data) {
     });
   }
 
+  if (action === 'profit_update_entry') {
+    // Update one entry in Payments or Cash Sales formula + note.
+    // Inputs: data.{month_idx, row_type, old_amount, old_description,
+    //               new_amount, new_description}
+    return _profitMutateEntry(sheet, data, 'update');
+  }
+
+  if (action === 'profit_remove_entry') {
+    // Remove one entry from Payments or Cash Sales formula + note.
+    // Inputs: data.{month_idx, row_type, amount, description}
+    return _profitMutateEntry(sheet, data, 'remove');
+  }
+
   if (action === 'update_profit_formula') {
     // Carve-out for Payments / Cash Sales cells — explicitly writes a formula
     // and matching note in lockstep. Callers should only route editable
@@ -1025,6 +1038,170 @@ function _handleProfitAction(action, location, data) {
   }
 
   return jsonResponse({ error: 'Unknown profit action: ' + action });
+}
+
+// Locate Profit26 cell for a given month + row_type and run update/remove on it.
+// Shared by profit_update_entry and profit_remove_entry.
+// Matching strategy:
+//   Primary  — match note line exactly by '<oldAmount> <oldDescription>' (trimmed)
+//              then align with the same-index number in the formula.
+//   Fallback — match by signed number in formula alone if note line not found.
+function _profitMutateEntry(sheet, data, mode) {
+  var monthIdxM = parseInt(data.month_idx);
+  var rowTypeM = String(data.row_type || '');
+  if (isNaN(monthIdxM) || monthIdxM < 0 || monthIdxM > 11) {
+    return jsonResponse({ ok: false, error: 'invalid_month_idx' });
+  }
+  if (rowTypeM !== 'payments' && rowTypeM !== 'cash_sales') {
+    return jsonResponse({ ok: false, error: 'invalid_row_type' });
+  }
+
+  // Locate the target cell (same math as profit_append_entry)
+  var START_COL_M = 4;
+  var startRowM = 1;
+  for (var srM = 1; srM <= 20; srM++) {
+    var cvM = String(sheet.getRange(srM, START_COL_M).getValue()).trim();
+    if (cvM === 'Jan' || cvM === 'January') { startRowM = srM; break; }
+  }
+  var BLOCK_ROWS_M = 22;
+  var BLOCK_GAP_M = 1;
+  var blockM = Math.floor(monthIdxM / 4);
+  var mInBlockM = monthIdxM % 4;
+  var blockStartInnerM = blockM * (BLOCK_ROWS_M + BLOCK_GAP_M);
+  var rowOffsetM = rowTypeM === 'payments' ? 20 : 21;
+  var targetRowM = startRowM + blockStartInnerM + rowOffsetM;
+  var targetColM = START_COL_M + mInBlockM * 3 + 1;
+  var cellM = sheet.getRange(targetRowM, targetColM);
+
+  var formulaM = cellM.getFormula() || '';
+  var noteM = cellM.getNote() || '';
+
+  // Parse formula into [{sign:'+'|'-', value}...] so we can manipulate by index
+  var body = formulaM.replace(/^=\s*/, '').trim();
+  var tokens = body.split(/([+\-])/).map(function(t){return t.trim();}).filter(Boolean);
+  var entries = [];
+  var sign = '+';
+  for (var ti = 0; ti < tokens.length; ti++) {
+    var tk = tokens[ti];
+    if (tk === '+' || tk === '-') { sign = tk; continue; }
+    var vv = parseFloat(tk);
+    if (!isNaN(vv)) { entries.push({ sign: sign, value: vv }); sign = '+'; }
+  }
+
+  // Parse note lines
+  var noteLines = noteM.split(/\r?\n/);
+  var parsedLines = noteLines.map(function(l){
+    var trimmed = (l || '').trim();
+    var m = trimmed.match(/^(-?\d+(?:\.\d+)?)\s+(.*)$/);
+    if (m) return { raw: l, amount: parseFloat(m[1]), desc: m[2].trim() };
+    var m2 = trimmed.match(/^(-?\d+(?:\.\d+)?)$/);
+    if (m2) return { raw: l, amount: parseFloat(m2[1]), desc: '' };
+    return { raw: l, amount: null, desc: trimmed };
+  });
+
+  // Find matching index — prefer full match of amount+desc, fall back to amount-only
+  var oldAmount, oldDesc;
+  if (mode === 'update') {
+    oldAmount = parseFloat(data.old_amount);
+    oldDesc = String(data.old_description || '').trim();
+  } else {
+    oldAmount = parseFloat(data.amount);
+    oldDesc = String(data.description || '').trim();
+  }
+  if (isNaN(oldAmount)) return jsonResponse({ ok: false, error: 'invalid_old_amount' });
+
+  // Index in note that matches (amount + desc)
+  var noteMatchIdx = -1;
+  for (var pi = 0; pi < parsedLines.length; pi++) {
+    var pl = parsedLines[pi];
+    if (pl.amount != null && Math.abs(pl.amount - oldAmount) < 0.01 && pl.desc === oldDesc) {
+      noteMatchIdx = pi; break;
+    }
+  }
+  // If no full match, try amount-only fallback
+  if (noteMatchIdx < 0) {
+    for (var pi2 = 0; pi2 < parsedLines.length; pi2++) {
+      var pl2 = parsedLines[pi2];
+      if (pl2.amount != null && Math.abs(pl2.amount - oldAmount) < 0.01) {
+        noteMatchIdx = pi2; break;
+      }
+    }
+  }
+
+  // Find the formula-entry index that corresponds to the same numeric amount
+  // (entries are in formula-order; note lines are in the same order by convention)
+  var formulaMatchIdx = -1;
+  if (noteMatchIdx >= 0 && entries.length > noteMatchIdx) {
+    var cand = entries[noteMatchIdx];
+    var signedVal = cand.sign === '-' ? -cand.value : cand.value;
+    if (Math.abs(signedVal - oldAmount) < 0.01) formulaMatchIdx = noteMatchIdx;
+  }
+  // Fallback: scan entries for first signed-amount match
+  if (formulaMatchIdx < 0) {
+    for (var ei = 0; ei < entries.length; ei++) {
+      var sv = entries[ei].sign === '-' ? -entries[ei].value : entries[ei].value;
+      if (Math.abs(sv - oldAmount) < 0.01) { formulaMatchIdx = ei; break; }
+    }
+  }
+
+  if (formulaMatchIdx < 0 && noteMatchIdx < 0) {
+    return jsonResponse({ ok: false, error: 'entry_not_found', old_amount: oldAmount });
+  }
+
+  // Apply mutation
+  if (mode === 'remove') {
+    if (formulaMatchIdx >= 0) entries.splice(formulaMatchIdx, 1);
+    if (noteMatchIdx >= 0) parsedLines.splice(noteMatchIdx, 1);
+  } else {
+    var newAmount = parseFloat(data.new_amount);
+    var newDesc = String(data.new_description || '').trim();
+    if (isNaN(newAmount)) return jsonResponse({ ok: false, error: 'invalid_new_amount' });
+    if (formulaMatchIdx >= 0) {
+      entries[formulaMatchIdx] = { sign: newAmount < 0 ? '-' : '+', value: Math.abs(newAmount) };
+    }
+    if (noteMatchIdx >= 0) {
+      var newNoteLine = (newAmount < 0 ? '-' + String(Math.abs(newAmount)) : String(newAmount)) +
+        (newDesc ? ' ' + newDesc : '');
+      parsedLines[noteMatchIdx] = { raw: newNoteLine, amount: newAmount, desc: newDesc };
+    }
+  }
+
+  // Rebuild formula
+  var newFormula;
+  if (!entries.length) {
+    newFormula = '';
+  } else {
+    var parts = entries.map(function(e, idx){
+      if (idx === 0) return (e.sign === '-' ? '-' : '') + String(e.value);
+      return e.sign + String(e.value);
+    });
+    newFormula = '=' + parts.join('');
+  }
+
+  // Rebuild note
+  var newNoteLinesOut = parsedLines.map(function(p){ return p.raw != null ? p.raw : ((p.amount != null ? String(p.amount) : '') + (p.desc ? ' ' + p.desc : '')); });
+  var newNote = newNoteLinesOut.join('\n').replace(/\n+$/, '');
+
+  PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+  if (newFormula) {
+    cellM.setFormula(newFormula);
+    cellM.setNumberFormat('$#,##0');
+  } else {
+    // All entries removed — clear value back to 0 and clear note
+    cellM.setValue(0);
+    cellM.setNumberFormat('$#,##0');
+  }
+  cellM.setNote(newNote);
+
+  return jsonResponse({
+    ok: true,
+    action: mode === 'update' ? 'profit_update_entry' : 'profit_remove_entry',
+    row: targetRowM, col: targetColM,
+    new_value: cellM.getValue(),
+    new_formula: newFormula,
+    formula_match_idx: formulaMatchIdx,
+    note_match_idx: noteMatchIdx
+  });
 }
 
 // ============================================================
