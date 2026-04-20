@@ -11396,6 +11396,42 @@ function _txInit() {
 .pf-pc.neg{background:linear-gradient(135deg,#7f1d1d,#991b1b);}
 .pf-pc-l{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:900;letter-spacing:2.5px;color:rgba(255,255,255,.7);text-transform:uppercase;}
 .pf-pc-v{font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:-1px;color:#fff;font-variant-numeric:tabular-nums;line-height:1;}
+
+/* Breakdown editor modal (Payments / Cash Sales) */
+.pf-be{position:fixed;inset:0;background:#0a0a0a;z-index:1100;display:none;flex-direction:column;overflow:hidden;}
+.pf-be.on{display:flex;}
+.pf-be-head{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#111;border-bottom:1px solid #1f1f1f;flex-shrink:0;}
+.pf-be-bk{background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;width:34px;height:34px;border-radius:10px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.pf-be-title{flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:900;letter-spacing:1.5px;color:#fff;text-transform:uppercase;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pf-be-total{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:#4ade80;font-variant-numeric:tabular-nums;letter-spacing:-.3px;flex-shrink:0;}
+.pf-be-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 100px;}
+.pf-be-add{width:100%;padding:14px;background:linear-gradient(135deg,#059669,#10b981);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;margin-bottom:14px;box-shadow:0 3px 10px rgba(16,185,129,.25);}
+.pf-be-add:active{transform:scale(.98);}
+.pf-be-count{font-size:11px;font-weight:700;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;padding:0 4px;display:flex;justify-content:space-between;align-items:center;}
+.pf-be-list{display:flex;flex-direction:column;gap:6px;}
+.pf-be-item{display:flex;align-items:center;gap:10px;padding:11px 12px;background:#141414;border:1px solid #1f1f1f;border-radius:11px;cursor:pointer;transition:background .12s;}
+.pf-be-item:active{background:#1a1a1a;}
+.pf-be-item-amt{font-size:15px;font-weight:800;color:#4ade80;font-variant-numeric:tabular-nums;min-width:72px;letter-spacing:-.2px;}
+.pf-be-item-amt.neg{color:#f87171;}
+.pf-be-item-desc{flex:1;font-size:13px;color:#d4d4d4;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pf-be-item-x{background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;flex-shrink:0;}
+.pf-be-item-x:active{background:rgba(239,68,68,.15);color:#f87171;}
+.pf-be-foot{padding:12px 14px 18px;background:#111;border-top:1px solid #1f1f1f;flex-shrink:0;display:flex;gap:10px;}
+.pf-be-cancel{flex:1;padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;color:#888;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;}
+.pf-be-save{flex:2;padding:14px;background:#fff;color:#000;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;}
+.pf-be-save:disabled{background:#333;color:#888;}
+.pf-be-save:active{opacity:.85;}
+.pf-be-empty{text-align:center;color:#555;padding:40px 20px;font-size:13px;}
+
+/* Inline add/edit form */
+.pf-be-form{background:#0f0f0f;border:1.5px solid #334155;border-radius:12px;padding:12px;margin-bottom:10px;}
+.pf-be-form label{display:block;font-size:10px;font-weight:800;color:#555;letter-spacing:1.2px;text-transform:uppercase;margin:0 0 4px 2px;}
+.pf-be-form input{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;}
+.pf-be-form input:focus{border-color:#4ade80;}
+.pf-be-form-buttons{display:flex;gap:8px;}
+.pf-be-form-ok{flex:2;padding:10px;background:#10b981;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;}
+.pf-be-form-cancel{flex:1;padding:10px;background:#1a1a1a;color:#888;border:1px solid #2a2a2a;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;}
+.pf-edit-hint{font-size:10px;opacity:.55;font-weight:600;margin-left:4px;letter-spacing:.3px;}
 </style>
 
 <script>
@@ -14235,6 +14271,8 @@ function payFormSkipPhoto(){
 
 // Browser back button support for payment overlay
 window.addEventListener('popstate',function(e){
+  var pfBe=document.getElementById('pf-be');
+  if(pfBe&&pfBe.classList.contains('on')){pfBe.classList.remove('on');_pfBeState=null;return;}
   var pfOv=document.getElementById('pf-ov');
   if(pfOv&&pfOv.classList.contains('on')){pfOv.classList.remove('on');return;}
   var boardOv=document.getElementById('board-overlay');
@@ -19578,16 +19616,24 @@ function profitOpenDetail(mIdx){
   function _pfRow(it, isRev){
     var cls='pf-r'+(isRev?' rev':'');
     var valCls='pf-r-v';
-    if(it.isFormula)valCls+=' formula';
+    var lbl=(it.label||'').toLowerCase();
+    var isEditableFormula=(lbl==='payments'||lbl==='cash sales');
+    // Don't grey-style editable formulas even though they have formulas
+    if(it.isFormula&&!isEditableFormula)valCls+=' formula';
     var note=it.note||it.labelNote;
     var hasNote=note&&note.trim().length>0;
     if(hasNote&&!it.isFormula)valCls+=' has-note';
-    var lockIcon=it.isFormula?'<span class="pf-lock" title="Formula protected">🔒</span>':'';
-    // Click: formula → profitEditStart (shows locked alert); note present → profitShowNote; else profitEditStart
+    // Icon: editable formula → pencil hint; other formula → 🔒; otherwise none
+    var icon='';
+    if(isEditableFormula) icon='<span class="pf-edit-hint" title="Tap to edit">✏️</span>';
+    else if(it.isFormula) icon='<span class="pf-lock" title="Formula protected">🔒</span>';
+    // Click routing: editable formula → always profitEditStart (routes to breakdown);
+    // non-formula with note → show note; else edit
     var clickAction;
-    if(!it.isFormula&&hasNote)clickAction='profitShowNote('+mIdx+','+it._idx+')';
+    if(isEditableFormula) clickAction='profitEditStart('+mIdx+','+it._idx+')';
+    else if(!it.isFormula&&hasNote) clickAction='profitShowNote('+mIdx+','+it._idx+')';
     else clickAction='profitEditStart('+mIdx+','+it._idx+')';
-    return '<div class="'+cls+'"><span class="pf-r-l">'+(it.label||'')+lockIcon+'</span><span class="'+valCls+'" onclick="'+clickAction+'">'+_prFmtPlain(it.value||0)+'</span></div>';
+    return '<div class="'+cls+'"><span class="pf-r-l">'+(it.label||'')+icon+'</span><span class="'+valCls+'" onclick="'+clickAction+'">'+_prFmtPlain(it.value||0)+'</span></div>';
   }
 
   var h='';
@@ -19651,6 +19697,247 @@ function profitCloseDetail(){
   try{if(history.state&&history.state.profitDetail)history.back();}catch(e){}
 }
 
+// ── PROFIT: BREAKDOWN EDITOR (Payments / Cash Sales) ──────────
+// Parses the formula + note into {amount, description} entries,
+// opens a pill list where user can add/edit/delete, rebuilds formula
+// and note in lockstep on save, and posts to update_profit_formula.
+var _pfBeState=null; // {mIdx, itemIdx, row, col, label, entries[], editIdx, addMode}
+
+function _pfBeParseFormula(formula){
+  // Extract signed numbers from formula like '=500+200-100+380' → [500, 200, -100, 380]
+  var s=String(formula||'').replace(/^=\s*/,'').trim();
+  if(!s)return [];
+  var vals=[];
+  var tokens=s.split(/([+\-])/);
+  var pendingSign=1;
+  var expectSign=false; // first token has implicit +
+  for(var i=0;i<tokens.length;i++){
+    var t=tokens[i].trim();
+    if(!t)continue;
+    if(t==='+'){pendingSign=1;expectSign=true;continue;}
+    if(t==='-'){pendingSign=-1;expectSign=true;continue;}
+    var n=parseFloat(t);
+    if(!isNaN(n)){vals.push(pendingSign*n);}
+    pendingSign=1;
+  }
+  return vals;
+}
+function _pfBeParseNote(note){
+  // Each line is '<amount> <description>' — amount optional, description optional
+  var out=[];
+  var lines=String(note||'').split(/\r?\n/);
+  for(var i=0;i<lines.length;i++){
+    var l=(lines[i]||'').trim();
+    if(!l)continue;
+    var m=l.match(/^(-?\d+(?:\.\d+)?)\s+(.+)$/);
+    if(m) out.push({amount:parseFloat(m[1]),description:m[2].trim()});
+    else{
+      var mOnly=l.match(/^(-?\d+(?:\.\d+)?)$/);
+      if(mOnly) out.push({amount:parseFloat(mOnly[1]),description:''});
+      else out.push({amount:null,description:l});
+    }
+  }
+  return out;
+}
+function _pfBeMerge(formulaVals, noteLines){
+  // Pair by index. If counts differ, trust the longer side; note values win when both present.
+  var N=Math.max(formulaVals.length,noteLines.length);
+  var entries=[];
+  for(var i=0;i<N;i++){
+    var fv=i<formulaVals.length?formulaVals[i]:null;
+    var nl=i<noteLines.length?noteLines[i]:null;
+    var amt=nl&&nl.amount!=null?nl.amount:fv;
+    var desc=nl?nl.description:'';
+    if(amt==null&&!desc)continue;
+    entries.push({amount:amt||0,description:desc||''});
+  }
+  return entries;
+}
+function _pfBeBuild(entries){
+  // Rebuild formula '=a+b-c+d' and matching note 'a desc\\nb desc\\n-c desc\\nd desc'
+  var parts=[];var noteLines=[];
+  for(var i=0;i<entries.length;i++){
+    var e=entries[i];
+    var a=Number(e.amount)||0;
+    var d=(e.description||'').trim();
+    if(a===0&&!d)continue; // skip empty rows
+    if(parts.length===0){
+      parts.push(String(a));
+    }else if(a<0){
+      parts.push('-'+String(Math.abs(a)));
+    }else{
+      parts.push('+'+String(a));
+    }
+    noteLines.push((a<0?('-'+Math.abs(a)):String(a))+(d?' '+d:''));
+  }
+  var formula=parts.length?'='+parts.join(''):'';
+  return {formula:formula, note:noteLines.join('\n'), total: entries.reduce(function(s,e){return s+(Number(e.amount)||0);},0), count: parts.length};
+}
+function _pfBeTotal(){
+  if(!_pfBeState)return 0;
+  return _pfBeState.entries.reduce(function(s,e){return s+(Number(e.amount)||0);},0);
+}
+function _pfBeFmtMoney(n){if(n==null||isNaN(n))return '$0';return (n<0?'-$':'$')+Math.abs(Math.round(n)).toLocaleString();}
+
+function profitEditBreakdown(mIdx,itemIdx){
+  var months=_profitData.months||[];
+  if(mIdx>=months.length)return;
+  var it=months[mIdx].items[itemIdx];
+  if(!it)return;
+  var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var entries=_pfBeMerge(_pfBeParseFormula(it.formula||''),_pfBeParseNote(it.note||it.labelNote||''));
+  _pfBeState={
+    mIdx:mIdx,itemIdx:itemIdx,
+    row:it.row,col:it.col,
+    label:it.label,
+    monthName:monthNames[mIdx]||(months[mIdx].name||''),
+    entries:entries,
+    editIdx:-1,addMode:false
+  };
+  // Ensure overlay element exists
+  var be=document.getElementById('pf-be');
+  if(!be){be=document.createElement('div');be.id='pf-be';be.className='pf-be';document.body.appendChild(be);}
+  _pfBeRender();
+  be.classList.add('on');
+  try{history.pushState({profitBreakdown:true},'');}catch(e){}
+}
+function profitCloseBreakdown(){
+  var be=document.getElementById('pf-be');
+  if(be)be.classList.remove('on');
+  _pfBeState=null;
+  try{if(history.state&&history.state.profitBreakdown)history.back();}catch(e){}
+}
+function _pfBeRender(){
+  var be=document.getElementById('pf-be');
+  if(!be||!_pfBeState)return;
+  var s=_pfBeState;
+  var total=_pfBeTotal();
+  var h='';
+  h+='<div class="pf-be-head">';
+  h+='<div class="pf-be-bk" onclick="profitCloseBreakdown()">←</div>';
+  h+='<div class="pf-be-title">'+s.monthName+' · '+s.label+'</div>';
+  h+='<div class="pf-be-total">'+_pfBeFmtMoney(total)+'</div>';
+  h+='</div>';
+  h+='<div class="pf-be-body">';
+
+  // Form (add or edit mode)
+  if(s.addMode||s.editIdx>=0){
+    var isEdit=s.editIdx>=0;
+    var curA=isEdit?s.entries[s.editIdx].amount:'';
+    var curD=isEdit?s.entries[s.editIdx].description:'';
+    h+='<div class="pf-be-form">';
+    h+='<label>Amount</label>';
+    h+='<input id="pf-be-amt" type="text" inputmode="decimal" placeholder="e.g. 250 or -100 for refund" value="'+(curA===''?'':String(curA))+'">';
+    h+='<label>Description</label>';
+    h+='<input id="pf-be-desc" type="text" placeholder="Vehicle · Customer" value="'+(curD||'').replace(/"/g,'&quot;')+'">';
+    h+='<div class="pf-be-form-buttons">';
+    h+='<button class="pf-be-form-cancel" onclick="_pfBeCancelForm()">Cancel</button>';
+    h+='<button class="pf-be-form-ok" onclick="_pfBeCommitForm()">'+(isEdit?'Save':'Add')+'</button>';
+    h+='</div></div>';
+  }else{
+    h+='<button class="pf-be-add" onclick="_pfBeStartAdd()">+ Add Entry</button>';
+  }
+
+  h+='<div class="pf-be-count"><span>'+s.entries.length+' entries</span><span>tap to edit</span></div>';
+  h+='<div class="pf-be-list">';
+  if(!s.entries.length){
+    h+='<div class="pf-be-empty">No entries yet. Tap + Add Entry.</div>';
+  }else{
+    for(var i=0;i<s.entries.length;i++){
+      var e=s.entries[i];
+      var amt=Number(e.amount)||0;
+      var neg=amt<0?' neg':'';
+      var safeDesc=(e.description||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      h+='<div class="pf-be-item" onclick="_pfBeStartEdit('+i+')">';
+      h+='<span class="pf-be-item-amt'+neg+'">'+_pfBeFmtMoney(amt)+'</span>';
+      h+='<span class="pf-be-item-desc">'+(safeDesc||'<em style="color:#555;">(no description)</em>')+'</span>';
+      h+='<button class="pf-be-item-x" onclick="event.stopPropagation();_pfBeDelete('+i+')">✕</button>';
+      h+='</div>';
+    }
+  }
+  h+='</div>';
+  h+='</div>'; // /pf-be-body
+  h+='<div class="pf-be-foot">';
+  h+='<button class="pf-be-cancel" onclick="profitCloseBreakdown()">Close</button>';
+  h+='<button class="pf-be-save" onclick="_pfBeSave()">Save to Sheet</button>';
+  h+='</div>';
+  be.innerHTML=h;
+}
+function _pfBeStartAdd(){
+  _pfBeState.addMode=true;_pfBeState.editIdx=-1;
+  _pfBeRender();
+  setTimeout(function(){var el=document.getElementById('pf-be-amt');if(el)el.focus();},50);
+}
+function _pfBeStartEdit(i){
+  _pfBeState.editIdx=i;_pfBeState.addMode=false;
+  _pfBeRender();
+  setTimeout(function(){var el=document.getElementById('pf-be-amt');if(el)el.focus();},50);
+}
+function _pfBeCancelForm(){
+  _pfBeState.addMode=false;_pfBeState.editIdx=-1;
+  _pfBeRender();
+}
+function _pfBeCommitForm(){
+  var amtEl=document.getElementById('pf-be-amt');
+  var dscEl=document.getElementById('pf-be-desc');
+  var raw=(amtEl?amtEl.value:'').trim().replace(/[$,]/g,'');
+  var amt=parseFloat(raw);
+  if(isNaN(amt)){alert('Enter a valid amount.');return;}
+  var desc=(dscEl?dscEl.value:'').trim();
+  if(_pfBeState.editIdx>=0){
+    _pfBeState.entries[_pfBeState.editIdx]={amount:amt,description:desc};
+  }else{
+    _pfBeState.entries.push({amount:amt,description:desc});
+  }
+  _pfBeState.addMode=false;_pfBeState.editIdx=-1;
+  _pfBeRender();
+}
+function _pfBeDelete(i){
+  if(!confirm('Delete this entry?'))return;
+  _pfBeState.entries.splice(i,1);
+  _pfBeRender();
+}
+async function _pfBeSave(){
+  if(!_pfBeState)return;
+  var s=_pfBeState;
+  var built=_pfBeBuild(s.entries);
+  var saveBtn=document.querySelector('.pf-be-save');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
+  try{
+    var loc=_isLoc||'DeBary';
+    var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      secret:_SHEETS_SECRET,
+      action:'update_profit_formula',
+      location:loc,
+      data:{row:s.row,col:s.col,formula:built.formula,note:built.note}
+    })});
+    var data=null;try{data=await resp.json();}catch(e){}
+    if(!data||data.ok===false){
+      alert('Save failed: '+((data&&data.error)||'unknown error'));
+      if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save to Sheet';}
+      return;
+    }
+    // Optimistic local update of _profitData so the grid re-renders immediately
+    var it=_profitData.months[s.mIdx].items[s.itemIdx];
+    if(it){
+      it.value=Number(data.value)||built.total;
+      it.formula=data.formula||built.formula;
+      it.isFormula=!!(it.formula);
+      it.note=built.note;
+    }
+    profitCloseBreakdown();
+    // Refresh detail overlay if open, and main grid
+    var ov=document.getElementById('pf-ov');
+    if(ov&&ov.classList.contains('on')) profitOpenDetail(s.mIdx);
+    profitRender();
+    // Kick off a Supabase re-sync in the background so next load is fresh
+    try{fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});}catch(e){}
+  }catch(e){
+    alert('Save error: '+(e.message||e));
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save to Sheet';}
+  }
+}
+
 function profitShowNote(mIdx,itemIdx){
   var months=_profitData.months||[];
   if(mIdx>=months.length)return;
@@ -19685,6 +19972,14 @@ function profitEditStart(mIdx,itemIdx){
   if(mIdx>=months.length)return;
   var item=months[mIdx].items[itemIdx];
   if(!item)return;
+  // Payments / Cash Sales have a dedicated breakdown editor — they are
+  // editable formulas (sums of individual amounts). Other formula cells
+  // (Core Bills, Total Bills, Merch, Costs) remain locked.
+  var _pLbl=(item.label||'').toLowerCase();
+  if(_pLbl==='payments'||_pLbl==='cash sales'){
+    profitEditBreakdown(mIdx,itemIdx);
+    return;
+  }
   // Formula cells are protected — show a read-only alert instead of prompt
   if(item.isFormula){
     alert('🔒 This cell is a formula in the Google Sheet and can\'t be edited from the app.\n\n'+(item.formula?'Formula: '+item.formula:''));

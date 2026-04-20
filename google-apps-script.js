@@ -891,6 +891,33 @@ function _handleProfitAction(action, location, data) {
     return jsonResponse({ ok: true, action: 'update_profit', row: row, col: col });
   }
 
+  if (action === 'update_profit_formula') {
+    // Carve-out for Payments / Cash Sales cells — explicitly writes a formula
+    // and matching note in lockstep. Callers should only route editable
+    // formula rows (Payments, Cash Sales) here; Core Bills / Total Bills etc.
+    // stay protected by using update_profit.
+    var rowF = parseInt(data.row) || 0;
+    var colF = parseInt(data.col) || 0;
+    var formula = String(data.formula || '');
+    var noteF = data.note !== undefined ? String(data.note) : null;
+    if (rowF <= 0 || colF <= 0 || !formula) {
+      return jsonResponse({ ok: false, error: 'invalid_params' });
+    }
+    // Require formula to start with = (PostgREST/app contract — prevents
+    // stray literal values sneaking in through this endpoint)
+    if (formula.charAt(0) !== '=') formula = '=' + formula;
+    PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+    var cellF = sheet.getRange(rowF, colF);
+    cellF.setFormula(formula);
+    cellF.setNumberFormat('$#,##0');
+    if (noteF !== null) cellF.setNote(noteF);
+    var newVal = cellF.getValue();
+    return jsonResponse({
+      ok: true, action: 'update_profit_formula',
+      row: rowF, col: colF, value: newVal, formula: formula
+    });
+  }
+
   return jsonResponse({ error: 'Unknown profit action: ' + action });
 }
 
