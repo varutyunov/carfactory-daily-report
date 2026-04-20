@@ -16885,23 +16885,26 @@ async function _autopopulateDeals26(record, car) {
   if (ic && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
-  // 6. Calculate deal_num — find highest deal_num in current week group.
-  //    Filter by location so DeBary and DeLand deal_nums don't interleave
-  //    (each location's week starts with its own deal_num=1).
+  // 6. Calculate deal_num — scoped to the current CALENDAR week (Sunday-start,
+  //    matching _payGetWeekStart). If no deals26 rows exist this calendar week
+  //    for this location, deal_num=1 (new week → triggers thick top border in
+  //    the sheet via _writeRowToSheet). Otherwise max(this_week.deal_num)+1.
+  //    Must also be location-filtered so DeBary / DeLand counts don't mix.
   var _locForNum = record.location || 'DeBary';
   var dealNum = 1;
   try {
-    var recentD26 = await sbGet('deals26', 'location=eq.' + encodeURIComponent(_locForNum) + '&order=sort_order.desc&limit=50&select=deal_num');
+    var _wsDt = new Date();
+    _wsDt.setDate(_wsDt.getDate() - _wsDt.getDay()); // roll back to Sunday
+    _wsDt.setHours(0, 0, 0, 0);
+    var _weekStartIso = _wsDt.toISOString();
+    var recentD26 = await sbGet('deals26',
+      'location=eq.' + encodeURIComponent(_locForNum) +
+      '&created_at=gte.' + encodeURIComponent(_weekStartIso) +
+      '&order=deal_num.desc&limit=50&select=deal_num');
     if (Array.isArray(recentD26) && recentD26.length > 0) {
-      // Walk from most recent backward; the current week is everything after the last deal_num=1
-      var maxInWeek = 0;
-      for (var i = 0; i < recentD26.length; i++) {
-        var dn = parseInt(recentD26[i].deal_num) || 0;
-        if (dn > maxInWeek) maxInWeek = dn;
-        if (dn === 1) break; // hit the start of the current week
-      }
-      dealNum = maxInWeek + 1;
+      dealNum = (parseInt(recentD26[0].deal_num) || 0) + 1;
     }
+    // else: no deals this calendar week yet → dealNum stays 1
   } catch (e) { /* default to 1 */ }
 
   // 7. Get sort_order — location-filtered row count + 1. MUST be filtered
