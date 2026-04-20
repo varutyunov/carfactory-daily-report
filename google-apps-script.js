@@ -392,11 +392,8 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var val = data[cField];
       if (cField === 'gps_sold') val = val ? 'X' : '';
       var cell = sheet.getRange(targetRow, cNum);
-      // Column G (payments) in Deals26 — must be blank for new deal uploads
-      // and for any save where payments=0. Actively clearContent so that a
-      // stale prior value (or a row reused by insert/update) doesn't stay.
+      // Column G (payments) in Deals26 — skip writing if zero, leave empty for manual entry
       if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
-        cell.clearContent();
         continue;
       }
       // Column F (owed) in Deals26 — copy formula from the row above

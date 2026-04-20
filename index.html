@@ -16969,8 +16969,13 @@ async function _autopopulateDeals26(record, car) {
   // 9. Insert into Supabase
   var res = await sbPost('deals26', d26Obj);
 
-  // 10. Push to Google Sheet
-  sheetsPush('Deals26', sortOrder, d26Obj, 'update', (record.location || 'DeBary'));
+  // 10. Push to Google Sheet. For new deal uploads, drop payments/payment_notes
+  //     from the sheet payload so column G stays untouched (blank on a new row).
+  //     Vlad enters payments manually in the sheet. DB still carries 0 by default.
+  var _sheetObj = Object.assign({}, d26Obj);
+  delete _sheetObj.payments;
+  delete _sheetObj.payment_notes;
+  sheetsPush('Deals26', sortOrder, _sheetObj, 'update', (record.location || 'DeBary'));
 
   // 11. Update local _d26Data if it's loaded
   if (Array.isArray(_d26Data) && res && res[0]) {
