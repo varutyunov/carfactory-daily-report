@@ -891,6 +891,77 @@ function _handleProfitAction(action, location, data) {
     return jsonResponse({ ok: true, action: 'update_profit', row: row, col: col });
   }
 
+  if (action === 'profit_append_entry') {
+    // Append one entry to Payments or Cash Sales formula + note for a given month.
+    // Inputs: data.{month_idx: 0..11, row_type: 'payments'|'cash_sales',
+    //               amount: number (can be negative), description: text}
+    var monthIdxA = parseInt(data.month_idx);
+    var rowTypeA = String(data.row_type || '');
+    var amountA = parseFloat(data.amount);
+    var descA = String(data.description || '').trim();
+    if (isNaN(monthIdxA) || monthIdxA < 0 || monthIdxA > 11) {
+      return jsonResponse({ ok: false, error: 'invalid_month_idx' });
+    }
+    if (isNaN(amountA)) {
+      return jsonResponse({ ok: false, error: 'invalid_amount' });
+    }
+    if (rowTypeA !== 'payments' && rowTypeA !== 'cash_sales') {
+      return jsonResponse({ ok: false, error: 'invalid_row_type' });
+    }
+
+    // Find startRow and compute target cell
+    var START_COL_A = 4;
+    var startRowA = 1;
+    for (var srA = 1; srA <= 20; srA++) {
+      var cvA = String(sheet.getRange(srA, START_COL_A).getValue()).trim();
+      if (cvA === 'Jan' || cvA === 'January') { startRowA = srA; break; }
+    }
+    var BLOCK_ROWS_A = 22;
+    var BLOCK_GAP_A = 1;
+    var blockA = Math.floor(monthIdxA / 4);
+    var mInBlockA = monthIdxA % 4;
+    var blockStartInnerA = blockA * (BLOCK_ROWS_A + BLOCK_GAP_A);
+    var rowOffsetA = rowTypeA === 'payments' ? 20 : 21;
+    var targetRowA = startRowA + blockStartInnerA + rowOffsetA;
+    var targetColA = START_COL_A + mInBlockA * 3 + 1;
+
+    var cellA = sheet.getRange(targetRowA, targetColA);
+    var existingFormulaA = cellA.getFormula() || '';
+    var existingValueA = cellA.getValue();
+    var existingNoteA = cellA.getNote() || '';
+
+    // Build new formula — append +amount or -|amount|
+    var signStrA = amountA < 0 ? ('-' + String(Math.abs(amountA))) : ('+' + String(amountA));
+    var newFormulaA;
+    if (existingFormulaA) {
+      newFormulaA = existingFormulaA + signStrA;
+    } else if (existingValueA !== '' && existingValueA !== null && existingValueA !== 0) {
+      var existingNumA = parseFloat(String(existingValueA).replace(/[$,]/g, '')) || 0;
+      newFormulaA = '=' + String(existingNumA) + signStrA;
+    } else {
+      // Empty or zero cell — start fresh (no leading +)
+      newFormulaA = '=' + (amountA < 0 ? ('-' + String(Math.abs(amountA))) : String(amountA));
+    }
+
+    // Build new note — append a new line
+    var noteEntryA = (amountA < 0 ? '-' + String(Math.abs(amountA)) : String(amountA)) + (descA ? ' ' + descA : '');
+    var newNoteA = existingNoteA ? (existingNoteA.replace(/\s+$/,'') + '\n' + noteEntryA) : noteEntryA;
+
+    PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+    cellA.setFormula(newFormulaA);
+    cellA.setNumberFormat('$#,##0');
+    cellA.setNote(newNoteA);
+
+    return jsonResponse({
+      ok: true, action: 'profit_append_entry',
+      location: location, month_idx: monthIdxA, row_type: rowTypeA,
+      amount: amountA, description: descA,
+      row: targetRowA, col: targetColA,
+      new_value: cellA.getValue(),
+      new_formula: newFormulaA
+    });
+  }
+
   if (action === 'update_profit_formula') {
     // Carve-out for Payments / Cash Sales cells — explicitly writes a formula
     // and matching note in lockstep. Callers should only route editable

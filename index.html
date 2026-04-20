@@ -16673,6 +16673,11 @@ async function dealSubmit() {
     // Auto-populate Deals26 sheet
     try { await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
 
+    // D3: auto-append cash deals to Profit Cash Sales row for the deal's month
+    if (record.deal_type === 'cash') {
+      try { await _appendCashSaleToProfit(record, car); } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
+    }
+
     // Auto-create trade-in cars in inventory + inventory_costs
     for (var ti = 0; ti < payments.length; ti++) {
       if (payments[ti].method === 'trade_in') {
@@ -16809,6 +16814,56 @@ async function _autopopulateDeals26(record, car) {
   // 11. Update local _d26Data if it's loaded
   if (Array.isArray(_d26Data) && res && res[0]) {
     _d26Data.push(res[0]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// D3: APPEND CASH DEAL → PROFIT CASH SALES
+// Posts to Apps Script profit_append_entry with deal amount + vehicle desc.
+// Triggered from dealSubmit when deal_type === 'cash'.
+// ══════════════════════════════════════════════════════════════
+async function _appendCashSaleToProfit(record, car) {
+  try {
+    var d = record.created_at ? new Date(record.created_at) : new Date();
+    var monthIdx = d.getMonth();
+    var loc = record.location || (me ? me.location : 'DeBary');
+    var amount = parseFloat(record.total_collected) || 0;
+    if (amount <= 0) return;
+    // Description: prefer inventory_costs.car_name style short name (already on car.name);
+    // append customer last name for context — matches the existing note format
+    // (e.g. '1591 16 Jetta grey 73k Martinez')
+    var desc = (record.vehicle_desc || (car && car.name) || '').trim();
+    if (record.customer_name) {
+      var parts = String(record.customer_name).trim().split(/\s+/);
+      if (parts.length) {
+        var last = parts[parts.length - 1];
+        if (last) desc = (desc ? desc + ' ' : '') + last;
+      }
+    }
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'profit_append_entry',
+        location: loc,
+        data: { month_idx: monthIdx, row_type: 'cash_sales', amount: amount, description: desc.trim() }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if (!data || data.ok === false) {
+      console.warn('Profit Cash Sales append failed:', data);
+      return;
+    }
+    console.log('Profit Cash Sales +$' + amount + ' ' + desc + ' → ' + loc + ' month=' + monthIdx);
+    // Background re-sync so next Profit tab load shows fresh data
+    try {
+      fetch(_SHEETS_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+        secret: _SHEETS_SECRET, action: 'sync_profit', location: loc
+      })});
+    } catch(e){}
+  } catch (e) {
+    console.warn('Profit Cash Sales append error:', e);
   }
 }
 
