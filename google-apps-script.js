@@ -211,10 +211,43 @@ function doPost(e) {
     // ── ACTION: INSERT — add new row to sheet ─────────────────
     if (action === 'insert') {
       var data = body.data;
-      // Find last used row in the synced columns and insert after it
       var lastRow = sheet.getLastRow();
+
+      // For inventory_costs tab: insert ABOVE the Total row so new cars
+      // (including ones transferred between locations) land cleanly at the
+      // bottom of the car list and keep the Total row's SUM formula intact.
+      // Sheet's built-in insertRowBefore() auto-updates all formula ranges
+      // below the insertion point, so the Total row's =sum(...) expands
+      // correctly to include the new row.
+      if (config.table === 'inventory_costs') {
+        // Find the name column letter from config (car_name → usually 'H')
+        var nameColL = null;
+        var kkeys = Object.keys(config.columns);
+        for (var kk = 0; kk < kkeys.length; kk++) {
+          if (config.columns[kkeys[kk]] === 'car_name') { nameColL = kkeys[kk]; break; }
+        }
+        var totalRowIdx = -1;
+        if (nameColL) {
+          var ncol = letterToColumn(nameColL);
+          for (var rr = lastRow; rr >= config.startRow; rr--) {
+            var nv = String(sheet.getRange(rr, ncol).getValue() || '').trim();
+            if (nv.toLowerCase() === 'total') { totalRowIdx = rr; break; }
+          }
+        }
+        if (totalRowIdx > 0) {
+          // Insert a blank row BEFORE Total (shifts Total down by one).
+          // This inherits formatting from the row above (a real car row),
+          // so the new row gets normal formatting instead of Total-row style.
+          sheet.insertRowBefore(totalRowIdx);
+          _writeRowToSheet(sheet, config, totalRowIdx, data);
+          SpreadsheetApp.flush();
+          return jsonResponse({ ok: true, action: 'insert', row: totalRowIdx, method: 'insertBeforeTotal' });
+        }
+        // No Total row found — fall through to default append
+      }
+
+      // Default: append at bottom (or at row_index if provided)
       var insertRow = lastRow + 1;
-      // If row_index is provided, calculate target position
       if (body.row_index) {
         insertRow = config.startRow + body.row_index - 1;
       }
