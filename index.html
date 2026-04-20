@@ -20404,14 +20404,16 @@ function d26ShowExpPopup(idx){
   _d26ExpIdx=idx;
   var noteVal=(d.expense_notes||'').trim();
   var car=d.car_desc||'';
-  // Parse items
+  // Parse items. Google Sheets cell notes separate lines with newlines;
+  // older app saves used commas. Split on either so both parse correctly.
   var items=[];
   if(noteVal){
-    noteVal.split(',').forEach(function(item){
+    noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
+      if(!item)return;
       var m=item.match(/^(\d+)\s+(.+)/);
       if(m) items.push({amt:m[1],desc:m[2]});
-      else if(item) items.push({amt:'',desc:item});
+      else items.push({amt:'',desc:item});
     });
   }
   // Build editable rows
@@ -20484,7 +20486,8 @@ async function d26ExpSave(){
       total+=amt;
     }
   });
-  var noteStr=items.join(', ');
+  // Match Google Sheets cell-note format (newlines, not commas)
+  var noteStr=items.join('\n');
   try{
     await sbPatch('deals26',d.id,{expense_notes:noteStr,expenses:total});
     d.expense_notes=noteStr;
@@ -20504,13 +20507,15 @@ function d26ShowPmtPopup(idx){
   _d26PmtIdx=idx;
   var noteVal=(d.payment_notes||'').trim();
   var car=d.car_desc||'';
+  // Parse items. Sheet cell notes use newlines; old app saves used commas.
   var items=[];
   if(noteVal){
-    noteVal.split(',').forEach(function(item){
+    noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
+      if(!item)return;
       var m=item.match(/^(\d+(?:\.\d+)?)\s*(.*)/);
       if(m) items.push({amt:m[1],desc:(m[2]||'').trim()});
-      else if(item) items.push({amt:'',desc:item});
+      else items.push({amt:'',desc:item});
     });
   }
   var rowsHtml='';
@@ -20582,7 +20587,8 @@ async function d26PmtSave(){
       total+=amt;
     }
   });
-  var noteStr=items.join(', ');
+  // Match Google Sheets cell-note format (newlines, not commas)
+  var noteStr=items.join('\n');
   try{
     await sbPatch('deals26',d.id,{payment_notes:noteStr,payments:total});
     d.payment_notes=noteStr;
@@ -20993,11 +20999,14 @@ function isShowExpPopup(idx, type){
   var color=type==='joint'?'#f59e0b':'#a78bfa';
   var items=[];
   if(noteVal){
-    noteVal.split(',').forEach(function(item){
+    // Google Sheets cell notes separate line items with newlines. Earlier
+    // app saves used comma-separated. Split on either so both formats parse.
+    noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
+      if(!item)return;
       var m=item.match(/^(\d+(?:\.\d+)?)\s+(.+)/);
       if(m) items.push({amt:m[1],desc:m[2]});
-      else if(item) items.push({amt:'',desc:item});
+      else items.push({amt:'',desc:item});
     });
   }
   // If no notes but existing total, pre-populate one row with that amount
@@ -21078,7 +21087,9 @@ async function isExpSave(){
       total+=amt;
     }
   });
-  var noteStr=items.join(', ');
+  // Google Sheets cell notes are master and use newline separators.
+  // Write the same format so sheet ↔ app round-trip cleanly.
+  var noteStr=items.join('\n');
   var totalField=_isExpType==='joint'?'joint_expenses':'vlad_expenses';
   var noteField=_isExpType==='joint'?'expense_notes':'vlad_expense_notes';
   var patch={};
