@@ -16885,10 +16885,13 @@ async function _autopopulateDeals26(record, car) {
   if (ic && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
-  // 6. Calculate deal_num — find highest deal_num in current week group
+  // 6. Calculate deal_num — find highest deal_num in current week group.
+  //    Filter by location so DeBary and DeLand deal_nums don't interleave
+  //    (each location's week starts with its own deal_num=1).
+  var _locForNum = record.location || 'DeBary';
   var dealNum = 1;
   try {
-    var recentD26 = await sbGet('deals26', 'order=sort_order.desc&limit=50&select=deal_num');
+    var recentD26 = await sbGet('deals26', 'location=eq.' + encodeURIComponent(_locForNum) + '&order=sort_order.desc&limit=50&select=deal_num');
     if (Array.isArray(recentD26) && recentD26.length > 0) {
       // Walk from most recent backward; the current week is everything after the last deal_num=1
       var maxInWeek = 0;
@@ -16901,10 +16904,14 @@ async function _autopopulateDeals26(record, car) {
     }
   } catch (e) { /* default to 1 */ }
 
-  // 7. Get sort_order — total rows + 1
+  // 7. Get sort_order — location-filtered row count + 1. MUST be filtered
+  //    by location; otherwise DeBary's target sheet row gets offset by the
+  //    DeLand row count (or vice-versa), pushing the new entry into a
+  //    blank section of the sheet far past the current week.
+  var _loc = record.location || 'DeBary';
   var sortOrder = 1;
   try {
-    var allD26 = await sbGet('deals26', 'select=id&limit=500');
+    var allD26 = await sbGet('deals26', 'location=eq.' + encodeURIComponent(_loc) + '&select=id&limit=500');
     if (Array.isArray(allD26)) sortOrder = allD26.length + 1;
   } catch (e) {}
 
