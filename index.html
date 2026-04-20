@@ -16878,11 +16878,12 @@ async function _autopopulateDeals26(record, car) {
   var vladExp = ic ? (parseFloat(ic.vlad_expenses) || 0) : 0;
   var expenses = jointExp + vladExp;
 
-  // 5. Combine expense notes
+  // 5. Combine expense notes — join with newlines to match Google Sheets
+  //    cell-note format (joint + vlad lines flow into one breakdown).
   var expNotes = [];
   if (ic && ic.expense_notes) expNotes.push(ic.expense_notes);
   if (ic && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
-  var expenseNotes = expNotes.join(', ');
+  var expenseNotes = expNotes.join('\n');
 
   // 6. Calculate deal_num — find highest deal_num in current week group
   var dealNum = 1;
@@ -20404,17 +20405,29 @@ function d26ShowExpPopup(idx){
   _d26ExpIdx=idx;
   var noteVal=(d.expense_notes||'').trim();
   var car=d.car_desc||'';
-  // Parse items. Google Sheets cell notes separate lines with newlines;
-  // older app saves used commas. Split on either so both parse correctly.
+  // Parse items. Sheet cell notes use newlines; old app saves used commas.
+  // Amount may have optional $ prefix; description is optional (e.g. "582").
   var items=[];
   if(noteVal){
     noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
       if(!item)return;
-      var m=item.match(/^(\d+)\s+(.+)/);
-      if(m) items.push({amt:m[1],desc:m[2]});
+      var m=item.match(/^\$?(\d+(?:\.\d+)?)\s*(.*)$/);
+      if(m) items.push({amt:m[1],desc:(m[2]||'').trim()});
       else items.push({amt:'',desc:item});
     });
+  }
+  // Reconcile item sum vs stored column total. If the cell note lists
+  // only part of the amount, surface the difference as an unnamed row so
+  // the popup total matches the Deals26 table.
+  var _d26ExpStored=parseFloat(d.expenses)||0;
+  if(items.length===0){
+    if(_d26ExpStored>0) items.push({amt:String(_d26ExpStored),desc:''});
+  } else {
+    var _d26ExpSum=0;
+    items.forEach(function(it){ _d26ExpSum += parseFloat(it.amt)||0; });
+    var _d26ExpDiff=Math.round((_d26ExpStored - _d26ExpSum)*100)/100;
+    if(_d26ExpDiff > 0.01) items.push({amt:String(_d26ExpDiff),desc:''});
   }
   // Build editable rows
   var rowsHtml='';
@@ -20482,7 +20495,8 @@ async function d26ExpSave(){
     var amt=parseFloat(inputs[0].value)||0;
     var desc=(inputs[1].value||'').trim();
     if(amt>0||desc){
-      items.push(amt+' '+desc);
+      // Amount-only rows shouldn't leave a trailing space in the cell note.
+      items.push(desc?(amt+' '+desc):(''+amt));
       total+=amt;
     }
   });
@@ -20508,15 +20522,26 @@ function d26ShowPmtPopup(idx){
   var noteVal=(d.payment_notes||'').trim();
   var car=d.car_desc||'';
   // Parse items. Sheet cell notes use newlines; old app saves used commas.
+  // Allow optional $ prefix and amount-only items.
   var items=[];
   if(noteVal){
     noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
       if(!item)return;
-      var m=item.match(/^(\d+(?:\.\d+)?)\s*(.*)/);
+      var m=item.match(/^\$?(\d+(?:\.\d+)?)\s*(.*)$/);
       if(m) items.push({amt:m[1],desc:(m[2]||'').trim()});
       else items.push({amt:'',desc:item});
     });
+  }
+  // Reconcile against stored payments column so popup total matches table.
+  var _d26PmtStored=parseFloat(d.payments)||0;
+  if(items.length===0){
+    if(_d26PmtStored>0) items.push({amt:String(_d26PmtStored),desc:''});
+  } else {
+    var _d26PmtSum=0;
+    items.forEach(function(it){ _d26PmtSum += parseFloat(it.amt)||0; });
+    var _d26PmtDiff=Math.round((_d26PmtStored - _d26PmtSum)*100)/100;
+    if(_d26PmtDiff > 0.01) items.push({amt:String(_d26PmtDiff),desc:''});
   }
   var rowsHtml='';
   items.forEach(function(it,i){
@@ -21001,19 +21026,29 @@ function isShowExpPopup(idx, type){
   if(noteVal){
     // Google Sheets cell notes separate line items with newlines. Earlier
     // app saves used comma-separated. Split on either so both formats parse.
+    // Amount may have optional $ prefix and description is optional (a line
+    // like "582" or "$582" should parse to amount-only with no description).
     noteVal.split(/\r?\n|,/).forEach(function(item){
       item=item.trim();
       if(!item)return;
-      var m=item.match(/^(\d+(?:\.\d+)?)\s+(.+)/);
-      if(m) items.push({amt:m[1],desc:m[2]});
+      var m=item.match(/^\$?(\d+(?:\.\d+)?)\s*(.*)$/);
+      if(m) items.push({amt:m[1],desc:(m[2]||'').trim()});
       else items.push({amt:'',desc:item});
     });
   }
-  // If no notes but existing total, pre-populate one row with that amount
+  // Reconcile items against the stored column total so the popup total
+  // always matches the Sheets Inventory table value. If items don't sum
+  // to the total (missing line items in the cell note), surface the
+  // difference as an unnamed row so nothing gets hidden.
+  var _totalField=type==='joint'?'joint_expenses':'vlad_expenses';
+  var _existingTotal=parseFloat(c[_totalField])||0;
   if(items.length===0){
-    var totalField=type==='joint'?'joint_expenses':'vlad_expenses';
-    var existingTotal=parseFloat(c[totalField])||0;
-    if(existingTotal>0) items.push({amt:String(existingTotal),desc:''});
+    if(_existingTotal>0) items.push({amt:String(_existingTotal),desc:''});
+  } else {
+    var _itemsSum=0;
+    items.forEach(function(it){ _itemsSum += parseFloat(it.amt)||0; });
+    var _diff=Math.round((_existingTotal - _itemsSum)*100)/100;
+    if(_diff > 0.01) items.push({amt:String(_diff),desc:''});
   }
   var rowsHtml='';
   items.forEach(function(it,i){ rowsHtml+=isExpRow(i,it.amt,it.desc,color); });
@@ -21083,7 +21118,8 @@ async function isExpSave(){
     var amt=parseFloat(inputs[0].value)||0;
     var desc=(inputs[1].value||'').trim();
     if(amt>0||desc){
-      items.push(amt+' '+desc);
+      // Amount-only rows shouldn't leave a trailing space in the cell note.
+      items.push(desc?(amt+' '+desc):(''+amt));
       total+=amt;
     }
   });
