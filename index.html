@@ -16968,6 +16968,23 @@ async function _autopopulateDeals26(record, car) {
   if (Array.isArray(_d26Data) && res && res[0]) {
     _d26Data.push(res[0]);
   }
+
+  // 12. Remove sold car from inventory_costs (car transferred to Deals26).
+  //     Deletes Supabase row + Google Sheet row. Passes car_name so the
+  //     Apps Script can verify before deleting (guards against stale sort_order).
+  if (ic && ic.id) {
+    var _icSort = ic.sort_order;
+    var _icName = ic.car_name || '';
+    var _icLoc = record.location || 'DeBary';
+    try {
+      await sbDelete('inventory_costs', ic.id);
+      if (_icSort) sheetsPush('Inventory', _icSort, { car_name: _icName }, 'delete', _icLoc);
+      // Remove from any loaded local cache
+      if (Array.isArray(_isData)) _isData = _isData.filter(function(r){ return r.id !== ic.id; });
+    } catch (delErr) {
+      console.warn('Failed to remove sold car from inventory_costs id=' + ic.id + ':', delErr);
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -17150,9 +17167,15 @@ async function _autoCreateInventoryCosts(insertedRows) {
   var allIc = [];
   try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,sort_order&order=sort_order.asc&limit=500'); } catch(e) {}
   var existingCarIds = new Set();
+  // Also track (car_name + location) so we don't recreate orphaned rows
+  // (e.g. when CSV sync replaces an inventory row with a fresh inventory.id
+  // but the inventory_costs entry for that car already exists unlinked).
+  var existingNameKeys = new Set();
   var totalRow = null;
   if (Array.isArray(allIc)) allIc.forEach(function(r) {
     if (r.car_id) existingCarIds.add(r.car_id);
+    var _n = (r.car_name || '').trim().toLowerCase();
+    if (_n && _n !== 'total') existingNameKeys.add(_n + '||' + (r.location || 'DeBary'));
     if ((r.car_name || '').toLowerCase() === 'total') totalRow = r;
   });
   var nextSort = totalRow ? totalRow.sort_order : (Array.isArray(allIc) ? allIc.length + 1 : 1);
@@ -17172,6 +17195,16 @@ async function _autoCreateInventoryCosts(insertedRows) {
     var color = (row.color || '').toLowerCase();
     var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
     var carName = [shortYr, model, color, milesK].filter(Boolean).join(' ');
+
+    // Dedupe: if a row already exists for this name+location (e.g. orphaned
+    // from a prior sync), skip rather than create a duplicate. The reconciler
+    // will relink / update it on the next run.
+    var _nameKey = carName.trim().toLowerCase() + '||' + (row.location || 'DeBary');
+    if (existingNameKeys.has(_nameKey)) {
+      console.log('_autoCreateInventoryCosts: skipping duplicate name "' + carName + '" for ' + (row.location || 'DeBary'));
+      continue;
+    }
+    existingNameKeys.add(_nameKey);
 
     var icRow = {
       car_name: carName,
@@ -20841,8 +20874,25 @@ function invSheetsRender(){
 async function invSheetsAddCar(){
   var name=prompt('Car name (e.g. 17 BMW 330i Black 117k):');
   if(!name||!name.trim())return;
+  var trimmed=name.trim();
+  // Dedupe: if the same name already exists for this location, open the
+  // existing row instead of creating a duplicate.
+  var _key=trimmed.toLowerCase();
+  var _existingIdx=-1;
+  for(var _i=0;_i<_isData.length;_i++){
+    var _r=_isData[_i];
+    if(((_r.car_name||'').trim().toLowerCase()===_key) && ((_r.location||'DeBary')===_isLoc)){
+      _existingIdx=_i;break;
+    }
+  }
+  if(_existingIdx>=0){
+    if(confirm('"'+trimmed+'" already exists in '+_isLoc+'.\n\nOpen the existing row instead?')){
+      isEditOpen(_existingIdx);
+    }
+    return;
+  }
   try{
-    var newCar={car_name:name.trim(),purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',vlad_expense_notes:'',location:_isLoc};
+    var newCar={car_name:trimmed,purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',vlad_expense_notes:'',location:_isLoc};
     var res=await sbPost('inventory_costs',newCar);
     var costs=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500');
     _isData=Array.isArray(costs)?costs:[];

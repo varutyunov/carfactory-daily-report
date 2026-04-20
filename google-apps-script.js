@@ -276,6 +276,35 @@ function doPost(e) {
       if (nameVal.toLowerCase() === 'total') {
         return jsonResponse({ ok: false, error: 'refused_delete_total_row', row: targetRow });
       }
+      // Safety: if the caller passed the expected name in body.data.<nameField>,
+      // verify the sheet row actually matches before deleting. Guards against
+      // stale sort_order pointing at the wrong car (e.g. when rows shifted).
+      var expectedName = '';
+      if (body.data && body.data[nameField]) expectedName = String(body.data[nameField]).trim();
+      if (expectedName) {
+        var actualLc = nameVal.toLowerCase();
+        var expectedLc = expectedName.toLowerCase();
+        if (actualLc !== expectedLc) {
+          // Try scanning nearby rows (±20) in case sort_order drifted
+          var found = -1;
+          if (nameColLetter) {
+            var nCol = letterToColumn(nameColLetter);
+            var lastR = sheet.getLastRow();
+            var minR = Math.max(config.startRow, targetRow - 20);
+            var maxR = Math.min(lastR, targetRow + 20);
+            for (var rr = minR; rr <= maxR; rr++) {
+              var v = String(sheet.getRange(rr, nCol).getValue() || '').trim().toLowerCase();
+              if (v === expectedLc) { found = rr; break; }
+            }
+          }
+          if (found > 0) {
+            targetRow = found;
+          } else {
+            Logger.log('Delete refused: expected "' + expectedName + '" at row ' + targetRow + ' but found "' + nameVal + '"');
+            return jsonResponse({ ok: false, error: 'name_mismatch', expected: expectedName, actual: nameVal, row: targetRow });
+          }
+        }
+      }
       // Full row delete — removes text + formatting (no orphan colored blanks)
       sheet.deleteRow(targetRow);
       SpreadsheetApp.flush();
@@ -636,9 +665,14 @@ function syncFullReconcile() {
       }
 
       var rowName = rowData[nameField] || '';
+      // Normalize match key: trim + lowercase. For Deals26, include deal_num
+      // so multiple deals on the same car (different weeks) stay distinct
+      // rather than collapsing together.
+      var rowKey = rowName.trim().toLowerCase();
+      if (config.table === 'deals26') rowKey += '||' + (rowData.deal_num || 0);
       if (hasData && rowName) {
-        sheetByName[rowName] = rowData;
-        sheetOrder.push(rowName);
+        sheetByName[rowKey] = rowData;
+        sheetOrder.push(rowKey);
       }
     }
 
@@ -647,10 +681,40 @@ function syncFullReconcile() {
     var dbRows = supabaseGet(config.table, locFilter + 'select=*&order=sort_order.asc,id.asc&limit=500');
     if (!Array.isArray(dbRows)) continue;
 
+    // Group DB rows by the same normalized key used for sheet rows. When
+    // multiple DB rows share a key, keep the best one (prefer car_id set →
+    // most recent updated_at) and queue the rest for deletion. This self-heals
+    // legacy duplicates that slipped in before dedupe was added.
     var dbByName = {};
+    var _dbGroups = {};
     for (var d = 0; d < dbRows.length; d++) {
       var dName = dbRows[d][nameField] || '';
-      if (dName) dbByName[dName] = dbRows[d];
+      if (!dName) continue;
+      var dKey = dName.trim().toLowerCase();
+      if (config.table === 'deals26') dKey += '||' + (dbRows[d].deal_num || 0);
+      if (!_dbGroups[dKey]) _dbGroups[dKey] = [];
+      _dbGroups[dKey].push(dbRows[d]);
+    }
+    var _gkeys = Object.keys(_dbGroups);
+    for (var gi = 0; gi < _gkeys.length; gi++) {
+      var _group = _dbGroups[_gkeys[gi]];
+      if (_group.length === 1) {
+        dbByName[_gkeys[gi]] = _group[0];
+        continue;
+      }
+      _group.sort(function(a, b) {
+        if (!!a.car_id !== !!b.car_id) return b.car_id ? 1 : -1;
+        return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+      });
+      dbByName[_gkeys[gi]] = _group[0];
+      for (var gj = 1; gj < _group.length; gj++) {
+        try {
+          Logger.log('Reconcile DUP-DELETE: ' + tabName + ' → "' + _group[gj][nameField] + '" id=' + _group[gj].id);
+          supabaseDelete(config.table, 'id=eq.' + _group[gj].id);
+        } catch (err) {
+          Logger.log('Reconcile DUP-DELETE error id=' + _group[gj].id + ': ' + err.message);
+        }
+      }
     }
 
     // Sheet → Supabase: add new cars, update changed values + sort_order
@@ -667,10 +731,19 @@ function syncFullReconcile() {
           sRow.updated_at = new Date().toISOString();
         }
         try {
-          Logger.log('Reconcile INSERT: ' + tabName + ' → "' + sName + '" sort=' + newSortOrder);
-          supabasePost(config.table, sRow);
+          Logger.log('Reconcile INSERT: ' + tabName + ' → "' + sRow[nameField] + '" sort=' + newSortOrder);
+          var _postRes = supabasePost(config.table, sRow);
+          // Register the new row so if a later sheetOrder entry shares this
+          // normalized key (shouldn't happen with deal_num-aware keys, but
+          // guards against lingering edge cases) it updates instead of
+          // inserting another duplicate.
+          if (Array.isArray(_postRes) && _postRes[0]) {
+            dbByName[sName] = _postRes[0];
+          } else {
+            dbByName[sName] = sRow;
+          }
         } catch (err) {
-          Logger.log('Reconcile INSERT error for "' + sName + '": ' + err.message);
+          Logger.log('Reconcile INSERT error for "' + sRow[nameField] + '": ' + err.message);
         }
       } else {
         // Exists in both — check for value/note/sort_order changes
