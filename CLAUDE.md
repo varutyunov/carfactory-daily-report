@@ -41,7 +41,7 @@ version.json        — Version tracker (auto-updated)
 icon.png/icon-192/icon-512/apple-touch-icon — App icons
 stock-*.png         — Placeholder vehicle images
 netlify.toml        — Netlify config
-scripts/            — Sync scripts (carpay-sync, gps-sync, inventory-sync)
+scripts/            — Sync scripts (carpay-sync, gps-sync, inventory-sync) + one-shot maintenance (cleanup-sold-inventory-costs.py)
 netlify/functions/  — Serverless (ai-proxy.js, telegram-webhook.js)
 google-apps-script.js — Container-bound Apps Script for Google Sheets two-way sync
 ```
@@ -166,8 +166,9 @@ _payBreakdown         — {cash, card, check, other, total}
 5. **Read the target area fresh before every edit.** Code may have been added by a prior session. Never assume you know what's there from memory.
 6. **Grep before EVERY commit.** Run a grep for all key function names in the area you edited. If any function that existed before is now missing, STOP and fix it before committing.
 7. **After the commit, grep again.** Double-check the committed file still has all expected functions.
+8. **NEVER mass-update or bulk-modify live data without explicit per-scope approval.** This applies to Supabase rows and Google Sheets cells. Even if the mutation "looks safe" or is "defensive cleanup," STOP — get the user to approve the specific scope first. Dry-run, show exactly which rows/cells will change, wait for "yes." No "while I'm here, let me also…" sweeps. (See: April 20, 2026 — a well-intentioned sweep cleared column G on 97 Deals26 rows and destroyed user-entered data. Never again.)
 
-**Why this matters:** This is a 27k-line single-file app. A single overly broad Edit can silently delete dozens of functions. The user loses hours of work and trust. There is no acceptable reason to delete working code without explicit permission.
+**Why this matters:** This is a 27k-line single-file app. A single overly broad Edit can silently delete dozens of functions. And a single over-broad data sweep can wipe real business data that isn't recoverable outside Google Sheets version history. The user loses hours of work and trust. There is no acceptable reason to delete working code or bulk-mutate live data without explicit permission.
 
 ## Safe Editing Mechanics
 
@@ -235,12 +236,17 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Key vars:** `_isData`, `_isLoc`, `_isEditIdx`, `_isLinkIdx`, `_shPageIdx`, `_d26Data`, `_d26EditIdx`
 
 ### Google Sheets Two-Way Sync
-- **Sheet ID:** `1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE`
+- **Sheet IDs:** DeBary `1eUXKqWP_I_ysXZUDDhNLvWgPxOcqd_bsFKrD3p9chVE`, DeLand `1pNF6h9AX5MQsNoT-UxvrAOaT-7lulvGiWd_oTFkqyzM`
 - **Architecture:** Google Apps Script (container-bound) ↔ Supabase REST API (direct, no Netlify middleman)
-- **Sheet → Supabase:** Apps Script `onEdit` trigger detects changes → calls Supabase REST API directly to upsert rows
+- **Sheet → Supabase:** Apps Script `onEdit` trigger detects changes → calls Supabase REST API directly to upsert rows (matched by `sort_order + location`)
 - **App → Sheet:** `sheetsPush(tab, rowIndex, data)` function in index.html calls the Apps Script web app URL to write changes back to the sheet
 - **Apps Script URL:** Hardcoded in `sheetsPush` function (container-bound, deployed as web app)
-- **Conflict prevention:** `sync_source` field distinguishes app vs sheet edits
+- **Sheet is master.** The 5-min `syncFullReconcile` trigger reads the sheet as source of truth and updates Supabase to match. Supabase is effectively a cache for the app to read quickly.
+- **Reconciler matching keys (April 2026 fix):** normalized (trim + lowercase) for all tables; Deals26 uses compound key `car_desc + deal_num` so multiple deals on the same car across different weeks stay distinct rather than collapsing. Inventory uses `car_name + location`.
+- **Reconciler self-heals DB duplicates:** when multiple DB rows share a normalized key, keep one (prefer `car_id` set → most recent `updated_at`) and delete the rest.
+- **Reconciler dedupes insert path:** after an INSERT the reconciler registers the new row in its in-memory `dbByName` so the next sheet row with the same normalized key UPDATEs instead of re-inserting.
+- **`delete` action has name-safety:** when the app pushes a delete, it passes the expected `car_name`/`car_desc` in `data`. Apps Script verifies the sheet row's name matches before calling `sheet.deleteRow(targetRow)`. If sort_order drifted, it scans ±20 rows for the expected name; on mismatch, it refuses with `{ok:false, error:'name_mismatch'}`. Protects against wrong-row deletes.
+- **Conflict prevention:** 5-second `_syncLockTime` property — after an app→sheet write, `onSheetEdit` skips for 5s to prevent feedback loops.
 
 ### Trade-In Payment Method
 - **Payment option:** `trade_in` added to all 6 payment method dropdowns (deal upload, deal edit, deposit forms)
@@ -251,18 +257,30 @@ These are built, working, and must survive every future change. `scripts/validat
 
 ### Deals26 Auto-Populate (from deal upload)
 - **On deal submit:** `_autopopulateDeals26(record, car)` creates deals26 row with: car_desc (inventory_costs.car_name + customer last name), cost, expenses, money (total_collected), dealer_fee=$399, deal_num (auto-incremented), gps_sold, sold_inv_vin
-- **On deal edit:** `_updateDeals26FromDeal()` updates money/gps if deal is edited
-- **Tax lookup:** Fetches `PendingSalesDebary.csv` from GitHub, matches by VIN, pulls salestax + tagfee + titlefee
+- **`sort_order` + `deal_num` MUST be location-filtered** when computing — the DB queries in `_autopopulateDeals26` filter by `record.location`. Without the filter, DeBary's sort_order was being offset by DeLand's row count, pushing entries into blank rows past the current week (April 2026 fix).
+- **Column G (payments) stays blank for new deal uploads.** `_autopopulateDeals26` explicitly drops `payments` + `payment_notes` from the sheet payload (Supabase still stores 0 by default). Vlad enters payments manually in the sheet. Do NOT re-add blanket clearContent logic to Apps Script — it wipes user-entered values on other save paths.
+- **Auto-delete sold car from inventory_costs:** After inserting the deals26 row, the function deletes the linked `inventory_costs` row (Supabase + sheet) so the sold car is transferred out of the Inventory tab.
+- **Expense notes merge with newlines:** joint + vlad expense notes combined with `\n` separator to match Google Sheets cell-note format.
+- **On deal edit:** `_updateDeals26FromDeal()` updates money/gps if deal is edited. Finds existing row by `sold_inv_vin`; creates via `_autopopulateDeals26` if no match.
+- **Tax lookup:** Fetches `PendingSalesDebary.csv` / `PendingSalesDeland.csv` from GitHub, matches by VIN, pulls salestax + tagfee + titlefee.
 - **Periodic tax fill:** `_fillMissingTaxes()` runs every 30 min + on page load. Retries until CSV has the data.
 
 ### Inventory Auto-Create (CSV Sync → App Sheets)
 - **On CSV sync:** `_autoCreateInventoryCosts(insertedRows)` creates `inventory_costs` row with short name format, linked via `car_id`
 - **Inserts before Total row:** Finds "Total" row and inserts above it, bumps Total's sort_order
+- **Name-based dedupe (April 2026):** before inserting, checks `existingNameKeys` (trimmed-lower `car_name + location`). Prevents creating a duplicate when the CSV replaces an inventory row with a fresh `inventory.id` but the `inventory_costs` row for that car already exists unlinked.
+- **Manual + ADD dedupe:** `invSheetsAddCar` checks for existing `car_name + location` before POSTing; if match, prompts to open the existing row instead of creating a duplicate.
+
+### Expense / Payment Popup Parsing
+- **Popups:** `isShowExpPopup` (inventory Joint/Vlad), `d26ShowExpPopup` (deals26 expenses), `d26ShowPmtPopup` (deals26 payments).
+- **Separator:** Google Sheets cell notes use NEWLINES. Parser splits on `/\r?\n|,/` (newline OR comma for backward compat). Saves write with `\n` only so sheet ↔ app round-trips cleanly.
+- **Regex:** `/^\$?(\d+(?:\.\d+)?)\s*(.*)$/` — accepts optional `$` prefix (existing notes like `"$150 Perry"`) and amount-only lines (like `"582"`). Older regex required a description; that landed `$`-prefixed and amount-only entries in the description slot with no amount.
+- **Remainder row:** if the sum of the parsed items is less than the stored column total (e.g. cell says $592 but note only itemizes $10), the popup appends an unnamed row for the difference so the popup total always matches the Sheets Inventory / Deals26 table value. Save paths emit no trailing space when description is empty.
 
 ### Apps Script Auto-Deploy
 - **Deploy script:** `python scripts/deploy-apps-script.py "description"` — pushes code + creates version + updates deployment
 - **OAuth credentials:** `scripts/.google-credentials.json` + `scripts/.google-token.json` (both in .gitignore)
-- **Features deployed:** Car color coding on column B, currency formatting ($#,##0), week separator borders (deal_num=1), column F formula (copies from row above), column G skip (leaves empty for manual payments), error logging on all Supabase calls
+- **Features deployed:** Car color coding on column B, currency formatting ($#,##0), week separator borders (deal_num=1), column F formula (copies from row above), column G skip when payments=0 (leaves whatever's there — do NOT `clearContent` globally, it wiped data once), delete-action name verification (refuses + offers ±20-row scan), reconciler with normalized keys + compound keys for Deals26 + DB dupe healing, error logging on all Supabase calls
 
 ## Recent Work (April 2026)
 
@@ -284,8 +302,30 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Apps Script deploy pipeline** — automated deployment from CLI, no manual pasting
 - **Sheets tab layout swap** — DeBary/DeLand small tabs on top, Inventory/Deals26 big buttons below
 
+### Completed — April 20, 2026 (Sync fix day)
+- **inventory_costs duplicate cleanup (DeBary):** 8 duplicate rows across 3 groups (Accord, Forte, Tundra) removed from Supabase; car_id re-linked to correct inventory rows (Forte had been pointing at a Camry).
+- **Auto-delete sold car from inventory_costs:** `_autopopulateDeals26` now removes the sold car's `inventory_costs` row (Supabase + Google Sheet) after creating the Deals26 entry — completes the transfer from Inventory tab to Deals26.
+- **Apps Script `delete` action name safety:** verifies `car_name`/`car_desc` matches the sheet row before deleting; scans ±20 rows if `sort_order` drifted; refuses on mismatch.
+- **Reconciler hardening:** normalized match keys (trim+lowercase); Deals26 uses compound key `car_desc + deal_num`; self-heals in-DB duplicates; updates in-memory `dbByName` after INSERT so duplicate-named sheet rows don't cause re-inserts.
+- **`_autoCreateInventoryCosts` dedupe:** checks for existing `car_name + location` before POSTing, prevents orphan duplicates when CSV sync reassigns `inventory.id`.
+- **`invSheetsAddCar` dedupe:** same check, offers to open existing row.
+- **Expense/payment popup parser fixes:** split on newline OR comma; accept `$` prefix; amount-only items parse; add remainder row when item sum < stored total. Saves write with newlines to match sheet format.
+- **`_autopopulateDeals26` location-filter fix:** `sort_order` and `deal_num` queries now filter by `record.location`. Previously used combined count across DeBary+DeLand, which pushed DeBary writes past the current week (3 DeBary deals landed at rows 177-179 instead of 122-124).
+- **Column G blank for new deal uploads:** `_autopopulateDeals26` drops `payments`/`payment_notes` from the sheet payload; column G stays untouched on the new row.
+- **Backfill cleanup:** retroactively removed 17 already-sold cars from `inventory_costs` (Supabase + sheet) via new `scripts/cleanup-sold-inventory-costs.py`.
+- **Deals ↔ Deals26 alignment:** 12 previously-unlinked deals got their `sold_inv_vin` populated; 5 money mismatches resolved (including card-fee adjustments); 1 duplicate removed (Celeste Johnson); Linsey Solano renumbered; 3 orphan sheet rows moved back to correct week position.
+- **Helper script:** `scripts/cleanup-sold-inventory-costs.py` — idempotent, dry-run by default, `--apply` to execute.
+- **Apps Script versions shipped:** v38 (reconciler + delete safety), v39 (reverted), v40 (current — skip-only column G). Cache bumps v491 → v496.
+
 ### Known Issues / Gotchas
 - `deposits` table has NO `payment_method` column — payment method is tracked in the `payments` table instead (via auto-posted deposit payment)
 - `deposits` table uses `balance` (NOT `remaining_balance`) for the remaining balance column
 - Service worker cache must be bumped (`sw.js`) on every deploy or changes won't show on phones
 - `git push` often needs `git fetch origin main && git merge origin/main --no-edit` first (version.json conflicts)
+- **Deals26 sheet has a gap:** DeBary's Deals26 tab has a ~55-row empty stretch between rows 122-176. The contiguous deals historically fill up through row ~121, then recent auto-populated deals were landing past this gap (fixed April 2026). `read_all` returns `_sheetRow` (absolute) and `_rowIndex` (relative to data-having rows) — always trust `_rowIndex` / `sort_order` not the visual row number.
+- **Google Sheets cell notes use `\n` separators, NOT commas.** Any parser that splits on comma alone will show only the first line item. Fixed across all expense/payment popups in April 2026.
+- **`sort_order` collisions are real.** Legacy `inventory_costs` dupes had 2-3 rows sharing the same sort_order. The Apps Script `onSheetEdit` PATCH filters by `sort_order + location`; if multiple DB rows match, all get patched. Reconciler cleanup (April 2026) removed these, and new dedupe checks in `_autoCreateInventoryCosts` / `invSheetsAddCar` prevent new ones.
+- **Reconciler only runs every 5 min.** Between runs, `sort_order` in DB can drift from actual sheet position (if rows shifted). `onSheetEdit` PATCHes by `sort_order + location` which will hit the wrong DB row until the next reconcile. Most edits settle correctly within the 5-min window.
+- **Sheet writes via `sheetsPush` use `sort_order` as `row_index`, not visual sheet row.** `targetRow = startRow + rowIndex - 1`. For sheets with gaps, `row_index` counts hasData positions, not raw row numbers — always read the live sheet first if you need an exact row (use the `read_all` action and pick `_rowIndex`).
+- **The Apps Script `update` action writes only the fields in `data`** — other columns are untouched. Skipping a field (e.g. dropping `payments` from the payload) leaves the cell alone; this is the correct way to "don't touch column G" for new deal uploads. Do NOT add blanket `clearContent` to Apps Script — it nuked 97 rows' column G on April 20, 2026.
+- **When doing data repairs, ALWAYS read the live state first.** The DB `sort_order` can be stale relative to the sheet; writing to `row_index=X` will hit a different row than you expect if the sheet has been restructured. Use `action:read_all` to resolve the current `_rowIndex` before any targeted write or delete.
