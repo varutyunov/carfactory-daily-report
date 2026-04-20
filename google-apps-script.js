@@ -223,28 +223,30 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'insert', row: insertRow });
     }
 
-    // ── ACTION: DELETE — clear row from sheet ─────────────────
+    // ── ACTION: DELETE — remove row entirely (no orphan formatting) ─
     if (action === 'delete') {
       var rowIndex = body.row_index;
       var targetRow = config.startRow + rowIndex - 1;
-      // Clear all synced columns in this row
-      var colKeys = Object.keys(config.columns);
-      for (var j = 0; j < colKeys.length; j++) {
-        var cNum = letterToColumn(colKeys[j]);
-        var cell = sheet.getRange(targetRow, cNum);
-        cell.clearContent();
-        cell.clearNote();
+      // Find the name-column letter from the config so we can check for 'Total'
+      // (inventory_costs uses car_name in col H; deals26 uses car_desc in col B)
+      var nameField = (config.table === 'deals26') ? 'car_desc' : 'car_name';
+      var nameColLetter = null;
+      var cKeys = Object.keys(config.columns);
+      for (var ck = 0; ck < cKeys.length; ck++) {
+        if (config.columns[cKeys[ck]] === nameField) { nameColLetter = cKeys[ck]; break; }
       }
-      // Also clear cell notes columns
-      if (config.cellNotes) {
-        var noteKeys = Object.keys(config.cellNotes);
-        for (var n = 0; n < noteKeys.length; n++) {
-          var nNum = letterToColumn(noteKeys[n]);
-          sheet.getRange(targetRow, nNum).clearNote();
-        }
+      // Guard: never delete the Total row (detected by nameField value === 'Total')
+      var nameVal = '';
+      if (nameColLetter) {
+        nameVal = String(sheet.getRange(targetRow, letterToColumn(nameColLetter)).getValue() || '').trim();
       }
+      if (nameVal.toLowerCase() === 'total') {
+        return jsonResponse({ ok: false, error: 'refused_delete_total_row', row: targetRow });
+      }
+      // Full row delete — removes text + formatting (no orphan colored blanks)
+      sheet.deleteRow(targetRow);
       SpreadsheetApp.flush();
-      return jsonResponse({ ok: true, action: 'delete', row: targetRow });
+      return jsonResponse({ ok: true, action: 'delete', row: targetRow, method: 'deleteRow' });
     }
 
     // ── ACTION: READ_ALL — read all rows for reconciliation ───
