@@ -1083,6 +1083,17 @@ body.light .cal-fab{background:#4488ff !important;}
         <button id="deal-type-finance" onclick="dealSetType('finance')" style="flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Finance</button>
       </div>
 
+      <!-- Out of State toggle — suppresses tax/tag/title auto-fill -->
+      <div onclick="dealToggleOOS()" id="deal-oos-row" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;margin-bottom:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+        <div id="deal-oos-box" style="width:22px;height:22px;border:2px solid #333;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:transparent;">
+          <span id="deal-oos-check" style="display:none;color:#fbbf24;font-weight:900;font-size:14px;line-height:1;">✓</span>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;color:#fff;">Out of State</div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">No sales tax · tag · title</div>
+        </div>
+      </div>
+
       <!-- GPS Serial + Pick Up Payment (finance only) -->
       <div id="deal-gps-wrap" style="display:none;margin-bottom:14px;">
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
@@ -16452,9 +16463,30 @@ function dealSelectCar(carId) {
   document.getElementById('deal-pickup-due-wrap').style.display = 'none';
   _dealPayments = [];
   _dealAddToWeek = false;
+  _dealOOS = false;
+  _dealRenderOOS();
   dealAddPayment();
   dealSetType('cash');
   dealShowStep(2);
+}
+
+// Out-of-state flag — when on, skips auto-tax lookup in _autopopulateDeals26
+// and prevents _fillMissingTaxes from ever overwriting with CSV values.
+var _dealOOS = false;
+function dealToggleOOS(){ _dealOOS = !_dealOOS; _dealRenderOOS(); }
+function _dealRenderOOS(){
+  var box=document.getElementById('deal-oos-box');
+  var chk=document.getElementById('deal-oos-check');
+  if(!box||!chk)return;
+  if(_dealOOS){
+    box.style.background='rgba(251,191,36,.15)';
+    box.style.borderColor='#fbbf24';
+    chk.style.display='block';
+  } else {
+    box.style.background='transparent';
+    box.style.borderColor='#333';
+    chk.style.display='none';
+  }
 }
 
 // ── STEP 2: Deal info ──
@@ -16736,6 +16768,7 @@ async function dealSubmit() {
       created_by: me ? me.name : '',
       location: _dealData.dealLocation || (me ? me.location : 'DeBary'),
       notes: (document.getElementById('deal-upload-notes').value||'').trim(),
+      out_of_state: !!_dealOOS,
       created_at: new Date().toISOString()
     };
     // Save pickup payment as its own columns
@@ -16939,35 +16972,40 @@ async function _autopopulateDeals26(record, car) {
     if (Array.isArray(allD26)) sortOrder = allD26.length + 1;
   } catch (e) {}
 
-  // 7b. Look up taxes from Pending Sales CSV (salestax + tagfee + titlefee)
+  // 7b. Look up taxes from Pending Sales CSV (salestax + tagfee + titlefee).
+  //     Out-of-state deals skip this lookup entirely — no sales tax, tag,
+  //     or title applies, so taxes stay 0 forever and _fillMissingTaxes
+  //     must not overwrite them later.
   var taxes = 0;
-  try {
-    var psFile = (record.location === 'DeLand') ? 'PendingSalesDeland.csv' : 'PendingSalesDebary.csv';
-    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/' + psFile + '?t=' + Date.now();
-    var psResp = await fetch(psUrl);
-    if (psResp.ok) {
-      var psCsv = await psResp.text();
-      var psLines = psCsv.trim().split('\n');
-      var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
-      var vinIdx = psHdr.indexOf('vin');
-      var taxIdx = psHdr.indexOf('salestax');
-      var tagIdx = psHdr.indexOf('tagfee');
-      var titleIdx = psHdr.indexOf('titlefee');
-      if (vinIdx >= 0 && taxIdx >= 0) {
-        for (var pi = 1; pi < psLines.length; pi++) {
-          var psVals = psLines[pi].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
-          var psVin = (psVals[vinIdx] || '').trim();
-          if (psVin && vin.indexOf(psVin) === 0) {
-            var st = parseFloat(psVals[taxIdx]) || 0;
-            var tg = tagIdx >= 0 ? (parseFloat(psVals[tagIdx]) || 0) : 0;
-            var tt = titleIdx >= 0 ? (parseFloat(psVals[titleIdx]) || 0) : 0;
-            taxes = Math.round((st + tg + tt) * 100) / 100;
-            break;
+  if (!record.out_of_state) {
+    try {
+      var psFile = (record.location === 'DeLand') ? 'PendingSalesDeland.csv' : 'PendingSalesDebary.csv';
+      var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/' + psFile + '?t=' + Date.now();
+      var psResp = await fetch(psUrl);
+      if (psResp.ok) {
+        var psCsv = await psResp.text();
+        var psLines = psCsv.trim().split('\n');
+        var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+        var vinIdx = psHdr.indexOf('vin');
+        var taxIdx = psHdr.indexOf('salestax');
+        var tagIdx = psHdr.indexOf('tagfee');
+        var titleIdx = psHdr.indexOf('titlefee');
+        if (vinIdx >= 0 && taxIdx >= 0) {
+          for (var pi = 1; pi < psLines.length; pi++) {
+            var psVals = psLines[pi].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+            var psVin = (psVals[vinIdx] || '').trim();
+            if (psVin && vin.indexOf(psVin) === 0) {
+              var st = parseFloat(psVals[taxIdx]) || 0;
+              var tg = tagIdx >= 0 ? (parseFloat(psVals[tagIdx]) || 0) : 0;
+              var tt = titleIdx >= 0 ? (parseFloat(psVals[titleIdx]) || 0) : 0;
+              taxes = Math.round((st + tg + tt) * 100) / 100;
+              break;
+            }
           }
         }
       }
-    }
-  } catch (e) { /* taxes stays 0 */ }
+    } catch (e) { /* taxes stays 0 */ }
+  }
 
   // 8. Build deals26 object
   var d26Obj = {
@@ -17095,6 +17133,13 @@ async function _updateDeals26FromDeal(dealRecord) {
     patch.gps_sold = !!(dealRecord.gps_serial);
   }
 
+  // Out-of-state deals: force taxes to 0. When a deal is flagged OOS
+  // (either at creation or retroactively on edit), the deals26 row must
+  // reflect zero sales tax/tag/title so _fillMissingTaxes never overwrites.
+  if (dealRecord.out_of_state === true) {
+    patch.taxes = 0;
+  }
+
   await sbPatch('deals26', d26Row.id, patch);
 
   // Push update to Google Sheet
@@ -17124,6 +17169,41 @@ async function _fillMissingTaxes() {
     // Find deals26 rows with taxes=0 and a VIN
     var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc,location&limit=50');
     if (!Array.isArray(missing) || !missing.length) { _taxFillRunning = false; return; }
+
+    // Filter out deals flagged as out-of-state. OOS deals legitimately have
+    // taxes=0 (no sales tax/tag/title applies) and must never be overwritten
+    // by CSV values. We query deals.out_of_state by VIN and drop any matching
+    // rows before we even try to fetch the CSVs.
+    try {
+      var vinsToCheck = missing
+        .map(function(r) { return (r.sold_inv_vin || '').trim(); })
+        .filter(function(v) { return !!v; });
+      if (vinsToCheck.length) {
+        var oosVinSet = {};
+        // PostgREST in.() list — quote each VIN to be safe
+        var inList = '(' + vinsToCheck.map(function(v) { return '"' + v + '"'; }).join(',') + ')';
+        var oosRows = await sbGet('deals', 'out_of_state=eq.true&vin=in.' + encodeURIComponent(inList) + '&select=vin');
+        if (Array.isArray(oosRows)) {
+          for (var oi = 0; oi < oosRows.length; oi++) {
+            var ov = (oosRows[oi].vin || '').trim();
+            if (ov) oosVinSet[ov] = true;
+          }
+        }
+        if (Object.keys(oosVinSet).length) {
+          missing = missing.filter(function(r) {
+            var rv = (r.sold_inv_vin || '').trim();
+            if (oosVinSet[rv]) {
+              console.log('_fillMissingTaxes: skipping out-of-state ' + (r.car_desc || rv));
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+      if (!missing.length) { _taxFillRunning = false; return; }
+    } catch (e) {
+      console.warn('_fillMissingTaxes: OOS filter failed, continuing without it', e);
+    }
 
     // Fetch Pending Sales CSVs (DeBary + DeLand)
     var hasDeLand = missing.some(function(r) { return r.location === 'DeLand'; });
@@ -19240,6 +19320,17 @@ function openDealDetail(id) {
     html += '<button onclick="deSetType('+d.id+',\'finance\')" id="de-type-finance-'+d.id+'" style="flex:1;padding:12px 8px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:'+(d.deal_type==='finance'?'2px solid #7c3aed':'1px solid #333')+';background:'+(d.deal_type==='finance'?'#7c3aed':'transparent')+';color:'+(d.deal_type==='finance'?'#fff':'#888')+';-webkit-tap-highlight-color:transparent;">Finance</button>';
     html += '</div></div>';
 
+    // Out-of-State toggle (edit form). When on, deals26.taxes is forced to 0
+    // and _fillMissingTaxes will skip this VIN.
+    var _deOOS = !!d.out_of_state;
+    html += '<input type="hidden" id="de-oos-'+d.id+'" value="'+(_deOOS?'1':'0')+'"/>';
+    html += '<div onclick="deToggleOOS('+d.id+')" id="de-oos-row-'+d.id+'" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;margin-bottom:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+    html += '<div id="de-oos-box-'+d.id+'" style="width:22px;height:22px;border:2px solid '+(_deOOS?'#fbbf24':'#333')+';border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:'+(_deOOS?'rgba(251,191,36,.15)':'transparent')+';">';
+    html += '<span id="de-oos-check-'+d.id+'" style="display:'+(_deOOS?'block':'none')+';color:#fbbf24;font-weight:900;font-size:14px;line-height:1;">✓</span>';
+    html += '</div>';
+    html += '<div style="flex:1;"><div style="font-size:14px;font-weight:700;color:#fff;">Out of State</div><div style="font-size:11px;color:#666;margin-top:2px;">No sales tax · tag · title</div></div>';
+    html += '</div>';
+
     // Payments
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Payments</div>';
@@ -19547,6 +19638,20 @@ function deSetType(id,type){
   if(finBtn){finBtn.style.background=type==='finance'?'#7c3aed':'transparent';finBtn.style.color=type==='finance'?'#fff':'#888';finBtn.style.border=type==='finance'?'2px solid #7c3aed':'1px solid #333';}
 }
 
+function deToggleOOS(id){
+  var h=document.getElementById('de-oos-'+id);
+  if(!h)return;
+  var on = h.value!=='1';
+  h.value = on?'1':'0';
+  var box=document.getElementById('de-oos-box-'+id);
+  var chk=document.getElementById('de-oos-check-'+id);
+  if(box){
+    box.style.background = on?'rgba(251,191,36,.15)':'transparent';
+    box.style.borderColor = on?'#fbbf24':'#333';
+  }
+  if(chk) chk.style.display = on?'block':'none';
+}
+
 async function dealEditSave(id){
   var d=_dealsData.find(function(x){return x.id===id;});
   if(!d)return;
@@ -19563,6 +19668,10 @@ async function dealEditSave(id){
     // Deal type
     var typeEl=document.getElementById('de-type-'+id);
     if(typeEl&&typeEl.value!==d.deal_type) patch.deal_type=typeEl.value;
+    // Out-of-state flag
+    var oosEl=document.getElementById('de-oos-'+id);
+    var newOOS = oosEl ? (oosEl.value==='1') : !!d.out_of_state;
+    if(newOOS !== !!d.out_of_state) patch.out_of_state = newOOS;
     // GPS
     var gpsEl=document.getElementById('de-gps-'+id);
     if(gpsEl&&gpsEl.value.trim()!==(d.gps_serial||'')) patch.gps_serial=gpsEl.value.trim();
