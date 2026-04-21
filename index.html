@@ -16702,25 +16702,113 @@ async function _reviewApprove(id, candidateIdx){
     });
     // Save an alias — next payment for the same VIN / customer+model
     // will auto-write to this same row without going through Review.
+    var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
+    var aliasCust = _paymentLastName(r.customer_name);
+    var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
+    var aliasLoc = r.location;
+    var aliasTab = c.tab || 'Deals26';
+    var aliasRow = c.row;
     try {
-      var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
-      var aliasCust = _paymentLastName(r.customer_name);
-      var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
       await sbPost('payment_deal_aliases', {
         vin: aliasVin,
         customer_name_lower: aliasCust || null,
         vehicle_model_lower: aliasModel || null,
-        location: r.location,
-        target_tab: c.tab || 'Deals26',
-        target_row: c.row,
+        location: aliasLoc,
+        target_tab: aliasTab,
+        target_row: aliasRow,
         car_desc: c.car_desc || null,
         created_by: me ? me.name : '',
         source_review_id: id
       });
-      console.log('Alias saved: ' + (aliasVin || (aliasCust + '/' + aliasModel)) + ' → ' + (c.tab || 'Deals26') + ' row ' + c.row);
+      console.log('Alias saved: ' + (aliasVin || (aliasCust + '/' + aliasModel)) + ' → ' + aliasTab + ' row ' + aliasRow);
     } catch(aliasErr){
       console.warn('Alias save failed (non-fatal):', aliasErr);
     }
+
+    // Cascade: auto-approve any OTHER pending reviews that match this
+    // same deal (alias key). User explicitly asked for this — one
+    // approval applies to every matching pending item. Each cascaded
+    // apply still runs through dup-check to stay idempotent.
+    try {
+      var pendingAll = await sbGet('payment_reviews', 'status=eq.pending&select=*&limit=500');
+      var matches = (pendingAll || []).filter(function(rv){
+        if (rv.id === id) return false;
+        var rvVin = (rv.vehicle_vin || '').trim().toUpperCase();
+        if (aliasVin && rvVin && rvVin === aliasVin) return true;
+        var rvLast = _paymentLastName(rv.customer_name);
+        var rvModel = (rv.vehicle_model || '').toLowerCase().trim();
+        if (aliasCust && aliasModel && rvLast === aliasCust && rvModel === aliasModel && rv.location === aliasLoc) return true;
+        return false;
+      });
+      if (matches.length){
+        var cascadeMsg = matches.length + ' other pending review' + (matches.length > 1 ? 's' : '') + ' match this same deal.\n\nAuto-approve them all to ' + aliasTab + ' row ' + aliasRow + '?\n(duplicates are skipped automatically)';
+        if (confirm(cascadeMsg)){
+          var casOk = 0, casDup = 0, casSkip = 0, casErr = 0;
+          for (var mi = 0; mi < matches.length; mi++){
+            var m = matches[mi];
+            try {
+              var mResp = await fetch(_SHEETS_URL, {
+                method:'POST', headers:{'Content-Type':'text/plain'},
+                body: JSON.stringify({
+                  secret: _SHEETS_SECRET,
+                  action: 'deals26_append_payment_direct',
+                  location: m.location,
+                  data: {
+                    tab: aliasTab, row: aliasRow,
+                    amount: parseFloat(m.amount) || 0,
+                    note_line: m.note_line || '',
+                    check_dup: true
+                  }
+                })
+              });
+              var mData = null; try { mData = await mResp.json(); } catch(e){}
+              if (!mData || mData.ok === false){ casErr++; continue; }
+              // Post to Profit26 if the deal is in profit
+              if (mData.status === 'matched'){
+                var mOwed = parseFloat(mData.owed) || 0;
+                if (mOwed > 0){
+                  try {
+                    await _appendPaymentToProfit({
+                      customer_name: m.customer_name, amount: m.amount,
+                      vehicle_year: m.vehicle_year, vehicle_make: m.vehicle_make,
+                      vehicle_model: m.vehicle_model, vehicle_color: m.vehicle_color,
+                      vehicle_vin: m.vehicle_vin, location: m.location,
+                      payment_date: m.payment_date
+                    });
+                  } catch(ep){ console.warn(ep); }
+                }
+                await sbPatch('payment_reviews', m.id, {
+                  status: 'approved',
+                  resolved_at: new Date().toISOString(),
+                  resolved_by: me ? me.name : '',
+                  resolved_row: aliasRow,
+                  resolved_tab: aliasTab
+                });
+                casOk++;
+              } else if (mData.status === 'already_posted'){
+                // Silent skip — mark approved anyway so it leaves the queue
+                await sbPatch('payment_reviews', m.id, {
+                  status: 'approved',
+                  resolved_at: new Date().toISOString(),
+                  resolved_by: me ? me.name : '',
+                  resolved_row: aliasRow,
+                  resolved_tab: aliasTab
+                });
+                casSkip++;
+              } else if (mData.status === 'possible_duplicate'){
+                // Leave in queue for manual decision — it stays pending
+                casDup++;
+              } else {
+                casErr++;
+              }
+            } catch(e){ casErr++; console.warn('Cascade apply failed for review ' + m.id, e); }
+            await new Promise(function(r){ setTimeout(r, 120); });
+          }
+          console.log('Cascade: ' + casOk + ' approved, ' + casSkip + ' already-posted, ' + casDup + ' left as dup, ' + casErr + ' errors');
+        }
+      }
+    } catch(cErr){ console.warn('Cascade scan failed (non-fatal):', cErr); }
+
     await _reviewLoad();
   } catch(e){
     alert('Error: ' + (e.message || e));
