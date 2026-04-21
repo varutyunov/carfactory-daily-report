@@ -860,6 +860,30 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Location-aware Profit26 sheet layout. The two sheets have historically
+// had different block sizes: DeBary = 24 rows per month (1 header + 23 data),
+// DeLand = 22 rows per month (1 header + 21 data). The reconciler and the
+// profit_append_entry action must use the right block size for each sheet,
+// otherwise DeBary's trailing 2 rows (Extras + Net Profit) get truncated
+// or writes land on the wrong row.
+function _getProfitLayout(location) {
+  if (location === 'DeBary') {
+    return {
+      BLOCK_ROWS: 24,
+      BLOCK_GAP: 1,
+      // rin offset (where rin=0 is the month-header row) for the write-side
+      // targets used by profit_append_entry / profit_update_entry.
+      offsets: { payments: 20, cash_sales: 21, extras: 22, net_profit: 23 }
+    };
+  }
+  // DeLand (default)
+  return {
+    BLOCK_ROWS: 22,
+    BLOCK_GAP: 1,
+    offsets: { payments: 18, cash_sales: 19, extras: 20, net_profit: 21 }
+  };
+}
+
 function columnToLetter(col) {
   var letter = '';
   while (col > 0) {
@@ -890,13 +914,13 @@ function _handleProfitAction(action, location, data) {
 
   if (action === 'read_profit') {
     // Layout: 4 months across, each month = 3 cols (label, value, spacer), starting at col D (4)
-    // 3 blocks of 4 months stacked: rows 1-22 (Jan-Apr), rows 24-45 (May-Aug), rows 47-68 (Sep-Dec)
-    // Row 1 of each block = month name header, rows 2-22 = bill items
+    // Block size is location-aware (see _getProfitLayout): DeBary=24, DeLand=22.
     var MONTHS_PER_ROW = 4;
     var COLS_PER_MONTH = 3; // label, value, spacer
     var START_COL = 4; // column D
-    var BLOCK_ROWS = 22; // header + 21 data rows
-    var BLOCK_GAP = 1;   // blank row between blocks
+    var _rpLayout = _getProfitLayout(location);
+    var BLOCK_ROWS = _rpLayout.BLOCK_ROWS;
+    var BLOCK_GAP = _rpLayout.BLOCK_GAP;
     var monthNames = ['Jan','Feb','March','April','May','June','July','August','September','October','November','December'];
 
     // Find the start row — look for "Jan" in col D
@@ -1013,23 +1037,30 @@ function _handleProfitAction(action, location, data) {
     if (isNaN(amountA)) {
       return jsonResponse({ ok: false, error: 'invalid_amount' });
     }
-    if (rowTypeA !== 'payments' && rowTypeA !== 'cash_sales') {
+    if (rowTypeA !== 'payments' && rowTypeA !== 'cash_sales' && rowTypeA !== 'extras') {
       return jsonResponse({ ok: false, error: 'invalid_row_type' });
     }
 
-    // Find startRow and compute target cell
+    // Find startRow and compute target cell. Block size and row offsets are
+    // location-aware (see _getProfitLayout) — previously hardcoded offsets
+    // for payments/cash_sales worked for DeBary only and silently landed on
+    // DeLand's Net Profit row.
     var START_COL_A = 4;
     var startRowA = 1;
     for (var srA = 1; srA <= 20; srA++) {
       var cvA = String(sheet.getRange(srA, START_COL_A).getValue()).trim();
       if (cvA === 'Jan' || cvA === 'January') { startRowA = srA; break; }
     }
-    var BLOCK_ROWS_A = 22;
-    var BLOCK_GAP_A = 1;
+    var _apLayout = _getProfitLayout(location);
+    var BLOCK_ROWS_A = _apLayout.BLOCK_ROWS;
+    var BLOCK_GAP_A = _apLayout.BLOCK_GAP;
     var blockA = Math.floor(monthIdxA / 4);
     var mInBlockA = monthIdxA % 4;
     var blockStartInnerA = blockA * (BLOCK_ROWS_A + BLOCK_GAP_A);
-    var rowOffsetA = rowTypeA === 'payments' ? 20 : 21;
+    var rowOffsetA = _apLayout.offsets[rowTypeA];
+    if (rowOffsetA === undefined) {
+      return jsonResponse({ ok: false, error: 'offset_not_defined', row_type: rowTypeA });
+    }
     var targetRowA = startRowA + blockStartInnerA + rowOffsetA;
     var targetColA = START_COL_A + mInBlockA * 3 + 1;
 
@@ -1074,13 +1105,13 @@ function _handleProfitAction(action, location, data) {
     // Update one entry in Payments or Cash Sales formula + note.
     // Inputs: data.{month_idx, row_type, old_amount, old_description,
     //               new_amount, new_description}
-    return _profitMutateEntry(sheet, data, 'update');
+    return _profitMutateEntry(sheet, data, 'update', location);
   }
 
   if (action === 'profit_remove_entry') {
     // Remove one entry from Payments or Cash Sales formula + note.
     // Inputs: data.{month_idx, row_type, amount, description}
-    return _profitMutateEntry(sheet, data, 'remove');
+    return _profitMutateEntry(sheet, data, 'remove', location);
   }
 
   if (action === 'update_profit_formula') {
@@ -1119,29 +1150,33 @@ function _handleProfitAction(action, location, data) {
 //   Primary  — match note line exactly by '<oldAmount> <oldDescription>' (trimmed)
 //              then align with the same-index number in the formula.
 //   Fallback — match by signed number in formula alone if note line not found.
-function _profitMutateEntry(sheet, data, mode) {
+function _profitMutateEntry(sheet, data, mode, location) {
   var monthIdxM = parseInt(data.month_idx);
   var rowTypeM = String(data.row_type || '');
   if (isNaN(monthIdxM) || monthIdxM < 0 || monthIdxM > 11) {
     return jsonResponse({ ok: false, error: 'invalid_month_idx' });
   }
-  if (rowTypeM !== 'payments' && rowTypeM !== 'cash_sales') {
+  if (rowTypeM !== 'payments' && rowTypeM !== 'cash_sales' && rowTypeM !== 'extras') {
     return jsonResponse({ ok: false, error: 'invalid_row_type' });
   }
 
-  // Locate the target cell (same math as profit_append_entry)
+  // Locate the target cell using location-aware block size and offsets.
   var START_COL_M = 4;
   var startRowM = 1;
   for (var srM = 1; srM <= 20; srM++) {
     var cvM = String(sheet.getRange(srM, START_COL_M).getValue()).trim();
     if (cvM === 'Jan' || cvM === 'January') { startRowM = srM; break; }
   }
-  var BLOCK_ROWS_M = 22;
-  var BLOCK_GAP_M = 1;
+  var _mtLayout = _getProfitLayout(location);
+  var BLOCK_ROWS_M = _mtLayout.BLOCK_ROWS;
+  var BLOCK_GAP_M = _mtLayout.BLOCK_GAP;
   var blockM = Math.floor(monthIdxM / 4);
   var mInBlockM = monthIdxM % 4;
   var blockStartInnerM = blockM * (BLOCK_ROWS_M + BLOCK_GAP_M);
-  var rowOffsetM = rowTypeM === 'payments' ? 20 : 21;
+  var rowOffsetM = _mtLayout.offsets[rowTypeM];
+  if (rowOffsetM === undefined) {
+    return jsonResponse({ ok: false, error: 'offset_not_defined', row_type: rowTypeM });
+  }
   var targetRowM = startRowM + blockStartInnerM + rowOffsetM;
   var targetColM = START_COL_M + mInBlockM * 3 + 1;
   var cellM = sheet.getRange(targetRowM, targetColM);
@@ -1300,8 +1335,12 @@ function _syncProfitFromSheet(location) {
 
   var MONTHS_PER_ROW = 4;
   var COLS_PER_MONTH = 3;
-  var BLOCK_ROWS = 22;
-  var BLOCK_GAP = 1;
+  // Block size is location-dependent — DeBary has 24 rows/month (Extras +
+  // Net Profit at bottom), DeLand has 22. Using a global constant used to
+  // silently truncate DeBary's last 2 rows per block.
+  var _layout = _getProfitLayout(location);
+  var BLOCK_ROWS = _layout.BLOCK_ROWS;
+  var BLOCK_GAP = _layout.BLOCK_GAP;
   var totalRows = 3 * BLOCK_ROWS + 2 * BLOCK_GAP;
   var totalCols = MONTHS_PER_ROW * COLS_PER_MONTH;
 
