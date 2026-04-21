@@ -2350,31 +2350,36 @@ async function sbSignPhotoUrl(url){
 }
 function _needsSign(url){return typeof url==='string'&&url.indexOf('/car-photos/')!==-1;}
 async function _signStorageUrls(rows, fields){
+  // Fire every signing call in parallel instead of awaiting each one
+  // sequentially. For N rows × M photos the old loop blocked on N*M
+  // round-trips; this version completes in the time of the slowest one.
+  // Each task mutates its row field in-place so callers see the signed
+  // URLs once Promise.all resolves.
+  var tasks=[];
   for(var i=0;i<rows.length;i++){
     for(var f=0;f<fields.length;f++){
-      var key=fields[f];
-      if(!rows[i][key]) continue;
-      // Handle JSON array of URLs (e.g. deal photo_urls)
-      if(typeof rows[i][key]==='string'&&rows[i][key].charAt(0)==='['){
-        try{
-          var urls=JSON.parse(rows[i][key]);
-          var changed=false;
-          for(var u=0;u<urls.length;u++){
-            if(_needsSign(urls[u])){
-              var s=await sbSignPhotoUrl(urls[u]);
-              if(s){urls[u]=s;changed=true;}
+      (function(row,key){
+        if(!row[key]) return;
+        if(typeof row[key]==='string'&&row[key].charAt(0)==='['){
+          try{
+            var urls=JSON.parse(row[key]);
+            var urlTasks=urls.map(function(u,idx){
+              if(!_needsSign(u)) return null;
+              return sbSignPhotoUrl(u).then(function(s){ if(s) urls[idx]=s; });
+            }).filter(Boolean);
+            if(urlTasks.length){
+              tasks.push(Promise.all(urlTasks).then(function(){ row[key]=JSON.stringify(urls); }));
             }
-          }
-          if(changed) rows[i][key]=JSON.stringify(urls);
-        }catch(e){}
-        continue;
-      }
-      if(_needsSign(rows[i][key])){
-        var signed=await sbSignPhotoUrl(rows[i][key]);
-        if(signed) rows[i][key]=signed;
-      }
+          }catch(e){}
+          return;
+        }
+        if(_needsSign(row[key])){
+          tasks.push(sbSignPhotoUrl(row[key]).then(function(s){ if(s) row[key]=s; }));
+        }
+      })(rows[i], fields[f]);
     }
   }
+  if(tasks.length) await Promise.all(tasks);
 }
 async function _signInventoryPhotos(){
   var cars=(S.inventory||[]).filter(function(c){return c.photo&&c.photo.indexOf('/public/')!==-1;});
@@ -14578,9 +14583,18 @@ async function loadPaymentWeek(){
   list.innerHTML='<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   var wk=_payWeekKey(_payCurrentWeekStart);
   try{
+    // Fire all three loads in parallel instead of awaiting one at a time.
+    // Previously: payments → signStorageUrls → cashPayoutsLoad → netDealLoad
+    // = four serial round-trips before anything rendered. Now the three
+    // independent queries race, and receipt-photo signing happens AFTER
+    // the first paint so the list shows up while signatures catch up.
     var params='week_start=eq.'+wk+'&location=eq.'+_payLocation+'&order=payment_date.desc,created_at.desc';
-    var allData=await sbGet('payments',params);
-    await _signStorageUrls(allData, ['receipt_photo_url']);
+    var results=await Promise.all([
+      sbGet('payments',params).catch(function(e){console.warn('Payment load error:',e);return[];}),
+      cashPayoutsLoad(),
+      _netDealLoad()
+    ]);
+    var allData=Array.isArray(results[0])?results[0]:[];
     // Owners see everything (flagged items highlighted); employees don't see delete_requested
     if(_payIsOwner()){
       _payWeekData=allData;
@@ -14591,10 +14605,16 @@ async function loadPaymentWeek(){
     console.warn('Payment load error:',e);
     _payWeekData=[];
   }
-  await cashPayoutsLoad();
-  await _netDealLoad();
   _payUpdateStats();
   _payRenderCards();
+  // Background: sign receipt photo URLs and re-render once they're ready.
+  // The list is already visible; signed URLs just replace unsigned ones
+  // in place so photo thumbnails become clickable when the promise resolves.
+  if(_payWeekData && _payWeekData.length){
+    _signStorageUrls(_payWeekData, ['receipt_photo_url']).then(function(){
+      _payRenderCards();
+    }).catch(function(){});
+  }
   _cashPayoutsRenderInline();
 }
 
@@ -17445,10 +17465,12 @@ async function loadDeals() {
   if(!list) return;
   list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;"><div class="dep-spinner" style="margin:0 auto 12px;"></div>Loading...</div>';
   try {
-    var allDeals = await sbGet('deals', 'order=created_at.desc');
-    await _signStorageUrls(allDeals, ['photo_urls']);
-    // Filter by location
-    var locDeals = allDeals.filter(function(d){ return (d.location||'DeBary') === _dealsLocation; });
+    // Server-side location filter (avoids dragging down the other location's
+    // rows just to drop them client-side). photo_urls signing moved to a
+    // background task so the week's list renders instantly; signed URLs
+    // replace placeholders in-place when the promise resolves.
+    var params = 'location=eq.' + encodeURIComponent(_dealsLocation) + '&order=created_at.desc';
+    var locDeals = await sbGet('deals', params);
     _dealsAllData = locDeals;
     // Filter by current week
     var ws = _dealsCurrentWeekStart;
@@ -17462,6 +17484,10 @@ async function loadDeals() {
     _dealsFiltered = _dealsData;
     _dealsUpdateStats();
     renderDeals();
+    // Background: sign photo URLs, then re-render so cards show thumbnails.
+    _signStorageUrls(locDeals, ['photo_urls']).then(function(){
+      renderDeals();
+    }).catch(function(){});
   } catch(e) {
     list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error: ' + (e.message||e) + '</div>';
   }
