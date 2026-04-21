@@ -16877,12 +16877,23 @@ async function dealSubmit() {
       }
     }
 
-    // Auto-populate Deals26 sheet
-    try { await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
+    // Auto-populate Deals26 sheet. Returns a snapshot with the computed
+    // owed, taxes, and whether taxes are "final" (OOS, or CSV matched).
+    var _d26Snap = null;
+    try { _d26Snap = await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
 
-    // D3: auto-append cash deals to Profit Cash Sales row for the deal's month
-    if (record.deal_type === 'cash') {
-      try { await _appendCashSaleToProfit(record, car); } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
+    // D3: auto-append cash deals to Profit Cash Sales — ONLY when the owed
+    //     amount is final. If taxes are still pending (CSV miss, not OOS),
+    //     skip here and let _fillMissingTaxes post once taxes are filled.
+    if (record.deal_type === 'cash' && _d26Snap && _d26Snap.taxesKnown && _d26Snap.owed > 0) {
+      try {
+        await _appendCashSaleToProfit({
+          record: record,
+          car: car,
+          amount: _d26Snap.owed,
+          carDesc: _d26Snap.carDesc
+        });
+      } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
     }
 
     // Auto-create trade-in cars in inventory + inventory_costs
@@ -17007,19 +17018,28 @@ async function _autopopulateDeals26(record, car) {
     } catch (e) { /* taxes stays 0 */ }
   }
 
-  // 8. Build deals26 object
+  // 8. Build deals26 object. 'owed' is the deal's profit — money minus
+  //     cost, expenses, taxes, dealer fee, and Manny's cut. It mirrors the
+  //     Google Sheet's Net column formula and is the value Cash Sales posts
+  //     use. If taxes haven't been filled yet (CSV miss and not OOS), owed
+  //     will be too high; _fillMissingTaxes will recompute on backfill.
+  var money = parseFloat(record.total_collected) || 0;
+  var dealerFee = 399;
+  var manny = 0;
+  var owed = money - cost - expenses - taxes - dealerFee - manny;
+  owed = Math.round(owed * 100) / 100;
   var d26Obj = {
     car_desc: carDesc,
     cost: cost,
     expenses: expenses,
     expense_notes: expenseNotes,
     taxes: taxes,
-    money: parseFloat(record.total_collected) || 0,
-    owed: 0,
+    money: money,
+    owed: owed,
     payments: 0,
     payment_notes: '',
-    dealer_fee: 399,
-    manny: 0,
+    dealer_fee: dealerFee,
+    manny: manny,
     deal_num: dealNum,
     gps_sold: !!(record.gps_serial),
     sold_inv_vin: vin,
@@ -17060,31 +17080,90 @@ async function _autopopulateDeals26(record, car) {
       console.warn('Failed to remove sold car from inventory_costs id=' + ic.id + ':', delErr);
     }
   }
+
+  // 13. Return a snapshot so dealSubmit can decide if Cash Sales should post
+  //     now (owed is final: OOS, or CSV tax match found) vs. defer to
+  //     _fillMissingTaxes. `taxesKnown` means we're confident owed won't
+  //     change — either OOS (taxes stay 0 forever) or CSV matched a non-zero
+  //     value already.
+  return {
+    carDesc: carDesc,
+    owed: owed,
+    taxes: taxes,
+    taxesKnown: !!record.out_of_state || taxes > 0
+  };
 }
 
 // ══════════════════════════════════════════════════════════════
 // D3: APPEND CASH DEAL → PROFIT CASH SALES
-// Posts to Apps Script profit_append_entry with deal amount + vehicle desc.
-// Triggered from dealSubmit when deal_type === 'cash'.
+// Posts owed (profit = money − cost − expenses − taxes − dealer_fee − manny)
+// as a Cash Sales line for the deal's month. Triggered from dealSubmit
+// (taxes-final path), _fillMissingTaxes (deferred path), and the edit
+// form's OOS flip. Idempotent: checks the Supabase profit mirror first
+// and bails if a Cash Sales line already references the same car_desc.
+//
+// Args:
+//   opts.record      — deals row (or shape with customer_name, location, created_at)
+//   opts.car         — inventory car (optional, for fallback name)
+//   opts.amount      — REQUIRED. The owed/profit value. Must be a number.
+//   opts.desc        — optional override description; if omitted we build it
+//                      from vehicle_desc + customer last name
+//   opts.carDesc     — optional precomputed car description (e.g. from
+//                      _autopopulateDeals26) — matches the deals26.car_desc
+//                      format and is what the Apps Script stores as the note
 // ══════════════════════════════════════════════════════════════
-async function _appendCashSaleToProfit(record, car) {
+async function _appendCashSaleToProfit(opts) {
+  opts = opts || {};
+  var record = opts.record || {};
+  var car = opts.car;
   try {
+    var amount = parseFloat(opts.amount);
+    if (!isFinite(amount) || amount === 0) return; // never post $0 / NaN / nothing
     var d = record.created_at ? new Date(record.created_at) : new Date();
     var monthIdx = d.getMonth();
     var loc = record.location || (me ? me.location : 'DeBary');
-    var amount = parseFloat(record.total_collected) || 0;
-    if (amount <= 0) return;
-    // Description: prefer inventory_costs.car_name style short name (already on car.name);
-    // append customer last name for context — matches the existing note format
-    // (e.g. '1591 16 Jetta grey 73k Martinez')
-    var desc = (record.vehicle_desc || (car && car.name) || '').trim();
-    if (record.customer_name) {
+
+    // Description. Prefer an explicit carDesc (what _autopopulateDeals26
+    // stored on deals26.car_desc) so the Profit note matches the deals26
+    // row exactly. Otherwise build from the deal record.
+    var desc = (opts.desc || opts.carDesc || record.vehicle_desc || (car && car.name) || '').trim();
+    if (!opts.desc && !opts.carDesc && record.customer_name) {
       var parts = String(record.customer_name).trim().split(/\s+/);
       if (parts.length) {
         var last = parts[parts.length - 1];
         if (last) desc = (desc ? desc + ' ' : '') + last;
       }
     }
+    desc = desc.trim();
+    if (!desc) return;
+
+    // Idempotency — query the Supabase profit mirror for the month and
+    // bail if any item's note/label already contains this description.
+    // We match by substring because Apps Script stores the description as
+    // the cell note while the cell value is the amount.
+    try {
+      var mirror = await sbGet('profit',
+        'location=eq.' + encodeURIComponent(loc) +
+        '&month_idx=eq.' + monthIdx +
+        '&select=note,label_note,label,value&limit=200');
+      if (Array.isArray(mirror)) {
+        var descL = desc.toLowerCase();
+        for (var mi = 0; mi < mirror.length; mi++) {
+          var r = mirror[mi];
+          var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
+          if (hay.indexOf(descL) !== -1) {
+            console.log('Profit Cash Sales skip (already posted): ' + desc + ' → ' + loc + ' month=' + monthIdx);
+            return;
+          }
+        }
+      }
+    } catch (mirrorErr) {
+      // If the mirror check fails, don't silently double-book — bail out.
+      // User can post manually if needed.
+      console.warn('Profit Cash Sales idempotency check failed; aborting to avoid duplicate:', mirrorErr);
+      return;
+    }
+
     var resp = await fetch(_SHEETS_URL, {
       method: 'POST',
       headers: {'Content-Type': 'text/plain'},
@@ -17092,7 +17171,7 @@ async function _appendCashSaleToProfit(record, car) {
         secret: _SHEETS_SECRET,
         action: 'profit_append_entry',
         location: loc,
-        data: { month_idx: monthIdx, row_type: 'cash_sales', amount: amount, description: desc.trim() }
+        data: { month_idx: monthIdx, row_type: 'cash_sales', amount: amount, description: desc }
       })
     });
     var data = null; try { data = await resp.json(); } catch(e){}
@@ -17126,7 +17205,8 @@ async function _updateDeals26FromDeal(dealRecord) {
   }
 
   var d26Row = existing[0];
-  var patch = { money: parseFloat(dealRecord.total_collected) || 0 };
+  var newMoney = parseFloat(dealRecord.total_collected) || 0;
+  var patch = { money: newMoney };
 
   // Update GPS if changed
   if (dealRecord.gps_serial !== undefined) {
@@ -17136,8 +17216,21 @@ async function _updateDeals26FromDeal(dealRecord) {
   // Out-of-state deals: force taxes to 0. When a deal is flagged OOS
   // (either at creation or retroactively on edit), the deals26 row must
   // reflect zero sales tax/tag/title so _fillMissingTaxes never overwrites.
+  var newTaxes = parseFloat(d26Row.taxes) || 0;
   if (dealRecord.out_of_state === true) {
     patch.taxes = 0;
+    newTaxes = 0;
+  }
+
+  // Recompute owed (profit) whenever money or taxes change. Mirror of the
+  // computation in _autopopulateDeals26 step 8 and _fillMissingTaxes.
+  var _cost = parseFloat(d26Row.cost) || 0;
+  var _exp = parseFloat(d26Row.expenses) || 0;
+  var _df = parseFloat(d26Row.dealer_fee) || 0;
+  var _mn = parseFloat(d26Row.manny) || 0;
+  var newOwed = Math.round((newMoney - _cost - _exp - newTaxes - _df - _mn) * 100) / 100;
+  if (newOwed !== (parseFloat(d26Row.owed) || 0)) {
+    patch.owed = newOwed;
   }
 
   await sbPatch('deals26', d26Row.id, patch);
@@ -17156,6 +17249,24 @@ async function _updateDeals26FromDeal(dealRecord) {
       }
     }
   }
+
+  // Cash-sale Profit auto-post. If this is a cash deal and owed is now
+  // final (OOS flag set, or taxes > 0), try to post to Cash Sales.
+  // Idempotency inside _appendCashSaleToProfit blocks duplicates — so
+  // this covers the case where a deal was submitted with taxes=0 pending,
+  // then the user retroactively flipped OOS on (making owed final).
+  try {
+    var taxesFinal = dealRecord.out_of_state === true || newTaxes > 0;
+    if (dealRecord.deal_type === 'cash' && taxesFinal && newOwed > 0) {
+      await _appendCashSaleToProfit({
+        record: dealRecord,
+        amount: newOwed,
+        carDesc: d26Row.car_desc
+      });
+    }
+  } catch (postErr) {
+    console.warn('_updateDeals26FromDeal: cash-sale post failed', postErr);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -17166,43 +17277,47 @@ async function _fillMissingTaxes() {
   if (_taxFillRunning) return;
   _taxFillRunning = true;
   try {
-    // Find deals26 rows with taxes=0 and a VIN
-    var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc,location&limit=50');
+    // Find deals26 rows with taxes=0 and a VIN. We also pull money/cost/
+    // expenses/dealer_fee/manny so we can recompute owed (profit) after
+    // the tax fill lands, and sync that back to the sheet + trigger the
+    // cash-sale Profit auto-post.
+    var missing = await sbGet('deals26', 'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,sort_order,car_desc,location,money,cost,expenses,dealer_fee,manny&limit=50');
     if (!Array.isArray(missing) || !missing.length) { _taxFillRunning = false; return; }
 
-    // Filter out deals flagged as out-of-state. OOS deals legitimately have
-    // taxes=0 (no sales tax/tag/title applies) and must never be overwritten
-    // by CSV values. We query deals.out_of_state by VIN and drop any matching
-    // rows before we even try to fetch the CSVs.
+    // Query deals by VIN once — we need:
+    //   1) out_of_state flag to skip OOS rows (taxes stay 0 forever)
+    //   2) deal_type + customer_name + created_at for cash-sale auto-post
+    // after the fill.
+    var dealsByVin = {};
     try {
       var vinsToCheck = missing
         .map(function(r) { return (r.sold_inv_vin || '').trim(); })
         .filter(function(v) { return !!v; });
       if (vinsToCheck.length) {
-        var oosVinSet = {};
-        // PostgREST in.() list — quote each VIN to be safe
         var inList = '(' + vinsToCheck.map(function(v) { return '"' + v + '"'; }).join(',') + ')';
-        var oosRows = await sbGet('deals', 'out_of_state=eq.true&vin=in.' + encodeURIComponent(inList) + '&select=vin');
-        if (Array.isArray(oosRows)) {
-          for (var oi = 0; oi < oosRows.length; oi++) {
-            var ov = (oosRows[oi].vin || '').trim();
-            if (ov) oosVinSet[ov] = true;
+        var dealRows = await sbGet('deals',
+          'vin=in.' + encodeURIComponent(inList) +
+          '&select=vin,out_of_state,deal_type,customer_name,created_at,location,total_collected,vehicle_desc');
+        if (Array.isArray(dealRows)) {
+          for (var di = 0; di < dealRows.length; di++) {
+            var dv = (dealRows[di].vin || '').trim();
+            if (dv) dealsByVin[dv] = dealRows[di];
           }
         }
-        if (Object.keys(oosVinSet).length) {
-          missing = missing.filter(function(r) {
-            var rv = (r.sold_inv_vin || '').trim();
-            if (oosVinSet[rv]) {
-              console.log('_fillMissingTaxes: skipping out-of-state ' + (r.car_desc || rv));
-              return false;
-            }
-            return true;
-          });
-        }
       }
+      // Filter out OOS rows — they legitimately have taxes=0 forever.
+      missing = missing.filter(function(r) {
+        var rv = (r.sold_inv_vin || '').trim();
+        var d = dealsByVin[rv];
+        if (d && d.out_of_state === true) {
+          console.log('_fillMissingTaxes: skipping out-of-state ' + (r.car_desc || rv));
+          return false;
+        }
+        return true;
+      });
       if (!missing.length) { _taxFillRunning = false; return; }
     } catch (e) {
-      console.warn('_fillMissingTaxes: OOS filter failed, continuing without it', e);
+      console.warn('_fillMissingTaxes: OOS/deal lookup failed, continuing without it', e);
     }
 
     // Fetch Pending Sales CSVs (DeBary + DeLand)
@@ -17256,10 +17371,37 @@ async function _fillMissingTaxes() {
         }
       }
       if (tax && tax > 0) {
-        await sbPatch('deals26', row.id, { taxes: tax });
-        sheetsPush('Deals26', row.sort_order, { taxes: tax, owed: 0 }, 'update', (row.location || 'DeBary'));
+        // Recompute owed now that taxes are known:
+        //   owed = money − cost − expenses − taxes − dealer_fee − manny
+        var _money = parseFloat(row.money) || 0;
+        var _cost = parseFloat(row.cost) || 0;
+        var _exp = parseFloat(row.expenses) || 0;
+        var _df = parseFloat(row.dealer_fee) || 0;
+        var _mn = parseFloat(row.manny) || 0;
+        var _owed = Math.round((_money - _cost - _exp - tax - _df - _mn) * 100) / 100;
+        var patch = { taxes: tax, owed: _owed };
+        await sbPatch('deals26', row.id, patch);
+        sheetsPush('Deals26', row.sort_order, patch, 'update', (row.location || 'DeBary'));
         filled++;
-        console.log('Tax filled: ' + (row.car_desc || '') + ' = $' + tax);
+        console.log('Tax filled: ' + (row.car_desc || '') + ' tax=$' + tax + ' owed=$' + _owed);
+
+        // Cash-sale Profit auto-post. If the underlying deal is 'cash' type,
+        // try posting to that month's Cash Sales section. Idempotency
+        // inside _appendCashSaleToProfit prevents duplicates — so this is
+        // safe even if the deal was already posted at submit (e.g. taxes
+        // filled once, manual fix later, etc.).
+        try {
+          var dealForPost = dealsByVin[vin];
+          if (dealForPost && dealForPost.deal_type === 'cash' && _owed > 0) {
+            await _appendCashSaleToProfit({
+              record: dealForPost,
+              amount: _owed,
+              carDesc: row.car_desc
+            });
+          }
+        } catch (postErr) {
+          console.warn('_fillMissingTaxes: cash-sale post failed for ' + (row.car_desc || vin), postErr);
+        }
       }
     }
     if (filled) console.log('_fillMissingTaxes: filled ' + filled + ' rows');
