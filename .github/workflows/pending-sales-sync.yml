@@ -1,0 +1,69 @@
+name: Pending Sales CSV Sync
+
+# Promotes the newest dealer export in `Pending Sales/Debary/` or
+# `Pending Sales/Deland/` to `PendingSalesDebary.csv` / `PendingSalesDeland.csv`
+# at the repo root. These root files are what the app's _fillMissingTaxes
+# function fetches for tax lookups, so keeping them current keeps taxes in sync.
+#
+# Trigger: any push that adds/modifies a file under `Pending Sales/**/*.csv`,
+# or on-demand via the Actions tab (workflow_dispatch).
+
+on:
+  push:
+    paths:
+      - 'Pending Sales/**/*.csv'
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Checkout full history so the commit back to main/master works cleanly
+          fetch-depth: 0
+          # Use a PAT or default token; default is fine for same-repo pushes
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pick newest CSV per location and copy to repo root
+        shell: bash
+        run: |
+          set -e
+          changed=0
+
+          for loc in Debary Deland; do
+            dir="Pending Sales/${loc}"
+            # Skip if the folder doesn't exist
+            [ -d "$dir" ] || { echo "No $dir folder — skipping"; continue; }
+            # Find the newest CSV by filename (exports are named SalesOpenPending_RunOn_YYYYMMDD.csv,
+            # so a lexicographic sort puts the latest last). Fallback to mtime if filenames don't sort.
+            newest="$(ls -1 "$dir"/*.csv 2>/dev/null | sort | tail -1 || true)"
+            if [ -z "$newest" ]; then
+              echo "No CSV found in $dir"
+              continue
+            fi
+            dest="PendingSales${loc}.csv"
+            echo "Promoting: $newest -> $dest"
+            # Only copy if content differs (avoid no-op commits)
+            if ! cmp -s "$newest" "$dest"; then
+              cp "$newest" "$dest"
+              changed=1
+              git add "$dest"
+            else
+              echo "  (no changes — $dest already matches)"
+            fi
+          done
+
+          if [ "$changed" = "1" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Auto: promote newest Pending Sales CSV to repo root"
+            # Push back; dual push refspec in the user repo will mirror to main + master.
+            git push
+          else
+            echo "No CSV changes to commit."
+          fi
