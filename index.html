@@ -1035,8 +1035,31 @@ body.light .cal-fab{background:#4488ff !important;}
             <div class="orbit-tile-label">Sheets</div>
           </div>
 
+          <!-- Review tile — unresolved payment-automation matches -->
+          <div class="orbit-tile" id="review-tile" style="display:none;background:linear-gradient(145deg,#2a1500,#5a2a00,#7c3e00);box-shadow:0 4px 20px rgba(251,146,60,0.3);width:88px;height:88px;" onclick="openReviewQueue()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            </svg>
+            <div class="orbit-tile-label">Review</div>
+            <div id="review-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:900;display:none;align-items:center;justify-content:center;line-height:1;box-shadow:0 2px 6px rgba(239,68,68,.5);">0</div>
+          </div>
+
         </div>
       </div><!-- /swipe-page-2 -->
+
+<!-- REVIEW QUEUE OVERLAY -->
+<div id="review-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">REVIEW</span>
+    <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span>
+  </div>
+  <div id="review-body" style="padding-top:70px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+      <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
+    </div>
+  </div>
+</div>
 
       </div><!-- /swipe-container -->
     </div>
@@ -16012,6 +16035,389 @@ function payDealSelect(dealId){
 }
 
 // ══════════════════════════════════════════════════════════════
+// PAYMENT AUTOMATION — format helpers + orchestrator
+//
+// For every scanned/entered customer payment we now:
+//   1. Append the amount to the matching deal's Deals26 col G (growing
+//      formula). Falls back to Deals25 for carryover deals.
+//   2. Only post to Profit26 Payments if the deal is ALREADY in profit
+//      (Deals26 col F > 0).
+//   3. Route ambiguous matches (no match / multiple / partial) to the
+//      Review tab for manual approval.
+//
+// Note format (both places): "{amount} {year} {make} {model} {color}
+// {LastName}" clipped to ≤32 chars — model, color, last name are ALWAYS
+// kept. Year drops first, then make.
+// ══════════════════════════════════════════════════════════════
+
+// Extract a last-name token from a customer_name string. Handles:
+//   "Juan Martinez"         → "Martinez"
+//   "Martinez, Juan"        → "Martinez"
+//   "Juan Garcia-Martinez"  → "Garcia-Martinez"
+//   "Van Der Berg, Juan"    → "Van Der Berg" (compound before comma)
+// Returns a lowercase trimmed string, or '' if nothing usable.
+function _paymentLastName(customerName){
+  if(!customerName) return '';
+  var s = String(customerName).trim();
+  if(!s) return '';
+  // Comma form → take everything before the first comma
+  if(s.indexOf(',') !== -1){
+    return s.split(',')[0].trim().toLowerCase();
+  }
+  // No comma → take the last whitespace-separated token
+  var parts = s.split(/\s+/);
+  return (parts[parts.length - 1] || '').toLowerCase();
+}
+
+// Build the one-line note entry for both Deals26 col G and Profit26
+// Payments. Hard rule: model + color + LastName always present. Year
+// and make drop first if the line would exceed ~32 chars.
+// Example outputs:
+//   "300 17 Civic red Robinson"     ← 25 chars, full
+//   "300 Civic red Robinson"        ← drops year
+//   "300 Civic red Robinson"        ← drops make
+//   "300 Sonata red Garcia-Martinez"← long name, drops year + make
+function _paymentNoteLine(amount, payload){
+  var amt = parseFloat(amount);
+  if(!isFinite(amt)) amt = 0;
+  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var year = payload.vehicle_year ? String(payload.vehicle_year).trim() : '';
+  var make = payload.vehicle_make ? String(payload.vehicle_make).trim() : '';
+  var model = payload.vehicle_model ? String(payload.vehicle_model).trim() : '';
+  var color = payload.vehicle_color ? String(payload.vehicle_color).trim() : '';
+  var lastName = '';
+  if(payload.customer_name){
+    var s = String(payload.customer_name).trim();
+    if(s.indexOf(',') !== -1) lastName = s.split(',')[0].trim();
+    else {
+      var parts = s.split(/\s+/);
+      lastName = parts[parts.length - 1] || '';
+    }
+  }
+  // Shorten year to 2 digits if it's 4
+  if(year.length === 4) year = year.slice(2);
+
+  var MAX = 32;
+  var build = function(incYear, incMake){
+    var pieces = [amtStr];
+    if(incYear && year) pieces.push(year);
+    if(incMake && make) pieces.push(make);
+    if(model) pieces.push(model);
+    if(color) pieces.push(color);
+    if(lastName) pieces.push(lastName);
+    return pieces.filter(Boolean).join(' ');
+  };
+  var line = build(true, true);
+  if(line.length <= MAX) return line;
+  line = build(false, true);
+  if(line.length <= MAX) return line;
+  line = build(false, false);
+  return line;
+}
+
+// D2a: Append this payment to the matching deal's Deals26 (or Deals25)
+// col G, and conditionally post to Profit26 Payments.
+// Returns one of:
+//   { ok:true, matched:true,  posted_to_profit:boolean, owed:num }
+//   { ok:true, matched:false, review:true } — queued for Review
+//   { ok:false, error:string }
+async function _appendPaymentToDeals26(payload){
+  try{
+    if(!payload) return { ok:false, error:'no_payload' };
+    // Skip deal/deposit auto-posts — only real user payments flow here
+    if(!_profitShouldPropagate(payload)) return { ok:false, error:'skipped_prefix' };
+    var amt = parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,'')) || 0;
+    if(amt === 0) return { ok:false, error:'zero_amount' };
+    var lastName = _paymentLastName(payload.customer_name);
+    var model = payload.vehicle_model ? String(payload.vehicle_model).trim() : '';
+    if(!lastName || !model) return { ok:false, error:'missing_last_or_model' };
+    var loc = payload.location || (me ? me.location : 'DeBary');
+    var noteLine = _paymentNoteLine(amt, payload);
+
+    var resp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals26_append_payment',
+        location: loc,
+        data: {
+          last_name: lastName,
+          year: payload.vehicle_year ? String(payload.vehicle_year).trim() : '',
+          make: payload.vehicle_make ? String(payload.vehicle_make).trim() : '',
+          model: model,
+          color: payload.vehicle_color ? String(payload.vehicle_color).trim() : '',
+          amount: amt,
+          note_line: noteLine
+        }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if(!data || data.ok === false){
+      console.warn('Deals26 payment append failed:', data);
+      return { ok:false, error:'apps_script_failed', data: data };
+    }
+
+    if(data.status === 'matched'){
+      var owed = parseFloat(data.owed) || 0;
+      var posted = false;
+      // Gate the Profit26 Payments post on col F (owed). Positive only.
+      if(owed > 0){
+        try {
+          await _appendPaymentToProfit(payload);
+          posted = true;
+        } catch(ep){ console.warn('Profit Payments post failed:', ep); }
+      } else {
+        console.log('Payment recorded on ' + data.tab + ' row ' + data.row +
+          ' — deal not yet in profit (owed $' + owed + '), skipping Profit26');
+      }
+      return { ok:true, matched:true, posted_to_profit:posted, owed:owed, tab:data.tab, row:data.row };
+    }
+
+    // Ambiguous — queue for Review
+    try {
+      await sbPost('payment_reviews', {
+        payment_id: payload.id || null,
+        customer_name: payload.customer_name || '',
+        amount: amt,
+        vehicle_year: payload.vehicle_year || '',
+        vehicle_make: payload.vehicle_make || '',
+        vehicle_model: payload.vehicle_model || '',
+        vehicle_color: payload.vehicle_color || '',
+        vehicle_vin: payload.vehicle_vin || '',
+        location: loc,
+        payment_date: payload.payment_date || null,
+        payment_method: payload.payment_method || '',
+        note_line: noteLine,
+        reason: data.status, // 'no_match' | 'multiple' | 'partial'
+        candidates: JSON.stringify(data.candidates || []),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      console.log('Payment queued for Review (' + data.status + '): ' + noteLine);
+    } catch(sqErr){
+      console.warn('Failed to queue Review item:', sqErr);
+    }
+    return { ok:true, matched:false, review:true, reason:data.status };
+  } catch(e){
+    console.warn('_appendPaymentToDeals26 error:', e);
+    return { ok:false, error:'exception', message: e.message };
+  }
+}
+
+// Top-level orchestrator. Called from payScanSave in place of the old
+// direct _appendPaymentToProfit(payload) call. Handles the Deals26 col G
+// append + col F profit gate + Review queue routing.
+async function _handleNewPaymentAutomation(payload){
+  try {
+    var res = await _appendPaymentToDeals26(payload);
+    // Refresh the Review badge whenever we queue a new item
+    if (res && res.review) {
+      try { _reviewRefreshBadge(); } catch(e){}
+    }
+    return res;
+  } catch(e){
+    console.warn('Payment automation error:', e);
+    return { ok:false, error:'exception' };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// REVIEW QUEUE — unresolved payment-automation matches
+//
+// When the automatic matcher can't confidently link a scanned payment
+// to a deal (no_match / multiple_matches / partial_match), the item is
+// stored in Supabase table `payment_reviews` with status='pending'. This
+// UI shows those items and lets the user approve a candidate (which
+// runs the normal post-to-Deals26-G + conditional Profit26 Payments)
+// or dismiss the review.
+// ══════════════════════════════════════════════════════════════
+var _reviewData = [];
+
+async function _reviewRefreshBadge(){
+  try {
+    var rows = await sbGet('payment_reviews', 'status=eq.pending&select=id&limit=100');
+    var count = Array.isArray(rows) ? rows.length : 0;
+    var tile = document.getElementById('review-tile');
+    var badge = document.getElementById('review-badge');
+    if (tile) tile.style.display = count > 0 ? 'flex' : 'none';
+    if (badge) {
+      badge.textContent = String(count);
+      badge.style.display = count > 0 ? 'flex' : 'none';
+    }
+  } catch(e){ /* silent */ }
+}
+
+async function openReviewQueue(){
+  var overlay = document.getElementById('review-overlay');
+  if (overlay) overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _reviewLoad();
+}
+
+function closeReviewQueue(){
+  var overlay = document.getElementById('review-overlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function _reviewLoad(){
+  var list = document.getElementById('review-list');
+  var count = document.getElementById('review-count');
+  if (list) list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>';
+  try {
+    var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=100');
+    _reviewData = Array.isArray(rows) ? rows : [];
+    if (count) count.textContent = _reviewData.length ? (_reviewData.length + ' pending') : '';
+    _reviewRender();
+    _reviewRefreshBadge();
+  } catch(e){
+    if (list) list.innerHTML = '<div style="text-align:center;color:#f87171;padding:40px 0;">Error loading: ' + (e.message || e) + '</div>';
+  }
+}
+
+function _reviewRender(){
+  var list = document.getElementById('review-list');
+  if (!list) return;
+  if (!_reviewData.length){
+    list.innerHTML = '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ No pending reviews</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < _reviewData.length; i++){
+    var r = _reviewData[i];
+    var candidates = [];
+    try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){ candidates = []; }
+    var reasonLabel = r.reason === 'no_match' ? 'No match found'
+                    : r.reason === 'multiple' ? 'Multiple matches — pick one'
+                    : r.reason === 'partial'  ? 'Partial match — pick one or reject'
+                    : r.reason;
+    var reasonColor = r.reason === 'no_match' ? '#ef4444'
+                    : r.reason === 'multiple' ? '#fbbf24'
+                    : '#60a5fa';
+    html += '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;">';
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;">';
+    html += '<div style="flex:1;">';
+    html += '<div style="font-size:11px;color:' + reasonColor + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">' + _escHtml(reasonLabel) + '</div>';
+    html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || '') + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
+    html += '</div>';
+    html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
+    html += '</div>';
+    // Candidates
+    if (candidates.length){
+      html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Candidates</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      for (var ci = 0; ci < candidates.length; ci++){
+        var c = candidates[ci];
+        var tabTag = c.tab ? ('<span style="font-size:10px;color:#888;background:#1a1a1a;padding:2px 6px;border-radius:6px;margin-left:6px;">' + c.tab + '</span>') : '';
+        var partialTags = '';
+        if (c.has_last === false) partialTags += '<span style="font-size:10px;color:#ef4444;margin-left:6px;">name mismatch</span>';
+        if (c.has_car === false) partialTags += '<span style="font-size:10px;color:#ef4444;margin-left:6px;">car mismatch</span>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:10px 12px;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:13px;color:#fff;">' + _escHtml(c.car_desc || '') + tabTag + partialTags + '</div>';
+        html += '<div style="font-size:11px;color:#666;margin-top:2px;">row ' + (c.row || '?') + '</div>';
+        html += '</div>';
+        html += '<button onclick="_reviewApprove(' + r.id + ',' + ci + ')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:12px;color:#888;padding:8px 0;">No candidates returned. Dismiss to remove from the queue, then post manually on Deals26 / Deals25 if needed.</div>';
+    }
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function _escHtml(s){
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Approve a candidate — calls the Apps Script direct row-write action,
+// then posts to Profit26 Payments if owed > 0. Marks the review as
+// 'approved' so it leaves the queue.
+async function _reviewApprove(id, candidateIdx){
+  var r = _reviewData.find(function(x){ return x.id === id; });
+  if (!r) return;
+  var candidates = [];
+  try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){}
+  var c = candidates[candidateIdx];
+  if (!c) { alert('Candidate not found'); return; }
+
+  if (!confirm('Post $' + (parseFloat(r.amount)||0) + ' to ' + (c.tab || 'Deals26') + ' row ' + c.row + '?\n\n' + (c.car_desc || ''))) return;
+
+  try {
+    // Direct row write via Apps Script (bypasses the match logic)
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST', headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals26_append_payment_direct',
+        location: r.location,
+        data: {
+          tab: c.tab || 'Deals26',
+          row: c.row,
+          amount: parseFloat(r.amount) || 0,
+          note_line: r.note_line || ''
+        }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if (!data || data.ok === false){
+      alert('Failed: ' + (data && data.error ? data.error : 'unknown'));
+      return;
+    }
+    var owed = parseFloat(data.owed) || 0;
+    // Post to Profit26 Payments if the deal is now in profit
+    if (owed > 0){
+      try {
+        await _appendPaymentToProfit({
+          customer_name: r.customer_name,
+          amount: r.amount,
+          vehicle_year: r.vehicle_year,
+          vehicle_make: r.vehicle_make,
+          vehicle_model: r.vehicle_model,
+          vehicle_color: r.vehicle_color,
+          vehicle_vin: r.vehicle_vin,
+          location: r.location,
+          payment_date: r.payment_date
+        });
+      } catch(ep){ console.warn('Profit Payments post failed:', ep); }
+    }
+    // Mark review resolved
+    await sbPatch('payment_reviews', id, {
+      status: 'approved',
+      resolved_at: new Date().toISOString(),
+      resolved_by: me ? me.name : '',
+      resolved_row: c.row,
+      resolved_tab: c.tab || 'Deals26'
+    });
+    await _reviewLoad();
+  } catch(e){
+    alert('Error: ' + (e.message || e));
+  }
+}
+
+async function _reviewReject(id){
+  if (!confirm('Dismiss this review item? The payment will still exist in the Payments list — this only removes it from the Review queue.')) return;
+  try {
+    await sbPatch('payment_reviews', id, {
+      status: 'rejected',
+      resolved_at: new Date().toISOString(),
+      resolved_by: me ? me.name : ''
+    });
+    await _reviewLoad();
+  } catch(e){
+    alert('Error: ' + (e.message || e));
+  }
+}
+
+// Refresh the badge on app load
+try { setTimeout(function(){ _reviewRefreshBadge(); }, 2000); } catch(e){}
+
+// ══════════════════════════════════════════════════════════════
 // D2: APPEND APP PAYMENT → PROFIT PAYMENTS ROW
 // Posts a +amount to the Profit26 Payments cell for the payment's
 // month, and appends a matching 'amount year make model lastname'
@@ -16266,9 +16672,11 @@ async function payScanSave(){
         notes:note||null,raw_ocr_text:rawOcr,
         is_final_payment:isFinal||false,created_at:new Date().toISOString()
       };
-      await sbPost('payments',_ePayload);
-      // D2: also auto-link these "added during edit" rows to Profit Payments
-      try{ await _appendPaymentToProfit(_ePayload); }catch(eap){ console.warn('Profit Payments auto-link failed:',eap); }
+      var _ePostRes = await sbPost('payments',_ePayload);
+      if(_ePostRes && _ePostRes[0] && _ePostRes[0].id) _ePayload.id = _ePostRes[0].id;
+      // D2: auto-link to Deals26 col G (and Profit26 Payments if deal in
+      // profit). Ambiguous matches queue to the Review tab.
+      try{ await _handleNewPaymentAutomation(_ePayload); }catch(eap){ console.warn('Payment automation failed:',eap); }
     }
   } else {
     // New payment — create one record per payment row
@@ -16290,9 +16698,11 @@ async function payScanSave(){
         notes:note||null,raw_ocr_text:rawOcr,
         is_final_payment:isFinal||false,created_at:new Date().toISOString()
       };
-      await sbPost('payments',_payPayload);
-      // D2: auto-append to Profit Payments row for this payment's month/location
-      try{ await _appendPaymentToProfit(_payPayload); }catch(eap){ console.warn('Profit Payments auto-link failed:',eap); }
+      var _payPostRes = await sbPost('payments',_payPayload);
+      if(_payPostRes && _payPostRes[0] && _payPostRes[0].id) _payPayload.id = _payPostRes[0].id;
+      // D2: auto-link to Deals26 col G (and Profit26 Payments if deal in
+      // profit). Ambiguous matches queue to the Review tab.
+      try{ await _handleNewPaymentAutomation(_payPayload); }catch(eap){ console.warn('Payment automation failed:',eap); }
     }
     // Push notification to managers
     try{

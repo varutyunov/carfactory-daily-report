@@ -1,3 +1,12 @@
+# Handoff — Car Factory session of 2026-04-20 → 22
+
+> Day 3 (Apr 22) shipped: Out-of-State deal toggle + end-to-end wiring;
+> Cash-Sale Profit auto-post with idempotency and deferred-tax flow.
+> Currently designing: payment-automation upgrade (Deals26 col G +
+> Profit26 Payments gating + Review tab). Locked design decisions
+> captured at the bottom of this file under "Payment automation design —
+> locked decisions".
+
 # Handoff — Car Factory session of 2026-04-20 → 21
 
 Continuation notes for the next session. What landed today, what's pending tomorrow, and relevant state.
@@ -153,3 +162,140 @@ From CLAUDE.md, Rule #8 (added yesterday after a bad sweep):
 > **NEVER mass-update or bulk-modify live data without explicit per-scope approval.** This applies to Supabase rows and Google Sheets cells. Even if the mutation "looks safe" or is "defensive cleanup," STOP — get the user to approve the specific scope first. Dry-run, show exactly which rows/cells will change, wait for "yes." No "while I'm here, let me also…" sweeps.
 
 All mutations today were explicitly approved per-scope. Continue this pattern.
+
+---
+
+# Day 2 (2026-04-21 late / 22 early) — Out-of-State toggle
+
+## Shipped
+
+### OOS toggle end-to-end
+- **DDL executed via Chrome MCP**: `ALTER TABLE deals ADD COLUMN IF NOT EXISTS out_of_state BOOLEAN DEFAULT FALSE;` (playbook captured in CLAUDE.md).
+- **Upload form (Step 2)**: new "Out of State" checkbox row with yellow-accent styling, persists to `deals.out_of_state` via `dealSubmit`.
+- **Edit form**: same checkbox on `dealEditForm`, `dealEditSave` includes `out_of_state` in the patch.
+- **`_autopopulateDeals26`**: Pending Sales CSV tax lookup wrapped in `if (!record.out_of_state)` — OOS deals keep `taxes = 0`.
+- **`_fillMissingTaxes`**: queries `deals.out_of_state` for all candidate VINs up front and drops OOS rows before the CSV fetch.
+- **`_updateDeals26FromDeal`**: forces `patch.taxes = 0` when `out_of_state === true`. Handles the retroactive flip case.
+- User retroactively flagged **Azera (Bullock)** and **Corvette (Smith)** OOS via the edit form — their deals26 rows now hold `taxes = 0` permanently and `_fillMissingTaxes` will skip them forever.
+
+### Deploy
+- Commit: `f777eb0` (OOS toggle), merged/pushed to `master` + `main`. Cache v505 → v506.
+
+---
+
+# Day 3 (2026-04-22) — Cash Sale Profit automation
+
+## Shipped
+
+### `_appendCashSaleToProfit` rewrite
+Cash deals now post the correct **profit** (owed = money − cost − expenses − taxes − dealer_fee − manny) to that month's Profit Cash Sales row instead of `total_collected` (the amount paid, which included cost and fees).
+
+Three-principle rewrite:
+1. **Compute owed once** in `_autopopulateDeals26` and store it on the deals26 row. Was always `0` before.
+2. **Post only when owed is final** — OOS flag true, or CSV tax match found. If taxes are pending (CSV miss, not OOS), skip at submit and let `_fillMissingTaxes` post on the next cycle after recomputing owed.
+3. **Idempotent** — before posting, `_appendCashSaleToProfit` queries the Supabase `profit` mirror for the target month. If any line's `note`/`label_note`/`label` already contains the `car_desc`, bail. Safe to call from submit, tax fill, and edit-form OOS flip flows without double-booking.
+
+### Related fixes
+- `_fillMissingTaxes` now patches the **recomputed owed** alongside the tax fill. Previously pushed `owed=0` to the sheet (Apps Script silently rescued this by copying the sheet formula from row above, but Supabase was stale).
+- `_updateDeals26FromDeal` recomputes owed whenever money or taxes change. Also triggers a cash-sale post if the deal is cash-type and just became final (e.g. OOS flipped on retroactively).
+- `dealSubmit` cash-sale branch now guarded: `record.deal_type === 'cash' && _d26Snap.taxesKnown && _d26Snap.owed > 0`.
+
+### Posting flow summary
+| Scenario | When posted | Amount |
+|---|---|---|
+| Cash deal, VIN in Pending Sales CSV at submit | At submit | owed = money − cost − expenses − taxes − DF − manny |
+| Cash deal, OOS toggle on | At submit | owed (taxes = 0) |
+| Cash deal, VIN not in CSV yet | Deferred → `_fillMissingTaxes` | Recomputed owed after tax fill |
+| Finance deal | Never (Cash Sales is cash-only) | — |
+| Re-submit / re-edit / re-fill | Skipped via idempotency check | — |
+
+### Known non-auto-post cases (intentional)
+- Deals with `owed <= 0` (loss / break-even) — needs human eye.
+- Supabase mirror query failure → bails rather than risk a double-book (user can post manually).
+- Finance deals — never routed to Cash Sales.
+
+### Deploy
+- Commit: `0c311a0` (Cash Sale Profit auto-post), pushed to `master` + `main`. Cache v506 → v507.
+
+---
+
+# Day 3 — Payment automation design (locked decisions, not yet built)
+
+User wants to upgrade `_appendPaymentToProfit` so that scanned payments from the app's Payments tab flow intelligently:
+- Always record the payment on the deal's Deals26 column G (or Deals25 for carryovers).
+- Only post to Profit26 Payments when the deal is already in profit (col F > 0).
+- Route any uncertain match to a new **Review** tab for manual approval.
+
+## Locked decisions
+
+### 1. Profit-gating rule
+- Read **Deals26 column F (owed)** directly on the matched row.
+- **Positive** → deal is in profit → post to Profit26 Payments.
+- **Negative or zero** → skip Profit26 post (but still record in col G — see #1 below).
+- Don't recompute. The sheet formula on F is authoritative.
+
+### 2. Still record every payment in Deals26 column G
+- Column G holds a **growing formula**: `=amt1+amt2+amt3...`
+- First payment (cell blank): write `=amount`.
+- Subsequent payments: append `+amount` to the existing formula.
+- Stray raw number (legacy): convert to `=oldNumber+amount`.
+- Column F (owed) auto-recomputes because the sheet formula references G.
+- Mirror the existing `profit_append_entry` pattern (already implemented for Profit26 cells in Apps Script — replicate for Deals26 col G).
+
+### 3. Deals25 lookup
+- Deals25 lives as a **separate tab in the same DeBary / DeLand spreadsheet**, same column layout as Deals26.
+- **Don't** sync Deals25 to Supabase. Apps Script reads it directly.
+- Lookup order: Deals26 first, then Deals25 if no hit.
+
+### 4. Match rule (car linking)
+- **AND match**: last name token **AND** year+make+model all present in `car_desc` (column B).
+- Case-insensitive.
+- Compound/hyphenated last names (Garcia-Martinez, Van Der Berg) — match on either the last whole-word token OR the compound.
+- If **exactly one confident match** → auto-post.
+- Otherwise → **Review** tab.
+
+### 5. Review tab (new)
+Routes for any of the three ambiguity cases:
+- **No match found** in either Deals26 or Deals25.
+- **Multiple matches** (same customer has two cars that both match).
+- **Partial match** (last name but not car, or car but not last name).
+
+Stored per item:
+- Source payment info (customer, amount, date, vehicle info)
+- Reason flagged (`no_match` / `multiple_matches` / `partial_match`)
+- Candidate matches (list of Deals26/Deals25 rows that partially matched, if any)
+- Status: `pending` / `approved` / `rejected`
+
+User actions: approve → post (col G + Profit26 if F>0). Reject → dismiss.
+
+### 6. Formatting
+Hard rule: **model + color + customer last name always included**. Keep each line ≤ ~32 chars so it doesn't wrap to two lines in the Sheets note box.
+
+Format builder:
+1. Base (always): `{amount} {model} {color} {LastName}`
+2. If room: prepend 2-digit year.
+3. If still room: add make between year and model.
+4. Never exceed ~32 chars. Drop year, then make, until it fits.
+
+Applied to both places:
+- Deals26 column G note (growing list per deal row)
+- Profit26 Payments note (monthly cell, only when deal is in profit)
+
+### 7. Profit26 post amount
+Full payment amount (same as what's appended to col G). Not a computed "profit portion." Deal is already in profit — every dollar above break-even is profit.
+
+## Open implementation risks / collisions
+
+- **`d26PmtSave` popup in the app** currently writes `payments` (raw total) + `payment_notes` (multi-line newline-joined) to Deals26 col G/G-note via `sheetsPush`. This clobbers the growing-formula pattern because `_writeRowToSheet` does `cell.setValue(val)` which destroys formulas. Needs fix during build: either route the popup through the new growing-formula Apps Script action, OR detect formula presence and merge instead of overwriting.
+- **Supabase `deals26.owed`** is currently set to a computed number from the app. For cash deals this matches (G=0). For finance deals it's the "initial" owed without payments; the sheet's col F formula is authoritative. Downstream readers (like `_appendCashSaleToProfit`'s idempotency check) use the Supabase number. Keep that in mind — if we trust col F at any point, it should be via Apps Script sheet read, not the Supabase mirror.
+- **Review tab storage**: new Supabase table needed (e.g. `payment_reviews`). Needs DDL via Chrome MCP playbook (see CLAUDE.md).
+
+## Plan structure (high-level, awaiting final "build it")
+
+1. Apps Script: new action `deals26_append_payment` — finds row in Deals26 (then Deals25) by last name + year/make/model, appends to col G formula + note using the growing-pattern helper, returns `{row, col_f_value, matched_sheet}`. Returns `{status: 'no_match' | 'multiple' | 'partial', candidates: [...]}` on ambiguity.
+2. Supabase: `payment_reviews` table (DDL via Chrome MCP).
+3. Index.html: new `_appendPaymentToDeals26(payload)` that posts to the new action. On auto-match success → call `_appendPaymentToProfit` only if col_f_value > 0. On ambiguity → insert into `payment_reviews`.
+4. Index.html: replace `_appendPaymentToProfit` call site so it goes through the new flow.
+5. Index.html: new **Review** tab UI with approve/reject.
+6. Fix `d26PmtSave` collision (either route it through the new action or detect formula).
+7. Cache bump, commit, push.

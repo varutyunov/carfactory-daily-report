@@ -191,6 +191,23 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'sync_profit', location: location, rowsUpserted: n });
     }
 
+    // ── Payment automation: append to Deals26 (or Deals25) col G ──
+    // Searches the Deals26 tab for a row matching last_name + year/make/model
+    // tokens. If no hit, falls back to Deals25. On confident single match,
+    // appends +amount to col G's growing formula and adds a note line. Returns
+    // col F (owed) value so the caller can decide whether to also post to
+    // Profit26 Payments. On zero/multiple/partial match, returns a status the
+    // caller routes to the Review queue.
+    if (action === 'deals26_append_payment') {
+      return _handleDeals26AppendPayment(location, body.data || {});
+    }
+
+    // Direct row write for Review-queue approvals. Bypasses the matcher.
+    // Inputs: body.data.{ tab: 'Deals26'|'Deals25', row, amount, note_line }
+    if (action === 'deals26_append_payment_direct') {
+      return _handleDeals26AppendPaymentDirect(location, body.data || {});
+    }
+
     var locConfig = _getConfig(location);
     var config = locConfig[tabName];
     if (!config) {
@@ -403,6 +420,32 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       // Column G (payments) in Deals26 — skip writing if zero, leave empty for manual entry
       if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
         continue;
+      }
+      // Column G (payments) in Deals26 — preserve the growing formula pattern.
+      // Payment automation stores col G as "=amt1+amt2+..." via the
+      // deals26_append_payment action. If the app's edit popup later tries
+      // to push a raw total here, we:
+      //   - If the cell already holds a formula, only write if the incoming
+      //     total differs from the formula's evaluated value (deliberate
+      //     override). In that override case we reset to a single-value
+      //     formula "=total" so future auto-appends keep the + chain.
+      //   - If the incoming total matches, preserve the formula — the
+      //     popup is just echoing the same total, don't clobber the detail.
+      if (config.table === 'deals26' && cField === 'payments') {
+        var existingGFormula = cell.getFormula() || '';
+        if (existingGFormula) {
+          var existingGVal = parseFloat(cell.getValue()) || 0;
+          var incomingG = parseFloat(val) || 0;
+          if (Math.abs(existingGVal - incomingG) < 0.01) {
+            // Same total — keep the growing formula
+            continue;
+          }
+          // Deliberate override — reset to a single-value formula
+          cell.setFormula('=' + String(incomingG));
+          cell.setNumberFormat('$#,##0');
+          continue;
+        }
+        // No formula in the cell — fall through to the default setValue path
       }
       // Column F (owed) in Deals26 — copy formula from the row above
       if (config.table === 'deals26' && cField === 'owed') {
@@ -1511,7 +1554,286 @@ function fixTotalRow() {
   
   // Also set column F total if it exists
   sheet.getRange(totalRow, 6).setFormula('=SUM(F20:F136)').setNumberFormat('$#,##0');  // F
-  
+
   SpreadsheetApp.flush();
   Logger.log('Fixed Total row formatting and formulas');
+}
+
+// ============================================================
+// PAYMENT AUTOMATION — append to Deals26 (or Deals25) col G
+// ============================================================
+//
+// Called from app side on every scanned/entered customer payment.
+// Flow:
+//   1. Search Deals26 col B for a row matching last_name AND year+make+model.
+//   2. If no match, fall back to Deals25 (same spreadsheet, different tab).
+//   3. If exactly one confident match → append +amount to col G's growing
+//      formula ( "=" + sum ), append a new line to the col G note, then
+//      read back col F (owed) so the caller can decide whether to also
+//      post to Profit26 Payments (F > 0 means the deal is in profit).
+//   4. If zero / multiple / partial matches → return a status so the caller
+//      queues the payment in the Review tab for manual approval.
+//
+// Inputs (body.data):
+//   last_name   — lowercase last-name token for the customer
+//   year        — "2017" or "17" (we match both forms)
+//   make        — "Honda" / "civic" / etc
+//   model       — "Civic" / "accord" / etc
+//   color       — optional, for note formatting (not used for matching)
+//   amount      — positive number
+//   note_line   — pre-built by client per format rules (≤32 chars)
+// ============================================================
+function _handleDeals26AppendPayment(location, data) {
+  try {
+    var lastName = String(data.last_name || '').trim().toLowerCase();
+    var year = String(data.year || '').trim();
+    var make = String(data.make || '').trim().toLowerCase();
+    var model = String(data.model || '').trim().toLowerCase();
+    var amount = parseFloat(data.amount);
+    var noteLine = String(data.note_line || '').trim();
+
+    if (!lastName || !model || isNaN(amount) || amount <= 0 || !noteLine) {
+      return jsonResponse({ ok: false, error: 'invalid_params',
+        got: { last_name: lastName, year: year, make: make, model: model, amount: amount, note_line_len: noteLine.length } });
+    }
+
+    var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
+
+    // Try Deals26 first, then Deals25. Tab names are case-sensitive.
+    var result = _findDealMatch(ss, 'Deals26', lastName, year, make, model);
+    var usedTab = 'Deals26';
+    if (result.status === 'no_match' || result.status === 'no_sheet') {
+      var r25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model);
+      // If Deals25 finds something, use it. If Deals25 also has no match,
+      // keep whatever Deals26 found (zero matches wins over no-sheet).
+      if (r25.status !== 'no_sheet') {
+        result = r25;
+        usedTab = 'Deals25';
+      }
+    }
+
+    if (result.status !== 'matched') {
+      // Partial matches come from Deals26 lookup; if we fell through to
+      // Deals25 and got a partial there, include those candidates too.
+      var partial25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model);
+      var mergedCandidates = (result.candidates || []).map(function(c){ c.tab = c.tab || 'Deals26'; return c; });
+      if (partial25.candidates) {
+        partial25.candidates.forEach(function(c){ c.tab = 'Deals25'; mergedCandidates.push(c); });
+      }
+      return jsonResponse({
+        ok: true,
+        action: 'deals26_append_payment',
+        status: result.status,
+        location: location,
+        candidates: mergedCandidates
+      });
+    }
+
+    // Confident match — append to col G (formula + note) on the matched row
+    var sheet = ss.getSheetByName(usedTab);
+    var gCol = 7; // Col G
+    var fCol = 6; // Col F
+    var gCell = sheet.getRange(result.row, gCol);
+    var fCell = sheet.getRange(result.row, fCol);
+
+    var existingFormula = gCell.getFormula() || '';
+    var existingValue = gCell.getValue();
+    var existingNote = gCell.getNote() || '';
+
+    var signStr = '+' + String(amount);
+    var newFormula;
+    if (existingFormula) {
+      // Already a growing formula — append
+      newFormula = existingFormula + signStr;
+    } else if (existingValue !== '' && existingValue !== null && existingValue !== 0) {
+      // Stray raw number — convert to =oldNum+amount
+      var existingNum = parseFloat(String(existingValue).replace(/[$,]/g, '')) || 0;
+      newFormula = '=' + String(existingNum) + signStr;
+    } else {
+      // Blank cell — start the formula. Note: no leading + on the first entry.
+      newFormula = '=' + String(amount);
+    }
+
+    var newNote = existingNote
+      ? (existingNote.replace(/\s+$/, '') + '\n' + noteLine)
+      : noteLine;
+
+    PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+    gCell.setFormula(newFormula);
+    gCell.setNumberFormat('$#,##0');
+    gCell.setNote(newNote);
+
+    SpreadsheetApp.flush();
+
+    // Read col F (owed) AFTER the G write so the sheet formula can recompute
+    var owedValue = fCell.getValue();
+    var owedNum = parseFloat(owedValue);
+    if (isNaN(owedNum)) owedNum = 0;
+
+    return jsonResponse({
+      ok: true,
+      action: 'deals26_append_payment',
+      status: 'matched',
+      location: location,
+      tab: usedTab,
+      row: result.row,
+      car_desc: result.car_desc,
+      owed: owedNum,
+      new_formula: newFormula
+    });
+  } catch (err) {
+    return jsonResponse({ ok: false, error: 'exception', message: err.message });
+  }
+}
+
+// Find a deal row in the given Deals tab whose col B (car_desc) contains
+// the last-name token AND all three car tokens (year/make/model, each
+// matched as a whole word). Returns:
+//   { status: 'matched', row, car_desc }                 — exactly one hit
+//   { status: 'multiple', candidates: [{row,car_desc}] } — more than one full hit
+//   { status: 'partial',  candidates: [{row,car_desc,hasLast,hasCar}] } — partials
+//   { status: 'no_match' }                               — nothing at all
+//   { status: 'no_sheet' }                               — tab missing
+function _findDealMatch(ss, tabName, lastName, year, make, model) {
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) return { status: 'no_sheet' };
+
+  var startRow = 2;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return { status: 'no_match' };
+
+  var rng = sheet.getRange(startRow, 2, lastRow - startRow + 1, 1);
+  var vals = rng.getValues();
+
+  // Build year-match alternates. If payload has 4-digit year, also try
+  // the 2-digit tail (sheet entries use "17 Civic" form). If it has
+  // 2 digits, we just use that.
+  var yearAlts = [];
+  if (year) {
+    yearAlts.push(year);
+    if (year.length === 4) yearAlts.push(year.slice(2));
+    if (year.length === 2) yearAlts.push('20' + year);
+  }
+
+  var fullMatches = [];
+  var partials = [];
+
+  for (var i = 0; i < vals.length; i++) {
+    var desc = String(vals[i][0] || '').trim();
+    if (!desc) continue;
+    var descL = desc.toLowerCase();
+
+    var hasLast = _wordBoundary(descL, lastName);
+    var hasYear = yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : true;
+    var hasMake = make ? _wordBoundary(descL, make) : true;
+    var hasModel = model ? _wordBoundary(descL, model) : true;
+
+    var hasCar = hasYear && hasMake && hasModel;
+
+    if (hasLast && hasCar) {
+      fullMatches.push({ row: startRow + i, car_desc: desc });
+    } else if (hasLast || hasCar) {
+      partials.push({
+        row: startRow + i,
+        car_desc: desc,
+        has_last: hasLast,
+        has_car: hasCar,
+        has_year: hasYear,
+        has_make: hasMake,
+        has_model: hasModel
+      });
+    }
+  }
+
+  if (fullMatches.length === 1) {
+    return { status: 'matched', row: fullMatches[0].row, car_desc: fullMatches[0].car_desc };
+  }
+  if (fullMatches.length > 1) {
+    return { status: 'multiple', candidates: fullMatches };
+  }
+  if (partials.length) {
+    return { status: 'partial', candidates: partials };
+  }
+  return { status: 'no_match' };
+}
+
+// Direct row write — used when the user approves a specific candidate in
+// the Review queue. The candidate { tab, row } has already been chosen;
+// we just append the amount to col G and return the recomputed col F.
+function _handleDeals26AppendPaymentDirect(location, data) {
+  try {
+    var tabName = String(data.tab || 'Deals26');
+    var row = parseInt(data.row);
+    var amount = parseFloat(data.amount);
+    var noteLine = String(data.note_line || '').trim();
+
+    if (!tabName || !row || row < 2 || isNaN(amount) || amount <= 0 || !noteLine) {
+      return jsonResponse({ ok: false, error: 'invalid_params' });
+    }
+    if (tabName !== 'Deals26' && tabName !== 'Deals25') {
+      return jsonResponse({ ok: false, error: 'invalid_tab' });
+    }
+
+    var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
+    var sheet = ss.getSheetByName(tabName);
+    if (!sheet) return jsonResponse({ ok: false, error: 'no_sheet' });
+
+    var gCell = sheet.getRange(row, 7); // Col G
+    var fCell = sheet.getRange(row, 6); // Col F
+
+    var existingFormula = gCell.getFormula() || '';
+    var existingValue = gCell.getValue();
+    var existingNote = gCell.getNote() || '';
+
+    var signStr = '+' + String(amount);
+    var newFormula;
+    if (existingFormula) {
+      newFormula = existingFormula + signStr;
+    } else if (existingValue !== '' && existingValue !== null && existingValue !== 0) {
+      var existingNum = parseFloat(String(existingValue).replace(/[$,]/g, '')) || 0;
+      newFormula = '=' + String(existingNum) + signStr;
+    } else {
+      newFormula = '=' + String(amount);
+    }
+
+    var newNote = existingNote
+      ? (existingNote.replace(/\s+$/, '') + '\n' + noteLine)
+      : noteLine;
+
+    PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+    gCell.setFormula(newFormula);
+    gCell.setNumberFormat('$#,##0');
+    gCell.setNote(newNote);
+
+    SpreadsheetApp.flush();
+
+    var owedValue = fCell.getValue();
+    var owedNum = parseFloat(owedValue);
+    if (isNaN(owedNum)) owedNum = 0;
+
+    return jsonResponse({
+      ok: true,
+      action: 'deals26_append_payment_direct',
+      tab: tabName,
+      row: row,
+      owed: owedNum,
+      new_formula: newFormula
+    });
+  } catch (err) {
+    return jsonResponse({ ok: false, error: 'exception', message: err.message });
+  }
+}
+
+// Whole-word match of `needle` inside `haystack`. Handles hyphenated names
+// (Garcia-Martinez matches both "garcia" and "martinez" and "garcia-martinez"),
+// case-insensitive (caller lowercases). Returns true if needle appears with
+// word boundaries, OR if haystack contains the needle bracketed by hyphen.
+function _wordBoundary(haystack, needle) {
+  if (!needle) return true;
+  if (!haystack) return false;
+  // Escape regex specials
+  var escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // \b needle \b, also allow hyphen on either side for compound names
+  var re = new RegExp('(^|[\\s,\\-\\/])' + escaped + '(?=[\\s,\\-\\/]|$)', 'i');
+  return re.test(haystack);
 }
