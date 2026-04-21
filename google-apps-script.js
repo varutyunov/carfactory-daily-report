@@ -1641,6 +1641,42 @@ function _handleDeals26AppendPayment(location, data) {
     var existingValue = gCell.getValue();
     var existingNote = gCell.getNote() || '';
 
+    // Backfill-time duplicate check. When check_dup is set, we don't write
+    // anything if the note already contains the same payment. Two tiers:
+    //   - EXACT line match ("{amount} model color name M/D") → already_posted,
+    //     silent skip (e.g. backfill re-run, or payment already posted via
+    //     the live flow).
+    //   - AMOUNT-only match (any note line starts with "{amount} ") → possible
+    //     duplicate, route to Review so the user can decide.
+    if (data.check_dup) {
+      var noteLines = existingNote.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+      if (noteLines.indexOf(noteLine) !== -1) {
+        return jsonResponse({
+          ok: true,
+          action: 'deals26_append_payment',
+          status: 'already_posted',
+          location: location,
+          tab: usedTab,
+          row: result.row,
+          car_desc: result.car_desc
+        });
+      }
+      var amtPrefix = String(amount) + ' ';
+      var dupHit = noteLines.some(function(l){ return l.indexOf(amtPrefix) === 0; });
+      if (dupHit) {
+        return jsonResponse({
+          ok: true,
+          action: 'deals26_append_payment',
+          status: 'possible_duplicate',
+          location: location,
+          tab: usedTab,
+          row: result.row,
+          car_desc: result.car_desc,
+          candidates: [{ row: result.row, car_desc: result.car_desc, tab: usedTab }]
+        });
+      }
+    }
+
     var signStr = '+' + String(amount);
     var newFormula;
     if (existingFormula) {

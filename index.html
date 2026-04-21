@@ -1056,9 +1056,10 @@ body.light .cal-fab{background:#4488ff !important;}
 <!-- REVIEW QUEUE OVERLAY (must live outside swipe-container so
      position:fixed anchors to the viewport, not the transformed parent) -->
 <div id="review-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:10px;">
     <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
     <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">REVIEW</span>
+    <button onclick="runPaymentBackfill()" title="Sweep all existing payments into Deals26 col G (safe to re-run)" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill</button>
     <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span>
   </div>
   <div id="review-body" style="padding-top:70px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
@@ -16251,6 +16252,173 @@ async function _handleNewPaymentAutomation(payload){
 }
 
 // ══════════════════════════════════════════════════════════════
+// BACKFILL — one-shot sweep to post all historical payments to
+// Deals26 col G (and Profit26 Payments when col F > 0). Idempotent:
+// the Apps Script action is called with check_dup=true, so:
+//   - Exact (amount+desc+date) hit already in the cell note → skip silently
+//   - Same amount different detail → route to Review as 'possible_duplicate'
+//   - No dup → append normally and gate Profit26 post on col F
+//   - No confident match → route to Review ('no_match'/'multiple'/'partial')
+//
+// Safe to re-run. Progress is shown inline in the Review overlay.
+// ══════════════════════════════════════════════════════════════
+var _backfillRunning = false;
+var _backfillCancel = false;
+
+async function runPaymentBackfill(){
+  if (_backfillRunning){
+    if (confirm('Backfill already running. Cancel it?')) { _backfillCancel = true; }
+    return;
+  }
+  var msg = 'Sweep all existing payments into Deals26 col G (and Profit26 if the deal is in profit).\n\nSafe to re-run — already-posted entries are skipped.\nPossible duplicates go to Review for you to approve/dismiss.\n\nContinue?';
+  if (!confirm(msg)) return;
+
+  _backfillRunning = true;
+  _backfillCancel = false;
+  var list = document.getElementById('review-list');
+
+  // Fetch all payments, filter to eligible ones
+  var rows;
+  try {
+    rows = await sbGet('payments', 'select=id,customer_name,amount,payment_method,payment_date,vehicle_year,vehicle_make,vehicle_model,vehicle_color,vehicle_vin,location,raw_ocr_text&order=created_at.asc&limit=2000');
+  } catch(e){
+    alert('Failed to load payments: ' + e.message);
+    _backfillRunning = false;
+    return;
+  }
+  rows = (rows || []).filter(_profitShouldPropagate);
+
+  var total = rows.length;
+  var done = 0, posted = 0, skipped = 0, queued = 0, errored = 0;
+
+  // Inject a progress card at the top of the review list
+  var progressId = 'backfill-progress-card';
+  if (list){
+    var existing = document.getElementById(progressId);
+    if (existing) existing.remove();
+    list.insertAdjacentHTML('afterbegin',
+      '<div id="' + progressId + '" style="background:#1a1000;border:1px solid #fbbf24;border-radius:14px;padding:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="font-size:13px;color:#fbbf24;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Backfill in progress</div>' +
+          '<button onclick="_backfillCancelReq()" style="background:none;border:1px solid #444;border-radius:8px;color:#ccc;padding:4px 10px;font-size:11px;cursor:pointer;">Cancel</button>' +
+        '</div>' +
+        '<div id="backfill-progress-text" style="font-size:13px;color:#ddd;">Starting… (0 / ' + total + ')</div>' +
+        '<div style="margin-top:8px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="backfill-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#fbbf24,#f59e0b);transition:width .2s;"></div></div>' +
+      '</div>');
+  }
+  var updProgress = function(){
+    var t = document.getElementById('backfill-progress-text');
+    var b = document.getElementById('backfill-progress-bar');
+    if (t) t.textContent = done + ' / ' + total + ' · posted ' + posted + ' · skipped ' + skipped + ' · review ' + queued + (errored ? ' · errors ' + errored : '');
+    if (b) b.style.width = (total ? Math.round(done*100/total) : 0) + '%';
+  };
+
+  for (var i = 0; i < rows.length; i++){
+    if (_backfillCancel){ break; }
+    var p = rows[i];
+    done++;
+    try {
+      var res = await _appendPaymentToDeals26Checked(p);
+      if (res.posted) posted++;
+      else if (res.skipped) skipped++;
+      else if (res.queued) queued++;
+      else errored++;
+    } catch(e){
+      errored++;
+      console.warn('Backfill row failed id=' + p.id, e);
+    }
+    updProgress();
+    // Light throttle to avoid Apps Script concurrency issues
+    await new Promise(function(r){ setTimeout(r, 120); });
+  }
+
+  _backfillRunning = false;
+  var finishMsg = _backfillCancel
+    ? ('Cancelled at ' + done + '/' + total + ' · posted ' + posted + ' · skipped ' + skipped + ' · review ' + queued)
+    : ('Done · ' + posted + ' posted · ' + skipped + ' already-posted · ' + queued + ' in review' + (errored ? ' · ' + errored + ' errored' : ''));
+  alert(finishMsg);
+  _backfillCancel = false;
+  try { await _reviewLoad(); } catch(e){}
+}
+
+function _backfillCancelReq(){
+  if (_backfillRunning){
+    _backfillCancel = true;
+    var t = document.getElementById('backfill-progress-text');
+    if (t) t.textContent = 'Cancelling…';
+  }
+}
+
+// One payment, with dup-check enabled. Returns
+//   {posted, skipped, queued} flags. Errors bubble up.
+async function _appendPaymentToDeals26Checked(payload){
+  if (!_profitShouldPropagate(payload)) return { skipped: true };
+  var amt = parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,'')) || 0;
+  if (amt === 0) return { skipped: true };
+  var lastName = _paymentLastName(payload.customer_name);
+  var model = payload.vehicle_model ? String(payload.vehicle_model).trim() : '';
+  if (!lastName || !model) return { skipped: true };
+  var loc = payload.location || 'DeBary';
+  var noteLine = _paymentNoteLine(amt, payload);
+
+  var resp = await fetch(_SHEETS_URL, {
+    method: 'POST', headers: {'Content-Type':'text/plain'},
+    body: JSON.stringify({
+      secret: _SHEETS_SECRET,
+      action: 'deals26_append_payment',
+      location: loc,
+      data: {
+        last_name: lastName,
+        year: payload.vehicle_year ? String(payload.vehicle_year).trim() : '',
+        make: payload.vehicle_make ? String(payload.vehicle_make).trim() : '',
+        model: model,
+        color: payload.vehicle_color ? String(payload.vehicle_color).trim() : '',
+        amount: amt,
+        note_line: noteLine,
+        check_dup: true
+      }
+    })
+  });
+  var data = null; try { data = await resp.json(); } catch(e){}
+  if (!data || data.ok === false){
+    throw new Error('apps_script_failed');
+  }
+
+  if (data.status === 'matched'){
+    var owed = parseFloat(data.owed) || 0;
+    if (owed > 0){
+      try { await _appendPaymentToProfit(payload); } catch(e){ console.warn(e); }
+    }
+    return { posted: true };
+  }
+  if (data.status === 'already_posted'){
+    return { skipped: true };
+  }
+  // possible_duplicate / no_match / multiple / partial → queue for Review
+  try {
+    await sbPost('payment_reviews', {
+      payment_id: payload.id || null,
+      customer_name: payload.customer_name || '',
+      amount: amt,
+      vehicle_year: payload.vehicle_year || '',
+      vehicle_make: payload.vehicle_make || '',
+      vehicle_model: payload.vehicle_model || '',
+      vehicle_color: payload.vehicle_color || '',
+      vehicle_vin: payload.vehicle_vin || '',
+      location: loc,
+      payment_date: payload.payment_date || null,
+      payment_method: payload.payment_method || '',
+      note_line: noteLine,
+      reason: data.status,
+      candidates: JSON.stringify(data.candidates || []),
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn('Review insert failed:', e); }
+  return { queued: true };
+}
+
+// ══════════════════════════════════════════════════════════════
 // REVIEW QUEUE — unresolved payment-automation matches
 //
 // When the automatic matcher can't confidently link a scanned payment
@@ -16319,9 +16487,11 @@ function _reviewRender(){
     var reasonLabel = r.reason === 'no_match' ? 'No match found'
                     : r.reason === 'multiple' ? 'Multiple matches — pick one'
                     : r.reason === 'partial'  ? 'Partial match — pick one or reject'
+                    : r.reason === 'possible_duplicate' ? 'Possible duplicate — same amount already on deal'
                     : r.reason;
     var reasonColor = r.reason === 'no_match' ? '#ef4444'
                     : r.reason === 'multiple' ? '#fbbf24'
+                    : r.reason === 'possible_duplicate' ? '#f97316'
                     : '#60a5fa';
     html += '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;">';
     // Header
