@@ -1861,6 +1861,24 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     var existingValue = gCell.getValue();
     var existingNote = gCell.getNote() || '';
 
+    // Dup-check — same logic as deals26_append_payment's check_dup.
+    if (data.check_dup) {
+      var lines = existingNote.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+      if (lines.indexOf(noteLine) !== -1) {
+        return jsonResponse({
+          ok: true, action: 'deals26_append_payment_direct',
+          status: 'already_posted', tab: tabName, row: row
+        });
+      }
+      var amtPrefix = String(amount) + ' ';
+      if (lines.some(function(l){ return l.indexOf(amtPrefix) === 0; })) {
+        return jsonResponse({
+          ok: true, action: 'deals26_append_payment_direct',
+          status: 'possible_duplicate', tab: tabName, row: row
+        });
+      }
+    }
+
     var signStr = '+' + String(amount);
     var newFormula;
     if (existingFormula) {
@@ -1890,6 +1908,7 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     return jsonResponse({
       ok: true,
       action: 'deals26_append_payment_direct',
+      status: 'matched',
       tab: tabName,
       row: row,
       owed: owedNum,

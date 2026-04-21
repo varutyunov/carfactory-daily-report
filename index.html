@@ -16145,6 +16145,37 @@ function _paymentDescFromPayload(payload){
   return build(false);
 }
 
+// Look up a learned alias for this payment. When the user approved a
+// match in Review, we saved (VIN, customer+model, location) → (tab, row).
+// Future payments for the same deal skip the matcher entirely.
+// Returns { target_tab, target_row, car_desc } or null.
+async function _findDealAlias(payload){
+  try {
+    var vin = (payload.vehicle_vin || '').trim().toUpperCase();
+    var loc = payload.location || 'DeBary';
+    // VIN is the most reliable key. Try it first.
+    if (vin){
+      var byVin = await sbGet('payment_deal_aliases',
+        'vin=eq.' + encodeURIComponent(vin) +
+        '&location=eq.' + encodeURIComponent(loc) +
+        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
+      if (byVin && byVin.length) return byVin[0];
+    }
+    // Fall back to last-name + model + location.
+    var custL = _paymentLastName(payload.customer_name);
+    var modelL = (payload.vehicle_model || '').toLowerCase().trim();
+    if (custL && modelL){
+      var byCust = await sbGet('payment_deal_aliases',
+        'customer_name_lower=eq.' + encodeURIComponent(custL) +
+        '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
+        '&location=eq.' + encodeURIComponent(loc) +
+        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
+      if (byCust && byCust.length) return byCust[0];
+    }
+  } catch(e){ /* silent — fallback to matcher */ }
+  return null;
+}
+
 // D2a: Append this payment to the matching deal's Deals26 (or Deals25)
 // col G, and conditionally post to Profit26 Payments.
 // Returns one of:
@@ -16163,6 +16194,34 @@ async function _appendPaymentToDeals26(payload){
     if(!lastName || !model) return { ok:false, error:'missing_last_or_model' };
     var loc = payload.location || (me ? me.location : 'DeBary');
     var noteLine = _paymentNoteLine(amt, payload);
+
+    // Check for a learned alias first — user previously approved a
+    // specific (tab,row) for this VIN / customer+model. If found, write
+    // directly to it and skip the fuzzy matcher.
+    var alias = await _findDealAlias(payload);
+    if (alias){
+      var dResp = await fetch(_SHEETS_URL, {
+        method:'POST', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals26_append_payment_direct',
+          location: loc,
+          data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine }
+        })
+      });
+      var dData = null; try { dData = await dResp.json(); } catch(e){}
+      if (dData && dData.ok !== false){
+        var dOwed = parseFloat(dData.owed) || 0;
+        var dPosted = false;
+        if (dOwed > 0){
+          try { await _appendPaymentToProfit(payload); dPosted = true; } catch(ep){ console.warn(ep); }
+        }
+        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row);
+        return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:alias.target_row, via_alias:true };
+      }
+      // Alias direct-write failed — fall through to the normal matcher
+      console.warn('Alias direct-write failed, falling back to matcher:', dData);
+    }
 
     var resp = await fetch(_SHEETS_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'},
@@ -16360,6 +16419,54 @@ async function _appendPaymentToDeals26Checked(payload){
   if (!lastName || !model) return { skipped: true };
   var loc = payload.location || 'DeBary';
   var noteLine = _paymentNoteLine(amt, payload);
+
+  // Alias short-circuit: if the user previously approved a match for
+  // this VIN / customer+model, write directly to the remembered row
+  // (still with dup-check so re-runs are safe).
+  var alias = await _findDealAlias(payload);
+  if (alias){
+    var dResp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals26_append_payment_direct',
+        location: loc,
+        data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine, check_dup: true }
+      })
+    });
+    var dData = null; try { dData = await dResp.json(); } catch(e){}
+    if (dData && dData.ok !== false){
+      if (dData.status === 'already_posted') return { skipped: true };
+      if (dData.status === 'possible_duplicate'){
+        try {
+          await sbPost('payment_reviews', {
+            payment_id: payload.id || null,
+            customer_name: payload.customer_name || '',
+            amount: amt,
+            vehicle_year: payload.vehicle_year || '',
+            vehicle_make: payload.vehicle_make || '',
+            vehicle_model: payload.vehicle_model || '',
+            vehicle_color: payload.vehicle_color || '',
+            vehicle_vin: payload.vehicle_vin || '',
+            location: loc, payment_date: payload.payment_date || null,
+            payment_method: payload.payment_method || '',
+            note_line: noteLine, reason: 'possible_duplicate',
+            candidates: JSON.stringify([{ tab: alias.target_tab, row: alias.target_row, car_desc: alias.car_desc }]),
+            status: 'pending', created_at: new Date().toISOString()
+          });
+        } catch(e){}
+        return { queued: true };
+      }
+      // posted — check profit gate
+      var dOwed = parseFloat(dData.owed) || 0;
+      if (dOwed > 0){
+        try { await _appendPaymentToProfit(payload); } catch(e){}
+      }
+      return { posted: true };
+    }
+    // Alias direct write failed — fall through to the normal matcher
+    console.warn('Alias direct-write failed in backfill, falling back to matcher');
+  }
 
   var resp = await fetch(_SHEETS_URL, {
     method: 'POST', headers: {'Content-Type':'text/plain'},
@@ -16593,6 +16700,27 @@ async function _reviewApprove(id, candidateIdx){
       resolved_row: c.row,
       resolved_tab: c.tab || 'Deals26'
     });
+    // Save an alias — next payment for the same VIN / customer+model
+    // will auto-write to this same row without going through Review.
+    try {
+      var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
+      var aliasCust = _paymentLastName(r.customer_name);
+      var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
+      await sbPost('payment_deal_aliases', {
+        vin: aliasVin,
+        customer_name_lower: aliasCust || null,
+        vehicle_model_lower: aliasModel || null,
+        location: r.location,
+        target_tab: c.tab || 'Deals26',
+        target_row: c.row,
+        car_desc: c.car_desc || null,
+        created_by: me ? me.name : '',
+        source_review_id: id
+      });
+      console.log('Alias saved: ' + (aliasVin || (aliasCust + '/' + aliasModel)) + ' → ' + (c.tab || 'Deals26') + ' row ' + c.row);
+    } catch(aliasErr){
+      console.warn('Alias save failed (non-fatal):', aliasErr);
+    }
     await _reviewLoad();
   } catch(e){
     alert('Error: ' + (e.message || e));
