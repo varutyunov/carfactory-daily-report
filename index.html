@@ -1035,19 +1035,26 @@ body.light .cal-fab{background:#4488ff !important;}
             <div class="orbit-tile-label">Sheets</div>
           </div>
 
-          <!-- Review tile — unresolved payment-automation matches -->
-          <div class="orbit-tile" id="review-tile" style="display:none;background:linear-gradient(145deg,#2a1500,#5a2a00,#7c3e00);box-shadow:0 4px 20px rgba(251,146,60,0.3);width:88px;height:88px;" onclick="openReviewQueue()">
+          <!-- Review tile — unresolved payment-automation matches.
+               Always visible. Red badge appears only when there are
+               pending items. Users can open an empty queue to confirm
+               nothing's pending. -->
+          <div class="orbit-tile" id="review-tile" style="background:linear-gradient(145deg,#2a1500,#5a2a00,#7c3e00);box-shadow:0 4px 20px rgba(251,146,60,0.3);width:88px;height:88px;position:relative;" onclick="openReviewQueue()">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             </svg>
             <div class="orbit-tile-label">Review</div>
-            <div id="review-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:900;display:none;align-items:center;justify-content:center;line-height:1;box-shadow:0 2px 6px rgba(239,68,68,.5);">0</div>
+            <div id="review-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:900;align-items:center;justify-content:center;line-height:1;box-shadow:0 2px 6px rgba(239,68,68,.5);">0</div>
           </div>
 
         </div>
       </div><!-- /swipe-page-2 -->
 
-<!-- REVIEW QUEUE OVERLAY -->
+      </div><!-- /swipe-container -->
+    </div>
+
+<!-- REVIEW QUEUE OVERLAY (must live outside swipe-container so
+     position:fixed anchors to the viewport, not the transformed parent) -->
 <div id="review-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
   <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
     <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
@@ -1060,9 +1067,6 @@ body.light .cal-fab{background:#4488ff !important;}
     </div>
   </div>
 </div>
-
-      </div><!-- /swipe-container -->
-    </div>
 
 <!-- FORMS VIEW OVERLAY -->
 <div id="forms-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#000;flex-direction:column;">
@@ -16237,9 +16241,9 @@ async function _reviewRefreshBadge(){
   try {
     var rows = await sbGet('payment_reviews', 'status=eq.pending&select=id&limit=100');
     var count = Array.isArray(rows) ? rows.length : 0;
-    var tile = document.getElementById('review-tile');
+    // Tile is always visible so you can open an empty queue. Only the red
+    // badge reflects the pending count.
     var badge = document.getElementById('review-badge');
-    if (tile) tile.style.display = count > 0 ? 'flex' : 'none';
     if (badge) {
       badge.textContent = String(count);
       badge.style.display = count > 0 ? 'flex' : 'none';
