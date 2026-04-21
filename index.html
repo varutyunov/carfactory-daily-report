@@ -16073,20 +16073,11 @@ function _paymentLastName(customerName){
   return (parts[parts.length - 1] || '').toLowerCase();
 }
 
-// Build the one-line note entry for both Deals26 col G and Profit26
-// Payments. Hard rule: model + color + LastName always present. Year
-// and make drop first if the line would exceed ~32 chars.
-// Example outputs:
-//   "300 17 Civic red Robinson"     ← 25 chars, full
-//   "300 Civic red Robinson"        ← drops year
-//   "300 Civic red Robinson"        ← drops make
-//   "300 Sonata red Garcia-Martinez"← long name, drops year + make
-function _paymentNoteLine(amount, payload){
-  var amt = parseFloat(amount);
-  if(!isFinite(amt)) amt = 0;
-  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
-  var year = payload.vehicle_year ? String(payload.vehicle_year).trim() : '';
-  var make = payload.vehicle_make ? String(payload.vehicle_make).trim() : '';
+// Extract the ordered format pieces from a payload — shared by the
+// Deals26 col G note builder and the Profit26 description builder so
+// both places produce identical strings (important for update/remove
+// matching in Profit26).
+function _paymentFormatPieces(payload){
   var model = payload.vehicle_model ? String(payload.vehicle_model).trim() : '';
   var color = payload.vehicle_color ? String(payload.vehicle_color).trim() : '';
   var lastName = '';
@@ -16098,25 +16089,59 @@ function _paymentNoteLine(amount, payload){
       lastName = parts[parts.length - 1] || '';
     }
   }
-  // Shorten year to 2 digits if it's 4
-  if(year.length === 4) year = year.slice(2);
+  var dateStr = '';
+  try {
+    var d = payload.payment_date ? new Date(payload.payment_date + 'T12:00:00') : new Date();
+    if (!isNaN(d.getTime())) dateStr = (d.getMonth() + 1) + '/' + d.getDate();
+  } catch(e){}
+  return { model: model, color: color, lastName: lastName, dateStr: dateStr };
+}
 
+// Build the one-line note entry for Deals26 col G (caller prepends the
+// amount directly — used by the Apps Script action).
+// Hard rule: model + LastName + M/D date always present. Color drops
+// first if the line would exceed ~32 chars.
+// Examples:
+//   "200 Passat gray Gauvin 4/21"
+//   "1465 Avalon silver Rackley 4/25"
+//   "200 Passat Garcia-Martinez 4/21"   ← drops color, long name
+function _paymentNoteLine(amount, payload){
+  var amt = parseFloat(amount);
+  if(!isFinite(amt)) amt = 0;
+  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var p = _paymentFormatPieces(payload);
   var MAX = 32;
-  var build = function(incYear, incMake){
+  var build = function(incColor){
     var pieces = [amtStr];
-    if(incYear && year) pieces.push(year);
-    if(incMake && make) pieces.push(make);
-    if(model) pieces.push(model);
-    if(color) pieces.push(color);
-    if(lastName) pieces.push(lastName);
+    if(p.model) pieces.push(p.model);
+    if(incColor && p.color) pieces.push(p.color);
+    if(p.lastName) pieces.push(p.lastName);
+    if(p.dateStr) pieces.push(p.dateStr);
     return pieces.filter(Boolean).join(' ');
   };
-  var line = build(true, true);
+  var line = build(true);
   if(line.length <= MAX) return line;
-  line = build(false, true);
-  if(line.length <= MAX) return line;
-  line = build(false, false);
-  return line;
+  // Overflow — drop color (model, lastname, date are non-negotiable)
+  return build(false);
+}
+
+// Build the Profit26 description (same rule but WITHOUT the amount —
+// Apps Script's profit_append_entry prepends the amount itself).
+// Budgets ~5 chars for the amount+space prefix to stay under 32 total.
+function _paymentDescFromPayload(payload){
+  var p = _paymentFormatPieces(payload);
+  var MAX_CORE = 27; // 32 - 5 (typical amount + space)
+  var build = function(incColor){
+    var pieces = [];
+    if(p.model) pieces.push(p.model);
+    if(incColor && p.color) pieces.push(p.color);
+    if(p.lastName) pieces.push(p.lastName);
+    if(p.dateStr) pieces.push(p.dateStr);
+    return pieces.filter(Boolean).join(' ');
+  };
+  var line = build(true);
+  if(line.length <= MAX_CORE) return line;
+  return build(false);
 }
 
 // D2a: Append this payment to the matching deal's Deals26 (or Deals25)
@@ -16441,19 +16466,9 @@ async function _appendPaymentToProfit(payload){
     var loc = payload.location || (me ? me.location : 'DeBary');
     var amt = parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,''))||0;
     if(amt === 0) return;
-    // Description: '<year> <make> <model> <lastname>' — matches existing sheet note style
-    var descParts = [];
-    if(payload.vehicle_year) descParts.push(String(payload.vehicle_year).trim());
-    if(payload.vehicle_make) descParts.push(String(payload.vehicle_make).trim());
-    if(payload.vehicle_model) descParts.push(String(payload.vehicle_model).trim());
-    if(payload.customer_name){
-      var cp = String(payload.customer_name).trim().split(/\s+/);
-      if(cp.length){
-        var last = cp[cp.length-1];
-        if(last) descParts.push(last);
-      }
-    }
-    var desc = descParts.filter(Boolean).join(' ').trim();
+    // Description: "model color LastName M/D" — unified with Deals26 col G
+    // note format. Apps Script prepends the amount automatically.
+    var desc = _paymentDescFromPayload(payload);
     var resp = await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
       secret:_SHEETS_SECRET,
       action:'profit_append_entry',
@@ -16478,18 +16493,10 @@ async function _appendPaymentToProfit(payload){
 
 // Build the description string for a payment payload exactly as
 // _appendPaymentToProfit writes it, so we can match / update / remove
-// the corresponding entry later.
+// the corresponding entry later. Delegates to the unified builder.
 function _profitDescFromPayment(payload){
   if(!payload) return '';
-  var parts=[];
-  if(payload.vehicle_year) parts.push(String(payload.vehicle_year).trim());
-  if(payload.vehicle_make) parts.push(String(payload.vehicle_make).trim());
-  if(payload.vehicle_model) parts.push(String(payload.vehicle_model).trim());
-  if(payload.customer_name){
-    var cp=String(payload.customer_name).trim().split(/\s+/);
-    if(cp.length){var last=cp[cp.length-1];if(last) parts.push(last);}
-  }
-  return parts.filter(Boolean).join(' ').trim();
+  return _paymentDescFromPayload(payload);
 }
 function _profitAmountFromPayment(payload){
   return parseFloat(String((payload&&payload.amount)||'').replace(/[^0-9.\-]/g,''))||0;
