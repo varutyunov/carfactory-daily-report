@@ -18839,6 +18839,11 @@ function _prRender(){
   h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Revenue ('+carsSold+' x $'+_PR_REV+')</div><div style="font-size:15px;font-weight:700;color:#30d158;">+'+_prFmt$(revenue)+'</div></div>';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Total Payroll</div><div style="font-size:15px;font-weight:700;color:#f87171;">-'+_prFmt$(totalPayroll)+'</div></div>';
   if(totalOther>0) h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;"><div style="font-size:14px;color:#888;">Other Payouts</div><div style="font-size:15px;font-weight:700;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
+  // Post-Net-to-Extras button — attributes this period's net to the Profit26
+  // Extras row for the month containing the period's END date.
+  h+='<div style="padding:10px 12px 12px;border-top:1px solid #1a1a1a;">';
+  h+='<button onclick="_prPostNetToExtras()" style="width:100%;padding:12px;background:linear-gradient(145deg,#0a1a10,#1a3d20);border:1px solid rgba(74,222,128,.4);border-radius:12px;color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Post Net to Extras (Profit)</button>';
+  h+='</div>';
   h+='</div>';
   // Revenue
   h+='<div '+cs+'>';
@@ -18969,6 +18974,89 @@ function _prShowEmpBreakdown(empName){
 function _prCloseEmpBreakdown(){
   var ov=document.getElementById('pr-emp-breakdown-overlay');
   if(ov) ov.style.display='none';
+}
+
+// Post the current 2-week period's net to the Profit26 Extras row for the
+// month containing the period's END date. Format matches Vlad's existing
+// convention from DeLand history: '-NNN DF MM/DD - MM/DD' (or +NNN for
+// positive net). Idempotent — refuses if the same DF range is already in
+// the target cell's note. Works for both DeBary and DeLand since the Apps
+// Script now uses location-aware block sizes.
+async function _prPostNetToExtras(){
+  if(!_prPeriodStart){ alert('No payroll period loaded.'); return; }
+  var ps=new Date(_prPeriodStart);
+  var pe=_prGetPeriodEnd(ps);
+  var loc=_prLocation||'DeBary';
+
+  // Recompute net from the currently-loaded data (same math as _prRender)
+  var deals=(_prDeals||[]).filter(function(d){return d.location===loc;});
+  var revenue=deals.length*_PR_REV;
+  var totalPayroll=0;
+  (_prPayouts||[]).forEach(function(p){
+    if(p.location!==loc)return;
+    if((p.paid_to||'').toLowerCase().indexOf('payroll')===-1)return;
+    totalPayroll+=parseFloat(p.amount)||0;
+  });
+  var net=revenue-totalPayroll;
+  if(!net){ alert('Net is $0 — nothing to post.'); return; }
+
+  // Target month = month of period end date (e.g. 02/23-03/08 → March)
+  var monthIdx=pe.getMonth();
+  var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var monthName=monthNames[monthIdx];
+
+  // DF range string: "M/D - M/D" (matches historical '02/09 - 02/22' shape,
+  // accepts both zero-padded and not). Kept unpadded to match user's own
+  // past entries for DeBary Jan ('12/28 - 1/11').
+  var fmt=function(d){ return (d.getMonth()+1)+'/'+d.getDate(); };
+  var dfRange=fmt(ps)+' - '+fmt(pe);
+  var dfTag='DF '+dfRange;
+
+  // Idempotency: fetch current Extras note for the target month+location
+  var existing;
+  try{
+    existing=await sbGet('profit','location=eq.'+encodeURIComponent(loc)+'&month_idx=eq.'+monthIdx+'&label=eq.Extras&limit=1');
+  }catch(e){ existing=null; }
+  var existingNote=(Array.isArray(existing)&&existing[0])?(existing[0].note||''):'';
+  if(existingNote.indexOf(dfTag)!==-1){
+    alert('Already posted: '+dfTag+' is already in '+monthName+' Extras.\n\nIf you need to update the amount, remove that line from the sheet first.');
+    return;
+  }
+
+  // Confirm before writing (Rule 8: don't bulk-mutate without a visible check)
+  var signDisplay=net<0?'-$':'+$';
+  var absAmt=Math.abs(Math.round(net));
+  var prompt='Post '+signDisplay+absAmt.toLocaleString()+' to '+monthName+' '+loc+' Extras\nAs: '+(net<0?'-':'+')+absAmt+' '+dfTag+'\n\nProceed?';
+  if(!confirm(prompt))return;
+
+  // Post via Apps Script profit_append_entry (row_type='extras' now supported)
+  try{
+    var resp=await fetch(_SHEETS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({
+        secret:_SHEETS_SECRET,
+        action:'profit_append_entry',
+        location:loc,
+        data:{ month_idx:monthIdx, row_type:'extras', amount:net, description:dfTag }
+      })
+    });
+    var data=null; try{ data=await resp.json(); }catch(e){}
+    if(!data||data.ok===false){
+      alert('Post failed: '+(data&&data.error?data.error:'unknown error'));
+      return;
+    }
+    alert('Posted '+signDisplay+absAmt.toLocaleString()+' to '+monthName+' Extras.');
+    // Background: trigger sync_profit so Supabase mirror catches up.
+    try{
+      fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});
+    }catch(e){}
+    // If the Profit tab is currently loaded in the Sheets tab, refresh it
+    try{ if(typeof shLoadProfit==='function'&&_profitLoaded){ _profitLoaded=false; shLoadProfit(); } }catch(e){}
+  }catch(e){
+    alert('Post error: '+(e.message||e));
+  }
 }
 
 async function _prLoadHistory(){
