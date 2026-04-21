@@ -174,7 +174,15 @@ function doPost(e) {
     var action = body.action || 'update';
 
     // ── Profit26 actions — handled before tab config lookup ──
-    if (action === 'read_profit' || action === 'update_profit') {
+    // All of these are routed to _handleProfitAction which has handlers for
+    // each. Previously only 'read_profit' and 'update_profit' were listed
+    // here, so profit_append_entry / profit_update_entry / profit_remove_entry
+    // / update_profit_formula all fell through to the tab-config lookup and
+    // returned 'Unknown tab: undefined'. That silently broke
+    // _appendCashSaleToProfit AND the new Payroll Net → Extras post.
+    if (action === 'read_profit' || action === 'update_profit' ||
+        action === 'profit_append_entry' || action === 'profit_update_entry' ||
+        action === 'profit_remove_entry' || action === 'update_profit_formula') {
       return _handleProfitAction(action, location, body.data || {});
     }
     if (action === 'sync_profit') {
