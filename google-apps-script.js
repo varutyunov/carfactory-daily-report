@@ -1589,6 +1589,7 @@ function _handleDeals26AppendPayment(location, data) {
     var year = String(data.year || '').trim();
     var make = String(data.make || '').trim().toLowerCase();
     var model = String(data.model || '').trim().toLowerCase();
+    var color = String(data.color || '').trim().toLowerCase();
     var amount = parseFloat(data.amount);
     var noteLine = String(data.note_line || '').trim();
 
@@ -1600,10 +1601,10 @@ function _handleDeals26AppendPayment(location, data) {
     var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
 
     // Try Deals26 first, then Deals25. Tab names are case-sensitive.
-    var result = _findDealMatch(ss, 'Deals26', lastName, year, make, model);
+    var result = _findDealMatch(ss, 'Deals26', lastName, year, make, model, color);
     var usedTab = 'Deals26';
     if (result.status === 'no_match' || result.status === 'no_sheet') {
-      var r25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model);
+      var r25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model, color);
       // If Deals25 finds something, use it. If Deals25 also has no match,
       // keep whatever Deals26 found (zero matches wins over no-sheet).
       if (r25.status !== 'no_sheet') {
@@ -1615,7 +1616,7 @@ function _handleDeals26AppendPayment(location, data) {
     if (result.status !== 'matched') {
       // Partial matches come from Deals26 lookup; if we fell through to
       // Deals25 and got a partial there, include those candidates too.
-      var partial25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model);
+      var partial25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model, color);
       var mergedCandidates = (result.candidates || []).map(function(c){ c.tab = c.tab || 'Deals26'; return c; });
       if (partial25.candidates) {
         partial25.candidates.forEach(function(c){ c.tab = 'Deals25'; mergedCandidates.push(c); });
@@ -1686,15 +1687,23 @@ function _handleDeals26AppendPayment(location, data) {
   }
 }
 
-// Find a deal row in the given Deals tab whose col B (car_desc) contains
-// the last-name token AND all three car tokens (year/make/model, each
-// matched as a whole word). Returns:
-//   { status: 'matched', row, car_desc }                 — exactly one hit
-//   { status: 'multiple', candidates: [{row,car_desc}] } — more than one full hit
-//   { status: 'partial',  candidates: [{row,car_desc,hasLast,hasCar}] } — partials
-//   { status: 'no_match' }                               — nothing at all
+// Find a deal row in the given Deals tab whose col B (car_desc) matches
+// the payment's qualifiers. Matching rule (option B, locked with user):
+//
+//   REQUIRED — confident match needs all three: last name, year, model.
+//   TIEBREAKER — if 2+ rows match the required three, use color to
+//   narrow it down. If color picks exactly one, that's the match.
+//   BONUS — make is treated as a soft signal (shows in partials), not
+//   required. The sheet convention often omits make ("16 Passat
+//   Gauvin" not "16 VW Passat Gauvin").
+//
+// Returns:
+//   { status: 'matched', row, car_desc }                 — exactly one confident hit
+//   { status: 'multiple', candidates: [{row,car_desc}] } — 2+ required-hits and color couldn't narrow
+//   { status: 'partial',  candidates: [...] }            — last name OR car hit, but not both
+//   { status: 'no_match' }                               — nothing
 //   { status: 'no_sheet' }                               — tab missing
-function _findDealMatch(ss, tabName, lastName, year, make, model) {
+function _findDealMatch(ss, tabName, lastName, year, make, model, color) {
   var sheet = ss.getSheetByName(tabName);
   if (!sheet) return { status: 'no_sheet' };
 
@@ -1705,15 +1714,15 @@ function _findDealMatch(ss, tabName, lastName, year, make, model) {
   var rng = sheet.getRange(startRow, 2, lastRow - startRow + 1, 1);
   var vals = rng.getValues();
 
-  // Build year-match alternates. If payload has 4-digit year, also try
-  // the 2-digit tail (sheet entries use "17 Civic" form). If it has
-  // 2 digits, we just use that.
+  // Year alternates — 4-digit and 2-digit tail both accepted
   var yearAlts = [];
   if (year) {
     yearAlts.push(year);
     if (year.length === 4) yearAlts.push(year.slice(2));
     if (year.length === 2) yearAlts.push('20' + year);
   }
+
+  var colorL = color ? String(color).toLowerCase() : '';
 
   var fullMatches = [];
   var partials = [];
@@ -1724,33 +1733,51 @@ function _findDealMatch(ss, tabName, lastName, year, make, model) {
     var descL = desc.toLowerCase();
 
     var hasLast = _wordBoundary(descL, lastName);
-    var hasYear = yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : true;
-    var hasMake = make ? _wordBoundary(descL, make) : true;
-    var hasModel = model ? _wordBoundary(descL, model) : true;
+    var hasYear = yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : false;
+    var hasMake = make ? _wordBoundary(descL, make) : false;
+    var hasModel = model ? _wordBoundary(descL, model) : false;
+    var hasColor = colorL ? _wordBoundary(descL, colorL) : false;
 
-    var hasCar = hasYear && hasMake && hasModel;
+    // Confident match = lastName + year + model (option B locked rule)
+    var hasCarRequired = hasYear && hasModel;
 
-    if (hasLast && hasCar) {
-      fullMatches.push({ row: startRow + i, car_desc: desc });
-    } else if (hasLast || hasCar) {
+    if (hasLast && hasCarRequired) {
+      fullMatches.push({
+        row: startRow + i,
+        car_desc: desc,
+        has_color: hasColor
+      });
+    } else if (hasLast || hasCarRequired) {
       partials.push({
         row: startRow + i,
         car_desc: desc,
         has_last: hasLast,
-        has_car: hasCar,
+        has_car: hasCarRequired,
         has_year: hasYear,
         has_make: hasMake,
-        has_model: hasModel
+        has_model: hasModel,
+        has_color: hasColor
       });
     }
   }
 
+  // Exactly one required-match → done
   if (fullMatches.length === 1) {
     return { status: 'matched', row: fullMatches[0].row, car_desc: fullMatches[0].car_desc };
   }
+
+  // 2+ required-matches → try color as tiebreaker
   if (fullMatches.length > 1) {
+    if (colorL) {
+      var colorHits = fullMatches.filter(function(m){ return m.has_color; });
+      if (colorHits.length === 1) {
+        return { status: 'matched', row: colorHits[0].row, car_desc: colorHits[0].car_desc };
+      }
+    }
+    // Color didn't narrow it down — kick to Review
     return { status: 'multiple', candidates: fullMatches };
   }
+
   if (partials.length) {
     return { status: 'partial', candidates: partials };
   }
