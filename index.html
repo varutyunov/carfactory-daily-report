@@ -18831,6 +18831,15 @@ function _prRender(){
   var net=revenue-totalPayroll;
   var cs='style="margin:12px 16px;background:#111;border:1px solid #1e1e1e;border-radius:16px;overflow:hidden;"';
   var h='';
+  // Net (at the top for both DeBary and DeLand — same render function so the
+  // reorder applies to both locations automatically).
+  var nc=net>=0?'#30d158':'#f87171';
+  h+='<div '+cs+'>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0d1117;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:'+nc+';">Net</div><div style="font-size:22px;font-weight:900;letter-spacing:1px;color:'+nc+';">'+(net<0?'-':'')+_prFmt$(net)+'</div></div>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Revenue ('+carsSold+' x $'+_PR_REV+')</div><div style="font-size:15px;font-weight:700;color:#30d158;">+'+_prFmt$(revenue)+'</div></div>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Total Payroll</div><div style="font-size:15px;font-weight:700;color:#f87171;">-'+_prFmt$(totalPayroll)+'</div></div>';
+  if(totalOther>0) h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;"><div style="font-size:14px;color:#888;">Other Payouts</div><div style="font-size:15px;font-weight:700;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
+  h+='</div>';
   // Revenue
   h+='<div '+cs+'>';
   h+='<div style="padding:14px 16px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ccc;font-family:\'Barlow Condensed\',sans-serif;">Revenue</div><div style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;background:#0d2818;color:#30d158;">'+loc+'</div></div>';
@@ -18877,14 +18886,7 @@ function _prRender(){
     });
     h+='</div>';
   }
-  // Net
-  var nc=net>=0?'#30d158':'#f87171';
-  h+='<div '+cs+'>';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0d1117;"><div style="font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:'+nc+';">Net</div><div style="font-size:22px;font-weight:900;letter-spacing:1px;color:'+nc+';">'+(net<0?'-':'')+_prFmt$(net)+'</div></div>';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Revenue ('+carsSold+' x $'+_PR_REV+')</div><div style="font-size:15px;font-weight:700;color:#30d158;">+'+_prFmt$(revenue)+'</div></div>';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1a1a1a;"><div style="font-size:14px;color:#888;">Total Payroll</div><div style="font-size:15px;font-weight:700;color:#f87171;">-'+_prFmt$(totalPayroll)+'</div></div>';
-  if(totalOther>0) h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;"><div style="font-size:14px;color:#888;">Other Payouts</div><div style="font-size:15px;font-weight:700;color:#fbbf24;">-'+_prFmt$(totalOther)+'</div></div>';
-  h+='</div>';
+  // (Net section moved to the top — see above)
   var el=document.getElementById('pr-data');if(el)el.innerHTML=h;
 }
 
