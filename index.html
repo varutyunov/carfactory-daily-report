@@ -19881,14 +19881,17 @@ function _prMoNet(mIdx){
   for(var i=0;i<summary.length;i++){
     if(((summary[i].month)||'').toLowerCase()===full.toLowerCase())return summary[i].profit||0;
   }
-  var pay=0,cash=0,tot=0;
+  var pay=0,cash=0,tot=0,extras=0;
   for(var i=0;i<mo.items.length;i++){
     var L=(mo.items[i].label||'').toLowerCase();
     if(L==='payments')pay=mo.items[i].value;
     else if(L==='cash sales')cash=mo.items[i].value;
     else if(L==='total bills')tot=mo.items[i].value;
+    else if(L==='extras')extras=mo.items[i].value;
   }
-  return pay+cash-tot;
+  // Extras is a signed adjustment (DF payroll-net lines, etc.) — include
+  // it so the computed Net matches what the sheet's Net Profit row shows.
+  return pay+cash-tot+extras;
 }
 function _prMoHasData(mIdx){
   var mo=(_profitData.months||[])[mIdx];if(!mo)return false;
@@ -20077,13 +20080,15 @@ function profitOpenDetail(mIdx){
   var color='pf-c'+mIdx;
   var net=_prMoNet(mIdx);
   // Classify items into sections (label-based)
-  var fixed=[],variable=[],revenue=[],coreBills=null,totBills=null;
+  var fixed=[],variable=[],revenue=[],coreBills=null,totBills=null,extras=null;
   for(var i=0;i<mo.items.length;i++){
     var it=mo.items[i];
     it._idx=i; // preserve original index for click handlers
     var L=(it.label||'').toLowerCase();
     if(L==='core bills')coreBills=it;
     else if(L==='total bills')totBills=it;
+    else if(L==='extras')extras=it;
+    else if(L==='net profit')continue; // computed row, shown as header
     else if(L==='payments'||L==='cash sales')revenue.push(it);
     else if(L==='costs'||L==='credits'||L==='dealer sign'||L==='clover'||L==='carpay')variable.push(it);
     else fixed.push(it);
@@ -20092,7 +20097,10 @@ function profitOpenDetail(mIdx){
     var cls='pf-r'+(isRev?' rev':'');
     var valCls='pf-r-v';
     var lbl=(it.label||'').toLowerCase();
-    var isEditableFormula=(lbl==='payments'||lbl==='cash sales');
+    // 'extras' joins payments / cash sales as an editable breakdown cell:
+    // user can view itemized lines (DF payroll, misc adjustments) and add /
+    // edit / remove entries individually from the app.
+    var isEditableFormula=(lbl==='payments'||lbl==='cash sales'||lbl==='extras');
     // Don't grey-style editable formulas even though they have formulas
     if(it.isFormula&&!isEditableFormula)valCls+=' formula';
     var note=it.note||it.labelNote;
@@ -20147,6 +20155,16 @@ function profitOpenDetail(mIdx){
       var lock=totBills.isFormula?'<span class="pf-lock" title="Formula protected">🔒</span>':'';
       h+='<div class="pf-r sub"><span class="pf-r-l">'+totBills.label+lock+'</span><span class="'+subCls+'" onclick="profitEditStart('+mIdx+','+totBills._idx+')">'+_prFmtPlain(totBills.value||0)+'</span></div>';
     }
+    h+='</div>';
+  }
+
+  // Extras — its own section so it's clearly separated from Revenue / Bills.
+  // Tapping the value opens the breakdown editor (same as Payments / Cash
+  // Sales) where DF payroll lines + miscellaneous adjustments can be
+  // viewed, added, edited, or removed.
+  if(extras){
+    h+='<div class="pf-sec"><div class="pf-sec-h">Extras<span class="pf-sec-t">'+_prFmtPlain(extras.value||0)+'</span></div>';
+    h+=_pfRow(extras,false);
     h+='</div>';
   }
 
@@ -20447,11 +20465,11 @@ function profitEditStart(mIdx,itemIdx){
   if(mIdx>=months.length)return;
   var item=months[mIdx].items[itemIdx];
   if(!item)return;
-  // Payments / Cash Sales have a dedicated breakdown editor — they are
-  // editable formulas (sums of individual amounts). Other formula cells
-  // (Core Bills, Total Bills, Merch, Costs) remain locked.
+  // Payments / Cash Sales / Extras all have a dedicated breakdown editor
+  // — they're editable formulas (sums of individual amounts). Other formula
+  // cells (Core Bills, Total Bills, Merch, Costs) remain locked.
   var _pLbl=(item.label||'').toLowerCase();
-  if(_pLbl==='payments'||_pLbl==='cash sales'){
+  if(_pLbl==='payments'||_pLbl==='cash sales'||_pLbl==='extras'){
     profitEditBreakdown(mIdx,itemIdx);
     return;
   }
