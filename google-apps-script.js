@@ -1600,31 +1600,44 @@ function _handleDeals26AppendPayment(location, data) {
 
     var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
 
-    // Try Deals26 first, then Deals25. Tab names are case-sensitive.
-    var result = _findDealMatch(ss, 'Deals26', lastName, year, make, model, color);
+    // Lookup chain: Deals26 → Deals25 → Deals24. Tab names are
+    // case-sensitive. First confident hit wins.
+    var lookupTabs = ['Deals26', 'Deals25', 'Deals24'];
+    var result = { status: 'no_sheet' };
     var usedTab = 'Deals26';
-    if (result.status === 'no_match' || result.status === 'no_sheet') {
-      var r25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model, color);
-      // If Deals25 finds something, use it. If Deals25 also has no match,
-      // keep whatever Deals26 found (zero matches wins over no-sheet).
-      if (r25.status !== 'no_sheet') {
-        result = r25;
-        usedTab = 'Deals25';
+    for (var li = 0; li < lookupTabs.length; li++) {
+      var r = _findDealMatch(ss, lookupTabs[li], lastName, year, make, model, color);
+      if (r.status === 'matched') {
+        result = r;
+        usedTab = lookupTabs[li];
+        break;
+      }
+      // Track the "best" non-matched result so we can return it if nothing
+      // matches confidently. Preference: multiple > partial > no_match > no_sheet.
+      var rank = { matched: 0, multiple: 1, partial: 2, no_match: 3, no_sheet: 4 };
+      if ((rank[r.status] || 5) < (rank[result.status] || 5)) {
+        result = r;
+        usedTab = lookupTabs[li];
       }
     }
 
     if (result.status !== 'matched') {
-      // Partial matches come from Deals26 lookup; if we fell through to
-      // Deals25 and got a partial there, include those candidates too.
-      var partial25 = _findDealMatch(ss, 'Deals25', lastName, year, make, model, color);
-      var mergedCandidates = (result.candidates || []).map(function(c){ c.tab = c.tab || 'Deals26'; return c; });
-      if (partial25.candidates) {
-        partial25.candidates.forEach(function(c){ c.tab = 'Deals25'; mergedCandidates.push(c); });
+      // Gather partial candidates across all tabs so the Review UI can
+      // show the user every row that was close to matching.
+      var mergedCandidates = [];
+      for (var ti = 0; ti < lookupTabs.length; ti++) {
+        var rr = _findDealMatch(ss, lookupTabs[ti], lastName, year, make, model, color);
+        if (rr.candidates && rr.candidates.length) {
+          rr.candidates.forEach(function(c){
+            c.tab = lookupTabs[ti];
+            mergedCandidates.push(c);
+          });
+        }
       }
       return jsonResponse({
         ok: true,
         action: 'deals26_append_payment',
-        status: result.status,
+        status: result.status === 'no_sheet' ? 'no_match' : result.status,
         location: location,
         candidates: mergedCandidates
       });
@@ -1833,7 +1846,7 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     if (!tabName || !row || row < 2 || isNaN(amount) || amount <= 0 || !noteLine) {
       return jsonResponse({ ok: false, error: 'invalid_params' });
     }
-    if (tabName !== 'Deals26' && tabName !== 'Deals25') {
+    if (tabName !== 'Deals26' && tabName !== 'Deals25' && tabName !== 'Deals24') {
       return jsonResponse({ ok: false, error: 'invalid_tab' });
     }
 
