@@ -16107,7 +16107,7 @@ function _paymentLastName(customerName){
 // matching in Profit26).
 function _paymentFormatPieces(payload){
   var model = payload.vehicle_model ? String(payload.vehicle_model).trim() : '';
-  var color = payload.vehicle_color ? String(payload.vehicle_color).trim() : '';
+  var color = payload.vehicle_color ? String(payload.vehicle_color).trim().toLowerCase() : '';
   var lastName = '';
   if(payload.customer_name){
     var s = String(payload.customer_name).trim();
@@ -16117,6 +16117,9 @@ function _paymentFormatPieces(payload){
       lastName = parts[parts.length - 1] || '';
     }
   }
+  // Lowercase the last name — uppercase letters are wider in proportional
+  // fonts and waste budget (CarPay portal names come ALL-CAPS).
+  lastName = lastName.toLowerCase();
   var dateStr = '';
   try {
     var d = payload.payment_date ? new Date(payload.payment_date + 'T12:00:00') : new Date();
@@ -16135,7 +16138,10 @@ function _paymentFormatPieces(payload){
 //   3. lastName is truncated after 12 chars
 // Amount + date are non-negotiable (amount is the data, date is the
 // dedup key).
-var _PAY_NOTE_MAX = 26;
+// 30 chars — with lowercase names, this renders ~= 26 mixed-case chars
+// in proportional fonts, which we verified doesn't wrap. Fits amount +
+// model + color + lastname + M/D for most common posts.
+var _PAY_NOTE_MAX = 30;
 
 // Fit {amount model [color] lastName date} into MAX chars. Amount and
 // date are reserved first (never lost); the middle "core" (model/color/
@@ -16992,8 +16998,9 @@ function _reviewRender(){
     html += '</select>';
     html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row # (optional w/ Force post)" inputmode="numeric" style="width:180px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
     html += '</div>';
-    html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St blue Alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
-    html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount will auto-prepend: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> · M/D will auto-append: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong></div>';
+    html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
+    html += '<input id="rv-mcolor-' + r.id + '" type="text" placeholder="Color (optional \u2014 set it if the matched deal has a color)" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
+    html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount auto-prepends: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> \u00b7 M/D auto-appends: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong> \u00b7 Color (if set) is inserted between the model and the name.</div>';
     // Profit26 posting mode — auto (col F > 0) / force yes / force no
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Profit26 Payments</div>';
     html += '<div style="display:flex;gap:4px;margin-bottom:10px;">';
@@ -17085,7 +17092,23 @@ async function _reviewManualPost(id){
   var rawRow = (document.getElementById('rv-mrow-' + id) || {}).value;
   var row = rawRow === '' || rawRow == null ? 0 : parseInt(rawRow, 10);
   var label = ((document.getElementById('rv-mlabel-' + id) || {}).value || '').trim();
+  var color = ((document.getElementById('rv-mcolor-' + id) || {}).value || '').trim().toLowerCase();
   var pmMode = ((document.getElementById('rv-mpm-val-' + id) || {}).value) || 'auto';
+
+  // Inject the user-supplied color between the model (first token) and
+  // the rest of the label if it's not already present.
+  if (color){
+    var parts = label.split(/\s+/).filter(Boolean);
+    var hasColor = parts.some(function(t){ return t.toLowerCase() === color; });
+    if (!hasColor){
+      if (parts.length >= 2){
+        parts = [parts[0], color].concat(parts.slice(1));
+      } else {
+        parts = parts.concat([color]);
+      }
+      label = parts.join(' ');
+    }
+  }
 
   // Row # is required UNLESS the user picked "Force post" (Profit26 only).
   // In that mode we allow a blank row and skip the Deals tab write entirely.
