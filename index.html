@@ -17118,8 +17118,11 @@ async function _reviewRematch(id, evt){
         resolved_row: data.row,
         resolved_tab: data.tab
       });
-      var crossTag = (matchedLoc !== r.location) ? ' [CROSS: payment tagged ' + r.location + ' → deal on ' + matchedLoc + ']' : '';
-      alert('Matched! Posted to ' + matchedLoc + ' ' + data.tab + ' row ' + data.row + (owed > 0 ? ' + Profit26 (owed $' + owed + ')' : ' (col F ≤ 0, skipped Profit26)') + crossTag);
+      var crossNote = (matchedLoc !== r.location) ? '\n(payment was tagged ' + r.location + ')' : '';
+      var profitLine = owed > 0
+        ? 'Deal is in profit — posting to profit.'
+        : 'Deal not yet in profit — payment logged on the deal only.';
+      alert('Found in ' + matchedLoc + ' ' + data.tab + ' row ' + data.row + '.\n' + profitLine + crossNote);
       await _reviewLoad();
       return;
     }
