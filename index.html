@@ -16620,7 +16620,7 @@ function _reviewRender(){
     html += '<select id="rv-mtab-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;appearance:auto;">';
     html += '<option value="Deals26">Deals26</option><option value="Deals25">Deals25</option><option value="Deals24">Deals24</option>';
     html += '</select>';
-    html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row #" inputmode="numeric" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
+    html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row # (optional w/ Force post)" inputmode="numeric" style="width:180px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
     html += '</div>';
     html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St blue Alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
     html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount will auto-prepend: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> · M/D will auto-append: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong></div>';
@@ -16712,58 +16712,77 @@ async function _reviewManualPost(id){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
   var tab = (document.getElementById('rv-mtab-' + id) || {}).value || 'Deals26';
-  var row = parseInt((document.getElementById('rv-mrow-' + id) || {}).value, 10);
+  var rawRow = (document.getElementById('rv-mrow-' + id) || {}).value;
+  var row = rawRow === '' || rawRow == null ? 0 : parseInt(rawRow, 10);
   var label = ((document.getElementById('rv-mlabel-' + id) || {}).value || '').trim();
-  if (!row || row < 2){ alert('Row must be a valid row number (2+).'); return; }
-  if (!label){ alert('Label cannot be empty.'); return; }
+  var pmMode = ((document.getElementById('rv-mpm-val-' + id) || {}).value) || 'auto';
 
-  // Build the final note line: "{amount} {label} {M/D}"
+  // Row # is required UNLESS the user picked "Force post" (Profit26 only).
+  // In that mode we allow a blank row and skip the Deals tab write entirely.
+  var profitOnly = (pmMode === 'yes' && (!row || row < 2));
+  if (!profitOnly && (!row || row < 2)){
+    alert('Row must be a valid row number (2+).\n\nTip: if you only want to post to Profit26 (no Deals26 col G entry), switch the Profit26 toggle to "Force post" and leave Row # blank.');
+    return;
+  }
+  if (!label){ alert('Label cannot be empty.'); return; }
+  if (pmMode === 'no' && profitOnly){
+    alert('Nothing to do — row # is blank and Profit26 is set to Skip.');
+    return;
+  }
+
   var amt = parseFloat(r.amount) || 0;
   var dateTag = _manualDateTag(r.payment_date);
   var noteLine = String(amt) + ' ' + label + (dateTag ? ' ' + dateTag : '');
 
-  if (!confirm('Post $' + amt + ' to ' + tab + ' row ' + row + '?\n\nNote: "' + noteLine + '"\n\nThis row will also be remembered for future payments with the same customer + car.')) return;
+  var confirmMsg;
+  if (profitOnly){
+    confirmMsg = 'Profit26-only post: $' + amt + ' for ' + r.location + '\n\nNote: "' + noteLine + '"\n\nNo Deals tab row will be written. No alias will be saved (can\'t remember without a row).';
+  } else {
+    confirmMsg = 'Post $' + amt + ' to ' + tab + ' row ' + row + '?\n\nNote: "' + noteLine + '"\n\nThis row will also be remembered for future payments with the same customer + car.';
+  }
+  if (!confirm(confirmMsg)) return;
 
   try {
-    var resp = await fetch(_SHEETS_URL, {
-      method: 'POST', headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify({
-        secret: _SHEETS_SECRET,
-        action: 'deals26_append_payment_direct',
-        location: r.location,
-        data: { tab: tab, row: row, amount: amt, note_line: noteLine, check_dup: true }
-      })
-    });
-    var data = null; try { data = await resp.json(); } catch(e){}
-    if (!data || data.ok === false){ alert('Failed: ' + (data && data.error ? data.error : 'unknown')); return; }
+    var data = null;
 
-    if (data.status === 'possible_duplicate'){
-      if (!confirm('This row already has a payment with amount $' + amt + '. Post anyway? (cancel to leave in Review)')) return;
-      // Re-post without dup-check to force the write
-      var resp2 = await fetch(_SHEETS_URL, {
+    // Deals col G write — skip when profitOnly
+    if (!profitOnly){
+      var resp = await fetch(_SHEETS_URL, {
         method: 'POST', headers: {'Content-Type':'text/plain'},
         body: JSON.stringify({
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
           location: r.location,
-          data: { tab: tab, row: row, amount: amt, note_line: noteLine }
+          data: { tab: tab, row: row, amount: amt, note_line: noteLine, check_dup: true }
         })
       });
-      var data2 = null; try { data2 = await resp2.json(); } catch(e){}
-      if (!data2 || data2.ok === false){ alert('Retry failed: ' + (data2 && data2.error ? data2.error : 'unknown')); return; }
-      data = data2;
+      try { data = await resp.json(); } catch(e){}
+      if (!data || data.ok === false){ alert('Failed: ' + (data && data.error ? data.error : 'unknown')); return; }
+
+      if (data.status === 'possible_duplicate'){
+        if (!confirm('This row already has a payment with amount $' + amt + '. Post anyway? (cancel to leave in Review)')) return;
+        var resp2 = await fetch(_SHEETS_URL, {
+          method: 'POST', headers: {'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            secret: _SHEETS_SECRET,
+            action: 'deals26_append_payment_direct',
+            location: r.location,
+            data: { tab: tab, row: row, amount: amt, note_line: noteLine }
+          })
+        });
+        var data2 = null; try { data2 = await resp2.json(); } catch(e){}
+        if (!data2 || data2.ok === false){ alert('Retry failed: ' + (data2 && data2.error ? data2.error : 'unknown')); return; }
+        data = data2;
+      }
     }
 
-    // Profit26 posting — honor the user's chosen mode from the form.
-    //   'auto' → standard col F > 0 gate (same as regular approval)
-    //   'yes'  → force post regardless of col F (deal is in profit
-    //            per user's judgment, even if the sheet formula hasn't
-    //            caught up)
-    //   'no'   → skip Profit26 entirely
-    var pmMode = ((document.getElementById('rv-mpm-val-' + id) || {}).value) || 'auto';
-    var owed = parseFloat(data.owed) || 0;
+    // Profit26 posting — honor the chosen mode.
+    //   'auto' → col F > 0 gate (needs Deals write to have happened)
+    //   'yes'  → force post regardless of col F
+    //   'no'   → skip Profit26
+    var owed = data ? (parseFloat(data.owed) || 0) : 0;
     var shouldPost = (pmMode === 'yes') ||
-                     (pmMode === 'auto' && data.status !== 'already_posted' && owed > 0);
+                     (pmMode === 'auto' && data && data.status !== 'already_posted' && owed > 0);
     if (shouldPost){
       try {
         await _appendPaymentToProfit({
@@ -16774,32 +16793,35 @@ async function _reviewManualPost(id){
           payment_date: r.payment_date
         });
       } catch(ep){ console.warn('Profit26 post failed:', ep); }
-    } else if (pmMode === 'auto' && owed <= 0 && data.status !== 'already_posted'){
+    } else if (pmMode === 'auto' && data && owed <= 0 && data.status !== 'already_posted'){
       console.log('Manual post: col F=' + owed + ' → skipping Profit26 (auto mode)');
     }
 
-    // Save alias
-    try {
-      await sbPost('payment_deal_aliases', {
-        vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
-        customer_name_lower: _paymentLastName(r.customer_name) || null,
-        vehicle_model_lower: (r.vehicle_model || '').toLowerCase().trim() || null,
-        location: r.location,
-        target_tab: tab,
-        target_row: row,
-        car_desc: label,
-        created_by: me ? me.name : '',
-        source_review_id: id
-      });
-    } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+    // Save alias ONLY when we have a row — profit-only posts don't
+    // carry a (tab,row) to remember.
+    if (!profitOnly){
+      try {
+        await sbPost('payment_deal_aliases', {
+          vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
+          customer_name_lower: _paymentLastName(r.customer_name) || null,
+          vehicle_model_lower: (r.vehicle_model || '').toLowerCase().trim() || null,
+          location: r.location,
+          target_tab: tab,
+          target_row: row,
+          car_desc: label,
+          created_by: me ? me.name : '',
+          source_review_id: id
+        });
+      } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+    }
 
     // Mark resolved
     await sbPatch('payment_reviews', id, {
       status: 'approved',
       resolved_at: new Date().toISOString(),
       resolved_by: me ? me.name : '',
-      resolved_row: row,
-      resolved_tab: tab
+      resolved_row: profitOnly ? null : row,
+      resolved_tab: profitOnly ? 'Profit26-only' : tab
     });
     await _reviewLoad();
   } catch(e){
