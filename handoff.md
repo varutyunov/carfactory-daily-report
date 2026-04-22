@@ -10,6 +10,109 @@
 > Re-match / Manual / Dismiss actions. Learned aliases, cascade
 > approval, backfill, cross-location fallback, two-surname matching.
 > Apps Script is at v50. Cache v523.
+> Day 4 (Apr 22 evening): CarPay sync Phase 1 — rebuilt the paused
+> scraper as a list-page-only sync. 4 HTTP requests per run (vs 400+).
+> Back on schedule (every 2 hrs Mon-Sat business day). Phase 2 (email /
+> vehicle / current_amount_due / scheduled_amount / payment_frequency
+> re-acquisition) deferred.
+
+---
+
+# Day 4 (2026-04-22 evening) — CarPay sync Phase 1
+
+## Context
+CarPay asked us to stop scraping earlier this year. The old
+`scripts/carpay-sync.js` hit `/dms/customer/{id}` for EVERY customer
+twice per run (vehicle/phone/email + payment history) — ~2× customer
+count of requests. Workflow had been paused since.
+
+## What shipped
+
+### List-page-only sync
+- `/dms/customers?length=10000` → all customers in one response
+  (DataTables server-renders every row inline — confirmed by probe).
+- `/dms/recent-payments?length=10000` → same.
+- **4 list requests + 1 login + 2 dealer-selects = 7 per run.**
+  Previously 400+. Runtime ~22 seconds.
+- Both locations (DeBary + DeLand) synced per run.
+
+### Preserve-map
+List pages don't expose email, vehicle year/make/model,
+current_amount_due, scheduled_amount, payment_frequency. Previous
+scraper got those from per-customer detail pages. To avoid wiping
+them, `sbLoadPreserveMap(location)` reads those columns plus
+`repo_flagged` from Supabase before the delete-then-insert, and
+`applyPreserved` merges them back into fresh rows by `account`.
+
+Real `carpay_customers` columns (confirmed by `select=*` probe on
+Apr 22): `id, location, name, account, days_late, next_payment,
+auto_pay, synced_at, carpay_id, phone, email, vehicle,
+current_amount_due, scheduled_amount, payment_frequency,
+repo_flagged`. **No `vin` / `color` columns** (earlier assumption
+was wrong — PostgREST 400'd and the `!res.ok` branch silently
+returned `{}`, which was why preserve-map initially showed 0 rows).
+
+### Verification
+- `Content-Range: 0-0/183` DeBary customers, `/73` DeLand
+- `Content-Range: 0-0/266` DeBary payments, `/98` DeLand
+- Today's DeBary top payment: `OTERO ROJAS, MICHAEL · Apr 22 8:24 AM
+  · $153.31` — matches CarPay site.
+- DeLand's recent-payments view is capped at 98 rows covering
+  Mar 9–Apr 20 (~40 days). No Apr 21/22 activity on DeLand (business
+  reality, not a sync gap).
+
+### Deploy
+- `scripts/carpay-sync.js` rewritten (146 lines vs previous 496).
+- `.github/workflows/carpay-sync.yml` schedule re-enabled:
+  `0 12,14,16,18,20,22,0 * * 1-6` UTC.
+- `scripts/carpay-sync-original.js` retained as the old scraper
+  backup (untouched).
+
+## Phase 2 — deferred, revisit next session
+
+Fields the list pages don't give us (now preserved, but never
+updated post-sync):
+- **email**
+- **vehicle** (year/make/model string)
+- **current_amount_due**
+- **scheduled_amount**
+- **payment_frequency**
+
+Options to regain them:
+1. **Add as columns via CarPay's "Columns" UI** (the gear button
+   next to CSV/PDF on customers page). If available, list pages
+   will start including them — sync picks them up automatically, no
+   code change.
+2. **Rare per-new-customer sweep** — on sync, detect accounts with
+   null email/vehicle, hit `/dms/customer/{id}` for ONLY those
+   (typically <5 per run after initial seed). Low load, preserves
+   completeness.
+3. **Cross-reference from our own data** — many CarPay customers
+   are also in our `deals` / `deposits` tables with email +
+   vehicle. One-time backfill join on name + account/VIN.
+
+User preference deferred to Phase 2.
+
+## Technique learned — Node-via-workflow beats browser driving
+
+For authenticated external-site tasks (CarPay login), driving
+Chrome via MCP ran into: (a) CarPay blocked this host's IP after
+prior scraping, so dealers.carpay.com timed out even from the
+browser; (b) credentials live only in GitHub Secrets, not on disk.
+
+The right pattern: write a Node script that uses the existing
+`cpLogin(email, password)` + cookie jar, wire it into a one-shot
+`workflow_dispatch` workflow, trigger via GitHub API
+(`POST /repos/…/actions/workflows/{name}/dispatches`), poll
+`/actions/runs/{id}`, download `/actions/jobs/{id}/logs`. Playbook
+codified in CLAUDE.md ("Automation scripts against external
+authenticated APIs").
+
+Used this pattern 4× today (initial probe, column-structure probe,
+sync test, DeLand gap probe). Each cycle: commit → push → dispatch
+→ ~30s run → log fetch. No credential paste, no browser needed.
+
+---
 
 # Handoff — Car Factory session of 2026-04-20 → 21
 

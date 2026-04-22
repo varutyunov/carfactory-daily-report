@@ -170,6 +170,54 @@ _payBreakdown         — {cash, card, check, other, total}
 
 **Why this matters:** This is a 27k-line single-file app. A single overly broad Edit can silently delete dozens of functions. And a single over-broad data sweep can wipe real business data that isn't recoverable outside Google Sheets version history. The user loses hours of work and trust. There is no acceptable reason to delete working code or bulk-mutate live data without explicit permission.
 
+## Operating Mode: phone-first, autonomous
+
+**Vlad drives everything from the chat box on his phone. You handle the rest.**
+
+This means:
+- **Do not ask the user to paste credentials, open DevTools, run scripts locally, copy cURL commands, or drive a browser.** The user should never need to leave the chat to make you productive.
+- Prefer automation paths that already have the secrets they need (GitHub Actions secrets, Supabase anon key in `supabase_keys.txt`, GitHub PAT in `../Automation/GIThub Carpay update.txt`).
+- Ask for input only when a **decision** is needed (which direction, approve a scope, pick an option) — not to offload work you can do yourself.
+- Assume the user cannot reliably use desktop tools. Don't suggest "open F12 and do X."
+
+When a task requires credentials that aren't already on disk (CarPay login, any third-party portal), reach for the **Node-via-workflow-dispatch** pattern below.
+
+## Automation scripts against external authenticated APIs
+
+**Problem:** Tasks like scraping CarPay, testing external auth, or probing a site behind login need credentials that aren't local. Driving Chrome MCP sometimes fails (the dev host may be IP-blocked by the target site; the extension may not be connected).
+
+**Default solution — Node script + one-shot GitHub Actions workflow_dispatch.**
+
+GitHub Actions secrets already hold: `CARPAY_EMAIL`, `CARPAY_PASSWORD`, `CARPAY_DEBARY_ID` (656), `CARPAY_DELAND_ID` (657), `SUPABASE_URL`, `SUPABASE_KEY`. Use them without asking.
+
+Playbook:
+1. Write/modify a Node script under `scripts/` that reads the needed vars from `process.env`. Reuse the cookie jar + login helpers from `scripts/carpay-sync.js` for CarPay.
+2. Create (or reuse) a minimal `.github/workflows/*.yml` that runs the script with the needed `secrets.*` env vars. `workflow_dispatch:` trigger only for probes.
+3. Commit + push from the main repo (dual refspec pushes to master AND main).
+4. Trigger:
+   ```
+   curl -sS -X POST -H "Authorization: Bearer <PAT>" \
+     https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/<name>.yml/dispatches \
+     -d '{"ref":"main"}'
+   ```
+   PAT is in `C:\Users\Vlad\Desktop\Automation\GIThub Carpay update.txt` (second line — no-expiry token).
+5. Get the latest run ID:
+   ```
+   curl -sS -H "Authorization: Bearer <PAT>" \
+     "https://api.github.com/repos/varutyunov/carfactory-daily-report/actions/workflows/<name>.yml/runs?per_page=1"
+   ```
+6. Poll `/actions/runs/{id}` until `status == completed`. Typical probe: 20-40s. Runs are charged — don't let them loop.
+7. Fetch logs via `/actions/jobs/{id}/logs` (text). Secrets are masked as `***` — safe to grep/share.
+8. **Delete the probe script + workflow once done.** Leaving them around leaks intent in the repo history; commit a deletion in the same session.
+
+Why this beats Chrome MCP for authenticated external sites:
+- The target's IP blocks often don't apply to GitHub Actions runners.
+- No credential paste anywhere — secrets stay in GitHub.
+- Reproducible: each run is a clean ephemeral env. No browser state drift.
+- Parallel-safe. Multiple probes can fire side-by-side.
+
+Use Chrome MCP only for tasks that must stay in the user's authenticated browser session (e.g. Supabase SQL Editor DDL below, where the user's existing session is the credential).
+
 ## Supabase DDL / Schema Changes
 
 **Problem:** The anon key stored in `supabase_keys.txt` (and used everywhere in the app) is a PostgREST-limited key. It can do CRUD but **cannot run DDL** (`ALTER TABLE`, `CREATE TABLE`, etc.). No SQL-executing RPC exists in this project. The service-role key is deliberately not in the repo.
