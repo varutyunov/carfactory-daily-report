@@ -16855,14 +16855,6 @@ async function _reviewApprove(id, candidateIdx){
 
   if (!confirm('Post $' + (parseFloat(r.amount)||0) + ' to ' + (c.tab || 'Deals26') + ' row ' + c.row + '?\n\n' + (c.car_desc || ''))) return;
 
-  // Optimistic UI: dim the card immediately so the user knows the tap
-  // registered and can move on without waiting for the server round-trip.
-  var cardEl = document.getElementById('rv-card-' + id);
-  if (cardEl){
-    cardEl.style.opacity = '0.35';
-    cardEl.style.pointerEvents = 'none';
-  }
-
   var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
   var aliasCust = _paymentLastName(r.customer_name);
   var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
@@ -16870,9 +16862,14 @@ async function _reviewApprove(id, candidateIdx){
   var aliasTab = c.tab || 'Deals26';
   var aliasRow = c.row;
 
+  // Truly optimistic UI: remove the card NOW, before the server call.
+  // User can immediately move on to the next review. If the server call
+  // fails, we reload the queue to bring this card back.
+  _removeReviewCard(id);
+
   try {
-    // The one truly-blocking call — we need the response to know owed
-    // before deciding whether to post to Profit26.
+    // The one truly-blocking call (but it's running while the UI
+    // already feels responsive — user can tap another card).
     var resp = await fetch(_SHEETS_URL, {
       method: 'POST', headers: {'Content-Type':'text/plain'},
       body: JSON.stringify({
@@ -16884,14 +16881,10 @@ async function _reviewApprove(id, candidateIdx){
     });
     var data = null; try { data = await resp.json(); } catch(e){}
     if (!data || data.ok === false){
-      // Restore the card so the user can retry
-      if (cardEl){ cardEl.style.opacity = ''; cardEl.style.pointerEvents = ''; }
-      alert('Failed: ' + (data && data.error ? data.error : 'unknown'));
+      _showReviewToast('Approve failed — ' + ((data && data.error) || 'unknown') + '. Restoring.', 4000);
+      await _reviewLoad(); // brings back the pending item
       return;
     }
-
-    // Remove the card from the UI immediately so the user can keep moving
-    _removeReviewCard(id);
 
     var owed = parseFloat(data.owed) || 0;
 
@@ -16938,8 +16931,8 @@ async function _reviewApprove(id, candidateIdx){
     // applies to siblings on the same deal.
     _runCascadeApproval(id, aliasVin, aliasCust, aliasModel, aliasLoc, aliasTab, aliasRow);
   } catch(e){
-    if (cardEl){ cardEl.style.opacity = ''; cardEl.style.pointerEvents = ''; }
-    alert('Error: ' + (e.message || e));
+    _showReviewToast('Approve error — ' + (e.message || e), 4000);
+    await _reviewLoad();
   }
 }
 
