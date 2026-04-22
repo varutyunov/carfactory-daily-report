@@ -16598,6 +16598,7 @@ async function _reviewRefreshBadge(){
 async function openReviewQueue(){
   var overlay = document.getElementById('review-overlay');
   if (overlay) overlay.style.display = 'flex';
+  var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
   document.body.style.overflow = 'hidden';
   await _reviewLoad();
 }
@@ -16605,6 +16606,7 @@ async function openReviewQueue(){
 function closeReviewQueue(){
   var overlay = document.getElementById('review-overlay');
   if (overlay) overlay.style.display = 'none';
+  var tb = document.querySelector('.tb'); if (tb) tb.style.display = '';
   document.body.style.overflow = '';
 }
 
