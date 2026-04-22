@@ -1053,18 +1053,15 @@ body.light .cal-fab{background:#4488ff !important;}
       </div><!-- /swipe-container -->
     </div>
 
-<!-- REVIEW QUEUE OVERLAY — same header pattern as Payroll/Forms:
-     top bar uses .tb in normal flow with ← TITLE ↻ ✕, no inner
-     position:fixed header (which previously let the main .tb bar
-     tap-through in certain stacking contexts). -->
+<!-- REVIEW QUEUE OVERLAY — matches Deals / Forms overlay pattern:
+     position:fixed inner header with just ← TITLE. Body padded to
+     clear the header. Backfill lives in the body, not the header. -->
 <div id="review-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
-  <div class="tb">
-    <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;line-height:1;-webkit-tap-highlight-color:transparent;">&#8592;</button>
-    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">REVIEW <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span></span>
-    <button onclick="doSync()" title="Sync latest data" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;">&#x21BB;</button>
-    <button onclick="doLogout()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:10px;line-height:1;-webkit-tap-highlight-color:transparent;font-weight:300;">&#x2715;</button>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">REVIEW <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span></span>
   </div>
-  <div id="review-body" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+  <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px 12px 0;">
       <button onclick="runPaymentBackfill()" title="Sweep all existing payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill all historical payments</button>
     </div>
