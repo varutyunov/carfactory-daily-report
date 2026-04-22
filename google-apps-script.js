@@ -1688,13 +1688,13 @@ function _handleDeals26AppendPayment(location, data) {
     var existingValue = gCell.getValue();
     var existingNote = gCell.getNote() || '';
 
-    // Backfill-time duplicate check. When check_dup is set, we don't write
-    // anything if the note already contains the same payment. Two tiers:
-    //   - EXACT line match ("{amount} model color name M/D") → already_posted,
-    //     silent skip (e.g. backfill re-run, or payment already posted via
-    //     the live flow).
-    //   - AMOUNT-only match (any note line starts with "{amount} ") → possible
-    //     duplicate, route to Review so the user can decide.
+    // Dup-check. Col G formula grows cumulatively ("=300+200+200"), so
+    // just having the amount in the formula is NOT a block — that's
+    // historical. We only skip when a NOTE LINE fully matches (same
+    // amount AND same M/D date), and we flag when amount + date match
+    // but other pieces differ (same-day same-amount → probable dupe).
+    // Amount-alone in the note is allowed to post — user confirmed
+    // cumulative history shouldn't block new payments.
     if (data.check_dup) {
       var noteLines = existingNote.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
       if (noteLines.indexOf(noteLine) !== -1) {
@@ -1708,19 +1708,27 @@ function _handleDeals26AppendPayment(location, data) {
           car_desc: result.car_desc
         });
       }
+      var newDateMatch = /\s(\d{1,2}\/\d{1,2})\s*$/.exec(noteLine);
       var amtPrefix = String(amount) + ' ';
-      var dupHit = noteLines.some(function(l){ return l.indexOf(amtPrefix) === 0; });
-      if (dupHit) {
-        return jsonResponse({
-          ok: true,
-          action: 'deals26_append_payment',
-          status: 'possible_duplicate',
-          location: location,
-          tab: usedTab,
-          row: result.row,
-          car_desc: result.car_desc,
-          candidates: [{ row: result.row, car_desc: result.car_desc, tab: usedTab }]
+      if (newDateMatch) {
+        var newDate = newDateMatch[1];
+        var sameDaySameAmt = noteLines.some(function(l){
+          if (l.indexOf(amtPrefix) !== 0) return false;
+          var m = /\s(\d{1,2}\/\d{1,2})\s*$/.exec(l);
+          return m && m[1] === newDate;
         });
+        if (sameDaySameAmt) {
+          return jsonResponse({
+            ok: true,
+            action: 'deals26_append_payment',
+            status: 'possible_duplicate',
+            location: location,
+            tab: usedTab,
+            row: result.row,
+            car_desc: result.car_desc,
+            candidates: [{ row: result.row, car_desc: result.car_desc, tab: usedTab }]
+          });
+        }
       }
     }
 
@@ -1938,7 +1946,9 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     var existingValue = gCell.getValue();
     var existingNote = gCell.getNote() || '';
 
-    // Dup-check — same logic as deals26_append_payment's check_dup.
+    // Dup-check — same date-aware logic as deals26_append_payment.
+    // Amount in the cumulative formula doesn't block; only same-line or
+    // same-day-same-amount note entries do.
     if (data.check_dup) {
       var lines = existingNote.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
       if (lines.indexOf(noteLine) !== -1) {
@@ -1947,12 +1957,21 @@ function _handleDeals26AppendPaymentDirect(location, data) {
           status: 'already_posted', tab: tabName, row: row
         });
       }
+      var newDateMatch2 = /\s(\d{1,2}\/\d{1,2})\s*$/.exec(noteLine);
       var amtPrefix = String(amount) + ' ';
-      if (lines.some(function(l){ return l.indexOf(amtPrefix) === 0; })) {
-        return jsonResponse({
-          ok: true, action: 'deals26_append_payment_direct',
-          status: 'possible_duplicate', tab: tabName, row: row
+      if (newDateMatch2) {
+        var newDate2 = newDateMatch2[1];
+        var hit2 = lines.some(function(l){
+          if (l.indexOf(amtPrefix) !== 0) return false;
+          var m = /\s(\d{1,2}\/\d{1,2})\s*$/.exec(l);
+          return m && m[1] === newDate2;
         });
+        if (hit2) {
+          return jsonResponse({
+            ok: true, action: 'deals26_append_payment_direct',
+            status: 'possible_duplicate', tab: tabName, row: row
+          });
+        }
       }
     }
 

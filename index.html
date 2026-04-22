@@ -16125,51 +16125,92 @@ function _paymentFormatPieces(payload){
   return { model: model, color: color, lastName: lastName, dateStr: dateStr };
 }
 
+// Hard target: one physical line in Google Sheets cell notes, even with
+// proportional-font wrap. 32 was too generous — users reported wrap on
+// many posts. Target 26 total with progressive drops so NOTHING wraps.
+//
+// Truncation order (first to drop):
+//   1. color   (e.g. "silver")
+//   2. model is reduced to its first token (e.g. "Grand Prix" → "Grand")
+//   3. lastName is truncated after 12 chars
+// Amount + date are non-negotiable (amount is the data, date is the
+// dedup key).
+var _PAY_NOTE_MAX = 26;
+
+// Fit {amount model [color] lastName date} into MAX chars. Amount and
+// date are reserved first (never lost); the middle "core" (model/color/
+// lastName) is truncated progressively:
+//   color dropped → model reduced to first token → lastName truncated.
+// Guarantees ≤ MAX and that amount + date always survive.
+function _paymentNoteLineFit(amtStr, pieces){
+  var MAX = _PAY_NOTE_MAX;
+  var amt = amtStr || '';
+  var date = pieces.dateStr || '';
+  // Reserved: "{amt}" + (date ? " {date}" : '') — plus one more space
+  // between amt and core if core is non-empty.
+  var reserved = amt.length + (date ? 1 + date.length : 0);
+  var coreBudget = MAX - reserved - (amt ? 1 : 0);
+  if (coreBudget < 3){
+    // Too tight — amount + date only
+    return (amt + (date ? ' ' + date : '')).trim();
+  }
+  var model = pieces.model || '';
+  var color = pieces.color || '';
+  var last = pieces.lastName || '';
+  var fitCore = function(m, c, l){
+    return [m, c, l].filter(Boolean).join(' ');
+  };
+  var core;
+  core = fitCore(model, color, last);
+  if (core.length > coreBudget) core = fitCore(model, '', last);
+  if (core.length > coreBudget){
+    var modelShort = String(model).split(/\s+/)[0];
+    core = fitCore(modelShort, '', last);
+    if (core.length > coreBudget){
+      // Truncate lastName to whatever fits
+      var maxLast = coreBudget - modelShort.length - (modelShort ? 1 : 0);
+      if (maxLast < 1){
+        core = modelShort.slice(0, coreBudget);
+      } else {
+        core = (modelShort + (modelShort ? ' ' : '') + last.slice(0, maxLast)).trim();
+      }
+    }
+  }
+  var out = [];
+  if (amt) out.push(amt);
+  if (core) out.push(core);
+  if (date) out.push(date);
+  return out.join(' ');
+}
+
 // Build the one-line note entry for Deals26 col G (caller prepends the
 // amount directly — used by the Apps Script action).
-// Hard rule: model + LastName + M/D date always present. Color drops
-// first if the line would exceed ~32 chars.
+// Hard rule: amount + M/D always present. Color → model-extra → lastName
+// truncate, in that order.
 // Examples:
-//   "200 Passat gray Gauvin 4/21"
-//   "1465 Avalon silver Rackley 4/25"
-//   "200 Passat Garcia-Martinez 4/21"   ← drops color, long name
+//   "200 Passat Gauvin 4/21"
+//   "1465 Avalon Rackley 4/25"
 function _paymentNoteLine(amount, payload){
   var amt = parseFloat(amount);
   if(!isFinite(amt)) amt = 0;
   var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
-  var p = _paymentFormatPieces(payload);
-  var MAX = 32;
-  var build = function(incColor){
-    var pieces = [amtStr];
-    if(p.model) pieces.push(p.model);
-    if(incColor && p.color) pieces.push(p.color);
-    if(p.lastName) pieces.push(p.lastName);
-    if(p.dateStr) pieces.push(p.dateStr);
-    return pieces.filter(Boolean).join(' ');
-  };
-  var line = build(true);
-  if(line.length <= MAX) return line;
-  // Overflow — drop color (model, lastname, date are non-negotiable)
-  return build(false);
+  return _paymentNoteLineFit(amtStr, _paymentFormatPieces(payload));
 }
 
 // Build the Profit26 description (same rule but WITHOUT the amount —
 // Apps Script's profit_append_entry prepends the amount itself).
-// Budgets ~5 chars for the amount+space prefix to stay under 32 total.
+// Delegates to the same amount-aware builder so the resulting cell note
+// line matches exactly between Deals26 col G and Profit26.
 function _paymentDescFromPayload(payload){
-  var p = _paymentFormatPieces(payload);
-  var MAX_CORE = 27; // 32 - 5 (typical amount + space)
-  var build = function(incColor){
-    var pieces = [];
-    if(p.model) pieces.push(p.model);
-    if(incColor && p.color) pieces.push(p.color);
-    if(p.lastName) pieces.push(p.lastName);
-    if(p.dateStr) pieces.push(p.dateStr);
-    return pieces.filter(Boolean).join(' ');
-  };
-  var line = build(true);
-  if(line.length <= MAX_CORE) return line;
-  return build(false);
+  // Dummy amount placeholder of typical length to share the size budget
+  var amt = parseFloat(payload && payload.amount);
+  if(!isFinite(amt)) amt = 0;
+  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var fullLine = _paymentNoteLineFit(amtStr, _paymentFormatPieces(payload));
+  // Slice off "{amtStr} " prefix
+  var prefix = amtStr + ' ';
+  if (fullLine.indexOf(prefix) === 0) return fullLine.slice(prefix.length);
+  return fullLine;
 }
 
 // Look up a learned alias for this payment. When the user approved a
