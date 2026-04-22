@@ -269,6 +269,11 @@ These are built, working, and must survive every future change. `scripts/validat
 ### E-Sign System (Legal electronic signatures via ESIGN Act / UETA)
 - **Library:** `signature_pad@4.1.7` — loaded in `<head>` scripts
 - **Overlay:** `#esign-overlay` with `#esign-status-preparing`, `#esign-status-ready`, `#esign-status-sent`
+- **UI entry points (DELETED TWICE — keep all three):** purple "✍️ Send for E-Sign" buttons, one each in
+  - `openFormDetail` (deposit detail) → `onclick="esignOpen('deposit')"`
+  - `openInvoiceDetail` (invoice detail) → `onclick="esignOpen('invoice')"`
+  - Void/Release Step 2 form → `onclick="esignOpen('void_release')"`
+  All three are enforced by `scripts/validate-features.sh`. Do NOT remove or "consolidate" these buttons — they are the only way users can start the e-sign flow for a fresh record (`_buildEsignSection` returns empty when `esign_status` is null, so without these buttons there is no way in).
 - **Send flow:** `esignOpen`, `esignClose`, `esignCreateRequest`, `esignCopyLink`, `esignSendSMS`, `esignSendEmail`, `esignShare`
 - **Polling:** `_esignStartPolling`, `_esignStopPolling`, `_esignPollCheck`, `_esignResumePolling`
 - **After customer signs:** `_esignShowSignedAlert` (green banner + vibrate), `_esignOpenCounterSign` (navigate to detail)

@@ -84,6 +84,13 @@ check "_showCompletedReview"        'function _showCompletedReview'
 check "_viewSignedForm"             'function _viewSignedForm'
 check "_completeAndClose"           'function _completeAndClose'
 
+# ── E-SIGN UI TRIGGERS (buttons users tap to start the flow) ───
+# These were silently deleted twice by broad edits that kept the
+# functions intact but removed the entry points. Guard explicitly.
+check "E-Sign button: deposit"      "esignOpen\('deposit'\)"
+check "E-Sign button: invoice"      "esignOpen\('invoice'\)"
+check "E-Sign button: void_release" "esignOpen\('void_release'\)"
+
 # ── FORMS DETAIL VIEWS ─────────────────────────────────────────
 check "openFormDetail"              'function openFormDetail'
 check "openInvoiceDetail"           'function openInvoiceDetail'

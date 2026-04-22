@@ -10863,6 +10863,7 @@ function _txInit() {
       <!-- Action buttons -->
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="depositPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Form</button>
+        <button onclick="esignOpen('deposit')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
 
         <!-- AGGRESSIVE signed form prompt -->
         <div id="dep-signed-section" style="background:#1c0a00;border:2px solid #ea580c;border-radius:16px;padding:20px;margin-top:4px;">
@@ -11054,6 +11055,7 @@ function _txInit() {
 
       <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px;">
         <button onclick="invPrint()" style="width:100%;padding:15px;background:#0d0d0d;color:#fff;border:1px solid #333;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">🖨️ Print Invoice</button>
+        <button onclick="esignOpen('invoice')" style="width:100%;padding:15px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">✍️ Send for E-Sign</button>
         <button id="inv-save-btn" onclick="invSave()" style="width:100%;padding:16px;background:#f59e0b;color:#000;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;">Save Invoice</button>
         <div id="inv-save-status" style="text-align:center;font-size:13px;color:#888;"></div>
         <button onclick="closeInvoiceForm()" style="width:100%;padding:15px;background:#111;color:#888;border:1px solid #1a1a1a;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
