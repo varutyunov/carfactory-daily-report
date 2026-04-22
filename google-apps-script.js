@@ -182,7 +182,8 @@ function doPost(e) {
     // _appendCashSaleToProfit AND the new Payroll Net → Extras post.
     if (action === 'read_profit' || action === 'update_profit' ||
         action === 'profit_append_entry' || action === 'profit_update_entry' ||
-        action === 'profit_remove_entry' || action === 'update_profit_formula') {
+        action === 'profit_remove_entry' || action === 'update_profit_formula' ||
+        action === 'profit_reformat_notes') {
       return _handleProfitAction(action, location, body.data || {});
     }
     if (action === 'sync_profit') {
@@ -1163,6 +1164,140 @@ function _handleProfitAction(action, location, data) {
     // Remove one entry from Payments or Cash Sales formula + note.
     // Inputs: data.{month_idx, row_type, amount, description}
     return _profitMutateEntry(sheet, data, 'remove', location);
+  }
+
+  if (action === 'profit_reformat_notes') {
+    // Iterate all Profit26 Payments + Cash Sales + Extras cells for
+    // every month. For each note line over 26 chars, rewrite it to fit
+    // (drop known color tokens, collapse multi-word model to first
+    // word, truncate lastName). Preserves amount (leading) and M/D
+    // (trailing) — those are the data.
+    //
+    // Inputs: data.mode = 'preview' | 'apply' (preview returns counts
+    // + sample before/after; apply writes back to cells).
+    var pMode = String(data.mode || 'preview');
+    var pLayout = _getProfitLayout(location);
+    var P_START_COL = 4;
+    var pStartRow = 1;
+    for (var sr2 = 1; sr2 <= 20; sr2++) {
+      var cvv = String(sheet.getRange(sr2, P_START_COL).getValue()).trim();
+      if (cvv === 'Jan' || cvv === 'January') { pStartRow = sr2; break; }
+    }
+    var MAX_NOTE = 26;
+    var COLOR_WORDS = {'white':1,'black':1,'silver':1,'red':1,'blue':1,'gray':1,'grey':1,'green':1,'yellow':1,'gold':1,'orange':1,'purple':1,'tan':1,'brown':1,'beige':1,'pearl':1,'maroon':1,'teal':1,'navy':1,'bronze':1,'burgundy':1,'champagne':1,'charcoal':1,'copper':1,'cream':1,'ivory':1};
+    var fitNoteLine = function(line){
+      var trimmed = String(line).trim();
+      if (!trimmed) return line;
+      var tokens = trimmed.split(/\s+/);
+      if (tokens.length === 0) return line;
+      // Detect compound lines — two payments mashed into one note line
+      // (e.g. "220 16 RDX grey Hernandez 204 15 Lancer Davis"). Single
+      // payments are typically <35 chars. Very long lines with a later
+      // 3+ digit amount are almost certainly compound; leave them so
+      // user can edit by hand rather than mangling the data.
+      if (trimmed.length > 40) {
+        for (var ci = 3; ci < tokens.length - 1; ci++){
+          if (/^\d{3,4}$/.test(tokens[ci])) return line;
+        }
+      }
+      var amt = tokens[0];
+      var dateRe = /^\d{1,2}\/\d{1,2}$/;
+      var yearRe = /^\d{2}$|^(19|20)\d{2}$/;
+      var last = tokens[tokens.length - 1];
+      var hasDate = dateRe.test(last);
+      var date = hasDate ? last : '';
+      var rest = hasDate ? tokens.slice(1, -1) : tokens.slice(1);
+      // Year (2-digit or 4-digit) is part of the prefix — preserve it
+      // with the amount so the drop strategy doesn't swallow the model.
+      var year = '';
+      if (rest.length > 0 && yearRe.test(rest[0])){
+        year = rest[0];
+        rest = rest.slice(1);
+      }
+      // Step 1: drop known color tokens anywhere in rest
+      var middle = rest.filter(function(t){ return !COLOR_WORDS[t.toLowerCase()]; });
+      var prefix = amt + (year ? ' ' + year : '');
+      var join = function(arr){
+        var out = [prefix].concat(arr);
+        if (date) out.push(date);
+        return out.join(' ');
+      };
+      var result = join(middle);
+      if (result.length <= MAX_NOTE) return result;
+      // Step 2: keep only first and last middle tokens (collapse
+      // multi-word model / extra tokens).
+      if (middle.length > 2){
+        middle = [middle[0], middle[middle.length - 1]];
+        result = join(middle);
+        if (result.length <= MAX_NOTE) return result;
+      }
+      // Step 3: truncate the lastName (last token).
+      if (middle.length >= 1){
+        var prefixLen = prefix.length + 1 + (middle.length > 1 ? middle[0].length + 1 : 0);
+        var suffixLen = (date ? 1 + date.length : 0);
+        var avail = MAX_NOTE - prefixLen - suffixLen;
+        if (avail >= 2){
+          middle[middle.length - 1] = middle[middle.length - 1].slice(0, avail);
+        }
+        result = join(middle);
+      }
+      if (result.length > MAX_NOTE) result = result.slice(0, MAX_NOTE);
+      return result;
+    };
+
+    var totalCells = 0, cellsChanged = 0, linesTouched = 0, totalLines = 0;
+    var samples = [];
+    var rowTypes = ['payments', 'cash_sales', 'extras'];
+    for (var mIdx = 0; mIdx < 12; mIdx++){
+      var blk = Math.floor(mIdx / 4);
+      var mInB = mIdx % 4;
+      var blockStart = blk * (pLayout.BLOCK_ROWS + pLayout.BLOCK_GAP);
+      var colN = P_START_COL + mInB * 3 + 1;
+      for (var rti = 0; rti < rowTypes.length; rti++){
+        var rt = rowTypes[rti];
+        var off = pLayout.offsets[rt];
+        if (off === undefined) continue;
+        var rowN = pStartRow + blockStart + off;
+        var cellN = sheet.getRange(rowN, colN);
+        var noteN = cellN.getNote() || '';
+        if (!noteN) continue;
+        totalCells++;
+        var origLines = noteN.split(/\r?\n/);
+        var changed = false;
+        var newLines = origLines.map(function(l){
+          var trimmed = (l || '').trim();
+          if (!trimmed) return l;
+          totalLines++;
+          if (trimmed.length <= MAX_NOTE) return l;
+          var fitted = fitNoteLine(trimmed);
+          if (fitted !== trimmed){
+            changed = true;
+            linesTouched++;
+            if (samples.length < 12){
+              samples.push({row: rowN, col: colN, row_type: rt, month: mIdx + 1, from: trimmed, to: fitted});
+            }
+          }
+          return fitted;
+        });
+        if (changed){
+          cellsChanged++;
+          if (pMode === 'apply'){
+            PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+            cellN.setNote(newLines.join('\n'));
+          }
+        }
+      }
+    }
+
+    return jsonResponse({
+      ok: true, action: 'profit_reformat_notes',
+      mode: pMode, location: location,
+      total_cells_with_notes: totalCells,
+      total_lines: totalLines,
+      cells_changed: cellsChanged,
+      lines_reformatted: linesTouched,
+      samples: samples
+    });
   }
 
   if (action === 'update_profit_formula') {
