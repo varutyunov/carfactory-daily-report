@@ -1,11 +1,12 @@
-// Probe for the CSV export URL on CarPay dealer pages.
-// Logs in, fetches /dms/customers and /dms/recent-payments, and prints
-// any candidate CSV/export URLs found (form actions, <a> hrefs, JS snippets,
-// data-* attributes).
+// Probe the CarPay customers + recent-payments list pages to confirm:
+// - All rows are inlined in the HTML (no separate DataTables ajax call)
+// - Column headers (so we know what data is available without per-customer hits)
+// - Row count vs stated total
+// - DataTables init config (for CSV column visibility clues)
 //
-// Run with:
+// Run:
 //   CARPAY_EMAIL=... CARPAY_PASSWORD=... node scripts/carpay-probe-csv.js
-// Optional: CARPAY_DEBARY_ID / CARPAY_DELAND_ID (defaults 656 / 657).
+// Optional: CARPAY_DEBARY_ID (default 656).
 
 const fetch = require('node-fetch');
 
@@ -19,7 +20,6 @@ if (!CP_EMAIL || !CP_PASSWORD) {
   process.exit(1);
 }
 
-// ── Cookie Jar ───────────────────────────────────────────────────────────────
 const jar = {};
 function updateJar(res) {
   const cookies = res.headers.raw()['set-cookie'] || [];
@@ -55,7 +55,7 @@ async function cpLogin(email, password) {
   const page = await cpFetch('/login');
   const html = await page.text();
   const mCsrf = html.match(/name="_csrfToken"[^>]*value="([^"]+)"/);
-  if (!mCsrf) { console.error('CSRF token not found'); return false; }
+  if (!mCsrf) return false;
   const mFields = html.match(/name="_Token\[fields\]"[^>]*value="([^"]+)"/);
   const tokenFields = mFields ? mFields[1] : '';
   const body = 'username=' + encodeURIComponent(email) +
@@ -71,8 +71,7 @@ async function cpLogin(email, password) {
     body: body
   });
   const text = await res.text();
-  if (text.includes('Your Customers') || text.includes('/dms/')) return true;
-  return false;
+  return text.includes('Your Customers') || text.includes('/dms/');
 }
 
 async function cpSelectDealer(dealerId) {
@@ -80,74 +79,62 @@ async function cpSelectDealer(dealerId) {
   await res.text();
 }
 
-// ── Probe a page for CSV-export clues ────────────────────────────────────────
-function probePage(pageName, html) {
-  console.log('\n=== ' + pageName + ' (' + html.length + ' bytes) ===');
+function analyzeTable(pageName, html) {
+  console.log('\n=== ' + pageName + ' ===');
+  console.log('HTML length:', html.length);
 
-  const anchorCsv = [];
-  const reAnchor = /<a[^>]+href="([^"]+)"[^>]*>([^<]*)<\/a>/gi;
+  const theadMatch = html.match(/<thead[^>]*>([\s\S]*?)<\/thead>/);
+  if (theadMatch) {
+    const ths = theadMatch[1].match(/<th[^>]*>([\s\S]*?)<\/th>/g) || [];
+    console.log('Columns (' + ths.length + '):');
+    ths.forEach((th, i) => {
+      const cls = th.match(/class="([^"]*)"/);
+      const text = th.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      const notExport = cls && cls[1].includes('not-export') ? ' [not-export]' : '';
+      console.log('  [' + i + '] ' + text + notExport);
+    });
+  }
+
+  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
+  if (tbodyMatch) {
+    const rows = tbodyMatch[1].match(/<tr[\s\S]*?<\/tr>/g) || [];
+    console.log('Rows in tbody:', rows.length);
+
+    if (rows.length) {
+      for (let r = 0; r < Math.min(2, rows.length); r++) {
+        const tds = (rows[r].match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
+          td.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+        );
+        console.log('Sample row ' + r + ' (' + tds.length + ' cells):');
+        tds.forEach((t, i) => console.log('  [' + i + '] ' + t.slice(0, 100)));
+      }
+    }
+  }
+
+  const totalMatch = html.match(/of\s+([\d,]+)\s+entries/i);
+  if (totalMatch) console.log('Stated total: ' + totalMatch[1] + ' entries');
+
+  const ajaxMatches = html.match(/ajax\s*:\s*["'`]([^"'`]+)["'`]/g) || [];
+  if (ajaxMatches.length) {
+    console.log('DataTables ajax configs:');
+    ajaxMatches.forEach(a => console.log('  ' + a));
+  }
+  const ajaxObjMatches = html.match(/ajax\s*:\s*\{[^}]+\}/g) || [];
+  if (ajaxObjMatches.length) {
+    console.log('DataTables ajax{} configs:');
+    ajaxObjMatches.slice(0, 5).forEach(a => console.log('  ' + a.replace(/\s+/g, ' ').slice(0, 300)));
+  }
+
+  if (/serverSide\s*:\s*true/.test(html)) console.log('serverSide: true (data fetched via ajax)');
+  else if (/serverSide\s*:\s*false/.test(html)) console.log('serverSide: false (all data inlined)');
+
+  const scriptUrls = new Set();
+  const reUrl = /['"`](\/dms\/[^'"`]+)['"`]/g;
   let m;
-  while ((m = reAnchor.exec(html)) !== null) {
-    const href = m[1];
-    const label = m[2].replace(/<[^>]+>/g, '').trim();
-    if (/csv|pdf|export|download/i.test(href) || /csv|pdf|export|download/i.test(label)) {
-      anchorCsv.push({ href, label });
-    }
-  }
-  if (anchorCsv.length) {
-    console.log('[anchors with csv/pdf/export/download]');
-    anchorCsv.slice(0, 30).forEach(a => console.log('  ' + a.label + '  →  ' + a.href));
-  }
-
-  const formMatches = html.match(/<form[^>]*>/gi) || [];
-  const formsCsv = formMatches.filter(f => /csv|pdf|export|download/i.test(f));
-  if (formsCsv.length) {
-    console.log('[forms with csv/pdf/export/download in attributes]');
-    formsCsv.slice(0, 10).forEach(f => console.log('  ' + f));
-  }
-
-  const buttonMatches = html.match(/<button[^>]*>[\s\S]*?<\/button>/gi) || [];
-  const btnCsv = buttonMatches.filter(b => /csv|pdf|export|download/i.test(b));
-  if (btnCsv.length) {
-    console.log('[buttons with csv/pdf/export/download]');
-    btnCsv.slice(0, 10).forEach(b => console.log('  ' + b.replace(/\s+/g, ' ').slice(0, 300)));
-  }
-
-  const dataAttrs = html.match(/data-[\w-]+="[^"]*(?:csv|pdf|export|download)[^"]*"/gi) || [];
-  if (dataAttrs.length) {
-    console.log('[data-* attrs mentioning csv/pdf/export/download]');
-    dataAttrs.slice(0, 20).forEach(a => console.log('  ' + a));
-  }
-
-  const jsLines = (html.match(/.{0,80}(csv|\.pdf|export|download).{0,160}/gi) || [])
-    .filter(s => s.includes('/') || s.includes('url') || s.includes('action') || s.includes('href'));
-  const jsUnique = {};
-  jsLines.forEach(l => { jsUnique[l.trim()] = true; });
-  const jsList = Object.keys(jsUnique);
-  if (jsList.length) {
-    console.log('[context snippets mentioning csv/pdf/export/download with url-ish keywords]');
-    jsList.slice(0, 30).forEach(l => console.log('  … ' + l.slice(0, 260).replace(/\s+/g, ' ') + ' …'));
-  }
-
-  if (!anchorCsv.length && !formsCsv.length && !btnCsv.length && !dataAttrs.length && !jsList.length) {
-    console.log('(no csv/pdf/export/download hits found — dumping first 1500 chars for manual inspection)');
-    console.log(html.slice(0, 1500));
-  }
-}
-
-// ── Try a few common CSV URLs by guessing and checking content-type ─────────
-async function tryUrl(url) {
-  try {
-    const res = await cpFetch(url);
-    const ct = res.headers.get('content-type') || '';
-    const cd = res.headers.get('content-disposition') || '';
-    const head = (await res.text()).slice(0, 300);
-    console.log('  ' + url + ' → ' + res.status + '  content-type=' + ct + (cd ? '  cd=' + cd : ''));
-    if (/csv|attachment/i.test(ct + cd)) {
-      console.log('    [HEAD 300]: ' + head.replace(/\n/g, '\\n'));
-    }
-  } catch (e) {
-    console.log('  ' + url + ' → ERROR ' + e.message);
+  while ((m = reUrl.exec(html)) !== null) scriptUrls.add(m[1]);
+  if (scriptUrls.size) {
+    console.log('URLs mentioned in scripts (' + Math.min(30, scriptUrls.size) + ' of ' + scriptUrls.size + '):');
+    [...scriptUrls].slice(0, 30).forEach(u => console.log('  ' + u));
   }
 }
 
@@ -158,36 +145,13 @@ async function main() {
   console.log('Logged in. Selecting DeBary dealer (id=' + DEBARY_ID + ').');
   await cpSelectDealer(DEBARY_ID);
 
-  // Page 1: customers
-  const c = await cpFetch('/dms/customers');
+  const c = await cpFetch('/dms/customers?start=0&length=5000');
   const custHtml = await c.text();
-  probePage('/dms/customers', custHtml);
+  analyzeTable('/dms/customers?length=5000', custHtml);
 
-  // Page 2: recent payments
-  const p = await cpFetch('/dms/recent-payments');
+  const p = await cpFetch('/dms/recent-payments?start=0&length=5000');
   const payHtml = await p.text();
-  probePage('/dms/recent-payments', payHtml);
-
-  // Blind guesses
-  console.log('\n=== blind URL probes ===');
-  const guesses = [
-    '/dms/customers/export',
-    '/dms/customers/export.csv',
-    '/dms/customers/export?format=csv',
-    '/dms/customers?export=csv',
-    '/dms/customers.csv',
-    '/dms/customers/csv',
-    '/dms/customers/download',
-    '/dms/customers/download/csv',
-    '/dms/recent-payments/export',
-    '/dms/recent-payments/export.csv',
-    '/dms/recent-payments/export?format=csv',
-    '/dms/recent-payments?export=csv',
-    '/dms/recent-payments.csv',
-    '/dms/recent-payments/csv',
-    '/dms/recent-payments/download',
-  ];
-  for (const g of guesses) await tryUrl(g);
+  analyzeTable('/dms/recent-payments?length=5000', payHtml);
 
   console.log('\nDone.');
 }
