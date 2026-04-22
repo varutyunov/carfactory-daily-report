@@ -1,3 +1,24 @@
+// CarPay sync — Phase 1: list-page only.
+//
+// Previous version hit /dms/customer/{id} for every customer (vehicle,
+// phone, email) AND for payment history. That's ~2× customer-count requests
+// per run. CarPay asked us to stop — they flagged the traffic volume.
+//
+// Surgical replacement: fetch each list page once. DataTables server-renders
+// every row inline in a single HTML response (confirmed by probe).
+//   - /dms/customers          → name, account, phone, days_late, next_payment,
+//                               auto_pay, carpay_id  (14 cols per row)
+//   - /dms/recent-payments    → name, account, reference, date, time,
+//                               method, amount_sent  (20 cols per row)
+// Total per sync: 4 list requests + 1 login + 2 dealer-selects = 7 requests.
+//
+// What we DON'T get from list pages: email, vehicle year/make/model, current
+// amount due, scheduled amount, payment frequency. These lived on the
+// per-customer detail page. We preserve any existing values in Supabase
+// rather than overwrite them with null. Phase 2 will address these gaps
+// (add them as columns via CarPay's "Columns" UI if available, or do a
+// rare slow sweep — TBD with user).
+
 const fetch = require('node-fetch');
 
 const BASE = 'https://dealers.carpay.com';
@@ -15,7 +36,6 @@ const SB_HEADERS = {
 
 // ── Cookie Jar ───────────────────────────────────────────────────────────────
 const jar = {};
-
 function updateJar(res) {
   const cookies = res.headers.raw()['set-cookie'] || [];
   cookies.forEach(c => {
@@ -24,12 +44,10 @@ function updateJar(res) {
     if (idx > 0) jar[kv.slice(0, idx).trim()] = kv.slice(idx + 1).trim();
   });
 }
-
 function cookieHeader() {
   return Object.entries(jar).map(([k, v]) => k + '=' + v).join('; ');
 }
 
-// ── HTTP helper (manual redirect + cookie tracking + retry) ──────────────────
 async function cpFetch(url, opts, depth) {
   depth = depth || 0;
   if (depth > 10) throw new Error('Too many redirects');
@@ -48,7 +66,6 @@ async function cpFetch(url, opts, depth) {
         timeout: 60000
       }));
       updateJar(res);
-
       if (res.status >= 300 && res.status < 400) {
         let loc = res.headers.get('location') || '';
         if (!loc.startsWith('http')) loc = BASE + loc;
@@ -85,7 +102,6 @@ async function cpLogin(email, password) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body
   });
-
   const text = await res.text();
   if (text.includes('Your Customers') || text.includes('/dms/')) {
     console.log('Login successful');
@@ -95,478 +111,121 @@ async function cpLogin(email, password) {
   return false;
 }
 
-// ── Switch Location ──────────────────────────────────────────────────────────
 async function cpSelectDealer(dealerId) {
   const res = await cpFetch('/dms/select-dealer?dealerId=' + dealerId);
   await res.text();
 }
 
-// ── Parse customers table from HTML ─────────────────────────────────────────
-function parseCustomers(html) {
-  const customers = [];
-  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
-  if (!tbodyMatch) return customers;
+// ── Row cell helper ─────────────────────────────────────────────────────────
+function cellText(tdHtml) {
+  return tdHtml.replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
 
+function normalizePhone(raw) {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.length === 11 && digits[0] === '1') return digits.slice(1);
+  if (digits.length === 10) return digits;
+  return '';
+}
+
+// ── Parse /dms/customers HTML → [{ name, account, phone, ... }] ─────────────
+// Column order (14 cols, confirmed April 2026 by probe):
+//  0 Name     1 Account#    2 Last Login    3 Dealer Payment Method
+//  4 Auto-Pay 5 Reminders   6 Blocked       7 Next Payment Date
+//  8 Days Late  9 Phone     10 Last 6 VIN   11 Stock #
+//  12 Co-Buyer  13 Actions
+function parseCustomers(html) {
+  const out = [];
+  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
+  if (!tbodyMatch) return out;
   const rows = tbodyMatch[1].match(/<tr[\s\S]*?<\/tr>/g) || [];
-  rows.forEach(row => {
-    const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
-      td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
-    );
-    if (tds.length < 9) return;
+  for (const row of rows) {
+    const rawTds = row.match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
+    if (rawTds.length < 14) continue;
+    const tds = rawTds.map(cellText);
+
     const name = tds[0];
     const account = tds[1];
+    if (!name || !account) continue;
+
     const nextPayment = tds[7] || '';
+    // Days Late in UI uses "-(N)" for ahead-of-schedule and plain "N" for late.
     const daysLateRaw = tds[8] || '0';
-    const daysLate = parseInt(daysLateRaw.replace(/[()]/g, '').trim()) *
-                     (daysLateRaw.includes('(') ? -1 : 1);
-    const autoPayTd = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || [])[4] || '';
-    const autoPay = autoPayTd.includes('checked') || autoPayTd.includes('green');
+    const magnitude = parseInt((daysLateRaw.match(/\d+/) || ['0'])[0], 10);
+    const daysLate = daysLateRaw.includes('(') ? -magnitude : magnitude;
+
+    const phone = normalizePhone(tds[9]);
+
+    // Auto-pay cell contains an icon — no text in plaintext. Detect via HTML.
+    const autoPayTd = rawTds[4] || '';
+    const autoPay = /(checked|fa-check|green|true)/i.test(autoPayTd);
+
     const linkMatch = row.match(/\/dms\/customer\/(\d+)/);
     const carpayId = linkMatch ? linkMatch[1] : '';
 
-    if (!name || !account) return;
-    customers.push({
+    out.push({
       name, account,
       days_late: isNaN(daysLate) ? 0 : daysLate,
       next_payment: nextPayment,
       auto_pay: autoPay,
-      carpay_id: carpayId
+      carpay_id: carpayId,
+      phone: phone
     });
-  });
-  return customers;
+  }
+  return out;
 }
 
-// ── Fetch all customers (paginate) ──────────────────────────────────────────
-async function cpGetCustomers(dealerId) {
-  await cpSelectDealer(dealerId);
-  const all = [];
-  let start = 0;
-  const length = 100;
-
-  while (true) {
-    const res = await cpFetch('/dms/customers?start=' + start + '&length=' + length);
-    const html = await res.text();
-    const batch = parseCustomers(html);
-    all.push.apply(all, batch);
-    console.log('  Customers fetched so far:', all.length);
-
-    const totalMatch = html.match(/of\s+([\d,]+)\s+entries/);
-    const total = totalMatch ? parseInt(totalMatch[1].replace(/,/g, '')) : 0;
-    if (!batch.length || all.length >= total || total === 0) break;
-    start += length;
-  }
-  return all;
-}
-
-// ── Parse customer detail page for vehicle, phone, email, balance ───────────
-const CAR_MAKES = ['Acura','Alfa','Aston','Audi','Bentley','BMW','Buick','Cadillac','Chevrolet','Chevy','Chrysler','Dodge','Ferrari','Fiat','Ford','Genesis','GMC','Honda','Hyundai','Infiniti','Jaguar','Jeep','Kia','Lamborghini','Land','Lexus','Lincoln','Maserati','Mazda','McLaren','Mercedes','Mini','Mitsubishi','Nissan','Pontiac','Porsche','Ram','Rolls','Saab','Saturn','Scion','Subaru','Tesla','Toyota','Volkswagen','Volvo','Oldsmobile','Mercury','Plymouth','Hummer','Isuzu','Suzuki','Daewoo'];
-// Words that appear in CarPay UI text and should NOT be treated as vehicle names
-const NOT_VEHICLE = ['successful','regular','schedule','payment','customer','online','mobile','approved','complete','pending','failed','declined','amount','frequency','login','dealer','account','balance','history','transaction'];
-
-function isValidVehicle(v) {
-  if (!v) return false;
-  const words = v.toLowerCase().split(/\s+/);
-  // Must have at least year + one word
-  if (words.length < 2) return false;
-  // Second word (make) must not be a known CarPay UI term
-  if (NOT_VEHICLE.some(bad => words[1] === bad || words.slice(1).join(' ').startsWith(bad))) return false;
-  return true;
-}
-
-// ── Fetch vehicle from CarPay API using userToken (for SPA pages) ────────────
-async function fetchVehicleFromApi(html, carpayId) {
-  const tokenMatch = html.match(/window\.userToken\s*=\s*"([^"]+)"/);
-  const baseMatch = html.match(/window\.UiStateApiBaseUrl\s*=\s*"([^"]+)"/);
-  if (!tokenMatch || !baseMatch) return null;
-
-  const token = tokenMatch[1].replace(/\\\//g, '/');
-  const baseUrl = baseMatch[1].replace(/\\\//g, '/');
-
-  // Try several API endpoints to find vehicle data
-  const endpoints = [
-    baseUrl + '/customers/' + carpayId,
-    baseUrl + '/customer/' + carpayId,
-    baseUrl + '/customers/' + carpayId + '/vehicle',
-    baseUrl + '/customers/' + carpayId + '/account',
-    baseUrl + '/customers/' + carpayId + '/details',
-  ];
-
-  // First try the base URL itself to discover the API structure
-  try {
-    const discoverRes = await fetch(baseUrl, {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-      timeout: 10000
-    });
-    console.log('  [API] Base URL ' + baseUrl + ' → ' + discoverRes.status);
-    if (discoverRes.ok) {
-      const body = await discoverRes.text();
-      console.log('  [API] Base response (300): ' + body.slice(0, 300));
-    }
-  } catch(e) { console.log('  [API] Base URL error: ' + e.message); }
-
-  for (const url of endpoints) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0'
-        },
-        timeout: 10000
-      });
-      console.log('  [API] ' + url + ' → ' + res.status);
-      if (!res.ok) {
-        const t = await res.text(); console.log('  [API] Body: ' + t.slice(0, 200));
-        continue;
-      }
-      const data = await res.json();
-      const jsonStr = JSON.stringify(data);
-      console.log('  [API] OK response (500): ' + jsonStr.slice(0, 500));
-
-      // Search the JSON for vehicle-like patterns
-      const vMatch = jsonStr.match(/((?:19|20)\d{2})\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/);
-      if (vMatch) {
-        const possibleVehicle = vMatch[0].trim();
-        if (isValidVehicle(possibleVehicle)) {
-          const parts = possibleVehicle.split(/\s+/);
-          if (CAR_MAKES.some(mk => parts[1].toLowerCase().startsWith(mk.toLowerCase().slice(0, 3)))) {
-            return possibleVehicle;
-          }
-        }
-      }
-
-      // Also check for explicit vehicle keys
-      const vehicleKeys = ['vehicle', 'car', 'auto', 'vehicleDescription', 'vehicle_description', 'vehicleName'];
-      for (const key of vehicleKeys) {
-        if (data[key] && typeof data[key] === 'string' && data[key].match(/\d{4}/)) {
-          return data[key].trim();
-        }
-        // Check nested objects
-        if (typeof data === 'object') {
-          for (const topKey of Object.keys(data)) {
-            if (data[topKey] && typeof data[topKey] === 'object' && data[topKey][key]) {
-              return String(data[topKey][key]).trim();
-            }
-          }
-        }
-      }
-    } catch (e) { /* try next endpoint */ }
-  }
-  return null;
-}
-
-function parseCustomerDetails(html) {
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-
-  // ── Vehicle extraction (7 strategies) ──
-  let vehicle = '';
-
-  // Strategy 1: "Login as Customer YEAR MAKE MODEL Customer ID"
-  let m = text.match(/Login as Customer\s+(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+)*)\s+Customer ID/);
-  if (m) vehicle = m[1].trim();
-
-  // Strategy 2: "YEAR MAKE MODEL Customer ID:"
-  if (!vehicle) {
-    m = text.match(/(\d{4}\s+[A-Za-z]+\s+[A-Za-z]+)\s+Customer ID/);
-    if (m) vehicle = m[1].trim();
-  }
-
-  // Strategy 3: "Vehicle:" label
-  if (!vehicle) {
-    m = text.match(/Vehicle\s*:?\s*(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/i);
-    if (m) vehicle = m[1].trim();
-  }
-
-  // Strategy 4: <title> tag
-  if (!vehicle) {
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    if (titleMatch) {
-      m = titleMatch[1].match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-      if (m && isValidVehicle(m[1])) vehicle = m[1].trim();
-    }
-  }
-
-  // Strategy 5: Headings with vehicle info
-  if (!vehicle) {
-    const headingMatches = html.match(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi) || [];
-    for (const h of headingMatches) {
-      const hText = h.replace(/<[^>]+>/g, '').trim();
-      m = hText.match(/(\d{4}\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3})/);
-      if (m && isValidVehicle(m[1])) { vehicle = m[1].trim(); break; }
-    }
-  }
-
-  // Strategy 6: Broad scan for YEAR + known car make
-  if (!vehicle) {
-    const allYearMatches = text.match(/((?:19|20)\d{2})\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/g);
-    if (allYearMatches) {
-      for (const ym of allYearMatches) {
-        const parts = ym.split(/\s+/);
-        const year = parseInt(parts[0]);
-        if (year >= 1990 && year <= 2029 && parts.length >= 2) {
-          const possibleMake = parts[1];
-          if (CAR_MAKES.some(mk => possibleMake.toLowerCase().startsWith(mk.toLowerCase().slice(0, 3)))) {
-            vehicle = ym.trim();
-            break;
-          }
-        }
-      }
-      // No last-resort fallback — only accept known car makes to avoid false positives
-    }
-  }
-
-  // Strategy 7: Data attributes
-  if (!vehicle) {
-    const dataMatch = html.match(/data-vehicle="([^"]+)"/i) || html.match(/data-car="([^"]+)"/i);
-    if (dataMatch && dataMatch[1].match(/\d{4}/)) vehicle = dataMatch[1].trim();
-  }
-
-  // ── Phone extraction ──
-  let phone = '';
-  // Find tel: links, skip toll-free
-  const telMatches = html.match(/href="tel:([^"]+)"/g) || [];
-  for (const t of telMatches) {
-    let ph = t.replace(/href="tel:/, '').replace(/"/, '').replace(/\D/g, '');
-    if (ph.length === 11 && ph[0] === '1') ph = ph.slice(1);
-    if (ph.length === 10 && !ph.startsWith('877') && !ph.startsWith('800') && !ph.startsWith('888')) {
-      phone = ph; break;
-    }
-  }
-  if (!phone) {
-    const phoneMatches = text.match(/\+?1?\s*\((\d{3})\)\s*(\d{3})[.\-\s](\d{4})/g) || [];
-    for (const pm of phoneMatches) {
-      let digits = pm.replace(/\D/g, '');
-      if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1);
-      if (digits.length === 10 && !digits.startsWith('877') && !digits.startsWith('800') && !digits.startsWith('888')) {
-        phone = digits; break;
-      }
-    }
-  }
-
-  // ── Email extraction ──
-  let email = '';
-  const mailtoMatch = html.match(/href="mailto:([^"]+)"/i);
-  if (mailtoMatch) email = mailtoMatch[1].trim().toLowerCase();
-  if (!email || !email.includes('@')) {
-    const emailMatch = text.match(/([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})/i);
-    email = emailMatch ? emailMatch[1].toLowerCase() : '';
-  }
-
-  // ── Scheduled amount, frequency, amount due ──
-  const schedMatch = text.match(/Regular Scheduled Amount:\s*\$([\d,]+\.?\d*)/i);
-  const scheduledAmount = schedMatch ? '$' + schedMatch[1] : '';
-
-  const freqMatch = text.match(/Payment Frequency:\s*([A-Za-z-]+)/i);
-  const paymentFrequency = freqMatch ? freqMatch[1] : '';
-
-  const dueMatch = text.match(/Current Amount Due:\s*\$([\d,]+\.?\d*)/i);
-  const currentAmountDue = dueMatch ? parseFloat(dueMatch[1].replace(/,/g, '')) : null;
-
-  return { vehicle, phone, email, scheduledAmount, paymentFrequency, currentAmountDue };
-}
-
-// ── Fetch customer details (vehicle, phone, email) for all customers ────────
-async function cpGetCustomerDetails(dealerId, customers, location) {
-  await cpSelectDealer(dealerId);
-  const batchSize = 5;
-  let fetched = 0;
-  let debugApiDumped = false;
-
-  // Load existing vehicle data so SPA-page customers keep their vehicles
-  const existingDetails = {};
-  try {
-    const exRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + location + '&vehicle=neq.&select=account,vehicle', {
-      headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
-    });
-    if (exRes.ok) {
-      (await exRes.json()).forEach(c => { existingDetails[c.account] = c.vehicle; });
-      console.log('  Loaded ' + Object.keys(existingDetails).length + ' existing vehicles to preserve');
-    }
-  } catch(e) {}
-
-  for (let i = 0; i < customers.length; i += batchSize) {
-    const batch = customers.slice(i, i + batchSize);
-    await Promise.all(batch.map(async (cust) => {
-      if (!cust.carpay_id) return;
-      try {
-        const res = await cpFetch('/dms/customer/' + cust.carpay_id);
-        const html = await res.text();
-        const details = parseCustomerDetails(html);
-        cust.vehicle = details.vehicle || '';
-        cust.phone = details.phone || '';
-        cust.email = details.email || '';
-        cust.scheduled_amount = details.scheduledAmount || '';
-        cust.payment_frequency = details.paymentFrequency || '';
-        cust.current_amount_due = details.currentAmountDue;
-        // If HTML parsing failed but page has userToken, try the CarPay API
-        if (!details.vehicle && html.includes('window.userToken')) {
-          try {
-            // Log JS scripts and any embedded JSON/data in the page for the first SPA customer
-            if (!debugApiDumped) {
-              debugApiDumped = true;
-              const scripts = (html.match(/src="([^"]*\.js[^"]*)"/gi) || []).map(s => s.replace(/src="/,'').replace(/"/,'')).filter(s => !s.includes('jquery') && !s.includes('bootstrap'));
-              console.log('  [SPA-DEBUG] Scripts: ' + scripts.join(', '));
-              // Look for any inline script that references vehicle/car/account
-              const inlineScripts = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
-              for (const sc of inlineScripts) {
-                const body = sc.replace(/<\/?script[^>]*>/gi, '');
-                if (body.length > 50 && body.length < 5000 && (body.includes('vehicle') || body.includes('account') || body.includes('customer') || body.includes('userToken'))) {
-                  console.log('  [SPA-DEBUG] Inline script (' + body.length + ' chars): ' + body.replace(/\n/g, '\\n').slice(0, 600));
-                }
-              }
-              // Check for data attributes with customer/vehicle info
-              const dataAttrs = html.match(/data-[\w-]+="[^"]*"/gi) || [];
-              const interestingAttrs = dataAttrs.filter(d => d.includes('customer') || d.includes('vehicle') || d.includes('account') || d.match(/\d{4}/));
-              if (interestingAttrs.length) console.log('  [SPA-DEBUG] Data attrs: ' + interestingAttrs.slice(0, 10).join(', '));
-            }
-            const apiVehicle = await fetchVehicleFromApi(html, cust.carpay_id);
-            if (apiVehicle) {
-              cust.vehicle = apiVehicle;
-              console.log('  ✅ API found vehicle for ' + cust.name + ': ' + apiVehicle);
-            }
-          } catch (e) {
-            console.log('  API fetch error for ' + cust.name + ': ' + e.message);
-          }
-        }
-        // Still no vehicle? Try preserved Supabase data
-        if (!cust.vehicle && !details.vehicle && existingDetails[cust.account]) {
-          cust.vehicle = existingDetails[cust.account];
-          console.log('  ℹ Kept saved vehicle for ' + cust.name + ': ' + cust.vehicle);
-        } else if (!cust.vehicle && !details.vehicle) {
-          console.log('  ⚠ No vehicle for ' + cust.name + ' (acct ' + cust.account + ') — SPA page, API failed, no saved data');
-        }
-      } catch (e) { /* skip individual failures */ }
-    }));
-    fetched += batch.length;
-    if (fetched % 30 === 0 || fetched >= customers.length) {
-      const ph = customers.filter(c => c.phone).length;
-      const vh = customers.filter(c => c.vehicle).length;
-      console.log('  Details: ' + fetched + '/' + customers.length + ' fetched (' + ph + ' phones, ' + vh + ' vehicles)');
-    }
-    // Throttle to avoid IP ban
-    await new Promise(r => setTimeout(r, 800));
-  }
-
-  const phCount = customers.filter(c => c.phone).length;
-  const emCount = customers.filter(c => c.email).length;
-  const vhCount = customers.filter(c => c.vehicle).length;
-  console.log('  Details complete: ' + phCount + ' phones, ' + emCount + ' emails, ' + vhCount + ' vehicles');
-}
-
-// ── Parse payments table from HTML ───────────────────────────────────────────
+// ── Parse /dms/recent-payments HTML → [{ name, account, ... }] ──────────────
+// Column order (20 cols, confirmed April 2026):
+//  0 Name     1 Account#    2 Stock#    3 Reference#    4 VIN
+//  5 Date     6 Time        7 Origin    8 Platform      9 Collector
+//  10 Company 11 Approved   12 Payment Method  13 Conv Fee
+//  14 Total w/ Fee  15 Total w/o Platform Fee  16 Amount Sent to DMS
+//  17 Last 4  18 Memo       19 Action
 function parsePayments(html) {
-  const payments = [];
+  const out = [];
   const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
-  if (!tbodyMatch) return payments;
-
+  if (!tbodyMatch) return out;
   const rows = tbodyMatch[1].match(/<tr[\s\S]*?<\/tr>/g) || [];
-  rows.forEach(row => {
-    const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
-      td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
-    );
-    if (tds.length < 17) return;
+  for (const row of rows) {
+    const rawTds = row.match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
+    if (rawTds.length < 20) continue;
+    const tds = rawTds.map(cellText);
     const name = tds[0];
     const account = tds[1];
-    const reference = tds[2];
-    const date = tds[5];
-    const time = tds[6];
-    const method = tds[8];
-    const amountSent = tds[16];
-
-    if (!name || !account) return;
-    payments.push({
-      carpay_id: reference || null,
-      name, account, reference, date, time, method,
-      amount_sent: amountSent
+    if (!name || !account) continue;
+    out.push({
+      name, account,
+      reference: tds[3] || '',
+      date: tds[5] || '',
+      time: tds[6] || '',
+      method: tds[12] || '',
+      amount_sent: tds[16] || ''
     });
-  });
-  return payments;
+  }
+  return out;
 }
 
-// ── Fetch all recent payments (paginated) ───────────────────────────────────
-async function cpGetRecentPayments(dealerId) {
+// ── Fetch the two list pages (once each, no pagination) ─────────────────────
+async function cpGetCustomers(dealerId) {
   await cpSelectDealer(dealerId);
-  const all = [];
-  let start = 0;
-  const length = 100;
-
-  while (true) {
-    const res = await cpFetch('/dms/recent-payments?start=' + start + '&length=' + length);
-    const html = await res.text();
-    const batch = parsePayments(html);
-    all.push.apply(all, batch);
-    console.log('  Recent payments fetched so far:', all.length);
-
-    const totalMatch = html.match(/of\s+([\d,]+)\s+entries/);
-    const total = totalMatch ? parseInt(totalMatch[1].replace(/,/g, '')) : 0;
-    if (!batch.length || all.length >= total || total === 0) break;
-    start += length;
-  }
-  return all;
+  // length=10000 covers any plausible customer count with zero pagination;
+  // DataTables server echoes all rows in one response.
+  const res = await cpFetch('/dms/customers?start=0&length=10000');
+  const html = await res.text();
+  return parseCustomers(html);
 }
 
-// ── Parse payment history from individual customer page ──────────────────────
-function parseCustomerPagePayments(html) {
-  const payments = [];
-  const tbodyMatches = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/g) || [];
-  for (const tbody of tbodyMatches) {
-    const rows = tbody.match(/<tr[\s\S]*?<\/tr>/g) || [];
-    for (const row of rows) {
-      const tds = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/g) || []).map(td =>
-        td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim()
-      );
-      if (tds.length >= 4) {
-        const dateStr = tds[0];
-        const status = tds[1].toLowerCase();
-        const method = tds[2];
-        const amount = tds[3];
-        const isValid = status.includes('success') || status.includes('approved') || status.includes('complete') || status.includes('paid') || status.includes('settled');
-        if (dateStr && amount && amount.includes('$') && isValid) {
-          payments.push({ date: dateStr, method, amount_sent: amount });
-        }
-      }
-    }
-  }
-  return payments;
-}
-
-// ── Fetch full payment history from each customer's detail page ──────────────
-async function cpGetCustomerPayments(dealerId, customers, location) {
+async function cpGetPayments(dealerId) {
   await cpSelectDealer(dealerId);
-  const allPayments = [];
-  const batchSize = 5;
-
-  for (let i = 0; i < customers.length; i += batchSize) {
-    const batch = customers.slice(i, i + batchSize);
-    await Promise.all(batch.map(async (cust) => {
-      if (!cust.carpay_id) return;
-      try {
-        const res = await cpFetch('/dms/customer/' + cust.carpay_id + '?dealerId=' + dealerId + '&tabId=payment-history');
-        const html = await res.text();
-        const pays = parseCustomerPagePayments(html);
-        pays.forEach(p => {
-          allPayments.push({
-            location,
-            carpay_id: cust.carpay_id || null,
-            name: cust.name,
-            account: cust.account,
-            reference: '',
-            date: p.date,
-            time: '',
-            method: p.method || '',
-            amount_sent: p.amount_sent
-          });
-        });
-      } catch (e) { /* skip */ }
-    }));
-    if ((i + batchSize) % 50 === 0 || i + batchSize >= customers.length) {
-      console.log('  Customer payment history: ' + Math.min(i + batchSize, customers.length) + '/' + customers.length + ' (' + allPayments.length + ' payments)');
-    }
-  }
-  return allPayments;
+  const res = await cpFetch('/dms/recent-payments?start=0&length=10000');
+  const html = await res.text();
+  return parsePayments(html);
 }
 
-// ── Supabase Upsert ──────────────────────────────────────────────────────────
+// ── Supabase helpers ────────────────────────────────────────────────────────
 async function sbUpsert(table, rows) {
   if (!rows.length) return 0;
   const allKeys = {};
@@ -577,7 +236,6 @@ async function sbUpsert(table, rows) {
     keyList.forEach(k => { out[k] = r[k] !== undefined ? r[k] : null; });
     return out;
   });
-
   let upserted = 0;
   for (let i = 0; i < normalized.length; i += 50) {
     const batch = normalized.slice(i, i + 50);
@@ -586,8 +244,8 @@ async function sbUpsert(table, rows) {
       headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
       body: JSON.stringify(batch)
     });
-    if (res.ok) { upserted += (await res.json()).length; }
-    else { console.error('Upsert error for ' + table + ':', await res.text()); }
+    if (res.ok) upserted += (await res.json()).length;
+    else console.error('Upsert error for ' + table + ':', await res.text());
   }
   return upserted;
 }
@@ -600,13 +258,40 @@ async function sbDeleteByLocation(table, location) {
   if (!res.ok) console.error('Delete error ' + table + ' ' + location + ':', await res.text());
 }
 
-// ── Location Config ───────────────────────────────────────────────────────────
+// Fetch fields we will NOT overwrite — email, vehicle, current_amount_due,
+// scheduled_amount, payment_frequency, repo_flagged. Keyed by account.
+async function sbLoadPreserveMap(location) {
+  const cols = 'account,email,vehicle,current_amount_due,scheduled_amount,payment_frequency,repo_flagged,vin,color';
+  const res = await fetch(
+    SB_URL + '/rest/v1/carpay_customers?location=eq.' + location + '&select=' + cols,
+    { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) }
+  );
+  if (!res.ok) return {};
+  const map = {};
+  (await res.json()).forEach(row => { map[row.account] = row; });
+  return map;
+}
+
+function applyPreserved(cust, preserved) {
+  const p = preserved[cust.account];
+  if (!p) return;
+  if (p.email) cust.email = p.email;
+  if (p.vehicle) cust.vehicle = p.vehicle;
+  if (p.current_amount_due != null) cust.current_amount_due = p.current_amount_due;
+  if (p.scheduled_amount) cust.scheduled_amount = p.scheduled_amount;
+  if (p.payment_frequency) cust.payment_frequency = p.payment_frequency;
+  if (p.repo_flagged) cust.repo_flagged = true;
+  if (p.vin) cust.vin = p.vin;
+  if (p.color) cust.color = p.color;
+}
+
+// ── Location config ─────────────────────────────────────────────────────────
 const LOCATIONS = [
   { name: 'debary', dealerId: process.env.CARPAY_DEBARY_ID || '656' },
   { name: 'deland', dealerId: process.env.CARPAY_DELAND_ID || '657' }
 ];
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   if (!SB_URL || !SB_KEY) { console.error('Missing SUPABASE_URL or SUPABASE_KEY'); process.exit(1); }
   if (!CP_EMAIL || !CP_PASSWORD) {
@@ -617,73 +302,38 @@ async function main() {
   const ok = await cpLogin(CP_EMAIL, CP_PASSWORD);
   if (!ok) { console.error('Login failed — exiting'); process.exit(1); }
 
-  let totalCustomers = 0, totalPayments = 0;
+  let totalCust = 0, totalPay = 0;
 
   for (const loc of LOCATIONS) {
     console.log('\nSyncing ' + loc.name + ' (dealerId=' + loc.dealerId + ')...');
 
-    // Step 1: Get customer list
+    const preserved = await sbLoadPreserveMap(loc.name);
+    console.log('  Loaded preserve-map for ' + Object.keys(preserved).length + ' existing accounts');
+
     const customers = await cpGetCustomers(loc.dealerId);
-    console.log('  Found ' + customers.length + ' customers');
+    console.log('  Fetched ' + customers.length + ' customers from list page');
 
-    // Step 2: Fetch vehicle, phone, email from each customer's detail page
-    console.log('  Fetching customer details (vehicle, phone, email)...');
-    await cpGetCustomerDetails(loc.dealerId, customers, loc.name);
+    const payments = await cpGetPayments(loc.dealerId);
+    console.log('  Fetched ' + payments.length + ' payments from list page');
 
-    // Step 3: Fetch recent payments
-    const recentPayments = await cpGetRecentPayments(loc.dealerId);
-    console.log('  Found ' + recentPayments.length + ' recent payments');
-
-    // Step 4: Fetch full payment history from each customer page
-    console.log('  Fetching payment history from customer pages...');
-    const customerPayments = await cpGetCustomerPayments(loc.dealerId, customers, loc.name);
-    console.log('  Found ' + customerPayments.length + ' payments from customer pages');
-
-    // Tag with location
-    customers.forEach(c => { c.location = loc.name; });
-    recentPayments.forEach(p => { p.location = loc.name; });
-
-    // Merge & deduplicate payments
-    const allPayments = recentPayments.slice();
-    const seenKeys = {};
-    allPayments.forEach(p => { seenKeys[p.account + '|' + p.date + '|' + p.amount_sent] = true; });
-    let added = 0;
-    customerPayments.forEach(p => {
-      const key = p.account + '|' + p.date + '|' + p.amount_sent;
-      if (!seenKeys[key]) { allPayments.push(p); seenKeys[key] = true; added++; }
+    customers.forEach(c => {
+      c.location = loc.name;
+      applyPreserved(c, preserved);
     });
-    console.log('  Total payments: ' + allPayments.length + ' (' + recentPayments.length + ' recent + ' + added + ' from history)');
+    payments.forEach(p => { p.location = loc.name; });
 
-    // Preserve repo_flagged before deleting
-    const existingRes = await fetch(SB_URL + '/rest/v1/carpay_customers?location=eq.' + loc.name + '&repo_flagged=eq.true&select=account,repo_flagged', {
-      method: 'GET', headers: SB_HEADERS
-    });
-    const flaggedAccounts = {};
-    if (existingRes.ok) {
-      const flagged = await existingRes.json();
-      flagged.forEach(f => { flaggedAccounts[f.account] = true; });
-      if (Object.keys(flaggedAccounts).length) console.log('  Preserving ' + Object.keys(flaggedAccounts).length + ' repo flags');
-    }
-
-    // Delete old data and insert fresh
     await sbDeleteByLocation('carpay_customers', loc.name);
     await sbDeleteByLocation('carpay_payments', loc.name);
 
-    // Re-apply repo_flagged
-    customers.forEach(c => {
-      if (flaggedAccounts[c.account]) c.repo_flagged = true;
-    });
-
     const custCount = await sbUpsert('carpay_customers', customers);
-    const payCount = await sbUpsert('carpay_payments', allPayments);
+    const payCount = await sbUpsert('carpay_payments', payments);
     console.log('  Stored: ' + custCount + ' customers, ' + payCount + ' payments');
-
-    totalCustomers += custCount;
-    totalPayments += payCount;
+    totalCust += custCount;
+    totalPay += payCount;
   }
 
   console.log('\n=== CARPAY SYNC COMPLETE ===');
-  console.log('Total: ' + totalCustomers + ' customers, ' + totalPayments + ' payments');
+  console.log('Total: ' + totalCust + ' customers, ' + totalPay + ' payments');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
