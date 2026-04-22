@@ -16609,6 +16609,7 @@ function _reviewRender(){
     html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
     html += '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<button onclick="_reviewRematch(' + r.id + ')" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
     html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Manual</button>';
     html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
     html += '</div>';
@@ -16997,6 +16998,117 @@ async function _reviewApprove(id, candidateIdx){
       }
     } catch(cErr){ console.warn('Cascade scan failed (non-fatal):', cErr); }
 
+    await _reviewLoad();
+  } catch(e){
+    alert('Error: ' + (e.message || e));
+  }
+}
+
+// Re-run the current matcher on a pending review item. Useful for items
+// stranded by older matcher versions (e.g. v46's early-shortcut that
+// skipped Deals25 when Deals26 had a partial). Behavior:
+//   - Current matcher says 'matched' → auto-approve (post col G, gate
+//     Profit26 on col F, save alias, resolve review).
+//   - Still ambiguous → update the review's candidates/reason in place
+//     so the card refreshes with whatever the current matcher sees.
+async function _reviewRematch(id){
+  var r = _reviewData.find(function(x){ return x.id === id; });
+  if (!r) return;
+  var amt = parseFloat(r.amount) || 0;
+  if (!amt) { alert('Invalid amount on this review item.'); return; }
+  var lastName = _paymentLastName(r.customer_name);
+  var model = (r.vehicle_model || '').toLowerCase().trim();
+  if (!lastName || !model) { alert('Missing last name or model — can\'t re-run matcher.'); return; }
+  var loc = r.location || 'DeBary';
+  var noteLine = r.note_line || _paymentNoteLine(amt, {
+    customer_name: r.customer_name, vehicle_model: r.vehicle_model,
+    vehicle_color: r.vehicle_color, payment_date: r.payment_date
+  });
+
+  try {
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST', headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals26_append_payment',
+        location: loc,
+        data: {
+          last_name: lastName,
+          year: r.vehicle_year ? String(r.vehicle_year).trim() : '',
+          make: r.vehicle_make ? String(r.vehicle_make).trim() : '',
+          model: r.vehicle_model ? String(r.vehicle_model).trim() : '',
+          color: r.vehicle_color ? String(r.vehicle_color).trim() : '',
+          amount: amt,
+          note_line: noteLine,
+          check_dup: true
+        }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if (!data || data.ok === false){
+      alert('Re-match failed: ' + (data && data.error ? data.error : 'unknown'));
+      return;
+    }
+
+    if (data.status === 'matched'){
+      // Confident match — post to Profit26 if col F > 0, save alias, resolve
+      var owed = parseFloat(data.owed) || 0;
+      if (owed > 0){
+        try {
+          await _appendPaymentToProfit({
+            customer_name: r.customer_name, amount: r.amount,
+            vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
+            vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
+            vehicle_vin: r.vehicle_vin, location: r.location,
+            payment_date: r.payment_date
+          });
+        } catch(ep){ console.warn('Profit26 post failed:', ep); }
+      }
+      try {
+        await sbPost('payment_deal_aliases', {
+          vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
+          customer_name_lower: lastName || null,
+          vehicle_model_lower: model || null,
+          location: loc,
+          target_tab: data.tab,
+          target_row: data.row,
+          car_desc: data.car_desc || null,
+          created_by: me ? me.name : '',
+          source_review_id: id
+        });
+      } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : '',
+        resolved_row: data.row,
+        resolved_tab: data.tab
+      });
+      alert('Matched! Posted to ' + data.tab + ' row ' + data.row + (owed > 0 ? ' + Profit26 (owed $' + owed + ')' : ' (col F ≤ 0, skipped Profit26)'));
+      await _reviewLoad();
+      return;
+    }
+
+    if (data.status === 'already_posted'){
+      // Already in the sheet — just resolve the review
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : '',
+        resolved_tab: 'already_posted'
+      });
+      alert('Already posted — review resolved.');
+      await _reviewLoad();
+      return;
+    }
+
+    // Still ambiguous — update candidates + reason on the review row
+    var newReason = data.status === 'possible_duplicate' ? 'possible_duplicate' : data.status;
+    await sbPatch('payment_reviews', id, {
+      reason: newReason,
+      candidates: JSON.stringify(data.candidates || [])
+    });
+    alert('Still ' + newReason.replace('_', ' ') + '. Card refreshed with the current matcher\'s candidates.');
     await _reviewLoad();
   } catch(e){
     alert('Error: ' + (e.message || e));
