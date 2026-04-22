@@ -16055,23 +16055,45 @@ function payDealSelect(dealId){
 // kept. Year drops first, then make.
 // ══════════════════════════════════════════════════════════════
 
-// Extract a last-name token from a customer_name string. Handles:
-//   "Juan Martinez"         → "Martinez"
-//   "Martinez, Juan"        → "Martinez"
-//   "Juan Garcia-Martinez"  → "Garcia-Martinez"
-//   "Van Der Berg, Juan"    → "Van Der Berg" (compound before comma)
-// Returns a lowercase trimmed string, or '' if nothing usable.
-function _paymentLastName(customerName){
-  if(!customerName) return '';
+// Extract possible last-name tokens from a customer_name string. Hispanic
+// names often carry two surnames (paternal + maternal, e.g. "BORROTO
+// GARCIA") and the Deals tab may list either. Returns an array of
+// lowercase candidates; the matcher will try each.
+//   "Juan Martinez"            → ["martinez"]
+//   "Juan Borroto Garcia"      → ["borroto", "garcia"]
+//   "Juan Maria Borroto Garcia"→ ["borroto", "garcia"] (last two only)
+//   "Martinez, Juan"           → ["martinez"]
+//   "Borroto Garcia, Juan"     → ["borroto", "garcia"]
+//   "Juan Garcia-Martinez"     → ["garcia-martinez"]
+function _paymentLastNames(customerName){
+  if(!customerName) return [];
   var s = String(customerName).trim();
-  if(!s) return '';
-  // Comma form → take everything before the first comma
+  if(!s) return [];
+  var raw;
   if(s.indexOf(',') !== -1){
-    return s.split(',')[0].trim().toLowerCase();
+    // "LAST1 LAST2, FIRST MIDDLE" form
+    raw = s.split(',')[0].trim();
+  } else {
+    raw = s;
   }
-  // No comma → take the last whitespace-separated token
-  var parts = s.split(/\s+/);
-  return (parts[parts.length - 1] || '').toLowerCase();
+  var parts = raw.split(/\s+/).filter(Boolean);
+  if(!parts.length) return [];
+  if(s.indexOf(',') !== -1){
+    // Everything before the comma is last-name material
+    return parts.map(function(t){ return t.toLowerCase(); });
+  }
+  // No comma: skip the first token (given name), return up to the last
+  // two remaining tokens as surname candidates.
+  if(parts.length === 1) return [parts[0].toLowerCase()];
+  if(parts.length === 2) return [parts[1].toLowerCase()];
+  return [parts[parts.length - 2].toLowerCase(), parts[parts.length - 1].toLowerCase()];
+}
+
+// Back-compat single-name helper — kept for existing call sites. Returns
+// the primary (last-token) surname for alias storage / legacy flows.
+function _paymentLastName(customerName){
+  var all = _paymentLastNames(customerName);
+  return all.length ? all[all.length - 1] : '';
 }
 
 // Extract the ordered format pieces from a payload — shared by the
@@ -16161,12 +16183,14 @@ async function _findDealAlias(payload){
         '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
       if (byVin && byVin.length) return byVin[0];
     }
-    // Fall back to last-name + model + location.
-    var custL = _paymentLastName(payload.customer_name);
+    // Fall back to last-name + model + location. Try every candidate
+    // surname (supports two-last-name names like "Borroto Garcia").
+    var custNames = _paymentLastNames(payload.customer_name);
     var modelL = (payload.vehicle_model || '').toLowerCase().trim();
-    if (custL && modelL){
+    if (custNames.length && modelL){
+      var inList = '(' + custNames.map(function(n){ return '"' + n + '"'; }).join(',') + ')';
       var byCust = await sbGet('payment_deal_aliases',
-        'customer_name_lower=eq.' + encodeURIComponent(custL) +
+        'customer_name_lower=in.' + encodeURIComponent(inList) +
         '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
         '&location=eq.' + encodeURIComponent(loc) +
         '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
@@ -16223,6 +16247,7 @@ async function _appendPaymentToDeals26(payload){
       console.warn('Alias direct-write failed, falling back to matcher:', dData);
     }
 
+    var allLastNames = _paymentLastNames(payload.customer_name);
     var resp = await fetch(_SHEETS_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify({
@@ -16230,7 +16255,8 @@ async function _appendPaymentToDeals26(payload){
         action: 'deals26_append_payment',
         location: loc,
         data: {
-          last_name: lastName,
+          last_name: lastName, // primary (back-compat)
+          last_names: allLastNames, // all candidate surnames (multi-last support)
           year: payload.vehicle_year ? String(payload.vehicle_year).trim() : '',
           make: payload.vehicle_make ? String(payload.vehicle_make).trim() : '',
           model: model,
@@ -16480,6 +16506,7 @@ async function _appendPaymentToDeals26Checked(payload){
     console.warn('Alias direct-write failed in backfill, falling back to matcher');
   }
 
+  var allLastNamesBackfill = _paymentLastNames(payload.customer_name);
   var resp = await fetch(_SHEETS_URL, {
     method: 'POST', headers: {'Content-Type':'text/plain'},
     body: JSON.stringify({
@@ -16488,6 +16515,7 @@ async function _appendPaymentToDeals26Checked(payload){
       location: loc,
       data: {
         last_name: lastName,
+        last_names: allLastNamesBackfill,
         year: payload.vehicle_year ? String(payload.vehicle_year).trim() : '',
         make: payload.vehicle_make ? String(payload.vehicle_make).trim() : '',
         model: model,
@@ -17136,6 +17164,7 @@ async function _reviewRematch(id, evt){
   };
 
   try {
+    var allLastNamesRematch = _paymentLastNames(r.customer_name);
     var resp = await fetch(_SHEETS_URL, {
       method: 'POST', headers: {'Content-Type':'text/plain'},
       body: JSON.stringify({
@@ -17144,6 +17173,7 @@ async function _reviewRematch(id, evt){
         location: loc,
         data: {
           last_name: lastName,
+          last_names: allLastNamesRematch,
           year: r.vehicle_year ? String(r.vehicle_year).trim() : '',
           make: r.vehicle_make ? String(r.vehicle_make).trim() : '',
           model: r.vehicle_model ? String(r.vehicle_model).trim() : '',

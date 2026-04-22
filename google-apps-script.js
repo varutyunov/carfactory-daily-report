@@ -1586,6 +1586,17 @@ function fixTotalRow() {
 function _handleDeals26AppendPayment(location, data) {
   try {
     var lastName = String(data.last_name || '').trim().toLowerCase();
+    // last_names is an array of surname candidates (Hispanic names often
+    // carry two, e.g. "Borroto Garcia" — sheet may list either). If the
+    // client didn't send it, fall back to the single last_name.
+    var lastNames = [];
+    if (Array.isArray(data.last_names)) {
+      for (var lni = 0; lni < data.last_names.length; lni++) {
+        var t = String(data.last_names[lni] || '').trim().toLowerCase();
+        if (t) lastNames.push(t);
+      }
+    }
+    if (!lastNames.length && lastName) lastNames = [lastName];
     var year = String(data.year || '').trim();
     var make = String(data.make || '').trim().toLowerCase();
     var model = String(data.model || '').trim().toLowerCase();
@@ -1593,9 +1604,9 @@ function _handleDeals26AppendPayment(location, data) {
     var amount = parseFloat(data.amount);
     var noteLine = String(data.note_line || '').trim();
 
-    if (!lastName || !model || isNaN(amount) || amount <= 0 || !noteLine) {
+    if (!lastNames.length || !model || isNaN(amount) || amount <= 0 || !noteLine) {
       return jsonResponse({ ok: false, error: 'invalid_params',
-        got: { last_name: lastName, year: year, make: make, model: model, amount: amount, note_line_len: noteLine.length } });
+        got: { last_names: lastNames, year: year, make: make, model: model, amount: amount, note_line_len: noteLine.length } });
     }
 
     // Lookup chain: Deals26 → Deals25 → Deals24 across BOTH locations.
@@ -1609,7 +1620,7 @@ function _handleDeals26AppendPayment(location, data) {
     var otherSs = SpreadsheetApp.openById(_getSpreadsheetId(otherLoc));
 
     // Run the 3-tab search in the primary location
-    var primary = _searchTabsForMatch(primarySs, lastName, year, make, model, color);
+    var primary = _searchTabsForMatch(primarySs, lastNames, year, make, model, color);
     primary.matchedLoc = primaryLoc;
     var result = primary;
     var ss = primarySs;
@@ -1617,7 +1628,7 @@ function _handleDeals26AppendPayment(location, data) {
 
     // If no confident match primary, try the other location
     if (result.status !== 'matched') {
-      var other = _searchTabsForMatch(otherSs, lastName, year, make, model, color);
+      var other = _searchTabsForMatch(otherSs, lastNames, year, make, model, color);
       other.matchedLoc = otherLoc;
       if (other.status === 'matched') {
         result = other;
@@ -1644,7 +1655,7 @@ function _handleDeals26AppendPayment(location, data) {
       [[primarySs, primaryLoc], [otherSs, otherLoc]].forEach(function(pair){
         var xSs = pair[0]; var xLoc = pair[1];
         ['Deals26','Deals25','Deals24'].forEach(function(tab){
-          var rr = _findDealMatch(xSs, tab, lastName, year, make, model, color);
+          var rr = _findDealMatch(xSs, tab, lastNames, year, make, model, color);
           if (rr.candidates && rr.candidates.length) {
             rr.candidates.forEach(function(c){
               c.tab = tab;
@@ -1766,13 +1777,13 @@ function _handleDeals26AppendPayment(location, data) {
 //   { status: 'partial',  candidates, usedTab }
 //   { status: 'no_match' }
 //   { status: 'no_sheet' } — none of the three tabs exist
-function _searchTabsForMatch(ss, lastName, year, make, model, color) {
+function _searchTabsForMatch(ss, lastNames, year, make, model, color) {
   var lookupTabs = ['Deals26', 'Deals25', 'Deals24'];
   var rank = { matched: 0, multiple: 1, partial: 2, no_match: 3, no_sheet: 4 };
   var best = { status: 'no_sheet' };
   var bestTab = null;
   for (var li = 0; li < lookupTabs.length; li++) {
-    var r = _findDealMatch(ss, lookupTabs[li], lastName, year, make, model, color);
+    var r = _findDealMatch(ss, lookupTabs[li], lastNames, year, make, model, color);
     if (r.status === 'matched') {
       r.usedTab = lookupTabs[li];
       return r;
@@ -1802,7 +1813,11 @@ function _searchTabsForMatch(ss, lastName, year, make, model, color) {
 //   { status: 'partial',  candidates: [...] }            — last name OR car hit, but not both
 //   { status: 'no_match' }                               — nothing
 //   { status: 'no_sheet' }                               — tab missing
-function _findDealMatch(ss, tabName, lastName, year, make, model, color) {
+// lastNames may be a single string (legacy callers) or an array of
+// surname candidates. For two-last-name customers (e.g. "Borroto Garcia"),
+// the sheet may list either — we match if ANY of the candidates appears
+// in col B.
+function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
   var sheet = ss.getSheetByName(tabName);
   if (!sheet) return { status: 'no_sheet' };
 
@@ -1823,6 +1838,18 @@ function _findDealMatch(ss, tabName, lastName, year, make, model, color) {
 
   var colorL = color ? String(color).toLowerCase() : '';
 
+  // Normalize lastNames to an array of non-empty strings
+  var nameList = [];
+  if (Array.isArray(lastNames)) {
+    for (var lnx = 0; lnx < lastNames.length; lnx++) {
+      var lnn = String(lastNames[lnx] || '').trim().toLowerCase();
+      if (lnn) nameList.push(lnn);
+    }
+  } else if (lastNames) {
+    var lnStr = String(lastNames).trim().toLowerCase();
+    if (lnStr) nameList.push(lnStr);
+  }
+
   var fullMatches = [];
   var partials = [];
 
@@ -1831,7 +1858,7 @@ function _findDealMatch(ss, tabName, lastName, year, make, model, color) {
     if (!desc) continue;
     var descL = desc.toLowerCase();
 
-    var hasLast = _wordBoundary(descL, lastName);
+    var hasLast = nameList.some(function(n){ return _wordBoundary(descL, n); });
     var hasYear = yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : false;
     var hasMake = make ? _wordBoundary(descL, make) : false;
     var hasModel = model ? _wordBoundary(descL, model) : false;
