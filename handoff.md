@@ -1,11 +1,15 @@
 # Handoff — Car Factory session of 2026-04-20 → 22
 
-> Day 3 (Apr 22) shipped: Out-of-State deal toggle + end-to-end wiring;
-> Cash-Sale Profit auto-post with idempotency and deferred-tax flow.
-> Currently designing: payment-automation upgrade (Deals26 col G +
-> Profit26 Payments gating + Review tab). Locked design decisions
-> captured at the bottom of this file under "Payment automation design —
-> locked decisions".
+> Day 1 (Apr 20–21): inventory/deals26 sync fixes, Payroll tab, Profit
+> tab mirror, Pending Sales tax auto-fill workflow.
+> Day 2 (Apr 21–22): Out-of-State deal toggle + Cash-Sale Profit
+> auto-post with deferred-tax flow.
+> Day 3 (Apr 22): Payment automation end-to-end — scanned payments
+> auto-append to Deals26 col G (or Deals25/Deals24), gate Profit26 on
+> col F, route ambiguous matches to a new Review tab with Approve /
+> Re-match / Manual / Dismiss actions. Learned aliases, cascade
+> approval, backfill, cross-location fallback, two-surname matching.
+> Apps Script is at v50. Cache v523.
 
 # Handoff — Car Factory session of 2026-04-20 → 21
 
@@ -299,3 +303,77 @@ Full payment amount (same as what's appended to col G). Not a computed "profit p
 5. Index.html: new **Review** tab UI with approve/reject.
 6. Fix `d26PmtSave` collision (either route it through the new action or detect formula).
 7. Cache bump, commit, push.
+
+---
+
+# Day 3 (2026-04-22) — Payment automation — shipped end-to-end
+
+Everything above in "Payment automation design (locked decisions, not yet built)" is now live. Iterated heavily across the day based on real-world failures in the queue. Chronological history below.
+
+## Core build
+- **Supabase tables (DDL via Chrome MCP):**
+  - `payment_reviews` — queue of uncertain matches with candidates + status.
+  - `payment_deal_aliases` — learned `(VIN / customer+model, loc) → (tab, row)` from approved reviews.
+- **Apps Script actions added:**
+  - `deals26_append_payment` — match + write col G + return col F. Supports `check_dup` for backfill idempotency.
+  - `deals26_append_payment_direct` — direct row write for Review approvals / Manual assign. Same `check_dup` support.
+- **index.html:**
+  - `_paymentLastNames`, `_paymentNoteLine`, `_paymentDescFromPayload` — unified formatter `{amount} {model} {color} {LastName} {M/D}` clipped to ~32 chars.
+  - `_appendPaymentToDeals26` — alias → matcher → profit gate → queue Review.
+  - Review overlay + tile (page 2) with badge.
+  - Per-card actions: **Approve** · **Re-match** · **Manual** · **Dismiss**.
+  - Backfill button (header) — sweeps all historical `payments` through the automation.
+
+## Iteration log (chronological)
+
+| Ship | What | Why |
+|---|---|---|
+| `b578826` · AS v44 · v508 | Initial payment-automation E2E | First ship of the locked design |
+| `5e2acaf` · v509 | Review tile visibility fix | Tile had `display:none` + overlay nested in `.swipe-container` (transformed) — broke `position:fixed` |
+| `e3fd5da` · AS v45 | Relax matcher (year+model+lastname required, color tiebreaker) | First real payment (Gauvin) routed to Review because sheet col B often omits make |
+| `ff24b87` · v510 | Note format: drop year, add M/D | User prefers date as identifier; shorter lines |
+| `a1b4cdf` · AS v46 · v511 | Backfill button + `check_dup` | Sweep all 82 eligible historical payments; idempotent re-runs |
+| `de12cd0` · AS v47 | Deals24 tab added to lookup chain | Pinnock 2013 Lexus turned out to be a 2-year loan deal → Deals24 |
+| `839c082` · AS v48 · v512 | Learned aliases | User approves once → system remembers for future payments |
+| `85b7d76` · v513 | Cascade approval | One approve auto-applies to every pending review matching the same deal |
+| `8b301aa` · v514 | Manual assign UI | Some payments need a custom tab+row+label (e.g. Alex Rentas Focus — nickname style) |
+| `82814f6` · v515 | Manual: Profit26 toggle (Auto / Force / Skip) | Force post when user knows deal's in profit but col F formula is stale |
+| `3b1e7bf` · v516 | Manual: row # optional in Force-post | Orphan deals (no Deals tab row) — post only to Profit26 |
+| `050dbab` · v517 | Re-match button per card | Stale reviews from earlier matcher versions (esp. v46's partial-shortcut bug) |
+| `befb7a2` · AS v49 · v518 | Cross-location matcher fallback | DeLand-paid payment for DeBary deal (and vice versa). Searches both spreadsheets, writes to whichever matches |
+| `25a7f6d` · v519 | Re-match button feedback ("Matching…" state) | UX: button felt dead during 1–3s round trip |
+| `157ec83` · v520 | Plain-English alerts ("Found in DeBary Deals25 row 298. Deal is in profit — posting to profit.") | Old alert was technical and wordy |
+| `1d57136` · v521 | Perf: optimistic Approve + parallel writes + background cascade | Reduce click-to-done latency; non-blocking cascade with toast |
+| `3bfdbb5` · v522 | Truly optimistic removal (card gone before fetch) | Dimmed card was hanging during fetch — user complained |
+| `9115f4c` · AS v50 · v523 | Two-last-name matching | "Borroto Garcia" — sheet may list either surname; matcher now tries both |
+
+## Final state of the matcher (v50)
+
+Lookup order for every payment:
+```
+Alias (VIN) → Alias (any lastName + model + location)
+  → Primary location Deals26 → Deals25 → Deals24
+  → Other location Deals26 → Deals25 → Deals24
+  → Review (no_match / multiple / partial / possible_duplicate)
+```
+
+Match rule (required):
+- `last_name token` (any of the 2-surname candidates) — case-insensitive, word-boundary
+- `year` (2-digit or 4-digit form)
+- `model`
+- Color is a **tiebreaker only** — used when 2+ rows match required tokens.
+
+Profit26 post gated on: Deals26 col F > 0 (the row's owed cell after the col G write).
+
+Note format (both col G and Profit26 notes): `{amount} {model} {color} {LastName} {M/D}` clipped to ~32 chars; drops color if needed.
+
+## Known quirks
+- Aliases are keyed by `payment.location` and store `target_tab + target_row`. Cross-location matches don't seed the alias cache; each such payment re-runs the matcher. Low overhead in practice — can add `target_location` column if needed.
+- Old Profit26 Payments note lines (from pre-`_paymentDescFromPayload` era) use the format `{amount} {year} {make} {model} {LastName}`. Edits/deletes via `_updatePaymentInProfit` / `_removePaymentFromProfit` on those old lines won't match exactly because the new formatter produces a different string. Appends work fine; this only affects historical edits.
+- `d26PmtSave` (Deals26 edit-payments popup): `_writeRowToSheet` now preserves the growing col G formula unless the user deliberately overrides the total (different number → rewrites to `=newTotal`). Same popup still doesn't speak the growing-formula format when adding new entries.
+
+## Completed items still worth a glance next session
+- Verify Karian Jackson (cross-location) post landed correctly on DeBary Deals25 row 298.
+- Verify Alex Rentas Focus (Manual-assigned, Force-post) hit Profit26 correctly.
+- Alias table size is tiny; can safely ignore for now.
+- Review queue should shrink over time as aliases accumulate. Eventually near-zero pending.
