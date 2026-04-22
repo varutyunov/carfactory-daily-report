@@ -16608,7 +16608,26 @@ function _reviewRender(){
     html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || '') + '</div>';
     html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
     html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Manual</button>';
     html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
+    html += '</div>';
+    html += '</div>';
+    // Manual-assign inline form (hidden until user taps Manual)
+    html += '<div id="rv-manual-' + r.id + '" style="display:none;background:#091220;border:1px solid #1e3a5f;border-radius:12px;padding:12px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Manual assignment</div>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
+    html += '<select id="rv-mtab-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;appearance:auto;">';
+    html += '<option value="Deals26">Deals26</option><option value="Deals25">Deals25</option><option value="Deals24">Deals24</option>';
+    html += '</select>';
+    html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row #" inputmode="numeric" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
+    html += '</div>';
+    html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St blue Alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
+    html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount will auto-prepend: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> · M/D will auto-append: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong></div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button onclick="_reviewManualCancel(' + r.id + ')" style="flex:1;background:none;border:1px solid #333;border-radius:10px;color:#888;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Cancel</button>';
+    html += '<button onclick="_reviewManualPost(' + r.id + ')" style="flex:1;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Post + Remember</button>';
+    html += '</div>';
     html += '</div>';
     // Candidates
     if (candidates.length){
@@ -16639,6 +16658,118 @@ function _reviewRender(){
 
 function _escHtml(s){
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Helper: format a payment_date (or today) as M/D, used for the
+// manual-assign preview so the user sees what'll get appended.
+function _manualDateTag(paymentDateStr){
+  try {
+    var d = paymentDateStr ? new Date(paymentDateStr + 'T12:00:00') : new Date();
+    if (!isNaN(d.getTime())) return (d.getMonth()+1) + '/' + d.getDate();
+  } catch(e){}
+  return '';
+}
+
+function _reviewManualOpen(id){
+  var form = document.getElementById('rv-manual-' + id);
+  if (form) form.style.display = (form.style.display === 'none' ? 'block' : 'none');
+}
+
+function _reviewManualCancel(id){
+  var form = document.getElementById('rv-manual-' + id);
+  if (form) form.style.display = 'none';
+}
+
+// Post a manually-assigned payment to a user-specified (tab, row) with a
+// custom label, then save an alias so future payments for this deal
+// auto-apply. Runs dup-check to stay idempotent on re-runs.
+async function _reviewManualPost(id){
+  var r = _reviewData.find(function(x){ return x.id === id; });
+  if (!r) return;
+  var tab = (document.getElementById('rv-mtab-' + id) || {}).value || 'Deals26';
+  var row = parseInt((document.getElementById('rv-mrow-' + id) || {}).value, 10);
+  var label = ((document.getElementById('rv-mlabel-' + id) || {}).value || '').trim();
+  if (!row || row < 2){ alert('Row must be a valid row number (2+).'); return; }
+  if (!label){ alert('Label cannot be empty.'); return; }
+
+  // Build the final note line: "{amount} {label} {M/D}"
+  var amt = parseFloat(r.amount) || 0;
+  var dateTag = _manualDateTag(r.payment_date);
+  var noteLine = String(amt) + ' ' + label + (dateTag ? ' ' + dateTag : '');
+
+  if (!confirm('Post $' + amt + ' to ' + tab + ' row ' + row + '?\n\nNote: "' + noteLine + '"\n\nThis row will also be remembered for future payments with the same customer + car.')) return;
+
+  try {
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST', headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals26_append_payment_direct',
+        location: r.location,
+        data: { tab: tab, row: row, amount: amt, note_line: noteLine, check_dup: true }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if (!data || data.ok === false){ alert('Failed: ' + (data && data.error ? data.error : 'unknown')); return; }
+
+    if (data.status === 'possible_duplicate'){
+      if (!confirm('This row already has a payment with amount $' + amt + '. Post anyway? (cancel to leave in Review)')) return;
+      // Re-post without dup-check to force the write
+      var resp2 = await fetch(_SHEETS_URL, {
+        method: 'POST', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals26_append_payment_direct',
+          location: r.location,
+          data: { tab: tab, row: row, amount: amt, note_line: noteLine }
+        })
+      });
+      var data2 = null; try { data2 = await resp2.json(); } catch(e){}
+      if (!data2 || data2.ok === false){ alert('Retry failed: ' + (data2 && data2.error ? data2.error : 'unknown')); return; }
+      data = data2;
+    }
+
+    // Profit26 gate
+    var owed = parseFloat(data.owed) || 0;
+    if (data.status !== 'already_posted' && owed > 0){
+      try {
+        await _appendPaymentToProfit({
+          customer_name: r.customer_name, amount: r.amount,
+          vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
+          vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
+          vehicle_vin: r.vehicle_vin, location: r.location,
+          payment_date: r.payment_date
+        });
+      } catch(ep){ console.warn('Profit26 post failed:', ep); }
+    }
+
+    // Save alias
+    try {
+      await sbPost('payment_deal_aliases', {
+        vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
+        customer_name_lower: _paymentLastName(r.customer_name) || null,
+        vehicle_model_lower: (r.vehicle_model || '').toLowerCase().trim() || null,
+        location: r.location,
+        target_tab: tab,
+        target_row: row,
+        car_desc: label,
+        created_by: me ? me.name : '',
+        source_review_id: id
+      });
+    } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+
+    // Mark resolved
+    await sbPatch('payment_reviews', id, {
+      status: 'approved',
+      resolved_at: new Date().toISOString(),
+      resolved_by: me ? me.name : '',
+      resolved_row: row,
+      resolved_tab: tab
+    });
+    await _reviewLoad();
+  } catch(e){
+    alert('Error: ' + (e.message || e));
+  }
 }
 
 // Approve a candidate — calls the Apps Script direct row-write action,
