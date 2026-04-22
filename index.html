@@ -16624,6 +16624,14 @@ function _reviewRender(){
     html += '</div>';
     html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St blue Alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
     html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount will auto-prepend: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> · M/D will auto-append: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong></div>';
+    // Profit26 posting mode — auto (col F > 0) / force yes / force no
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Profit26 Payments</div>';
+    html += '<div style="display:flex;gap:4px;margin-bottom:10px;">';
+    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'auto\')" id="rv-mpm-auto-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;text-transform:uppercase;letter-spacing:.5px;" data-mode="auto">Auto (col F)</button>';
+    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'yes\')" id="rv-mpm-yes-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;text-transform:uppercase;letter-spacing:.5px;" data-mode="yes">Force post</button>';
+    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'no\')" id="rv-mpm-no-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;text-transform:uppercase;letter-spacing:.5px;" data-mode="no">Skip</button>';
+    html += '</div>';
+    html += '<input type="hidden" id="rv-mpm-val-' + r.id + '" value="auto"/>';
     html += '<div style="display:flex;gap:6px;">';
     html += '<button onclick="_reviewManualCancel(' + r.id + ')" style="flex:1;background:none;border:1px solid #333;border-radius:10px;color:#888;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Cancel</button>';
     html += '<button onclick="_reviewManualPost(' + r.id + ')" style="flex:1;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Post + Remember</button>';
@@ -16680,6 +16688,23 @@ function _reviewManualCancel(id){
   if (form) form.style.display = 'none';
 }
 
+// Toggle the Profit26 posting mode for a manual assignment.
+// mode = 'auto' | 'yes' | 'no'
+function _reviewManualProfitMode(id, mode){
+  var hidden = document.getElementById('rv-mpm-val-' + id);
+  if (hidden) hidden.value = mode;
+  // Restyle the three buttons
+  ['auto','yes','no'].forEach(function(m){
+    var btn = document.getElementById('rv-mpm-' + m + '-' + id);
+    if (!btn) return;
+    var isActive = (m === mode);
+    var color = m === 'auto' ? '#1d4ed8' : (m === 'yes' ? '#10b981' : '#ef4444');
+    btn.style.background = isActive ? color : 'transparent';
+    btn.style.color = isActive ? '#fff' : '#888';
+    btn.style.border = isActive ? ('2px solid ' + color) : '2px solid #333';
+  });
+}
+
 // Post a manually-assigned payment to a user-specified (tab, row) with a
 // custom label, then save an alias so future payments for this deal
 // auto-apply. Runs dup-check to stay idempotent on re-runs.
@@ -16729,9 +16754,17 @@ async function _reviewManualPost(id){
       data = data2;
     }
 
-    // Profit26 gate
+    // Profit26 posting — honor the user's chosen mode from the form.
+    //   'auto' → standard col F > 0 gate (same as regular approval)
+    //   'yes'  → force post regardless of col F (deal is in profit
+    //            per user's judgment, even if the sheet formula hasn't
+    //            caught up)
+    //   'no'   → skip Profit26 entirely
+    var pmMode = ((document.getElementById('rv-mpm-val-' + id) || {}).value) || 'auto';
     var owed = parseFloat(data.owed) || 0;
-    if (data.status !== 'already_posted' && owed > 0){
+    var shouldPost = (pmMode === 'yes') ||
+                     (pmMode === 'auto' && data.status !== 'already_posted' && owed > 0);
+    if (shouldPost){
       try {
         await _appendPaymentToProfit({
           customer_name: r.customer_name, amount: r.amount,
@@ -16741,6 +16774,8 @@ async function _reviewManualPost(id){
           payment_date: r.payment_date
         });
       } catch(ep){ console.warn('Profit26 post failed:', ep); }
+    } else if (pmMode === 'auto' && owed <= 0 && data.status !== 'already_posted'){
+      console.log('Manual post: col F=' + owed + ' → skipping Profit26 (auto mode)');
     }
 
     // Save alias
