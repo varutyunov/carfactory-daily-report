@@ -16250,16 +16250,26 @@ async function _appendPaymentToDeals26(payload){
       var owed = parseFloat(data.owed) || 0;
       var posted = false;
       // Gate the Profit26 Payments post on col F (owed). Positive only.
+      // Use the LOCATION the matcher actually wrote to — this handles the
+      // cross-location case where a payment is tagged one location but
+      // the deal is on the other's sheet. Profit26 should go where the
+      // deal lives, not where the payment was entered.
+      var postLoc = data.location || payload.location;
       if(owed > 0){
         try {
-          await _appendPaymentToProfit(payload);
+          var profitPayload = Object.assign({}, payload, { location: postLoc });
+          await _appendPaymentToProfit(profitPayload);
           posted = true;
         } catch(ep){ console.warn('Profit Payments post failed:', ep); }
       } else {
         console.log('Payment recorded on ' + data.tab + ' row ' + data.row +
           ' — deal not yet in profit (owed $' + owed + '), skipping Profit26');
       }
-      return { ok:true, matched:true, posted_to_profit:posted, owed:owed, tab:data.tab, row:data.row };
+      if (data.location && data.location !== payload.location){
+        console.log('Cross-location match: payment tagged ' + payload.location +
+          ' but deal lives on ' + data.location + ' — wrote there');
+      }
+      return { ok:true, matched:true, posted_to_profit:posted, owed:owed, tab:data.tab, row:data.row, matched_loc:postLoc };
     }
 
     // Ambiguous — queue for Review
@@ -16457,10 +16467,12 @@ async function _appendPaymentToDeals26Checked(payload){
         } catch(e){}
         return { queued: true };
       }
-      // posted — check profit gate
+      // posted — check profit gate (use the matched location, not the
+      // payment's tagged one, for cross-location safety)
       var dOwed = parseFloat(dData.owed) || 0;
       if (dOwed > 0){
-        try { await _appendPaymentToProfit(payload); } catch(e){}
+        var pfPayload = Object.assign({}, payload, { location: dData.location || payload.location });
+        try { await _appendPaymentToProfit(pfPayload); } catch(e){}
       }
       return { posted: true };
     }
@@ -17053,13 +17065,14 @@ async function _reviewRematch(id){
     if (data.status === 'matched'){
       // Confident match — post to Profit26 if col F > 0, save alias, resolve
       var owed = parseFloat(data.owed) || 0;
+      var matchedLoc = data.location || loc;
       if (owed > 0){
         try {
           await _appendPaymentToProfit({
             customer_name: r.customer_name, amount: r.amount,
             vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
             vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
-            vehicle_vin: r.vehicle_vin, location: r.location,
+            vehicle_vin: r.vehicle_vin, location: matchedLoc,
             payment_date: r.payment_date
           });
         } catch(ep){ console.warn('Profit26 post failed:', ep); }
@@ -17069,7 +17082,7 @@ async function _reviewRematch(id){
           vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
           customer_name_lower: lastName || null,
           vehicle_model_lower: model || null,
-          location: loc,
+          location: matchedLoc,
           target_tab: data.tab,
           target_row: data.row,
           car_desc: data.car_desc || null,
@@ -17084,7 +17097,8 @@ async function _reviewRematch(id){
         resolved_row: data.row,
         resolved_tab: data.tab
       });
-      alert('Matched! Posted to ' + data.tab + ' row ' + data.row + (owed > 0 ? ' + Profit26 (owed $' + owed + ')' : ' (col F ≤ 0, skipped Profit26)'));
+      var crossTag = (matchedLoc !== r.location) ? ' [CROSS: payment tagged ' + r.location + ' → deal on ' + matchedLoc + ']' : '';
+      alert('Matched! Posted to ' + matchedLoc + ' ' + data.tab + ' row ' + data.row + (owed > 0 ? ' + Profit26 (owed $' + owed + ')' : ' (col F ≤ 0, skipped Profit26)') + crossTag);
       await _reviewLoad();
       return;
     }

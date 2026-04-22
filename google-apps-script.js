@@ -1598,52 +1598,75 @@ function _handleDeals26AppendPayment(location, data) {
         got: { last_name: lastName, year: year, make: make, model: model, amount: amount, note_line_len: noteLine.length } });
     }
 
-    var ss = SpreadsheetApp.openById(_getSpreadsheetId(location));
+    // Lookup chain: Deals26 → Deals25 → Deals24 across BOTH locations.
+    // Payments sometimes get tagged with the wrong location (e.g. a DeBary
+    // customer pays at the DeLand office, so the payment says DeLand but
+    // the deal row lives on DeBary's sheet). Search the payment's primary
+    // location first, then fall back to the other one if no confident hit.
+    var primaryLoc = location;
+    var otherLoc = (primaryLoc === 'DeBary') ? 'DeLand' : 'DeBary';
+    var primarySs = SpreadsheetApp.openById(_getSpreadsheetId(primaryLoc));
+    var otherSs = SpreadsheetApp.openById(_getSpreadsheetId(otherLoc));
 
-    // Lookup chain: Deals26 → Deals25 → Deals24. Tab names are
-    // case-sensitive. First confident hit wins.
-    var lookupTabs = ['Deals26', 'Deals25', 'Deals24'];
-    var result = { status: 'no_sheet' };
-    var usedTab = 'Deals26';
-    for (var li = 0; li < lookupTabs.length; li++) {
-      var r = _findDealMatch(ss, lookupTabs[li], lastName, year, make, model, color);
-      if (r.status === 'matched') {
-        result = r;
-        usedTab = lookupTabs[li];
-        break;
-      }
-      // Track the "best" non-matched result so we can return it if nothing
-      // matches confidently. Preference: multiple > partial > no_match > no_sheet.
-      var rank = { matched: 0, multiple: 1, partial: 2, no_match: 3, no_sheet: 4 };
-      if ((rank[r.status] || 5) < (rank[result.status] || 5)) {
-        result = r;
-        usedTab = lookupTabs[li];
-      }
-    }
+    // Run the 3-tab search in the primary location
+    var primary = _searchTabsForMatch(primarySs, lastName, year, make, model, color);
+    primary.matchedLoc = primaryLoc;
+    var result = primary;
+    var ss = primarySs;
+    var useLoc = primaryLoc;
 
+    // If no confident match primary, try the other location
     if (result.status !== 'matched') {
-      // Gather partial candidates across all tabs so the Review UI can
-      // show the user every row that was close to matching.
-      var mergedCandidates = [];
-      for (var ti = 0; ti < lookupTabs.length; ti++) {
-        var rr = _findDealMatch(ss, lookupTabs[ti], lastName, year, make, model, color);
-        if (rr.candidates && rr.candidates.length) {
-          rr.candidates.forEach(function(c){
-            c.tab = lookupTabs[ti];
-            mergedCandidates.push(c);
-          });
+      var other = _searchTabsForMatch(otherSs, lastName, year, make, model, color);
+      other.matchedLoc = otherLoc;
+      if (other.status === 'matched') {
+        result = other;
+        ss = otherSs;
+        useLoc = otherLoc;
+      } else {
+        // Rank across the two locations to pick the best non-matched
+        // result for the Review card. Merge candidates from BOTH so the
+        // user sees every near-match across the entire business.
+        var rankS = { matched: 0, multiple: 1, partial: 2, no_match: 3, no_sheet: 4 };
+        if ((rankS[other.status] || 5) < (rankS[result.status] || 5)) {
+          result = other;
+          useLoc = otherLoc;
         }
       }
+    }
+    var usedTab = result.usedTab || 'Deals26';
+
+    if (result.status !== 'matched') {
+      // Merge partial candidates from BOTH locations so the Review UI
+      // shows every row that was close — including cross-location hits
+      // that the user might want to approve manually.
+      var mergedCandidates = [];
+      [[primarySs, primaryLoc], [otherSs, otherLoc]].forEach(function(pair){
+        var xSs = pair[0]; var xLoc = pair[1];
+        ['Deals26','Deals25','Deals24'].forEach(function(tab){
+          var rr = _findDealMatch(xSs, tab, lastName, year, make, model, color);
+          if (rr.candidates && rr.candidates.length) {
+            rr.candidates.forEach(function(c){
+              c.tab = tab;
+              c.loc = xLoc;
+              mergedCandidates.push(c);
+            });
+          }
+        });
+      });
       return jsonResponse({
         ok: true,
         action: 'deals26_append_payment',
         status: result.status === 'no_sheet' ? 'no_match' : result.status,
-        location: location,
+        location: primaryLoc,
         candidates: mergedCandidates
       });
     }
 
-    // Confident match — append to col G (formula + note) on the matched row
+    // Confident match — append to col G (formula + note) on the matched
+    // row. `ss` and `useLoc` were set above — they point to the spreadsheet
+    // that actually contains the row, which may be the cross-location
+    // fallback (e.g. payment tagged DeLand but deal lives on DeBary).
     var sheet = ss.getSheetByName(usedTab);
     var gCol = 7; // Col G
     var fCol = 6; // Col F
@@ -1724,7 +1747,8 @@ function _handleDeals26AppendPayment(location, data) {
       ok: true,
       action: 'deals26_append_payment',
       status: 'matched',
-      location: location,
+      location: useLoc, // sheet that actually got the write (may differ from payload)
+      requested_location: location, // original payment.location for debugging
       tab: usedTab,
       row: result.row,
       car_desc: result.car_desc,
@@ -1734,6 +1758,32 @@ function _handleDeals26AppendPayment(location, data) {
   } catch (err) {
     return jsonResponse({ ok: false, error: 'exception', message: err.message });
   }
+}
+
+// Search Deals26 → Deals25 → Deals24 in a given spreadsheet. Returns:
+//   { status: 'matched', row, car_desc, usedTab }
+//   { status: 'multiple', candidates, usedTab }
+//   { status: 'partial',  candidates, usedTab }
+//   { status: 'no_match' }
+//   { status: 'no_sheet' } — none of the three tabs exist
+function _searchTabsForMatch(ss, lastName, year, make, model, color) {
+  var lookupTabs = ['Deals26', 'Deals25', 'Deals24'];
+  var rank = { matched: 0, multiple: 1, partial: 2, no_match: 3, no_sheet: 4 };
+  var best = { status: 'no_sheet' };
+  var bestTab = null;
+  for (var li = 0; li < lookupTabs.length; li++) {
+    var r = _findDealMatch(ss, lookupTabs[li], lastName, year, make, model, color);
+    if (r.status === 'matched') {
+      r.usedTab = lookupTabs[li];
+      return r;
+    }
+    if ((rank[r.status] || 5) < (rank[best.status] || 5)) {
+      best = r;
+      bestTab = lookupTabs[li];
+    }
+  }
+  best.usedTab = bestTab;
+  return best;
 }
 
 // Find a deal row in the given Deals tab whose col B (car_desc) matches
