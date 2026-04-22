@@ -1062,8 +1062,9 @@ body.light .cal-fab{background:#4488ff !important;}
     <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">REVIEW <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span></span>
   </div>
   <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <div style="padding:12px 12px 0;">
-      <button onclick="runPaymentBackfill()" title="Sweep all existing payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill all historical payments</button>
+    <div style="padding:12px 12px 0;display:flex;flex-direction:column;gap:8px;">
+      <button onclick="runPaymentBackfill()" title="Sweep all existing scanned payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill scanned payments</button>
+      <button onclick="processCarPayPaymentsUI()" title="Route any unprocessed CarPay portal payments through the matcher (posts confident, queues uncertain for review)" style="width:100%;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Process CarPay payments</button>
     </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
@@ -16448,6 +16449,275 @@ function _backfillCancelReq(){
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// CARPAY PAYMENT PROCESSING — mirror of the app-payment flow.
+//
+// Portal payments land in carpay_payments every 2 hrs (sync script).
+// We iterate any reference not yet in carpay_payment_postings, build
+// an app-payment-shaped payload, and run it through the same
+// matcher + check_dup + profit gate + review queue used for scanned
+// payments. Reference is the idempotency key so re-runs are safe.
+//
+// Conservative posture (per user: "if we are sure it's not a double
+// payment and what account it belongs to, post; otherwise Review"):
+//  - exact-line match in col G  → already_posted (skip)
+//  - amount-only match in col G → possible_duplicate (Review)
+//  - customer not yet in carpay_customers → Review with 'no_customer'
+//  - vehicle string missing/unparseable → Review with 'no_vehicle'
+// ══════════════════════════════════════════════════════════════
+
+function _carpayNormalizeLocation(s){
+  s = String(s || '').toLowerCase();
+  if (s === 'debary') return 'DeBary';
+  if (s === 'deland') return 'DeLand';
+  return 'DeBary';
+}
+
+function _carpayParseAmount(s){
+  var n = parseFloat(String(s || '').replace(/[^0-9.\-]/g, ''));
+  return isFinite(n) ? n : 0;
+}
+
+// "April 22, 2026" → "2026-04-22". Empty string if unparseable.
+function _carpayParseDate(s){
+  if (!s) return '';
+  try {
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  } catch(e) { return ''; }
+}
+
+// "2015 Chevrolet Camaro" → { year, make, model }. Best-effort.
+function _carpayParseVehicle(s){
+  s = String(s || '').trim();
+  if (!s) return { year: '', make: '', model: '' };
+  var parts = s.split(/\s+/);
+  var year = '';
+  var rest = parts.slice();
+  if (parts[0] && /^(19|20)\d{2}$/.test(parts[0])){
+    year = parts[0];
+    rest = parts.slice(1);
+  }
+  var make = rest[0] || '';
+  var model = rest.slice(1).join(' ');
+  if (!model && make){ model = make; make = ''; }
+  return { year: year, make: make, model: model };
+}
+
+// Build the app-payment-shaped payload from a CarPay payment + its
+// matching customer row. Marker `raw_ocr_text: 'CarPay — {ref}'` lets
+// _profitShouldPropagate let it through while tagging origin.
+function _carpayPaymentToPayload(cp, cust){
+  var veh = cust ? _carpayParseVehicle(cust.vehicle) : { year:'', make:'', model:'' };
+  return {
+    customer_name: cp.name || (cust && cust.name) || '',
+    amount: _carpayParseAmount(cp.amount_sent),
+    payment_date: _carpayParseDate(cp.date),
+    payment_method: cp.method || '',
+    vehicle_year: veh.year,
+    vehicle_make: veh.make,
+    vehicle_model: veh.model,
+    vehicle_color: '',
+    vehicle_vin: '',
+    location: _carpayNormalizeLocation(cp.location),
+    raw_ocr_text: 'CarPay \u2014 ' + (cp.reference || ''),
+    carpay_reference: cp.reference || null
+  };
+}
+
+// Upsert the outcome row into carpay_payment_postings keyed by
+// reference. Uses merge-duplicates so the same reference can be
+// retried with an updated status (e.g. 'review' → 'posted' after
+// user approves in Review).
+async function _carpayRecordPosting(cp, payload, outcome){
+  try {
+    var row = {
+      reference: cp.reference,
+      status: outcome.status || 'unknown',
+      location: payload ? payload.location : _carpayNormalizeLocation(cp.location),
+      amount: payload ? payload.amount : null,
+      target_tab: outcome.target_tab || null,
+      target_row: outcome.target_row || null,
+      car_desc: outcome.car_desc || null,
+      review_id: outcome.review_id || null,
+      error: outcome.error || null,
+      processed_at: new Date().toISOString()
+    };
+    await fetch(SB_URL + '/rest/v1/carpay_payment_postings', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
+      body: JSON.stringify([row])
+    });
+  } catch(e){
+    console.warn('Failed to record carpay posting for ' + cp.reference + ':', e);
+  }
+}
+
+// Single CarPay payment → match → post or queue for review. Mirrors
+// _appendPaymentToDeals26Checked but writes outcome to
+// carpay_payment_postings keyed by the CarPay reference.
+async function _appendCarPayPaymentToDeals26(cp, custByAccount){
+  if (!cp || !cp.reference){
+    return { status: 'skipped_no_reference' };
+  }
+
+  var cust = custByAccount[cp.account + '|' + String(cp.location || '').toLowerCase()]
+          || custByAccount[cp.account + '|debary']
+          || custByAccount[cp.account + '|deland']
+          || null;
+
+  // No customer row yet — route to review so user can manually assign
+  if (!cust){
+    var outcome = { status: 'no_customer', error: 'account ' + cp.account + ' not found in carpay_customers' };
+    var noCustPayload = _carpayPaymentToPayload(cp, null);
+    try {
+      var rev = await sbPost('payment_reviews', {
+        payment_id: null,
+        customer_name: noCustPayload.customer_name,
+        amount: noCustPayload.amount,
+        vehicle_year: '', vehicle_make: '', vehicle_model: '', vehicle_color: '', vehicle_vin: '',
+        location: noCustPayload.location,
+        payment_date: noCustPayload.payment_date || null,
+        payment_method: noCustPayload.payment_method,
+        note_line: _paymentNoteLine(noCustPayload.amount, noCustPayload),
+        reason: 'no_customer',
+        candidates: JSON.stringify([]),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      if (Array.isArray(rev) && rev.length) outcome.review_id = rev[0].id;
+    } catch(e){ outcome.error = (outcome.error || '') + '; review insert failed: ' + (e.message || e); }
+    await _carpayRecordPosting(cp, noCustPayload, outcome);
+    return outcome;
+  }
+
+  var payload = _carpayPaymentToPayload(cp, cust);
+  var amt = payload.amount;
+  if (amt === 0){
+    await _carpayRecordPosting(cp, payload, { status: 'zero_amount' });
+    return { status: 'zero_amount' };
+  }
+  if (!payload.vehicle_model){
+    // Vehicle missing on carpay_customer — route to review
+    var ro = { status: 'no_vehicle', error: 'customer ' + cp.account + ' has no vehicle string' };
+    try {
+      var r2 = await sbPost('payment_reviews', {
+        payment_id: null,
+        customer_name: payload.customer_name,
+        amount: amt,
+        vehicle_year: payload.vehicle_year, vehicle_make: payload.vehicle_make,
+        vehicle_model: '', vehicle_color: '', vehicle_vin: '',
+        location: payload.location,
+        payment_date: payload.payment_date || null,
+        payment_method: payload.payment_method,
+        note_line: _paymentNoteLine(amt, payload),
+        reason: 'no_vehicle',
+        candidates: JSON.stringify([]),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      if (Array.isArray(r2) && r2.length) ro.review_id = r2[0].id;
+    } catch(e){ ro.error += '; review insert failed: ' + (e.message || e); }
+    await _carpayRecordPosting(cp, payload, ro);
+    return ro;
+  }
+
+  // Fully-armed path — delegate to the existing checked helper.
+  var res;
+  try {
+    res = await _appendPaymentToDeals26Checked(payload);
+  } catch(e){
+    var eo = { status: 'error', error: String(e && e.message || e) };
+    await _carpayRecordPosting(cp, payload, eo);
+    return eo;
+  }
+
+  if (res && res.posted){
+    await _carpayRecordPosting(cp, payload, { status: 'posted' });
+    return { status: 'posted' };
+  }
+  if (res && res.skipped){
+    await _carpayRecordPosting(cp, payload, { status: 'already_posted' });
+    return { status: 'already_posted' };
+  }
+  if (res && res.queued){
+    await _carpayRecordPosting(cp, payload, { status: 'review' });
+    return { status: 'review' };
+  }
+  // Unknown shape — log raw outcome
+  var uo = { status: 'error', error: 'unexpected result: ' + JSON.stringify(res).slice(0, 200) };
+  await _carpayRecordPosting(cp, payload, uo);
+  return uo;
+}
+
+// Iterate all carpay_payments whose reference isn't in
+// carpay_payment_postings yet, run each through the matcher. Safe to
+// re-run. Returns counters. Silent (no alerts) — meant for auto-run
+// on Review open; surface via the Review list rendering.
+var _carpayProcessRunning = false;
+async function _carpayProcessPending(){
+  if (_carpayProcessRunning) return { already_running: true };
+  _carpayProcessRunning = true;
+  var counters = { pending: 0, posted: 0, already: 0, review: 0, no_customer: 0, no_vehicle: 0, zero: 0, error: 0 };
+  try {
+    // Pull processed references set
+    var processedRows = await sbGet('carpay_payment_postings', 'select=reference&limit=5000');
+    var processed = {};
+    (processedRows || []).forEach(function(r){ if (r.reference) processed[r.reference] = true; });
+
+    // Pull all carpay_payments
+    var cpRows = await sbGet('carpay_payments', 'select=reference,name,account,amount_sent,date,method,location&order=date.asc&limit=5000');
+    cpRows = cpRows || [];
+
+    // Customers map for joining
+    var custRows = await sbGet('carpay_customers', 'select=account,location,name,vehicle&limit=5000');
+    var custMap = {};
+    (custRows || []).forEach(function(c){
+      var key = (c.account || '') + '|' + String(c.location || '').toLowerCase();
+      custMap[key] = c;
+    });
+
+    for (var i = 0; i < cpRows.length; i++){
+      var cp = cpRows[i];
+      if (!cp.reference || processed[cp.reference]) continue;
+      counters.pending++;
+      var out = await _appendCarPayPaymentToDeals26(cp, custMap);
+      var s = out && out.status;
+      if (s === 'posted') counters.posted++;
+      else if (s === 'already_posted') counters.already++;
+      else if (s === 'review') counters.review++;
+      else if (s === 'no_customer') counters.no_customer++;
+      else if (s === 'no_vehicle') counters.no_vehicle++;
+      else if (s === 'zero_amount') counters.zero++;
+      else counters.error++;
+    }
+  } finally {
+    _carpayProcessRunning = false;
+  }
+  return counters;
+}
+
+// Manual button handler — same as _carpayProcessPending but with a
+// toast summary so the user sees what happened.
+async function processCarPayPaymentsUI(){
+  if (_carpayProcessRunning){
+    _showReviewToast('CarPay processing already running…', 3000);
+    return;
+  }
+  _showReviewToast('Processing CarPay payments…', 60000);
+  var c = await _carpayProcessPending();
+  var summary = 'CarPay: ' + c.pending + ' checked · posted ' + c.posted +
+    ' · already ' + c.already + ' · review ' + c.review +
+    ' · no-cust ' + c.no_customer + ' · no-vehicle ' + c.no_vehicle +
+    (c.error ? ' · errors ' + c.error : '');
+  _showReviewToast(summary, 5000);
+  try { await _reviewLoad(); } catch(e){}
+}
+
 // One payment, with dup-check enabled. Returns
 //   {posted, skipped, queued} flags. Errors bubble up.
 async function _appendPaymentToDeals26Checked(payload){
@@ -16601,6 +16871,18 @@ async function openReviewQueue(){
   var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
   document.body.style.overflow = 'hidden';
   await _reviewLoad();
+  // Run any unprocessed CarPay payments through the matcher in the
+  // background. New review items from CarPay will appear via the
+  // reload inside processCarPayPaymentsUI. Silent auto-run — the
+  // user can also tap "Process CarPay" to see the toast.
+  (async function(){
+    try {
+      var c = await _carpayProcessPending();
+      if (c && (c.posted || c.review || c.no_customer || c.no_vehicle)){
+        try { await _reviewLoad(); } catch(e){}
+      }
+    } catch(e){ console.warn('CarPay auto-process failed:', e); }
+  })();
 }
 
 function closeReviewQueue(){
