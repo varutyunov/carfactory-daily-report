@@ -261,15 +261,14 @@ async function sbDeleteByLocation(table, location) {
 // Fetch fields we will NOT overwrite — email, vehicle, current_amount_due,
 // scheduled_amount, payment_frequency, repo_flagged. Keyed by account.
 async function sbLoadPreserveMap(location) {
-  // Try * first so we keep working even if we misremembered a column name.
-  const url = SB_URL + '/rest/v1/carpay_customers?location=eq.' + location + '&select=*';
+  const cols = 'account,email,vehicle,current_amount_due,scheduled_amount,payment_frequency,repo_flagged';
+  const url = SB_URL + '/rest/v1/carpay_customers?location=eq.' + location + '&select=' + cols;
   const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
   if (!res.ok) {
     console.error('  preserve-map query failed: ' + res.status + ' ' + (await res.text()).slice(0, 300));
     return {};
   }
   const rows = await res.json();
-  console.log('  preserve-map raw rows: ' + rows.length + (rows[0] ? ' (sample keys: ' + Object.keys(rows[0]).join(',') + ')' : ''));
   const map = {};
   rows.forEach(row => { if (row.account) map[row.account] = row; });
   return map;
@@ -284,8 +283,6 @@ function applyPreserved(cust, preserved) {
   if (p.scheduled_amount) cust.scheduled_amount = p.scheduled_amount;
   if (p.payment_frequency) cust.payment_frequency = p.payment_frequency;
   if (p.repo_flagged) cust.repo_flagged = true;
-  if (p.vin) cust.vin = p.vin;
-  if (p.color) cust.color = p.color;
 }
 
 // ── Location config ─────────────────────────────────────────────────────────

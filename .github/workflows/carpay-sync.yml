@@ -1,9 +1,13 @@
-name: CarPay Sync (PAUSED — will be rebuilt)
+name: CarPay Sync
+
+# Phase 1 sync: 4 HTTP requests per run (2 list pages per location) —
+# no per-customer detail hits. Old paused scraper did ~400/run and CarPay
+# flagged the load.
 
 on:
-  # PAUSED — schedule disabled, will be rebuilt later
-  # schedule:
-  #   - cron: '0 12,14,16,18,20,22,0 * * 1-6'
+  schedule:
+    # UTC: 12, 14, 16, 18, 20, 22, 00 on Mon-Sat → ~every 2 hrs business day.
+    - cron: '0 12,14,16,18,20,22,0 * * 1-6'
   workflow_dispatch:
 
 jobs:
