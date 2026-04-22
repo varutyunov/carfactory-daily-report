@@ -16621,7 +16621,7 @@ function _reviewRender(){
     html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
     html += '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    html += '<button onclick="_reviewRematch(' + r.id + ')" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
+    html += '<button onclick="_reviewRematch(' + r.id + ', event)" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
     html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Manual</button>';
     html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
     html += '</div>';
@@ -17023,7 +17023,7 @@ async function _reviewApprove(id, candidateIdx){
 //     Profit26 on col F, save alias, resolve review).
 //   - Still ambiguous → update the review's candidates/reason in place
 //     so the card refreshes with whatever the current matcher sees.
-async function _reviewRematch(id){
+async function _reviewRematch(id, evt){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
   var amt = parseFloat(r.amount) || 0;
@@ -17036,6 +17036,26 @@ async function _reviewRematch(id){
     customer_name: r.customer_name, vehicle_model: r.vehicle_model,
     vehicle_color: r.vehicle_color, payment_date: r.payment_date
   });
+
+  // Immediate visual feedback — the matcher round-trip can take 1-3s
+  // while it scans both spreadsheets. Without this, taps feel dead.
+  var btn = (evt && evt.target) ? evt.target : (typeof event !== 'undefined' && event.target ? event.target : null);
+  var origBtnText = null;
+  if (btn){
+    origBtnText = btn.textContent;
+    btn.textContent = 'Matching…';
+    btn.disabled = true;
+    btn.style.opacity = '0.55';
+    btn.style.cursor = 'wait';
+  }
+  var restoreBtn = function(){
+    if (btn){
+      btn.textContent = origBtnText || 'Re-match';
+      btn.disabled = false;
+      btn.style.opacity = '';
+      btn.style.cursor = 'pointer';
+    }
+  };
 
   try {
     var resp = await fetch(_SHEETS_URL, {
@@ -17058,6 +17078,7 @@ async function _reviewRematch(id){
     });
     var data = null; try { data = await resp.json(); } catch(e){}
     if (!data || data.ok === false){
+      restoreBtn();
       alert('Re-match failed: ' + (data && data.error ? data.error : 'unknown'));
       return;
     }
@@ -17123,8 +17144,9 @@ async function _reviewRematch(id){
       candidates: JSON.stringify(data.candidates || [])
     });
     alert('Still ' + newReason.replace('_', ' ') + '. Card refreshed with the current matcher\'s candidates.');
-    await _reviewLoad();
+    await _reviewLoad(); // re-render repaints the button fresh
   } catch(e){
+    restoreBtn();
     alert('Error: ' + (e.message || e));
   }
 }
