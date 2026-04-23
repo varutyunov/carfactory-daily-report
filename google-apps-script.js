@@ -1819,6 +1819,14 @@ function _handleDeals26AppendPayment(location, data) {
     var gCell = sheet.getRange(result.row, gCol);
     var fCell = sheet.getRange(result.row, fCol);
 
+    // Swap the noteLine's last-name token to whatever Vlad typed on the
+    // matched deals26 row. The payload's lastname comes from parsing
+    // customer_name (last space-separated token), which picks the wrong
+    // surname for compound names like "WALDO BORROTO GARCIA" → "Garcia"
+    // when Vlad keyed the deal as "... Borroto". Align to the row so
+    // the note reads consistently with the column.
+    noteLine = _rewriteNoteLineLastName(noteLine, result.car_desc);
+
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
     var existingNote = gCell.getNote() || '';
@@ -2057,6 +2065,36 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
   return { status: 'multiple', candidates: _stripInternal(modelHits) };
 }
 
+// Rewrite the note_line's last-name token to match the car_desc on the
+// target row. The app parses customer_name and takes the last space-
+// separated token, which picks the wrong surname for Hispanic compound
+// names (e.g. "WALDO BORROTO GARCIA" → "Garcia", but Vlad keyed the
+// deals26 row as "... Borroto"). Here we swap to Vlad's chosen name
+// so the payment note reads consistently with the column.
+//
+// Input shape is the app's _paymentNoteLine output:
+//   "{amount} {model} [{color}] {lastname} [{M/D}]"
+// We identify the lastname as the word right before the trailing M/D
+// (or the last word if no date). Replace with the last word of
+// car_desc (lowercased to match app format). If same case-insensitive,
+// return unchanged.
+function _rewriteNoteLineLastName(noteLine, carDesc){
+  if (!noteLine || !carDesc) return noteLine;
+  var descTokens = String(carDesc).trim().split(/\s+/);
+  var matchedLast = descTokens[descTokens.length - 1];
+  if (!matchedLast) return noteLine;
+  matchedLast = matchedLast.toLowerCase();
+  var tokens = noteLine.trim().split(/\s+/);
+  if (tokens.length < 2) return noteLine;
+  var dateRe = /^\d{1,2}\/\d{1,2}$/;
+  var hasDate = dateRe.test(tokens[tokens.length - 1]);
+  var lastIdx = hasDate ? tokens.length - 2 : tokens.length - 1;
+  if (lastIdx < 1) return noteLine;
+  if (tokens[lastIdx].toLowerCase() === matchedLast) return noteLine;
+  tokens[lastIdx] = matchedLast;
+  return tokens.join(' ');
+}
+
 // Drop the lookup-only `descL` field when returning candidates.
 function _stripInternal(rows){
   return rows.map(function(r){
@@ -2092,6 +2130,11 @@ function _handleDeals26AppendPaymentDirect(location, data) {
 
     var gCell = sheet.getRange(row, 7); // Col G
     var fCell = sheet.getRange(row, 6); // Col F
+
+    // Pull the matched row's car_desc (col B) to align the note's last-name
+    // token with what Vlad typed on the row — same rule as the matcher path.
+    var rowCarDesc = String(sheet.getRange(row, 2).getValue() || '').trim();
+    noteLine = _rewriteNoteLineLastName(noteLine, rowCarDesc);
 
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
