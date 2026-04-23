@@ -17399,6 +17399,67 @@ async function _reviewLoad(){
   try {
     var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=100');
     _reviewData = Array.isArray(rows) ? rows : [];
+    // For deal_pending reviews, fetch the inventory + inventory_costs
+    // row that would be linked on approval — so the card can show it
+    // as a preview. Runs in parallel; each review gets a `_preview`
+    // field set once its lookups complete. Empty/null → Review renders
+    // a "no linked cost row" warning.
+    var dealReviews = _reviewData.filter(function(r){ return r.reason === 'deal_pending' && r.vehicle_vin; });
+    if (dealReviews.length){
+      await Promise.all(dealReviews.map(async function(r){
+        try {
+          var invRows = await sbGet('inventory',
+            'vin=eq.' + encodeURIComponent(r.vehicle_vin) +
+            '&select=id,name,color,miles&limit=1');
+          var inv = (invRows && invRows[0]) || null;
+          // Primary: direct car_id match (ic row that's already linked)
+          var ic = null;
+          if (inv){
+            var icRows = await sbGet('inventory_costs',
+              'car_id=eq.' + inv.id +
+              '&select=id,car_name,purchase_cost,joint_expenses,vlad_expenses,expense_notes,vlad_expense_notes,sort_order&limit=1');
+            ic = (icRows && icRows[0]) || null;
+          }
+          // Fallback: unlinked ic rows (car_id is null — happens after a
+          // revert-restore because the reconciler doesn't re-populate
+          // car_id). Search by model + location to offer candidates the
+          // user can pick from.
+          var fallbackCandidates = [];
+          if (!ic){
+            var vdTokens = String(r.vehicle_model || '').trim().split(/\s+/).filter(Boolean);
+            var modelKey = (vdTokens[0] || '').toLowerCase();
+            if (modelKey && modelKey.length >= 3){
+              try {
+                var fRows = await sbGet('inventory_costs',
+                  'car_name=ilike.' + encodeURIComponent('*' + modelKey + '*') +
+                  '&location=eq.' + encodeURIComponent(r.location || 'DeBary') +
+                  '&select=id,car_name,purchase_cost,joint_expenses,vlad_expenses,sort_order,car_id' +
+                  '&order=sort_order.desc&limit=10');
+                fallbackCandidates = (fRows || []).slice(0, 10);
+              } catch(e){ /* silent */ }
+            }
+          }
+          // Detect the same color / year conflict _autopopulateDeals26 does,
+          // so we flag suspect links before the user approves.
+          var conflict = null;
+          if (ic && ic.car_name){
+            var icColor = _extractColorWord(ic.car_name);
+            var dealColor = _extractColorWord(r.vehicle_color || '');
+            if (icColor && dealColor && icColor !== dealColor){
+              var isGray = (icColor === 'gray' && dealColor === 'grey') || (icColor === 'grey' && dealColor === 'gray');
+              if (!isGray) conflict = 'color mismatch (deal=' + dealColor + ', linked=' + icColor + ')';
+            }
+            if (!conflict && r.vehicle_year){
+              var ys = String(r.vehicle_year).slice(-2);
+              if (String(ic.car_name).toLowerCase().indexOf(ys) === -1) conflict = 'year mismatch';
+            }
+          }
+          r._preview = { inv: inv, ic: ic, conflict: conflict, candidates: fallbackCandidates };
+        } catch(e){
+          r._preview = { inv: null, ic: null, conflict: null, candidates: [], error: String(e && e.message || e) };
+        }
+      }));
+    }
     if (count) count.textContent = _reviewData.length ? (_reviewData.length + ' pending') : '';
     _reviewRender();
     _reviewRefreshBadge();
@@ -17431,6 +17492,46 @@ function _reviewRender(){
       html += '<div style="font-size:11px;color:' + tint + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>';
       html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
       html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
+
+      // Link preview — show which inventory_costs row would be used,
+      // whether color/year agrees, and (when missing) a fallback list
+      // of name-matched candidates the user can pick + link manually.
+      if (isDeal){
+        var pv = r._preview;
+        html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#0a0a0a;border:1px solid #1a1a1a;">';
+        html += '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Would link to</div>';
+        if (pv && pv.ic){
+          var tintWarn = pv.conflict ? '#ef4444' : '#4ade80';
+          var icCost = (parseFloat(pv.ic.purchase_cost) || 0);
+          var icExp = (parseFloat(pv.ic.joint_expenses) || 0) + (parseFloat(pv.ic.vlad_expenses) || 0);
+          html += '<div style="font-size:13px;color:' + tintWarn + ';font-weight:700;">' + _escHtml(pv.ic.car_name || '') + '</div>';
+          html += '<div style="font-size:11px;color:#888;margin-top:3px;">cost $' + icCost + ' · expenses $' + icExp + ' · sort ' + (pv.ic.sort_order || '?') + '</div>';
+          if (pv.conflict){
+            html += '<div style="font-size:11px;color:#ef4444;margin-top:6px;font-weight:700;">⚠ ' + _escHtml(pv.conflict) + '</div>';
+            html += '<div style="font-size:11px;color:#888;margin-top:2px;">Approve anyway to rebuild car_desc from deal data (cost + expenses zeroed, cost row left intact).</div>';
+          }
+        } else if (pv && pv.candidates && pv.candidates.length){
+          html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:8px;">No direct car_id link. Pick the matching cost row, or approve without linking (cost + expenses will be 0).</div>';
+          html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+          for (var ci = 0; ci < pv.candidates.length; ci++){
+            var c = pv.candidates[ci];
+            var cCost = parseFloat(c.purchase_cost) || 0;
+            var cExp = (parseFloat(c.joint_expenses) || 0) + (parseFloat(c.vlad_expenses) || 0);
+            html += '<button onclick="_reviewLinkIcToDeal(' + r.id + ',' + c.id + ')" style="display:block;text-align:left;background:#111;border:1px solid #222;border-radius:8px;color:#fff;padding:8px 10px;font-size:12px;cursor:pointer;width:100%;">' +
+              '<span style="font-weight:700;">' + _escHtml(c.car_name || '') + '</span> ' +
+              '<span style="color:#888;font-size:11px;">· $' + cCost + ' cost · $' + cExp + ' exp · sort ' + (c.sort_order || '?') + '</span>' +
+              '</button>';
+          }
+          html += '</div>';
+        } else if (pv && pv.inv){
+          html += '<div style="font-size:13px;color:#fbbf24;font-weight:700;">' + _escHtml(pv.inv.name || '') + '</div>';
+          html += '<div style="font-size:11px;color:#888;margin-top:3px;">inventory row exists (id ' + pv.inv.id + ') but no matching inventory_costs row linked. Approve → car_desc built from deal data; cost/expenses start at 0.</div>';
+        } else {
+          html += '<div style="font-size:11px;color:#888;">No inventory match by VIN. Approve → car_desc built from deal data; cost/expenses start at 0.</div>';
+        }
+        html += '</div>';
+      }
+
       html += '<div style="display:flex;gap:8px;margin-top:12px;">';
       html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:12px;font-size:13px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve · post now</button>';
       html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:12px;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
@@ -17799,6 +17900,25 @@ async function _reviewApprove(id, candidateIdx){
   } catch(e){
     _showReviewToast('Approve error — ' + (e.message || e), 4000);
     await _reviewLoad();
+  }
+}
+
+// Link an unlinked inventory_costs row (car_id=null) to the deal's
+// inventory row, so a subsequent Approve on the deal_pending review
+// picks up the cost/expenses cleanly via the normal car_id lookup.
+// Called by the candidate buttons inside the link-preview block.
+async function _reviewLinkIcToDeal(reviewId, icId){
+  var r = _reviewData.find(function(x){ return x.id === reviewId; });
+  if (!r || !r.vehicle_vin){ alert('Missing VIN on this review.'); return; }
+  try {
+    var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(r.vehicle_vin) + '&select=id&limit=1');
+    var inv = invRows && invRows[0];
+    if (!inv){ alert('No inventory row for VIN ' + r.vehicle_vin); return; }
+    var ic = await sbPatch('inventory_costs', icId, { car_id: inv.id });
+    _showReviewToast('Linked cost row #' + icId + ' to inventory #' + inv.id + '. Reloading…', 2500);
+    await _reviewLoad();
+  } catch(e){
+    alert('Link failed: ' + (e.message || e));
   }
 }
 
