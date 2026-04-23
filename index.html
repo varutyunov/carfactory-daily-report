@@ -16584,6 +16584,7 @@ async function _carpayRecordPosting(cp, payload, outcome){
   try {
     var row = {
       reference: cp.reference,
+      account: cp.account || null,
       status: outcome.status || 'unknown',
       location: payload ? payload.location : _carpayNormalizeLocation(cp.location),
       amount: payload ? payload.amount : null,
@@ -16602,6 +16603,44 @@ async function _carpayRecordPosting(cp, payload, outcome){
   } catch(e){
     console.warn('Failed to record carpay posting for ' + cp.reference + ':', e);
   }
+}
+
+// After a review for a CarPay payment is resolved (approve or manual
+// assign), stamp the winning target onto every carpay_payment_postings
+// row that was created for that review. This is what makes future
+// payments for the same account auto-match via _findCarPayAccountAlias.
+async function _patchCarPayPostingsForReview(reviewId, targetTab, targetRow, carDesc){
+  if (!reviewId) return;
+  try {
+    await fetch(SB_URL + '/rest/v1/carpay_payment_postings?review_id=eq.' + encodeURIComponent(reviewId), {
+      method: 'PATCH',
+      headers: Object.assign({}, SB_HEADERS),
+      body: JSON.stringify({
+        status: 'posted',
+        target_tab: targetTab || null,
+        target_row: targetRow || null,
+        car_desc: carDesc || null
+      })
+    });
+  } catch(e){ console.warn('carpay postings patch-from-review failed:', e); }
+}
+
+// Find a prior successful posting for this CarPay account+location.
+// Returns {target_tab, target_row, car_desc} or null. Future CarPay
+// payments for the same account auto-match to that target without
+// hitting the slow matcher or prompting Review.
+async function _findCarPayAccountAlias(account, location){
+  if (!account) return null;
+  try {
+    var loc = String(location || '').trim();
+    var rows = await sbGet('carpay_payment_postings',
+      'account=eq.' + encodeURIComponent(account) +
+      (loc ? '&location=eq.' + encodeURIComponent(loc) : '') +
+      '&target_tab=not.is.null&target_row=not.is.null' +
+      '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc');
+    if (Array.isArray(rows) && rows.length) return rows[0];
+  } catch(e){ console.warn('carpay account alias lookup failed:', e); }
+  return null;
 }
 
 // Single CarPay payment → match → post or queue for review. Mirrors
@@ -16678,10 +16717,72 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
     return { status: 'skipped_no_reference' };
   }
 
+  var cpLoc = _carpayNormalizeLocation(cp.location);
   var cust = custByAccount[cp.account + '|' + String(cp.location || '').toLowerCase()]
           || custByAccount[cp.account + '|debary']
           || custByAccount[cp.account + '|deland']
           || null;
+
+  // ── Account-level alias short-circuit ──
+  // If a previous payment for this CarPay account was posted (via
+  // auto-match, Review approve, or Manual assign), reuse that target
+  // without running the matcher. Idempotent via Apps Script check_dup.
+  var accountAlias = await _findCarPayAccountAlias(cp.account, cpLoc);
+  if (accountAlias && accountAlias.target_tab && accountAlias.target_row){
+    var aliasPayload = _carpayPaymentToPayload(cp, cust);
+    if (aliasPayload.amount > 0){
+      try {
+        var aliasResp = await fetch(_SHEETS_URL, {
+          method: 'POST', headers: {'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            secret: _SHEETS_SECRET,
+            action: 'deals26_append_payment_direct',
+            location: aliasPayload.location,
+            data: {
+              tab: accountAlias.target_tab,
+              row: accountAlias.target_row,
+              amount: aliasPayload.amount,
+              note_line: _paymentNoteLine(aliasPayload.amount, aliasPayload),
+              check_dup: true
+            }
+          })
+        });
+        var aliasData = null; try { aliasData = await aliasResp.json(); } catch(e){}
+        if (aliasData && aliasData.ok !== false){
+          if (aliasData.status === 'already_posted'){
+            await _carpayRecordPosting(cp, aliasPayload, {
+              status: 'already_posted',
+              target_tab: accountAlias.target_tab,
+              target_row: accountAlias.target_row,
+              car_desc: accountAlias.car_desc
+            });
+            return { status: 'already_posted' };
+          }
+          if (aliasData.status === 'possible_duplicate'){
+            // Alias says this is the row, but col G has same-day
+            // same-amount — route to Review so user can decide.
+            var pdCands = [{ tab: accountAlias.target_tab, row: accountAlias.target_row, car_desc: accountAlias.car_desc, location: aliasPayload.location, has_last: true, has_car: true }];
+            var rid = await _carpayQueueReview(aliasPayload, 'possible_duplicate', pdCands);
+            await _carpayRecordPosting(cp, aliasPayload, { status: 'review', review_id: rid });
+            return { status: 'review' };
+          }
+          // matched — posted OK
+          var aliasOwed = parseFloat(aliasData.owed) || 0;
+          if (aliasOwed > 0){
+            try { await _appendPaymentToProfit(aliasPayload); } catch(ep){ console.warn(ep); }
+          }
+          await _carpayRecordPosting(cp, aliasPayload, {
+            status: 'posted',
+            target_tab: accountAlias.target_tab,
+            target_row: accountAlias.target_row,
+            car_desc: accountAlias.car_desc
+          });
+          return { status: 'posted' };
+        }
+        console.warn('CarPay alias direct-write failed, falling back:', aliasData);
+      } catch(e){ console.warn('CarPay alias attempt errored, falling back:', e); }
+    }
+  }
 
   // No customer row yet — last-name candidates from deals26 (both locations)
   if (!cust){
@@ -17378,6 +17479,11 @@ async function _reviewManualPost(id){
           source_review_id: id
         });
       } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+      // CarPay stamp: if this review came from a CarPay payment,
+      // record the (tab,row) target on its carpay_payment_postings
+      // row so future payments for the same account auto-match.
+      try { await _patchCarPayPostingsForReview(id, tab, row, label); }
+      catch(e){ console.warn('CarPay alias stamp failed:', e); }
     }
 
     // Mark resolved
@@ -17450,6 +17556,12 @@ async function _reviewApprove(id, candidateIdx){
         resolved_row: aliasRow,
         resolved_tab: aliasTab
       }).catch(function(e){ console.warn('Review mark failed:', e); }),
+      // CarPay auto-link: if this review was created from a CarPay
+      // payment, stamp the winning target onto its carpay_payment_postings
+      // row(s) so future payments for the same account short-circuit
+      // via _findCarPayAccountAlias.
+      _patchCarPayPostingsForReview(id, aliasTab, aliasRow, c.car_desc || null)
+        .catch(function(e){ console.warn('CarPay alias stamp failed:', e); }),
       sbPost('payment_deal_aliases', {
         vin: aliasVin,
         customer_name_lower: aliasCust || null,
@@ -17743,6 +17855,9 @@ async function _reviewRematch(id, evt){
           source_review_id: id
         });
       } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+      // CarPay stamp — future payments for the same account auto-match.
+      try { await _patchCarPayPostingsForReview(id, data.tab, data.row, data.car_desc || null); }
+      catch(e){ console.warn('CarPay alias stamp failed:', e); }
       await sbPatch('payment_reviews', id, {
         status: 'approved',
         resolved_at: new Date().toISOString(),
