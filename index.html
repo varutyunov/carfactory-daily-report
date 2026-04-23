@@ -18504,6 +18504,15 @@ async function dealSubmit() {
     var _d26Snap = null;
     try { _d26Snap = await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
 
+    // Loud warning when autopopulate had to fall back because the
+    // linked inventory_costs row contradicted the deal. Tells the user
+    // to spot-check the Deals26 car_desc and the inventory_costs link.
+    if (_d26Snap && _d26Snap.carDescWarning){
+      alert('Heads up — Deals26 car description was built from the deal data because the linked inventory_costs row disagreed:\n\n' +
+        _d26Snap.carDescWarning +
+        '\n\nThe new Deals26 entry: "' + (_d26Snap.carDesc || '') + '"\n\nCheck the Inventory tab to re-link or rename the stray cost row if needed.');
+    }
+
     // D3: auto-append cash deals to Profit Cash Sales — ONLY when the owed
     //     amount is final. If taxes are still pending (CSV miss, not OOS),
     //     skip here and let _fillMissingTaxes post once taxes are filled.
@@ -18537,6 +18546,36 @@ async function dealSubmit() {
 // ══════════════════════════════════════════════════════════════
 // AUTO-POPULATE DEALS26 FROM DEAL UPLOAD
 // ══════════════════════════════════════════════════════════════
+// Pull the first known color word out of a string. Used to sanity-
+// check inventory_costs.car_name vs. deal.color before we trust the
+// linked inventory_costs row's name.
+var _D26_COLOR_WORDS = {'white':1,'black':1,'silver':1,'red':1,'blue':1,'gray':1,'grey':1,'green':1,'yellow':1,'gold':1,'orange':1,'purple':1,'tan':1,'brown':1,'beige':1,'pearl':1,'maroon':1,'teal':1,'navy':1,'bronze':1,'burgundy':1,'cream':1,'ivory':1,'champagne':1,'charcoal':1};
+function _extractColorWord(s){
+  var toks = String(s || '').toLowerCase().split(/\s+/);
+  for (var i = 0; i < toks.length; i++){
+    if (_D26_COLOR_WORDS[toks[i]]) return toks[i];
+  }
+  return '';
+}
+
+// Build a car_desc string from the deal record + inventory car when
+// inventory_costs can't be trusted (wrong link) or isn't available.
+// Format: "{YY} {model} {color} {miles}k" — customer last name gets
+// appended by the caller. Skips any piece that's empty.
+function _buildCarDescFromDeal(record, car){
+  var vd = String((record && record.vehicle_desc) || '').trim();
+  var parts = vd.split(/\s+/);
+  var yearShort = (parts[0] && /^(19|20)\d{2}$/.test(parts[0])) ? parts[0].slice(2) : '';
+  var model = parts.length >= 3 ? parts.slice(2).join(' ') : (parts[1] || '');
+  var color = String((record && record.color) || '').toLowerCase().trim();
+  var miles = '';
+  if (car && car.miles){
+    var mi = parseFloat(car.miles);
+    if (isFinite(mi) && mi > 0) miles = Math.round(mi / 1000) + 'k';
+  }
+  return [yearShort, model, color, miles].filter(Boolean).join(' ');
+}
+
 async function _autopopulateDeals26(record, car) {
   var vin = (record.vin || '').trim();
   if (!vin) return;
@@ -18552,11 +18591,54 @@ async function _autopopulateDeals26(record, car) {
     if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
   }
 
-  // 3. Build car_desc: prefer inventory_costs.car_name, fall back to deal vehicle_desc
-  //    Append customer last name to match sheet format (e.g. "14 Accord black 204k Colon")
-  var carDesc = (ic && ic.car_name) ? ic.car_name : (record.vehicle_desc || (car && car.name) || '');
+  // 3. Build car_desc.
+  //
+  // Normally we prefer inventory_costs.car_name because it's the short
+  // human name Vlad curates ("14 Accord black 204k"). But inventory_costs
+  // rows can be manually linked to the wrong inventory car (happened in
+  // April 2026 — orange Civic deal got deals26 named "12 Civic cp white
+  // 154k"). Sanity-check the ic.car_name against the deal's own color +
+  // year. If they contradict, fall back to a description built from
+  // the deal / inventory data, and surface a warning.
+  var carDescWarning = null;
+  var carDesc;
   var custParts = (record.customer_name || '').trim().split(/\s+/);
   var custLast = custParts.length > 0 ? custParts[custParts.length - 1] : '';
+
+  if (ic && ic.car_name){
+    var _icNameColor = _extractColorWord(ic.car_name);
+    var _dealColor = _extractColorWord(record.color || '');
+    var _vdTokens = String(record.vehicle_desc || '').trim().split(/\s+/);
+    var _dealYearFull = (_vdTokens[0] && /^(19|20)\d{2}$/.test(_vdTokens[0])) ? _vdTokens[0] : '';
+    var _dealYearShort = _dealYearFull ? _dealYearFull.slice(2) : '';
+    var _icLower = String(ic.car_name).toLowerCase();
+
+    var _colorConflict = false;
+    if (_icNameColor && _dealColor && _icNameColor !== _dealColor){
+      var _isGraySynonym =
+        (_icNameColor === 'gray' && _dealColor === 'grey') ||
+        (_icNameColor === 'grey' && _dealColor === 'gray');
+      if (!_isGraySynonym) _colorConflict = true;
+    }
+    var _yearConflict = false;
+    if (_dealYearShort && _icLower.indexOf(_dealYearShort) === -1 &&
+        _icLower.indexOf(_dealYearFull) === -1){
+      _yearConflict = true;
+    }
+
+    if (_colorConflict || _yearConflict){
+      var _parts = [];
+      if (_colorConflict) _parts.push('color mismatch (deal=' + _dealColor + ', linked=' + _icNameColor + ')');
+      if (_yearConflict) _parts.push('year mismatch (deal=' + _dealYearFull + ', linked=' + ic.car_name + ')');
+      carDescWarning = _parts.join('; ');
+      console.warn('Deals26 autopopulate: inventory_costs mismatch — ' + carDescWarning + ' — using deal-built car_desc');
+      carDesc = _buildCarDescFromDeal(record, car);
+    } else {
+      carDesc = ic.car_name;
+    }
+  } else {
+    carDesc = _buildCarDescFromDeal(record, car);
+  }
   if (custLast) carDesc = carDesc + ' ' + custLast;
 
   // 4. Pull cost + expenses from inventory_costs
@@ -18712,7 +18794,8 @@ async function _autopopulateDeals26(record, car) {
     carDesc: carDesc,
     owed: owed,
     taxes: taxes,
-    taxesKnown: !!record.out_of_state || taxes > 0
+    taxesKnown: !!record.out_of_state || taxes > 0,
+    carDescWarning: carDescWarning
   };
 }
 
