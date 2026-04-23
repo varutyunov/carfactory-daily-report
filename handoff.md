@@ -1,4 +1,4 @@
-# Handoff — Car Factory session of 2026-04-20 → 22
+# Handoff — Car Factory session of 2026-04-20 → 23
 
 > Day 1 (Apr 20–21): inventory/deals26 sync fixes, Payroll tab, Profit
 > tab mirror, Pending Sales tax auto-fill workflow.
@@ -15,6 +15,17 @@
 > Back on schedule (every 2 hrs Mon-Sat business day). Phase 2 (email /
 > vehicle / current_amount_due / scheduled_amount / payment_frequency
 > re-acquisition) deferred.
+> Day 5 (Apr 22–23): APPROVE-FIRST mode — nothing auto-posts anymore.
+> Every deal upload / scanned payment / CarPay payment queues a Review
+> card with a snapshot of what would be posted; user taps Approve and
+> only then does Deals26 / Profit26 get written and inventory_costs get
+> deleted. Plus: E-Sign deposit+invoice buttons restored (silently
+> deleted twice), Review tab back button fixed, Profit26 notes
+> retroactive reformat (284 lines across 15 cells), CarPay Process
+> button with visible progress + cancellable + resumable, CarPay
+> per-account alias learning, CarPay cutoff 2026-04-09, lowercase-
+> lastname + MAX 30-char format, color preserved when it fits.
+> Apps Script at v54. Cache v540.
 
 ---
 
@@ -480,3 +491,305 @@ Note format (both col G and Profit26 notes): `{amount} {model} {color} {LastName
 - Verify Alex Rentas Focus (Manual-assigned, Force-post) hit Profit26 correctly.
 - Alias table size is tiny; can safely ignore for now.
 - Review queue should shrink over time as aliases accumulate. Eventually near-zero pending.
+
+---
+
+# Day 5 (2026-04-22 → 23) — APPROVE-FIRST mode + pile of UX fixes
+
+## The big behavioral change
+
+**Nothing auto-posts anymore.** Every automation path that used to
+write to Deals26 / Profit26 now queues a Review card first. User
+taps Approve → *then* the write happens. Trigger: `_APPROVE_FIRST_MODE = true`
+global in `index.html`. Flip to `false` to restore legacy auto-post
+behavior.
+
+### Why we turned this on
+- Apr 22 Alicea Civic upload auto-linked to the wrong inventory_costs
+  row ("12 Civic cp white 154k 2") and wrote that as the deals26
+  car_desc. Row's cost + expense_notes bled in too.
+- Apr 22 Irving Tesla same pattern — inherited "$2180 cost + 413
+  expenses + notes wp exp / grill / front bumper" from an unrelated
+  Odyssey row.
+- Vlad reverted the sheet to an Apr 20 snapshot. The revert restored
+  deals26 rows but NOT inventory_costs's deleted rows (and `car_id`
+  on any restored ic rows is null after the reconciler re-inserts).
+- Decision: no more auto-posts. User approves each one.
+
+### Review card types now
+| Reason | Renders | Approve runs |
+|---|---|---|
+| `deal_pending` | green snapshot block + optional candidate picker | `_autopopulateDeals26(record, car, icOverride)` → if cash+taxesKnown+owed>0, queues a `cash_sale_pending` follow-up |
+| `cash_sale_pending` | yellow card | `_appendCashSaleToProfit(...)` |
+| `approve_first` | existing payment review UI | same as existing |
+| existing no_match / multiple / partial / possible_duplicate / no_customer / no_vehicle / no_vehicle_name_matches / no_customer_name_matches | existing | existing |
+
+### Snapshot design — the critical piece
+When a deal review is queued, `_queueDealReview` **snapshots** the
+current inventory + inventory_costs state into the review row's new
+`snapshot` JSONB column. Full ic payload: car_name, purchase_cost,
+joint_expenses, vlad_expenses, **expense_notes, vlad_expense_notes**,
+sort_order, location. Rendered on the card as a green "Snapshot at
+upload · will be posted on approve" block with the multi-line
+expense notes in a mono-spaced box.
+
+On approve, `_autopopulateDeals26` accepts an optional 3rd arg
+`icOverride`. When present it skips the live ic lookup and uses the
+snapshot directly — so cost + expense_notes survive even if the
+live ic row has been deleted or changed since upload. Step 12
+(auto-delete of the linked inventory_costs row) only runs on
+approve, with the snapshot's `ic.id`.
+
+### Duplicate guard
+Every `deal_pending` card also checks `deals26` by
+(sold_inv_vin, location) on load. If a row exists, shows a red
+"⚠ Already posted to Deals26 row X" banner at the top and blocks
+Approve with an alert. Prevents double-posting on deals that were
+already written by the legacy auto-path before approve-first shipped.
+
+### Candidate picker (for unlinked ic rows)
+When the deal's VIN → inventory row has no car_id-linked
+inventory_costs, `_reviewLoad` searches inventory_costs by
+model-name + location (`ilike '*{model}*'`). Top 10 candidates
+render as tappable buttons on the card. Tap → PATCHes
+`inventory_costs.car_id = inv.id` → reloads → card then shows the
+linked ic as the primary link. Handler: `_reviewLinkIcToDeal`.
+
+## Backfilled on close
+- Cleared `payment_reviews` (162 → 0) — fresh slate for approve-first.
+- Cleared non-final `carpay_payment_postings` (364 → 251; kept the
+  `skipped_pre_cutoff` tags so those stay out of the queue forever).
+- Queued the 5 post-Apr-20 deals (51–55) as `deal_pending` cards.
+  Snapshots backfilled (ic=null for all because `car_id` on the
+  post-revert restored rows is null; `inv` populated; candidate
+  buttons surface matching ic rows when they exist):
+  - 163 · DeBary · Velez 15 Camaro blue · cash $7280
+  - 164 · DeLand · Walker 13 Suburban white · finance $4500
+  - 165 · DeBary · Alicea 12 Civic orange · cash $8112
+  - 166 · DeBary · Irving 13 Tesla Model S blue · finance $5000
+  - 167 · DeLand · Bruten 13 Impala red · finance $1500
+
+## Other things shipped today
+
+### E-Sign UI triggers restored (silent-deletion-twice case)
+Commit `1147040` titled "void/release form: add middle name field"
+silently removed the `esignOpen('deposit')` and `esignOpen('invoice')`
+buttons. The follow-up "Restore" commit aae2bf8 brought the
+*functions* back but not the buttons, so users had no way to start
+e-sign on a fresh deposit/invoice record (since `_buildEsignSection`
+returns empty when `esign_status` is null). Fixed today by restoring
+the purple "✍️ Send for E-Sign" buttons in `openFormDetail` and
+`openInvoiceDetail`. Added `scripts/validate-features.sh` checks
+for the exact onclick strings — `esignOpen\('deposit'\)`,
+`esignOpen\('invoice'\)`, `esignOpen\('void_release'\)` — so any
+future broad edit that drops them fails pre-push.
+
+### Review tab header + X tap-through fix
+Main-app `.tb` bar (CAR FACTORY / Vlad / ↻ / ✕) was showing through
+the Review overlay on some stacking contexts; tapping the logout X
+landed on the Backfill chip behind it. Fix: `openReviewQueue` now
+`tb.style.display='none'` on open + `''` on close (same pattern
+every other detail overlay already used). Backfill button moved from
+the header into the body. Header matches Deals overlay: `← REVIEW`
+with `position:fixed` inner bar, back button always visible even
+when queue is empty.
+
+### Profit26 retroactive note cleanup (one-off)
+User reported "a lot of them ran over" (wrapping to 2 lines in the
+Sheets cell notes). Built an Apps Script action
+`profit_reformat_notes` (mode `preview` | `apply`) that walks all
+Payments + Cash Sales + Extras cells across 12 months per location.
+For each note line > 26 chars: drop known color token, collapse
+multi-word model to first word, truncate lastName. Compound lines
+(> 40 chars with a later 3-4-digit amount) left untouched.
+Ran apply on both locations today:
+- **DeBary: 231 lines across 7 cells reformatted**
+- **DeLand:  53 lines across 8 cells reformatted**
+Both verified empty on re-preview.
+
+### Forward format: lowercase + MAX 30 + color priority
+- `_paymentFormatPieces`: `lastName` is now lowercased. CarPay portal
+  names come ALL-CAPS (OTERO ROJAS) — narrower in proportional fonts
+  with lowercase.
+- `_PAY_NOTE_MAX`: 26 → **30**. With lowercase names, 30 renders
+  roughly as wide as 26 mixed-case (Sheets doesn't wrap).
+- `_paymentNoteLineFit`: amount + date always reserved; then fits
+  `{model} [{color}] {lastName}` in the remaining budget. Drops color
+  first when overflow, then reduces model to first token, then
+  truncates lastName.
+- Manual Assign in Review: added a Color input. If set, inserted
+  between model and name in the final note line.
+
+### Sanity check on deal-upload autopopulate (still active)
+`_autopopulateDeals26` detects color / year mismatch between
+`record.color` / `record.vehicle_desc` and `ic.car_name`. On conflict:
+- Builds car_desc from deal data (`_buildCarDescFromDeal`).
+- Zeros cost / expenses / expense_notes (refuses to copy stale numbers).
+- **Skips the step-12 inventory_costs delete** so we don't wipe a
+  real car's cost row the way the Apr 22 Tesla deal did.
+- Returns `carDescWarning` in the snapshot → dealSubmit alerts user.
+
+### CarPay payment automation — upgraded
+- Removed silent auto-trigger on Review open (iOS Safari suspends
+  hidden async; losing progress invisibly). Processing is now tied to
+  the manual **Process CarPay payments** button.
+- Progress card like the scanned Backfill: live counters, cancel
+  button, progress bar. Safe to cancel mid-run and resume — processed
+  references stay in `carpay_payment_postings` so subsequent runs
+  skip them via the `processed[reference]` set.
+- Retry-stale step at the top of each run: clears non-final outcomes
+  (`no_customer`, `no_vehicle`, `error`) from `carpay_payment_postings`
+  so they re-run under the latest matcher. Final outcomes
+  (`posted`, `already_posted`, `review`, `skipped_pre_cutoff`,
+  `zero_amount`) stay.
+- Cutoff: `_CARPAY_CUTOFF_DATE = '2026-04-09'`. Anything before gets
+  tagged `skipped_pre_cutoff` and never appears in Review.
+- Last-name candidates: when a CarPay payment's customer lacks a
+  `vehicle` (common after the sync pause — lots of carpay_customers
+  rows have null `vehicle`), `_carpayFindNameCandidates(lastNames)`
+  queries `deals26` by `car_desc ilike '*{lastName}*'`. Up to 20
+  candidates, both locations. Cards render as partial-match candidates
+  (`has_last=true`, `has_car=false`).
+- **Per-account alias learning** via new
+  `carpay_payment_postings.account` column (DDL today). After the
+  user resolves a CarPay review (Approve / Manual Assign / Re-match),
+  `_patchCarPayPostingsForReview` stamps `(target_tab, target_row,
+  car_desc)` on every posting row for that review_id. Next payment
+  for the same account → `_findCarPayAccountAlias` finds the row and
+  direct-posts via `deals26_append_payment_direct` with `check_dup`.
+  Approve-first mode currently bypasses this short-circuit (every
+  CarPay payment still queues review) — alias is dormant until
+  `_APPROVE_FIRST_MODE` flips false.
+- `check_dup` in Apps Script (v51+): **amount-only match no longer
+  flags as possible_duplicate**. User's cumulative-formula concern:
+  `=300+200+200` doesn't imply the next $300 is a duplicate. New
+  rule: exact-line match → `already_posted` (skip); **same-day
+  same-amount** → `possible_duplicate` (Review); everything else
+  posts. Applied to both `deals26_append_payment` and
+  `_direct` variants.
+
+## One-off data fixes applied today
+- **Alicea Civic (deals26 id=201)**: car_desc corrected from
+  `"12 Civic cp white 154k 2 Alicea"` → `"12 Civic SI orange 153k Alicea"`.
+  Original deletion of inventory_costs #72 (orange SI) and inventory
+  #1626 reversed — both were the correct sold car, not the wrong link.
+- **Tesla Irving (deals26 id=202)**: car_desc corrected to
+  `"13 Tesla S blue 152k Irving"`, `cost=0`, `expenses=0`, cleared
+  `expense_notes` (they were Odyssey data). Vlad will type the real
+  Tesla numbers manually in the sheet.
+- **Walker Suburban + Bruten Impala** (DeLand deals26 id=200 / 203):
+  deleted from both sheet (rows 58 / 59) and Supabase at user's
+  request — they'd been posted by the legacy path and revert didn't
+  remove them. Their `deals` rows + `inventory` rows are intact; will
+  re-post cleanly through approve-first when user approves their
+  review cards.
+
+## Infrastructure additions today
+
+### DDLs run (via Chrome MCP playbook)
+- `carpay_payment_postings.account TEXT` + index on
+  `(account, location)` for the per-account alias learning.
+- `payment_reviews.deal_id BIGINT` + partial index — link a
+  deal_pending review back to the source `deals` row.
+- `payment_reviews.snapshot JSONB` — snapshots of inventory +
+  inventory_costs at upload time. Holds the full ic row
+  including expense_notes, vlad_expense_notes.
+
+### Apps Script deploys
+- v51: relaxed `check_dup` (amount-only no longer flags; same-day
+  same-amount still flags).
+- v52: `profit_reformat_notes` action added.
+- v53: compound-line guard on the reformatter.
+- v54: year preserved in prefix for the reformatter.
+
+### Cache bumps
+- v523 → v540 across the day. All Service Worker version bumps.
+
+## Still pending (what tomorrow can tackle)
+
+### Immediate (user explicitly expecting)
+1. **User taps Approve on the 5 deal_pending review cards.** For each:
+   - If the card shows candidate buttons → pick the correct ic row
+     (tap once to link) → then Approve.
+   - If no candidates → Approve anyway; car_desc builds from deal
+     data, cost+expenses start at 0, user types real numbers in the
+     sheet afterward (Walker Suburban, Bruten Impala fall into this
+     bucket — their original ic rows are truly gone).
+2. **Tap "Process CarPay payments" on phone.** Will queue all 342
+   post-cutoff payments as review cards (no auto-post under
+   approve-first). First run is the big one; after that, new syncs
+   only bring in new references.
+3. **Scanned payments from Apr 20 → now** — still in the `payments`
+   table but the Deals26 col G writes from that period were reverted.
+   These need to flow through Review too. No backfill helper exists
+   yet for scanned — either:
+   - User re-scans each one (tedious)
+   - Build a backfill button that iterates `payments` since a
+     cutoff and queues `approve_first` reviews (~20 min of work)
+
+### Follow-ups carried over
+- **Matcher returns matched deal's color** so non-manual paths don't
+  deviate from the deal. Requires Apps Script API change + app-side
+  note rebuild on match response. Big-ish structural change.
+- **Deals25 / Deals24 cross-tab name search** via an Apps Script
+  action. Right now CarPay last-name candidate search only hits
+  Deals26 (Supabase). Customers whose deals are in older tabs still
+  land in Review with no candidates until user Manual-Assigns once
+  (which then seeds the per-account alias → future payments auto).
+- **Restore "12 Civic cp white 154k" cost row to DeBary
+  inventory_costs.** Vlad said he'd handle it manually. Not blocking.
+- **Phase 2 of CarPay** (email / vehicle / scheduled_amount /
+  current_amount_due / payment_frequency re-acquisition). Was queued
+  from Day 4.
+
+## Key new identifiers & structure
+
+### New helpers (index.html)
+- `_queueDealReview(dealRecord, car)` — inserts `deal_pending`
+  review with snapshot.
+- `_queueCashSaleReview(dealRecord, car, owed, carDesc)` — inserts
+  `cash_sale_pending`.
+- `_loadDealForReview(dealId)` — fetches deal row + inventory car by
+  VIN.
+- `_reviewApprovePending(id)` — handler for both pending types.
+- `_reviewLinkIcToDeal(reviewId, icId)` — PATCHes
+  `inventory_costs.car_id` from the candidate button.
+- `_dealReviewPreview(record, car)` — short note-line style preview
+  for the card header.
+- `_buildCarDescFromDeal(record, car)` — fallback car_desc when ic
+  is untrusted / missing.
+- `_extractColorWord(s)` — color-word extractor used by sanity
+  check.
+- `_findCarPayAccountAlias(account, location)` — per-account alias
+  lookup in `carpay_payment_postings`.
+- `_patchCarPayPostingsForReview(reviewId, tab, row, carDesc)` —
+  back-stamps target on postings after a CarPay review resolves.
+- `_carpayFindNameCandidates(lastNames)` — name-only candidate
+  search in deals26.
+- `_carpayQueueReview(payload, reason, candidates)` — unified
+  CarPay review inserter.
+
+### Config constants
+- `_APPROVE_FIRST_MODE = true` — the master kill-switch for
+  auto-posts.
+- `_PAY_NOTE_MAX = 30` — char budget for payment note lines.
+- `_CARPAY_CUTOFF_DATE = '2026-04-09'` — payments before this
+  auto-tag as `skipped_pre_cutoff`.
+
+### Supabase schema additions today
+| Table | Column | Purpose |
+|---|---|---|
+| `carpay_payment_postings` | `account TEXT` + index | per-account CarPay alias lookup |
+| `payment_reviews` | `deal_id BIGINT` + partial index | link deal_pending review → deals row |
+| `payment_reviews` | `snapshot JSONB` | inventory + inventory_costs snapshot at upload |
+
+## Hard rules re-affirmed today (mostly the hard way)
+1. **Never bulk-delete without explicit per-scope approval.** Vlad
+   pushed back on the Walker/Bruten delete — asked "you rushed?"
+   Even with apparent intent, confirm the specific rows before
+   executing.
+2. **Snapshot at queue time, trust the snapshot at apply time.**
+   Live lookups can mislead if data changes in-between.
+3. **Sheet is master.** When data repairs touch both sheet + Supabase,
+   write to sheet via `sheetsPush` update/delete actions with name
+   safety; Supabase reconciler catches up within 5 min.
