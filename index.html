@@ -19342,6 +19342,22 @@ function _extractColorWord(s){
   return '';
 }
 
+// Normalize a last-name token to Title Case for the car_desc column.
+// Preserves intentionally mixed-case names (McDonald, Van Der Berg)
+// but normalizes ALL-CAPS (from CarPay portal) or all-lower. Hyphens
+// and spaces split into title-cased words so "GARCIA-MARTINEZ" →
+// "Garcia-Martinez" and "van der berg" → "Van Der Berg".
+function _titleCaseLastName(s){
+  s = String(s || '').trim();
+  if (!s) return s;
+  // Mixed-case already → user typed it this way deliberately; leave alone
+  if (s !== s.toLowerCase() && s !== s.toUpperCase()) return s;
+  return s.split(/([-\s])/).map(function(part){
+    if (/^[-\s]*$/.test(part)) return part;
+    return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+  }).join('');
+}
+
 // Build a car_desc string from the deal record + inventory car when
 // inventory_costs can't be trusted (wrong link) or isn't available.
 // Format: "{YY} {model} {color} {miles}k" — customer last name gets
@@ -19397,6 +19413,10 @@ async function _autopopulateDeals26(record, car, icOverride) {
   var carDesc;
   var custParts = (record.customer_name || '').trim().split(/\s+/);
   var custLast = custParts.length > 0 ? custParts[custParts.length - 1] : '';
+  // Normalize to Title Case for consistency with the rest of the column.
+  // Preserves intentionally mixed-case names (McDonald, Van Der Berg).
+  // Handles hyphenated names like "GARCIA-MARTINEZ" → "Garcia-Martinez".
+  custLast = _titleCaseLastName(custLast);
 
   if (ic && ic.car_name){
     var _icNameColor = _extractColorWord(ic.car_name);
