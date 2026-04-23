@@ -1978,7 +1978,6 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
     if (year.length === 4) yearAlts.push(year.slice(2));
     if (year.length === 2) yearAlts.push('20' + year);
   }
-
   var colorL = color ? String(color).toLowerCase() : '';
 
   // Normalize lastNames to an array of non-empty strings
@@ -1992,65 +1991,82 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
     var lnStr = String(lastNames).trim().toLowerCase();
     if (lnStr) nameList.push(lnStr);
   }
+  if (!nameList.length) return { status: 'no_match' };
 
-  var fullMatches = [];
-  var partials = [];
-
+  // ── Progressive narrowing (locked Apr 2026 after too many scanned-payment
+  // mismatches under the old strict rule that required lastName + year +
+  // model all-at-once):
+  //   1. Filter to rows where ANY last-name token matches (word boundary).
+  //   2. If 1 hit → that's the match.
+  //   3. Multiple hits + model → keep only rows where model also matches.
+  //   4. 1 hit → match. Multiple → narrow by year. 1 hit → match.
+  //   5. Still multiple → narrow by color. 1 hit → match.
+  //   6. Still ambiguous → return as 'multiple' candidates.
+  //   Also: if model filter zeros out, the prior set is returned as
+  //   'partial' candidates for manual review.
+  var lastHits = [];
   for (var i = 0; i < vals.length; i++) {
     var desc = String(vals[i][0] || '').trim();
     if (!desc) continue;
     var descL = desc.toLowerCase();
-
-    var hasLast = nameList.some(function(n){ return _wordBoundary(descL, n); });
-    var hasYear = yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : false;
-    var hasMake = make ? _wordBoundary(descL, make) : false;
-    var hasModel = model ? _wordBoundary(descL, model) : false;
-    var hasColor = colorL ? _wordBoundary(descL, colorL) : false;
-
-    // Confident match = lastName + year + model (option B locked rule)
-    var hasCarRequired = hasYear && hasModel;
-
-    if (hasLast && hasCarRequired) {
-      fullMatches.push({
+    if (nameList.some(function(n){ return _wordBoundary(descL, n); })){
+      lastHits.push({
         row: startRow + i,
         car_desc: desc,
-        has_color: hasColor
-      });
-    } else if (hasLast || hasCarRequired) {
-      partials.push({
-        row: startRow + i,
-        car_desc: desc,
-        has_last: hasLast,
-        has_car: hasCarRequired,
-        has_year: hasYear,
-        has_make: hasMake,
-        has_model: hasModel,
-        has_color: hasColor
+        descL: descL,
+        has_last: true,
+        has_year: yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : false,
+        has_make: make ? _wordBoundary(descL, make) : false,
+        has_model: model ? _wordBoundary(descL, model) : false,
+        has_color: colorL ? _wordBoundary(descL, colorL) : false
       });
     }
   }
+  if (!lastHits.length) return { status: 'no_match' };
 
-  // Exactly one required-match → done
-  if (fullMatches.length === 1) {
-    return { status: 'matched', row: fullMatches[0].row, car_desc: fullMatches[0].car_desc };
-  }
+  var ret = function(row){ return { status: 'matched', row: row.row, car_desc: row.car_desc }; };
+  // Step 2: exactly one last-name hit → matched
+  if (lastHits.length === 1) return ret(lastHits[0]);
 
-  // 2+ required-matches → try color as tiebreaker
-  if (fullMatches.length > 1) {
-    if (colorL) {
-      var colorHits = fullMatches.filter(function(m){ return m.has_color; });
-      if (colorHits.length === 1) {
-        return { status: 'matched', row: colorHits[0].row, car_desc: colorHits[0].car_desc };
-      }
+  // Step 3: narrow by model when we have a model string
+  var modelHits = lastHits;
+  if (model){
+    modelHits = lastHits.filter(function(r){ return r.has_model; });
+    if (modelHits.length === 1) return ret(modelHits[0]);
+    if (modelHits.length === 0){
+      // Model filter zeroed it out — let user pick among the last-name hits
+      return { status: 'partial', candidates: _stripInternal(lastHits) };
     }
-    // Color didn't narrow it down — kick to Review
-    return { status: 'multiple', candidates: fullMatches };
   }
 
-  if (partials.length) {
-    return { status: 'partial', candidates: partials };
+  // Step 4: narrow by year
+  if (yearAlts.length){
+    var yearHits = modelHits.filter(function(r){ return r.has_year; });
+    if (yearHits.length === 1) return ret(yearHits[0]);
+    if (yearHits.length > 1) modelHits = yearHits;
   }
-  return { status: 'no_match' };
+
+  // Step 5: narrow by color
+  if (colorL){
+    var colorHits = modelHits.filter(function(r){ return r.has_color; });
+    if (colorHits.length === 1) return ret(colorHits[0]);
+    if (colorHits.length > 1) modelHits = colorHits;
+  }
+
+  // Still multiple — surface as candidates for review
+  return { status: 'multiple', candidates: _stripInternal(modelHits) };
+}
+
+// Drop the lookup-only `descL` field when returning candidates.
+function _stripInternal(rows){
+  return rows.map(function(r){
+    return {
+      row: r.row, car_desc: r.car_desc,
+      has_last: r.has_last, has_year: r.has_year,
+      has_make: r.has_make, has_model: r.has_model,
+      has_color: r.has_color
+    };
+  });
 }
 
 // Direct row write — used when the user approves a specific candidate in
