@@ -18037,8 +18037,18 @@ async function _reviewApprovePending(id){
       // + full notes survive even if the live ic row is gone or stale.
       var snapIc = (r.snapshot && r.snapshot.ic) ? r.snapshot.ic : null;
       var snap = null;
+      var autopopErr = null;
       try { snap = await _autopopulateDeals26(ctx.record, ctx.car, snapIc); }
-      catch(e){ console.warn('autopopulate failed:', e); }
+      catch(e){ autopopErr = e; console.warn('autopopulate failed:', e); }
+
+      if (autopopErr){
+        // Leave the review pending so the user can retry. Do NOT mark
+        // approved — that hides the failure. Reload so the card comes
+        // back into the queue.
+        alert('Post failed — nothing was written.\n\n' + (autopopErr.message || autopopErr) + '\n\nThe review stays pending. Tap Approve again to retry.');
+        try { await _reviewLoad(); } catch(_){}
+        return;
+      }
 
       if (snap && snap.carDescWarning){
         alert('Heads up — Deals26 car description was built from deal data because the linked inventory_costs row disagreed:\n\n' + snap.carDescWarning + '\n\nEntry: "' + (snap.carDesc || '') + '"\n\nCheck Inventory to re-link / rename.');
@@ -19551,36 +19561,63 @@ async function _autopopulateDeals26(record, car, icOverride) {
     location: record.location || 'DeBary'
   };
 
-  // 9. Insert into Supabase
-  var res = await sbPost('deals26', d26Obj);
-
-  // 10. Push to Google Sheet. For new deal uploads, drop payments/payment_notes
-  //     from the sheet payload so column G stays untouched (blank on a new row).
-  //     Vlad enters payments manually in the sheet. DB still carries 0 by default.
+  // Write order matters — sheet is master, so we write there FIRST and
+  // only touch Supabase + the inventory_costs delete AFTER the sheet
+  // write is confirmed. The old order (Supabase → sheet fire-and-forget
+  // → ic delete) silently orphaned the Alicea Civic deal on 2026-04-23
+  // when the sheet POST failed but Supabase + ic-delete both ran.
+  //
+  // Step A: Push to Google Sheet. For new deal uploads, drop payments/
+  //         payment_notes from the sheet payload so column G stays
+  //         untouched (blank on a new row). Vlad enters payments
+  //         manually in the sheet. DB still carries 0 by default.
   var _sheetObj = Object.assign({}, d26Obj);
   delete _sheetObj.payments;
   delete _sheetObj.payment_notes;
-  sheetsPush('Deals26', sortOrder, _sheetObj, 'update', (record.location || 'DeBary'));
+  var sheetResult = await sheetsPush('Deals26', sortOrder, _sheetObj, 'update', (record.location || 'DeBary'));
+  if (!sheetResult || sheetResult.ok === false){
+    // Nothing has been written to Supabase yet; ic row still intact.
+    // Throw so the caller (dealSubmit / _reviewApprovePending) knows
+    // NOT to mark the post successful. Review card stays pending.
+    throw new Error('deals26 sheet write failed: ' + ((sheetResult && sheetResult.error) || 'unknown'));
+  }
 
-  // 11. Update local _d26Data if it's loaded
+  // Step B: Insert into Supabase. If this fails, the sheet has the row
+  //         and the reconciler (5-min cycle) will upsert Supabase to
+  //         match. Non-fatal — log and continue to ic-delete so we
+  //         keep the user's expected behavior (car transferred out).
+  var res = null;
+  try {
+    res = await sbPost('deals26', d26Obj);
+  } catch (sbErr){
+    console.warn('deals26 Supabase insert failed (sheet already written; reconciler will catch up):', sbErr);
+  }
+
+  // Step C: Update local _d26Data cache if loaded.
   if (Array.isArray(_d26Data) && res && res[0]) {
     _d26Data.push(res[0]);
   }
 
-  // 12. Remove sold car from inventory_costs (car transferred to Deals26).
-  //     Deletes Supabase row + Google Sheet row. Passes car_name so the
-  //     Apps Script can verify before deleting (guards against stale sort_order).
-  //     SKIP on carDescWarning — the linked ic row was for a different car,
-  //     deleting it would lose cost data for a real car that's still in
-  //     stock. Leave it alone; user gets the alert and can investigate.
+  // Step D: Remove sold car from inventory_costs (car transferred to
+  //         Deals26). Runs only now — after the sheet write succeeded.
+  //         SKIP on carDescWarning — the linked ic row was for a
+  //         different car, deleting it would lose cost data for a real
+  //         car that's still in stock. Leave it; user sees the alert.
   if (ic && ic.id && !carDescWarning) {
     var _icSort = ic.sort_order;
     var _icName = ic.car_name || '';
     var _icLoc = record.location || 'DeBary';
     try {
       await sbDelete('inventory_costs', ic.id);
-      if (_icSort) sheetsPush('Inventory', _icSort, { car_name: _icName }, 'delete', _icLoc);
-      // Remove from any loaded local cache
+      if (_icSort){
+        // await — if the sheet delete fails we want to know so we can
+        // re-insert. But we DON'T roll back the deals26 insert — the
+        // car is sold and that's what matters. Just log loudly.
+        var delRes = await sheetsPush('Inventory', _icSort, { car_name: _icName }, 'delete', _icLoc);
+        if (!delRes || delRes.ok === false){
+          console.warn('inventory_costs sheet delete failed for id=' + ic.id + ':', delRes && delRes.error);
+        }
+      }
       if (Array.isArray(_isData)) _isData = _isData.filter(function(r){ return r.id !== ic.id; });
     } catch (delErr) {
       console.warn('Failed to remove sold car from inventory_costs id=' + ic.id + ':', delErr);
@@ -22507,17 +22544,38 @@ async function dealMoveWeek(id, dir) {
 // Push app edits directly to Google Apps Script web app → writes to Google Sheet
 var _SHEETS_URL='https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec';
 var _SHEETS_SECRET='cf-sync-2026';
+// Returns a Promise resolving to { ok: bool, action, row?, error? }.
+// Never throws — existing fire-and-forget callers keep working (they
+// just drop the returned promise). New callers can `await` and inspect
+// .ok to decide whether to proceed.
+//
+// Historical note: this used to silently swallow failures, which on
+// 2026-04-23 hid a sheet-write error that orphaned the Alicea Civic
+// deal — Supabase insert went through, sheet write didn't, and the
+// reconciler deleted the Supabase row on its next pass (sheet is
+// master). Now returns a real result so the caller can roll back
+// before deleting inventory_costs.
 function sheetsPush(tab, rowIndex, data, action, location){
   var url=_SHEETS_URL;
   var secret=_SHEETS_SECRET;
-  if(!url||!secret) return;
-  try{
-    fetch(url,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
-      body:JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{},location:location||'DeBary'})
-    }).catch(function(){});
-  }catch(e){}
+  if(!url||!secret) return Promise.resolve({ok:false, error:'sheets_url_or_secret_missing'});
+  return fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
+    body:JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{},location:location||'DeBary'})
+  }).then(function(resp){
+    if(!resp.ok) return { ok:false, error:'http_' + resp.status, action: action||'update', tab: tab, row_index: rowIndex };
+    return resp.json().then(function(parsed){
+      if (!parsed || parsed.ok === false){
+        return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action: action||'update', tab: tab, row_index: rowIndex };
+      }
+      return parsed;
+    }, function(){
+      return { ok:false, error:'invalid_json', action: action||'update', tab: tab, row_index: rowIndex };
+    });
+  }, function(e){
+    return { ok:false, error:String((e && e.message) || e), action: action||'update', tab: tab, row_index: rowIndex };
+  });
 }
 
 // ── INVENTORY SHEETS ────────────────────────────────────────────────────────
