@@ -16271,6 +16271,33 @@ async function _appendPaymentToDeals26(payload){
     var loc = payload.location || (me ? me.location : 'DeBary');
     var noteLine = _paymentNoteLine(amt, payload);
 
+    // Approve-first: route scanned payments straight into the Review
+    // queue without running the matcher. User picks the target row
+    // (or approves the auto-matched candidate) in Review.
+    if (_APPROVE_FIRST_MODE){
+      try {
+        await sbPost('payment_reviews', {
+          payment_id: payload.id || null,
+          customer_name: payload.customer_name || '',
+          amount: amt,
+          vehicle_year: payload.vehicle_year || '',
+          vehicle_make: payload.vehicle_make || '',
+          vehicle_model: payload.vehicle_model || '',
+          vehicle_color: payload.vehicle_color || '',
+          vehicle_vin: payload.vehicle_vin || '',
+          location: loc,
+          payment_date: payload.payment_date || null,
+          payment_method: payload.payment_method || '',
+          note_line: noteLine,
+          reason: 'approve_first',
+          candidates: JSON.stringify([]),
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      } catch(e){ console.warn('Approve-first queue failed:', e); }
+      return { ok: true, matched: false, review: true };
+    }
+
     // Check for a learned alias first — user previously approved a
     // specific (tab,row) for this VIN / customer+model. If found, write
     // directly to it and skip the fuzzy matcher.
@@ -16723,6 +16750,19 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           || custByAccount[cp.account + '|deland']
           || null;
 
+  // Approve-first: queue every CarPay payment as a review with
+  // any name candidates we can find. No alias short-circuit, no
+  // confident-match auto-post.
+  if (_APPROVE_FIRST_MODE){
+    var afPayload = _carpayPaymentToPayload(cp, cust);
+    var afNames = _paymentLastNames(afPayload.customer_name);
+    var afCandidates = await _carpayFindNameCandidates(afNames);
+    var afReason = cust ? (afCandidates.length ? 'approve_first' : 'no_vehicle') : 'no_customer';
+    var afRid = await _carpayQueueReview(afPayload, afReason, afCandidates);
+    await _carpayRecordPosting(cp, afPayload, { status: 'review', review_id: afRid });
+    return { status: 'review' };
+  }
+
   // ── Account-level alias short-circuit ──
   // If a previous payment for this CarPay account was posted (via
   // auto-match, Review approve, or Manual assign), reuse that target
@@ -16849,6 +16889,119 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
   var uo = { status: 'error', error: 'unexpected result: ' + JSON.stringify(res).slice(0, 200) };
   await _carpayRecordPosting(cp, payload, uo);
   return uo;
+}
+
+// ══════════════════════════════════════════════════════════════
+// APPROVE-FIRST MODE
+// ══════════════════════════════════════════════════════════════
+// When true, every automation path that previously auto-wrote to
+// Deals26 / Profit26 queues a review card instead. User approves
+// each card before the write actually happens. Covers:
+//   - Deal upload → Deals26 post                (reason='deal_pending')
+//   - Cash deal, taxes final, owed>0 → Profit26 (reason='cash_sale_pending')
+//   - Scanned payment confident match           (reason='approve_first')
+//   - CarPay confident match / account alias    (reason='approve_first')
+//
+// Flip to false and auto-posts resume (the pre-approve-first behavior).
+var _APPROVE_FIRST_MODE = true;
+
+// Queue a deal-upload review so the user approves before the deal
+// lands in Deals26. Called from dealSubmit instead of _autopopulateDeals26.
+async function _queueDealReview(dealRecord, car){
+  try {
+    var amt = parseFloat(dealRecord.total_collected) || 0;
+    var vdTokens = String(dealRecord.vehicle_desc || '').trim().split(/\s+/);
+    var year = (vdTokens[0] && /^(19|20)\d{2}$/.test(vdTokens[0])) ? vdTokens[0] : '';
+    var make = vdTokens[1] || '';
+    var model = vdTokens.slice(2).join(' ') || '';
+    var row = {
+      payment_id: null,
+      deal_id: dealRecord.id || null,
+      customer_name: dealRecord.customer_name || '',
+      amount: amt,
+      vehicle_year: year,
+      vehicle_make: make,
+      vehicle_model: model,
+      vehicle_color: dealRecord.color || '',
+      vehicle_vin: dealRecord.vin || '',
+      location: dealRecord.location || 'DeBary',
+      payment_date: (dealRecord.created_at || new Date().toISOString()).slice(0, 10),
+      payment_method: dealRecord.deal_type || '',
+      note_line: _dealReviewPreview(dealRecord, car),
+      reason: 'deal_pending',
+      candidates: JSON.stringify([]),
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    var r = await sbPost('payment_reviews', row);
+    return (Array.isArray(r) && r.length) ? r[0].id : null;
+  } catch(e){
+    console.warn('Failed to queue deal review:', e);
+    return null;
+  }
+}
+
+// Short preview string for the review card header. Uses the existing
+// note-line format rules (lowercase lastname, M/D, ≤30 chars) but
+// swaps in the deal's vehicle_desc info directly.
+function _dealReviewPreview(dealRecord, car){
+  var vdTokens = String(dealRecord.vehicle_desc || '').trim().split(/\s+/);
+  var year = (vdTokens[0] && /^(19|20)\d{2}$/.test(vdTokens[0])) ? vdTokens[0].slice(2) : '';
+  var model = vdTokens.slice(2).join(' ') || vdTokens[1] || '';
+  var color = String(dealRecord.color || '').toLowerCase();
+  var miles = (car && car.miles) ? (Math.round(parseFloat(car.miles) / 1000) + 'k') : '';
+  var custLast = String(dealRecord.customer_name || '').trim().split(/\s+/).pop().toLowerCase();
+  return [year, model, color, miles, custLast].filter(Boolean).join(' ');
+}
+
+// Queue a cash-sale Profit26 review AFTER the deal has been posted to
+// Deals26 and owed is known. Approving this card triggers
+// _appendCashSaleToProfit.
+async function _queueCashSaleReview(dealRecord, car, owed, carDesc){
+  try {
+    var row = {
+      payment_id: null,
+      deal_id: dealRecord.id || null,
+      customer_name: dealRecord.customer_name || '',
+      amount: owed,
+      vehicle_year: '',
+      vehicle_make: '',
+      vehicle_model: '',
+      vehicle_color: dealRecord.color || '',
+      vehicle_vin: dealRecord.vin || '',
+      location: dealRecord.location || 'DeBary',
+      payment_date: (dealRecord.created_at || new Date().toISOString()).slice(0, 10),
+      payment_method: 'cash',
+      note_line: carDesc || _dealReviewPreview(dealRecord, car),
+      reason: 'cash_sale_pending',
+      candidates: JSON.stringify([]),
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    var r = await sbPost('payment_reviews', row);
+    return (Array.isArray(r) && r.length) ? r[0].id : null;
+  } catch(e){
+    console.warn('Failed to queue cash sale review:', e);
+    return null;
+  }
+}
+
+// Fetch the freshest deal row by id, plus its linked inventory car,
+// both from Supabase. Used by deal/cash-sale review approve handlers.
+async function _loadDealForReview(dealId){
+  if (!dealId) return { record: null, car: null };
+  var record = null, car = null;
+  try {
+    var dr = await sbGet('deals', 'id=eq.' + dealId + '&select=*&limit=1');
+    if (Array.isArray(dr) && dr.length) record = dr[0];
+  } catch(e){ console.warn('Load deal for review failed:', e); }
+  if (record && record.vin){
+    try {
+      var ir = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(record.vin) + '&limit=1');
+      if (Array.isArray(ir) && ir.length) car = ir[0];
+    } catch(e){ /* best effort */ }
+  }
+  return { record: record, car: car };
 }
 
 // Iterate all carpay_payments whose reference isn't in
@@ -17058,6 +17211,33 @@ async function _appendPaymentToDeals26Checked(payload){
   var loc = payload.location || 'DeBary';
   var noteLine = _paymentNoteLine(amt, payload);
 
+  // Approve-first: never auto-post. Queue a review card carrying the
+  // full payload — reason 'approve_first' renders with an Approve
+  // button that runs the real post on user confirmation.
+  if (_APPROVE_FIRST_MODE){
+    try {
+      await sbPost('payment_reviews', {
+        payment_id: payload.id || null,
+        customer_name: payload.customer_name || '',
+        amount: amt,
+        vehicle_year: payload.vehicle_year || '',
+        vehicle_make: payload.vehicle_make || '',
+        vehicle_model: payload.vehicle_model || '',
+        vehicle_color: payload.vehicle_color || '',
+        vehicle_vin: payload.vehicle_vin || '',
+        location: loc,
+        payment_date: payload.payment_date || null,
+        payment_method: payload.payment_method || '',
+        note_line: noteLine,
+        reason: 'approve_first',
+        candidates: JSON.stringify([]),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+    } catch(e){ console.warn('Approve-first queue failed:', e); }
+    return { queued: true };
+  }
+
   // Alias short-circuit: if the user previously approved a match for
   // this VIN / customer+model, write directly to the remembered row
   // (still with dup-check so re-runs are safe).
@@ -17237,12 +17417,34 @@ function _reviewRender(){
   var html = '';
   for (var i = 0; i < _reviewData.length; i++){
     var r = _reviewData[i];
+    // ── Approve-first post-type cards ──
+    // Render a simple Approve/Dismiss card for deal_pending (deal
+    // upload → Deals26) and cash_sale_pending (deal → Profit26).
+    if (r.reason === 'deal_pending' || r.reason === 'cash_sale_pending'){
+      var amt = parseFloat(r.amount) || 0;
+      var isDeal = r.reason === 'deal_pending';
+      var tint = isDeal ? '#4ade80' : '#fbbf24';
+      var tintBg = isDeal ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)';
+      var tintBd = isDeal ? 'rgba(74,222,128,.35)' : 'rgba(251,191,36,.35)';
+      var label = isDeal ? 'Deal upload → Deals26' : 'Cash sale → Profit26';
+      html += '<div id="rv-card-' + r.id + '" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;transition:opacity .2s, transform .2s;">';
+      html += '<div style="font-size:11px;color:' + tint + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>';
+      html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
+      html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:12px;font-size:13px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve · post now</button>';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:12px;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
+      html += '</div>';
+      html += '</div>';
+      continue;
+    }
     var candidates = [];
     try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){ candidates = []; }
     var reasonLabel = r.reason === 'no_match' ? 'No match found'
                     : r.reason === 'multiple' ? 'Multiple matches — pick one'
                     : r.reason === 'partial'  ? 'Partial match — pick one or reject'
                     : r.reason === 'possible_duplicate' ? 'Possible duplicate — same amount already on deal'
+                    : r.reason === 'approve_first' ? 'Approve before posting'
                     : r.reason;
     var reasonColor = r.reason === 'no_match' ? '#ef4444'
                     : r.reason === 'multiple' ? '#fbbf24'
@@ -17598,6 +17800,90 @@ async function _reviewApprove(id, candidateIdx){
     _showReviewToast('Approve error — ' + (e.message || e), 4000);
     await _reviewLoad();
   }
+}
+
+// Approve handler for the two approve-first post types:
+//   deal_pending      → run _autopopulateDeals26 + queue cash-sale-pending
+//   cash_sale_pending → run _appendCashSaleToProfit
+// Both need the deal row + its inventory car, loaded fresh from Supabase.
+async function _reviewApprovePending(id){
+  var r = _reviewData.find(function(x){ return x.id === id; });
+  if (!r) return;
+  if (!r.deal_id){
+    alert('Missing deal_id on this review — can\'t post.');
+    return;
+  }
+
+  if (r.reason === 'deal_pending'){
+    if (!confirm('Post this deal to Deals26?\n\n' + (r.note_line || r.customer_name || '') + '\n\nRuns the normal autopopulate (sanity-checked links, lowercase name, ≤30-char note).')) return;
+    _removeReviewCard(id);
+    try {
+      var ctx = await _loadDealForReview(r.deal_id);
+      if (!ctx.record){
+        alert('Deal row ' + r.deal_id + ' not found — restoring card.');
+        await _reviewLoad();
+        return;
+      }
+      var snap = null;
+      try { snap = await _autopopulateDeals26(ctx.record, ctx.car); }
+      catch(e){ console.warn('autopopulate failed:', e); }
+
+      if (snap && snap.carDescWarning){
+        alert('Heads up — Deals26 car description was built from deal data because the linked inventory_costs row disagreed:\n\n' + snap.carDescWarning + '\n\nEntry: "' + (snap.carDesc || '') + '"\n\nCheck Inventory to re-link / rename.');
+      }
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : ''
+      });
+
+      // Cash-sale follow-up: queue the Profit26 post as a separate review
+      // so the user gets a second confirmation before it lands.
+      if (ctx.record.deal_type === 'cash' && snap && snap.taxesKnown && snap.owed > 0){
+        try { await _queueCashSaleReview(ctx.record, ctx.car, snap.owed, snap.carDesc); } catch(e){}
+        await _reviewLoad();
+        _showReviewToast('Deal posted. Cash sale awaiting a second approval in Review.', 4500);
+      } else {
+        _showReviewToast('Deal posted to Deals26.', 3500);
+      }
+    } catch(e){
+      alert('Deal approve failed: ' + (e.message || e));
+      await _reviewLoad();
+    }
+    return;
+  }
+
+  if (r.reason === 'cash_sale_pending'){
+    var amt = parseFloat(r.amount) || 0;
+    if (!confirm('Post $' + amt + ' to Profit26 Cash Sales?\n\n' + (r.note_line || r.customer_name || ''))) return;
+    _removeReviewCard(id);
+    try {
+      var ctx2 = await _loadDealForReview(r.deal_id);
+      if (!ctx2.record){
+        alert('Deal row ' + r.deal_id + ' not found — restoring card.');
+        await _reviewLoad();
+        return;
+      }
+      await _appendCashSaleToProfit({
+        record: ctx2.record,
+        car: ctx2.car,
+        amount: amt,
+        carDesc: r.note_line || ''
+      });
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : ''
+      });
+      _showReviewToast('Cash sale posted to Profit26.', 3500);
+    } catch(e){
+      alert('Cash sale approve failed: ' + (e.message || e));
+      await _reviewLoad();
+    }
+    return;
+  }
+
+  alert('Unknown pending reason: ' + r.reason);
 }
 
 // Shrink+fade out + remove a review card from the DOM, and drop the
@@ -18670,7 +18956,11 @@ async function dealSubmit() {
       record.pickup_payment_due = _dealData.pickupDue || null;
     }
 
-    await sbPost('deals', record);
+    var _insertedDeal = await sbPost('deals', record);
+    if (Array.isArray(_insertedDeal) && _insertedDeal[0] && _insertedDeal[0].id){
+      record.id = _insertedDeal[0].id;
+      record.created_at = _insertedDeal[0].created_at || record.created_at;
+    }
 
     // Push notification to managers on new deal
     try{
@@ -18770,32 +19060,33 @@ async function dealSubmit() {
       }
     }
 
-    // Auto-populate Deals26 sheet. Returns a snapshot with the computed
-    // owed, taxes, and whether taxes are "final" (OOS, or CSV matched).
+    // Deals26 post — route through Review when approve-first is on,
+    // otherwise auto-populate immediately (legacy path).
     var _d26Snap = null;
-    try { _d26Snap = await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
+    if (_APPROVE_FIRST_MODE){
+      try { await _queueDealReview(record, car); } catch(e){ console.warn('Queue deal review failed:', e); }
+    } else {
+      try { _d26Snap = await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
 
-    // Loud warning when autopopulate had to fall back because the
-    // linked inventory_costs row contradicted the deal. Tells the user
-    // to spot-check the Deals26 car_desc and the inventory_costs link.
-    if (_d26Snap && _d26Snap.carDescWarning){
-      alert('Heads up — Deals26 car description was built from the deal data because the linked inventory_costs row disagreed:\n\n' +
-        _d26Snap.carDescWarning +
-        '\n\nThe new Deals26 entry: "' + (_d26Snap.carDesc || '') + '"\n\nCheck the Inventory tab to re-link or rename the stray cost row if needed.');
-    }
+      if (_d26Snap && _d26Snap.carDescWarning){
+        alert('Heads up — Deals26 car description was built from the deal data because the linked inventory_costs row disagreed:\n\n' +
+          _d26Snap.carDescWarning +
+          '\n\nThe new Deals26 entry: "' + (_d26Snap.carDesc || '') + '"\n\nCheck the Inventory tab to re-link or rename the stray cost row if needed.');
+      }
 
-    // D3: auto-append cash deals to Profit Cash Sales — ONLY when the owed
-    //     amount is final. If taxes are still pending (CSV miss, not OOS),
-    //     skip here and let _fillMissingTaxes post once taxes are filled.
-    if (record.deal_type === 'cash' && _d26Snap && _d26Snap.taxesKnown && _d26Snap.owed > 0) {
-      try {
-        await _appendCashSaleToProfit({
-          record: record,
-          car: car,
-          amount: _d26Snap.owed,
-          carDesc: _d26Snap.carDesc
-        });
-      } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
+      // D3: auto-append cash deals to Profit Cash Sales — ONLY when the owed
+      //     amount is final. If taxes are still pending (CSV miss, not OOS),
+      //     skip here and let _fillMissingTaxes post once taxes are filled.
+      if (record.deal_type === 'cash' && _d26Snap && _d26Snap.taxesKnown && _d26Snap.owed > 0) {
+        try {
+          await _appendCashSaleToProfit({
+            record: record,
+            car: car,
+            amount: _d26Snap.owed,
+            carDesc: _d26Snap.carDesc
+          });
+        } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
+      }
     }
 
     // Auto-create trade-in cars in inventory + inventory_costs
@@ -19244,11 +19535,15 @@ async function _updateDeals26FromDeal(dealRecord) {
   try {
     var taxesFinal = dealRecord.out_of_state === true || newTaxes > 0;
     if (dealRecord.deal_type === 'cash' && taxesFinal && newOwed > 0) {
-      await _appendCashSaleToProfit({
-        record: dealRecord,
-        amount: newOwed,
-        carDesc: d26Row.car_desc
-      });
+      if (_APPROVE_FIRST_MODE){
+        await _queueCashSaleReview(dealRecord, null, newOwed, d26Row.car_desc);
+      } else {
+        await _appendCashSaleToProfit({
+          record: dealRecord,
+          amount: newOwed,
+          carDesc: d26Row.car_desc
+        });
+      }
     }
   } catch (postErr) {
     console.warn('_updateDeals26FromDeal: cash-sale post failed', postErr);
@@ -19379,11 +19674,15 @@ async function _fillMissingTaxes() {
         try {
           var dealForPost = dealsByVin[vin];
           if (dealForPost && dealForPost.deal_type === 'cash' && _owed > 0) {
-            await _appendCashSaleToProfit({
-              record: dealForPost,
-              amount: _owed,
-              carDesc: row.car_desc
-            });
+            if (_APPROVE_FIRST_MODE){
+              await _queueCashSaleReview(dealForPost, null, _owed, row.car_desc);
+            } else {
+              await _appendCashSaleToProfit({
+                record: dealForPost,
+                amount: _owed,
+                carDesc: row.car_desc
+              });
+            }
           }
         } catch (postErr) {
           console.warn('_fillMissingTaxes: cash-sale post failed for ' + (row.car_desc || vin), postErr);
