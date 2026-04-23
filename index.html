@@ -16763,22 +16763,127 @@ async function _carpayProcessPending(){
   return counters;
 }
 
-// Manual button handler — same as _carpayProcessPending but with a
-// toast summary so the user sees what happened.
+// Manual button handler with a visible, cancellable progress card.
+// iOS Safari suspends hidden/background JS so a silent long-running
+// loop loses items — this forces the user to keep the app foreground
+// and shows exactly where we are. Safe to re-run; processed
+// references are tracked in carpay_payment_postings.
+var _carpayUiCancel = false;
 async function processCarPayPaymentsUI(){
   if (_carpayProcessRunning){
-    _showReviewToast('CarPay processing already running…', 3000);
+    if (confirm('CarPay processing is running. Cancel it?')) _carpayUiCancel = true;
     return;
   }
-  _showReviewToast('Processing CarPay payments…', 60000);
-  var c = await _carpayProcessPending();
-  var summary = 'CarPay: ' + c.pending + ' checked · posted ' + c.posted +
-    ' · already ' + c.already + ' · review ' + c.review +
-    ' · no-cust ' + c.no_customer + ' · no-vehicle ' + c.no_vehicle +
-    (c.pre_cutoff ? ' · pre-cutoff skipped ' + c.pre_cutoff : '') +
-    (c.error ? ' · errors ' + c.error : '');
-  _showReviewToast(summary, 6000);
+  _carpayProcessRunning = true;
+  _carpayUiCancel = false;
+  var list = document.getElementById('review-list');
+
+  // Load the three tables once, then walk sequentially with progress.
+  var processed, cpRows, custMap;
+  try {
+    var processedRows = await sbGet('carpay_payment_postings', 'select=reference&limit=10000');
+    processed = {};
+    (processedRows || []).forEach(function(r){ if (r.reference) processed[r.reference] = true; });
+
+    cpRows = await sbGet('carpay_payments', 'select=reference,name,account,amount_sent,date,method,location&order=synced_at.desc&limit=10000');
+    cpRows = cpRows || [];
+
+    var custRows = await sbGet('carpay_customers', 'select=account,location,name,vehicle&limit=10000');
+    custMap = {};
+    (custRows || []).forEach(function(c){
+      var key = (c.account || '') + '|' + String(c.location || '').toLowerCase();
+      custMap[key] = c;
+    });
+  } catch(e){
+    alert('Failed to load CarPay data: ' + (e.message || e));
+    _carpayProcessRunning = false;
+    return;
+  }
+
+  var todo = cpRows.filter(function(cp){ return cp.reference && !processed[cp.reference]; });
+  var total = todo.length;
+
+  var progressId = 'carpay-progress-card';
+  if (list){
+    var existing = document.getElementById(progressId);
+    if (existing) existing.remove();
+    list.insertAdjacentHTML('afterbegin',
+      '<div id="' + progressId + '" style="background:#071726;border:1px solid #1e3a5f;border-radius:14px;padding:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="font-size:13px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Processing CarPay</div>' +
+          '<button onclick="_carpayUiCancelReq()" style="background:none;border:1px solid #444;border-radius:8px;color:#ccc;padding:4px 10px;font-size:11px;cursor:pointer;">Cancel</button>' +
+        '</div>' +
+        '<div id="carpay-progress-text" style="font-size:13px;color:#ddd;">Starting… (0 / ' + total + ')</div>' +
+        '<div style="margin-top:8px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="carpay-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#60a5fa,#3b82f6);transition:width .2s;"></div></div>' +
+      '</div>');
+  }
+
+  var counters = { pending: 0, posted: 0, already: 0, review: 0, no_customer: 0, no_vehicle: 0, zero: 0, error: 0, pre_cutoff: 0 };
+  var done = 0;
+  var upd = function(){
+    var t = document.getElementById('carpay-progress-text');
+    var b = document.getElementById('carpay-progress-bar');
+    if (t) t.textContent = done + ' / ' + total +
+      ' · posted ' + counters.posted +
+      ' · review ' + counters.review +
+      ' · already ' + counters.already +
+      (counters.pre_cutoff ? ' · skip-old ' + counters.pre_cutoff : '') +
+      (counters.no_customer + counters.no_vehicle ? ' · no-data ' + (counters.no_customer + counters.no_vehicle) : '') +
+      (counters.error ? ' · errors ' + counters.error : '');
+    if (b) b.style.width = (total ? Math.round(done*100/total) : 0) + '%';
+  };
+
+  try {
+    for (var i = 0; i < todo.length; i++){
+      if (_carpayUiCancel) break;
+      var cp = todo[i];
+      done++;
+      try {
+        var iso = _carpayParseDate(cp.date);
+        if (iso && iso < _CARPAY_CUTOFF_DATE){
+          await _carpayRecordPosting(cp, _carpayPaymentToPayload(cp, null), {
+            status: 'skipped_pre_cutoff',
+            error: 'date ' + iso + ' is before cutoff ' + _CARPAY_CUTOFF_DATE
+          });
+          counters.pre_cutoff++;
+        } else {
+          counters.pending++;
+          var out = await _appendCarPayPaymentToDeals26(cp, custMap);
+          var s = out && out.status;
+          if (s === 'posted') counters.posted++;
+          else if (s === 'already_posted') counters.already++;
+          else if (s === 'review') counters.review++;
+          else if (s === 'no_customer') counters.no_customer++;
+          else if (s === 'no_vehicle') counters.no_vehicle++;
+          else if (s === 'zero_amount') counters.zero++;
+          else counters.error++;
+        }
+      } catch(e){
+        counters.error++;
+        console.warn('CarPay item error on ref ' + (cp && cp.reference) + ':', e);
+      }
+      upd();
+    }
+  } finally {
+    _carpayProcessRunning = false;
+    _carpayUiCancel = false;
+  }
+
+  var finishMsg = (counters.error ? 'Finished with ' + counters.error + ' errors. ' : 'Finished. ') +
+    counters.posted + ' posted · ' + counters.review + ' in Review · ' +
+    counters.already + ' already posted · ' +
+    counters.pre_cutoff + ' skip-old · ' +
+    (counters.no_customer + counters.no_vehicle) + ' missing data';
+  alert(finishMsg);
   try { await _reviewLoad(); } catch(e){}
+}
+
+function _carpayUiCancelReq(){
+  if (_carpayProcessRunning){
+    _carpayUiCancel = true;
+    var t = document.getElementById('carpay-progress-text');
+    if (t) t.textContent = 'Cancelling…';
+  }
 }
 
 // One payment, with dup-check enabled. Returns
@@ -16934,18 +17039,10 @@ async function openReviewQueue(){
   var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
   document.body.style.overflow = 'hidden';
   await _reviewLoad();
-  // Run any unprocessed CarPay payments through the matcher in the
-  // background. New review items from CarPay will appear via the
-  // reload inside processCarPayPaymentsUI. Silent auto-run — the
-  // user can also tap "Process CarPay" to see the toast.
-  (async function(){
-    try {
-      var c = await _carpayProcessPending();
-      if (c && (c.posted || c.review || c.no_customer || c.no_vehicle)){
-        try { await _reviewLoad(); } catch(e){}
-      }
-    } catch(e){ console.warn('CarPay auto-process failed:', e); }
-  })();
+  // (intentional) CarPay processing is button-triggered only. iOS
+  // Safari suspends background async and a silent auto-run loses
+  // progress without telling the user. Tap "Process CarPay" for a
+  // visible progress bar, like the scanned-payment Backfill.
 }
 
 function closeReviewQueue(){
