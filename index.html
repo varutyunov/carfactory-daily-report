@@ -16138,10 +16138,13 @@ function _paymentFormatPieces(payload){
 //   3. lastName is truncated after 12 chars
 // Amount + date are non-negotiable (amount is the data, date is the
 // dedup key).
-// 30 chars — with lowercase names, this renders ~= 26 mixed-case chars
-// in proportional fonts, which we verified doesn't wrap. Fits amount +
-// model + color + lastname + M/D for most common posts.
-var _PAY_NOTE_MAX = 30;
+// 26 chars — dropped from 30 after Vlad reported visual wrap on
+// "320 Silverado 1500 garcia 4/23" and "250 Accord silver alverio
+// 4/23" at font size 13pt. 30 passes a char-count test but wraps
+// in the proportional font at that size; 26 is the known-safe
+// threshold (same value used successfully on the retroactive
+// Profit26 note cleanup).
+var _PAY_NOTE_MAX = 26;
 
 // Fit {amount model [color] lastName date} into MAX chars. Amount and
 // date are reserved first (never lost); the middle "core" (model/color/
