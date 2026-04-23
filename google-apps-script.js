@@ -2111,17 +2111,27 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
 
   var ret = function(row){ return { status: 'matched', row: row.row, car_desc: row.car_desc }; };
 
-  // Helper: build year+model fallback candidates for Review
+  // Helper: build year+model fallback candidates for Review. v59 — require
+  // year AND model when both are provided (was: just model). Prevents a
+  // 17 Expedition payment matching a 2004 Expedition "because it's the
+  // only Expedition on the sheet". If year is missing from the payload,
+  // fall back to model alone; if model is missing, year alone. Sorts by
+  // match score so the best candidate appears first.
   var yearModelFallback = function(){
     if (!model && !yearAlts.length) return [];
-    return allRows.filter(function(r){
-      // Prefer rows with model; year alone is too broad
-      if (model && r.has_model) return true;
-      if (model && !r.has_model) return false;
-      // No model in payload — fall back to year alone
-      if (!model && yearAlts.length) return r.has_year;
+    var hits = allRows.filter(function(r){
+      if (model && yearAlts.length) return r.has_model && r.has_year;
+      if (model) return r.has_model;
+      if (yearAlts.length) return r.has_year;
       return false;
     });
+    // Rank: color match pulls to top (when color provided)
+    hits.sort(function(a, b){
+      var sa = (a.has_year ? 2 : 0) + (a.has_model ? 2 : 0) + (a.has_color ? 1 : 0);
+      var sb = (b.has_year ? 2 : 0) + (b.has_model ? 2 : 0) + (b.has_color ? 1 : 0);
+      return sb - sa;
+    });
+    return hits;
   };
 
   var dedupRows = function(rows){
@@ -2131,9 +2141,12 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
   };
 
   if (!lastHits.length) {
-    // Zero lastname hits — try year+model fallback
+    // Zero lastname hits — surface year+model fallback as partial, NEVER
+    // auto-match. User explicitly approves each fallback pick in Review.
+    // (v58 had a `if (fb.length === 1) return ret(fb[0])` branch that
+    // auto-posted a 17 Expedition payment to the only 2004 Expedition
+    // it found in the other location — removed in v59.)
     var fb = yearModelFallback();
-    if (fb.length === 1 && !onlyWeak) return ret(fb[0]);
     if (fb.length) return { status: 'partial', candidates: _stripInternal(fb) };
     return { status: 'no_match' };
   }
@@ -2148,6 +2161,15 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
       var merged1 = dedupRows(lastHits.concat(fb1));
       return { status: 'partial', candidates: _stripInternal(merged1) };
     }
+    // Strong single hit — but still require year and model to line up
+    // when both are provided (prevents a "garcia" hit on a 2013 Civic
+    // from auto-posting a 2017 Accord payment). If year/model mismatch,
+    // demote to partial with y+m fallback alternatives.
+    if (model && yearAlts.length && (!only.has_model || !only.has_year)) {
+      var fb1b = yearModelFallback();
+      var merged1b = dedupRows(lastHits.concat(fb1b));
+      return { status: 'partial', candidates: _stripInternal(merged1b) };
+    }
     return ret(only);
   }
 
@@ -2155,7 +2177,15 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
   var modelHits = lastHits;
   if (model){
     modelHits = lastHits.filter(function(r){ return r.has_model; });
-    if (modelHits.length === 1) return ret(modelHits[0]);
+    if (modelHits.length === 1){
+      // Require year match too when year is provided
+      if (yearAlts.length && !modelHits[0].has_year){
+        var fb2a = yearModelFallback();
+        var merged2a = dedupRows(lastHits.concat(fb2a));
+        return { status: 'partial', candidates: _stripInternal(merged2a) };
+      }
+      return ret(modelHits[0]);
+    }
     if (modelHits.length === 0){
       // Model filter zeroed it out. v58: also pull year+model matches
       // (any row) so Review shows the likely-correct deal even when the
