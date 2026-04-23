@@ -18912,17 +18912,24 @@ async function _autopopulateDeals26(record, car) {
   }
   if (custLast) carDesc = carDesc + ' ' + custLast;
 
-  // 4. Pull cost + expenses from inventory_costs
-  var cost = ic ? (parseFloat(ic.purchase_cost) || 0) : 0;
-  var jointExp = ic ? (parseFloat(ic.joint_expenses) || 0) : 0;
-  var vladExp = ic ? (parseFloat(ic.vlad_expenses) || 0) : 0;
+  // 4. Pull cost + expenses from inventory_costs — BUT only if we
+  //    trust the link. If the sanity check flagged a color/year
+  //    conflict above, the ic row was for a different car, so its
+  //    cost + expenses would pollute this deal with stale numbers
+  //    (e.g. Apr 22 Tesla deal inherited $2180 cost + 413 expenses
+  //    + notes like "200 wp exp / 45 grill / 142 front bumper" from
+  //    an unrelated Odyssey row). Zero it out on conflict — Vlad
+  //    can type real values in the sheet after the alert.
+  var _useIc = ic && !carDescWarning;
+  var cost = _useIc ? (parseFloat(ic.purchase_cost) || 0) : 0;
+  var jointExp = _useIc ? (parseFloat(ic.joint_expenses) || 0) : 0;
+  var vladExp = _useIc ? (parseFloat(ic.vlad_expenses) || 0) : 0;
   var expenses = jointExp + vladExp;
 
-  // 5. Combine expense notes — join with newlines to match Google Sheets
-  //    cell-note format (joint + vlad lines flow into one breakdown).
+  // 5. Combine expense notes — only on trusted link, same rule.
   var expNotes = [];
-  if (ic && ic.expense_notes) expNotes.push(ic.expense_notes);
-  if (ic && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
+  if (_useIc && ic.expense_notes) expNotes.push(ic.expense_notes);
+  if (_useIc && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
   // 6. Calculate deal_num — scoped to the current CALENDAR week (Sunday-start,
@@ -19042,7 +19049,10 @@ async function _autopopulateDeals26(record, car) {
   // 12. Remove sold car from inventory_costs (car transferred to Deals26).
   //     Deletes Supabase row + Google Sheet row. Passes car_name so the
   //     Apps Script can verify before deleting (guards against stale sort_order).
-  if (ic && ic.id) {
+  //     SKIP on carDescWarning — the linked ic row was for a different car,
+  //     deleting it would lose cost data for a real car that's still in
+  //     stock. Leave it alone; user gets the alert and can investigate.
+  if (ic && ic.id && !carDescWarning) {
     var _icSort = ic.sort_order;
     var _icName = ic.car_name || '';
     var _icLoc = record.location || 'DeBary';
