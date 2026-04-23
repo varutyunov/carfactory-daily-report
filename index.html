@@ -17408,6 +17408,16 @@ async function _reviewLoad(){
     if (dealReviews.length){
       await Promise.all(dealReviews.map(async function(r){
         try {
+          // Is this deal already in deals26? If so the card should tell
+          // the user to Dismiss (approving would double-post).
+          var existing = null;
+          try {
+            var exRows = await sbGet('deals26',
+              'sold_inv_vin=eq.' + encodeURIComponent(r.vehicle_vin) +
+              '&location=eq.' + encodeURIComponent(r.location || '') +
+              '&select=id,car_desc,sort_order,location&limit=1');
+            existing = (exRows && exRows[0]) || null;
+          } catch(e){}
           var invRows = await sbGet('inventory',
             'vin=eq.' + encodeURIComponent(r.vehicle_vin) +
             '&select=id,name,color,miles&limit=1');
@@ -17454,9 +17464,9 @@ async function _reviewLoad(){
               if (String(ic.car_name).toLowerCase().indexOf(ys) === -1) conflict = 'year mismatch';
             }
           }
-          r._preview = { inv: inv, ic: ic, conflict: conflict, candidates: fallbackCandidates };
+          r._preview = { inv: inv, ic: ic, conflict: conflict, candidates: fallbackCandidates, existing: existing };
         } catch(e){
-          r._preview = { inv: null, ic: null, conflict: null, candidates: [], error: String(e && e.message || e) };
+          r._preview = { inv: null, ic: null, conflict: null, candidates: [], existing: null, error: String(e && e.message || e) };
         }
       }));
     }
@@ -17498,6 +17508,15 @@ function _reviewRender(){
       // of name-matched candidates the user can pick + link manually.
       if (isDeal){
         var pv = r._preview;
+        // Hard warning if this deal is ALREADY in deals26 — approving
+        // would create a duplicate.
+        if (pv && pv.existing){
+          html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#2a0505;border:1px solid #7f1d1d;">';
+          html += '<div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-weight:800;">\u26a0 Already posted to Deals26</div>';
+          html += '<div style="font-size:13px;color:#fff;">' + _escHtml(pv.existing.car_desc || '') + '</div>';
+          html += '<div style="font-size:11px;color:#888;margin-top:3px;">row ' + (pv.existing.sort_order || '?') + ' \u00b7 ' + _escHtml(pv.existing.location || '') + ' \u00b7 Approving would duplicate this row. Tap Dismiss.</div>';
+          html += '</div>';
+        }
         html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#0a0a0a;border:1px solid #1a1a1a;">';
         html += '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Would link to</div>';
         if (pv && pv.ic){
@@ -17935,6 +17954,12 @@ async function _reviewApprovePending(id){
   }
 
   if (r.reason === 'deal_pending'){
+    // Block the obvious dup case. The card already shows a red banner;
+    // this is the last safety net on the Approve tap.
+    if (r._preview && r._preview.existing){
+      alert('This deal is already in Deals26 (row ' + (r._preview.existing.sort_order || '?') + ', ' + (r._preview.existing.car_desc || '') + '). Approving would duplicate it. Tap Dismiss instead.');
+      return;
+    }
     if (!confirm('Post this deal to Deals26?\n\n' + (r.note_line || r.customer_name || '') + '\n\nRuns the normal autopopulate (sanity-checked links, lowercase name, ≤30-char note).')) return;
     _removeReviewCard(id);
     try {
