@@ -237,23 +237,32 @@ function doPost(e) {
     if (action === 'deals26_set_row_g') {
       var srgTab = String(body.data && body.data.tab || 'Deals26');
       var srgRow = parseInt(body.data && body.data.row);
-      var formula = String(body.data && body.data.payments_formula || '');
+      var formula = body.data && body.data.hasOwnProperty('payments_formula')
+        ? String(body.data.payments_formula || '') : '';
       var noteStr = body.data && body.data.hasOwnProperty('payment_notes')
         ? String(body.data.payment_notes) : null;
+      var shouldClear = body.data && body.data.clear === true;
       if (!srgRow || srgRow < 2) return jsonResponse({ ok: false, error: 'invalid_row' });
-      if (!formula || formula.charAt(0) !== '=') return jsonResponse({ ok: false, error: 'formula_must_start_with_=' });
+      if (!shouldClear && (!formula || formula.charAt(0) !== '=')) {
+        return jsonResponse({ ok: false, error: 'formula_must_start_with_=' });
+      }
       var srgSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
       var srgSheet = srgSs.getSheetByName(srgTab);
       if (!srgSheet) return jsonResponse({ ok: false, error: 'no_sheet' });
       PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
       var srgCell = srgSheet.getRange(srgRow, 7);
-      srgCell.setFormula(formula);
-      srgCell.setNumberFormat('$#,##0');
-      if (noteStr !== null) srgCell.setNote(noteStr);
+      if (shouldClear) {
+        srgCell.clearContent();
+        srgCell.clearNote();
+      } else {
+        srgCell.setFormula(formula);
+        srgCell.setNumberFormat('$#,##0');
+        if (noteStr !== null) srgCell.setNote(noteStr);
+      }
       return jsonResponse({
         ok: true, action: 'deals26_set_row_g',
         tab: srgTab, row: srgRow,
-        value: srgCell.getValue(), formula: formula
+        value: srgCell.getValue(), formula: shouldClear ? '' : formula
       });
     }
 
