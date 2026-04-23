@@ -215,6 +215,25 @@ function doPost(e) {
     // without losing the growing-formula history.
     // Inputs: body.data.{ tab, row, payments_formula: '=400+400+340',
     //                     payment_notes: 'line1\\nline2' }
+    if (action === 'deals26_get_row_g') {
+      var grgTab = String(body.data && body.data.tab || 'Deals26');
+      var grgRow = parseInt(body.data && body.data.row);
+      if (!grgRow || grgRow < 2) return jsonResponse({ ok: false, error: 'invalid_row' });
+      var grgSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
+      var grgSheet = grgSs.getSheetByName(grgTab);
+      if (!grgSheet) return jsonResponse({ ok: false, error: 'no_sheet' });
+      var grgCell = grgSheet.getRange(grgRow, 7);
+      var grgB = grgSheet.getRange(grgRow, 2).getValue();
+      return jsonResponse({
+        ok: true, action: 'deals26_get_row_g',
+        tab: grgTab, row: grgRow,
+        car_desc: String(grgB || ''),
+        value: grgCell.getValue(),
+        formula: grgCell.getFormula() || '',
+        note: grgCell.getNote() || ''
+      });
+    }
+
     if (action === 'deals26_set_row_g') {
       var srgTab = String(body.data && body.data.tab || 'Deals26');
       var srgRow = parseInt(body.data && body.data.row);
