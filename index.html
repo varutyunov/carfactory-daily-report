@@ -16906,7 +16906,11 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
 var _APPROVE_FIRST_MODE = true;
 
 // Queue a deal-upload review so the user approves before the deal
-// lands in Deals26. Called from dealSubmit instead of _autopopulateDeals26.
+// lands in Deals26. Snapshots the linked inventory_costs row (with
+// FULL expense notes — those matter) so the review has a durable
+// memory even if the ic row changes or gets deleted by other flows
+// before the user approves. Does NOT delete inventory_costs — that
+// only happens inside _autopopulateDeals26 on approval.
 async function _queueDealReview(dealRecord, car){
   try {
     var amt = parseFloat(dealRecord.total_collected) || 0;
@@ -16914,6 +16918,29 @@ async function _queueDealReview(dealRecord, car){
     var year = (vdTokens[0] && /^(19|20)\d{2}$/.test(vdTokens[0])) ? vdTokens[0] : '';
     var make = vdTokens[1] || '';
     var model = vdTokens.slice(2).join(' ') || '';
+
+    // Snapshot — what would the deal post if approved right now?
+    var snapshot = { ic: null, inv: null };
+    var icLookupId = (car && car.id) ? car.id : null;
+    if (!icLookupId && dealRecord.vin){
+      try {
+        var invRows = await sbGet('inventory',
+          'vin=eq.' + encodeURIComponent(dealRecord.vin) +
+          '&select=id,name,stock,color,miles,location&limit=1');
+        if (invRows && invRows[0]){ snapshot.inv = invRows[0]; icLookupId = invRows[0].id; }
+      } catch(e){}
+    } else if (car){
+      snapshot.inv = { id: car.id, name: car.name, stock: car.stock, color: car.color, miles: car.miles, location: car.location };
+    }
+    if (icLookupId){
+      try {
+        var icRows = await sbGet('inventory_costs',
+          'car_id=eq.' + icLookupId +
+          '&select=id,car_name,purchase_cost,joint_expenses,vlad_expenses,expense_notes,vlad_expense_notes,sort_order,location&limit=1');
+        if (icRows && icRows[0]) snapshot.ic = icRows[0];
+      } catch(e){}
+    }
+
     var row = {
       payment_id: null,
       deal_id: dealRecord.id || null,
@@ -16930,6 +16957,7 @@ async function _queueDealReview(dealRecord, car){
       note_line: _dealReviewPreview(dealRecord, car),
       reason: 'deal_pending',
       candidates: JSON.stringify([]),
+      snapshot: snapshot,
       status: 'pending',
       created_at: new Date().toISOString()
     };
@@ -17503,6 +17531,26 @@ function _reviewRender(){
       html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
       html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
 
+      // Snapshot block — what was linked at the moment this review
+      // was queued. This is the durable memory the approval will
+      // use, even if inventory_costs has changed since.
+      if (isDeal && r.snapshot && r.snapshot.ic){
+        var ss = r.snapshot.ic;
+        var ssCost = parseFloat(ss.purchase_cost) || 0;
+        var ssExp = (parseFloat(ss.joint_expenses) || 0) + (parseFloat(ss.vlad_expenses) || 0);
+        var ssExpNotes = [];
+        if (ss.expense_notes) ssExpNotes.push(ss.expense_notes);
+        if (ss.vlad_expense_notes) ssExpNotes.push(ss.vlad_expense_notes);
+        var ssNoteText = ssExpNotes.join('\n');
+        html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#062019;border:1px solid #166534;">';
+        html += '<div style="font-size:10px;color:#4ade80;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Snapshot at upload \u00b7 will be posted on approve</div>';
+        html += '<div style="font-size:13px;color:#fff;font-weight:700;">' + _escHtml(ss.car_name || '') + '</div>';
+        html += '<div style="font-size:11px;color:#888;margin-top:3px;">cost $' + ssCost + ' \u00b7 expenses $' + ssExp + '</div>';
+        if (ssNoteText){
+          html += '<div style="font-size:11px;color:#bbb;margin-top:6px;white-space:pre-wrap;background:#000;border-radius:8px;padding:8px;font-family:ui-monospace,monospace;">' + _escHtml(ssNoteText) + '</div>';
+        }
+        html += '</div>';
+      }
       // Link preview — show which inventory_costs row would be used,
       // whether color/year agrees, and (when missing) a fallback list
       // of name-matched candidates the user can pick + link manually.
@@ -17969,8 +18017,11 @@ async function _reviewApprovePending(id){
         await _reviewLoad();
         return;
       }
+      // Pass the captured snapshot's ic row through so cost + expenses
+      // + full notes survive even if the live ic row is gone or stale.
+      var snapIc = (r.snapshot && r.snapshot.ic) ? r.snapshot.ic : null;
       var snap = null;
-      try { snap = await _autopopulateDeals26(ctx.record, ctx.car); }
+      try { snap = await _autopopulateDeals26(ctx.record, ctx.car, snapIc); }
       catch(e){ console.warn('autopopulate failed:', e); }
 
       if (snap && snap.carDescWarning){
@@ -19283,19 +19334,28 @@ function _buildCarDescFromDeal(record, car){
   return [yearShort, model, color, miles].filter(Boolean).join(' ');
 }
 
-async function _autopopulateDeals26(record, car) {
+async function _autopopulateDeals26(record, car, icOverride) {
   var vin = (record.vin || '').trim();
   if (!vin) return;
 
-  // 1. Find inventory car by VIN to get inventory.id
-  var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
-  var invId = (Array.isArray(invRows) && invRows[0]) ? invRows[0].id : null;
-
-  // 2. Find inventory_costs row linked to this inventory car
   var ic = null;
-  if (invId) {
-    var icRows = await sbGet('inventory_costs', 'car_id=eq.' + invId + '&limit=1');
-    if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
+  var invId = null;
+  if (icOverride){
+    // Snapshot-driven: the review carried forward exactly what was
+    // linked at upload time. Prefer it — this is how we preserve
+    // expense_notes when the live ic row has since been deleted.
+    ic = icOverride;
+    invId = icOverride.car_id || null;
+  } else {
+    // 1. Find inventory car by VIN to get inventory.id
+    var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
+    invId = (Array.isArray(invRows) && invRows[0]) ? invRows[0].id : null;
+
+    // 2. Find inventory_costs row linked to this inventory car
+    if (invId) {
+      var icRows = await sbGet('inventory_costs', 'car_id=eq.' + invId + '&limit=1');
+      if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
+    }
   }
 
   // 3. Build car_desc.
