@@ -17427,6 +17427,22 @@ async function _reviewLoad(){
   try {
     var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=100');
     _reviewData = Array.isArray(rows) ? rows : [];
+    // Sort deal_pending cards by sale date ascending so the oldest deal
+    // gets approved first — keeps Deals26 rows in sale order and the
+    // week's deal_num sequence correct without user guesswork.
+    _reviewData.sort(function(a, b){
+      var aDeal = a.reason === 'deal_pending' || a.reason === 'cash_sale_pending';
+      var bDeal = b.reason === 'deal_pending' || b.reason === 'cash_sale_pending';
+      if (aDeal && !bDeal) return -1;
+      if (!aDeal && bDeal) return 1;
+      if (aDeal && bDeal){
+        var ad = a.payment_date || '';
+        var bd = b.payment_date || '';
+        if (ad !== bd) return ad < bd ? -1 : 1;
+      }
+      // fallback: newest review first (existing behavior for payment reviews)
+      return (a.created_at || '') < (b.created_at || '') ? 1 : -1;
+    });
     // For deal_pending reviews, fetch the inventory + inventory_costs
     // row that would be linked on approval — so the card can show it
     // as a preview. Runs in parallel; each review gets a `_preview`
@@ -19428,21 +19444,30 @@ async function _autopopulateDeals26(record, car, icOverride) {
   if (_useIc && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
-  // 6. Calculate deal_num — scoped to the current CALENDAR week (Sunday-start,
-  //    matching _payGetWeekStart). If no deals26 rows exist this calendar week
-  //    for this location, deal_num=1 (new week → triggers thick top border in
-  //    the sheet via _writeRowToSheet). Otherwise max(this_week.deal_num)+1.
+  // 6. Calculate deal_num — scoped to the DEAL's calendar week (Sunday-start).
+  //    Anchored on record.created_at (the SALE date), not new Date(), so
+  //    deals approved days/weeks after the sale still land in their correct
+  //    week. Under approve-first, this matters: the deals table carries
+  //    the original sale date, but the review approve happens later.
+  //    If no deals26 rows exist for that week at this location, deal_num=1
+  //    (new week → triggers thick top border via _writeRowToSheet).
+  //    Otherwise max(this_week.deal_num)+1.
   //    Must also be location-filtered so DeBary / DeLand counts don't mix.
   var _locForNum = record.location || 'DeBary';
   var dealNum = 1;
   try {
-    var _wsDt = new Date();
+    var _salesAnchor = record.created_at ? new Date(record.created_at) : new Date();
+    if (isNaN(_salesAnchor.getTime())) _salesAnchor = new Date();
+    var _wsDt = new Date(_salesAnchor.getTime());
     _wsDt.setDate(_wsDt.getDate() - _wsDt.getDay()); // roll back to Sunday
     _wsDt.setHours(0, 0, 0, 0);
     var _weekStartIso = _wsDt.toISOString();
+    var _weekEndDt = new Date(_wsDt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    var _weekEndIso = _weekEndDt.toISOString();
     var recentD26 = await sbGet('deals26',
       'location=eq.' + encodeURIComponent(_locForNum) +
       '&created_at=gte.' + encodeURIComponent(_weekStartIso) +
+      '&created_at=lt.' + encodeURIComponent(_weekEndIso) +
       '&order=deal_num.desc&limit=50&select=deal_num');
     if (Array.isArray(recentD26) && recentD26.length > 0) {
       dealNum = (parseInt(recentD26[0].deal_num) || 0) + 1;
