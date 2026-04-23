@@ -209,6 +209,35 @@ function doPost(e) {
       return _handleDeals26AppendPaymentDirect(location, body.data || {});
     }
 
+    // Surgical cell-write for one-off rollbacks / fixes. Writes a raw
+    // formula to col G + replaces col G's cell note verbatim. Use when
+    // we need to reverse a test-write or correct a malformed entry
+    // without losing the growing-formula history.
+    // Inputs: body.data.{ tab, row, payments_formula: '=400+400+340',
+    //                     payment_notes: 'line1\\nline2' }
+    if (action === 'deals26_set_row_g') {
+      var srgTab = String(body.data && body.data.tab || 'Deals26');
+      var srgRow = parseInt(body.data && body.data.row);
+      var formula = String(body.data && body.data.payments_formula || '');
+      var noteStr = body.data && body.data.hasOwnProperty('payment_notes')
+        ? String(body.data.payment_notes) : null;
+      if (!srgRow || srgRow < 2) return jsonResponse({ ok: false, error: 'invalid_row' });
+      if (!formula || formula.charAt(0) !== '=') return jsonResponse({ ok: false, error: 'formula_must_start_with_=' });
+      var srgSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
+      var srgSheet = srgSs.getSheetByName(srgTab);
+      if (!srgSheet) return jsonResponse({ ok: false, error: 'no_sheet' });
+      PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+      var srgCell = srgSheet.getRange(srgRow, 7);
+      srgCell.setFormula(formula);
+      srgCell.setNumberFormat('$#,##0');
+      if (noteStr !== null) srgCell.setNote(noteStr);
+      return jsonResponse({
+        ok: true, action: 'deals26_set_row_g',
+        tab: srgTab, row: srgRow,
+        value: srgCell.getValue(), formula: formula
+      });
+    }
+
     var locConfig = _getConfig(location);
     var config = locConfig[tabName];
     if (!config) {
@@ -1822,10 +1851,9 @@ function _handleDeals26AppendPayment(location, data) {
     // Swap the noteLine's last-name token to whatever Vlad typed on the
     // matched deals26 row. The payload's lastname comes from parsing
     // customer_name (last space-separated token), which picks the wrong
-    // surname for compound names like "WALDO BORROTO GARCIA" → "Garcia"
-    // when Vlad keyed the deal as "... Borroto". Align to the row so
-    // the note reads consistently with the column.
-    noteLine = _rewriteNoteLineLastName(noteLine, result.car_desc);
+    // surname for compound names. Pass the full lastNames candidate
+    // array so the rewrite picks whichever surname appears on the row.
+    noteLine = _rewriteNoteLineLastName(noteLine, result.car_desc, lastNames);
 
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
@@ -2068,30 +2096,61 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
 // Rewrite the note_line's last-name token to match the car_desc on the
 // target row. The app parses customer_name and takes the last space-
 // separated token, which picks the wrong surname for Hispanic compound
-// names (e.g. "WALDO BORROTO GARCIA" → "Garcia", but Vlad keyed the
-// deals26 row as "... Borroto"). Here we swap to Vlad's chosen name
-// so the payment note reads consistently with the column.
+// names (e.g. "ADRIANNA LOPEZ" → "lopez" is actually fine, but if the
+// deals26 row was keyed "Lopez Cruz", v56's "take last word" logic
+// would have written "cruz", which is wrong — Vlad typed "Lopez" as
+// the primary surname).
 //
-// Input shape is the app's _paymentNoteLine output:
+// Correct behavior: use the payload's lastNames array (caller's
+// computed surname candidates) and pick whichever one actually
+// appears on the matched row. Fall back to car_desc's last word only
+// when nothing from lastNamesHint matches.
+//
+// Input noteLine shape (from the app's _paymentNoteLine):
 //   "{amount} {model} [{color}] {lastname} [{M/D}]"
-// We identify the lastname as the word right before the trailing M/D
-// (or the last word if no date). Replace with the last word of
-// car_desc (lowercased to match app format). If same case-insensitive,
-// return unchanged.
-function _rewriteNoteLineLastName(noteLine, carDesc){
+// We identify the lastname token as the word right before the
+// trailing M/D (or the last word if no date).
+function _rewriteNoteLineLastName(noteLine, carDesc, lastNamesHint){
   if (!noteLine || !carDesc) return noteLine;
-  var descTokens = String(carDesc).trim().split(/\s+/);
-  var matchedLast = descTokens[descTokens.length - 1];
-  if (!matchedLast) return noteLine;
-  matchedLast = matchedLast.toLowerCase();
+  var descL = String(carDesc).toLowerCase();
   var tokens = noteLine.trim().split(/\s+/);
   if (tokens.length < 2) return noteLine;
   var dateRe = /^\d{1,2}\/\d{1,2}$/;
   var hasDate = dateRe.test(tokens[tokens.length - 1]);
   var lastIdx = hasDate ? tokens.length - 2 : tokens.length - 1;
   if (lastIdx < 1) return noteLine;
-  if (tokens[lastIdx].toLowerCase() === matchedLast) return noteLine;
-  tokens[lastIdx] = matchedLast;
+
+  var wordBoundary = function(hay, needle){
+    if (!needle) return false;
+    var esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('\\b' + esc + '\\b', 'i').test(hay);
+  };
+
+  // Candidate pool: caller's hints first, then the noteLine's current
+  // lastname (so we don't drop info we already had).
+  var candidates = [];
+  if (Array.isArray(lastNamesHint)){
+    for (var lh = 0; lh < lastNamesHint.length; lh++){
+      var c = String(lastNamesHint[lh] || '').trim().toLowerCase();
+      if (c && candidates.indexOf(c) === -1) candidates.push(c);
+    }
+  }
+  var currentLast = tokens[lastIdx].toLowerCase();
+  if (candidates.indexOf(currentLast) === -1) candidates.push(currentLast);
+
+  // Pick first candidate that actually appears on the deals26 row.
+  var newLast = null;
+  for (var ci = 0; ci < candidates.length; ci++){
+    if (wordBoundary(descL, candidates[ci])){ newLast = candidates[ci]; break; }
+  }
+  // Fallback: no candidate matched → use car_desc's last word (old v56 behavior)
+  if (!newLast){
+    var descTokens = String(carDesc).trim().split(/\s+/);
+    newLast = descTokens[descTokens.length - 1];
+    if (newLast) newLast = newLast.toLowerCase();
+  }
+  if (!newLast || currentLast === newLast) return noteLine;
+  tokens[lastIdx] = newLast;
   return tokens.join(' ');
 }
 
@@ -2133,8 +2192,11 @@ function _handleDeals26AppendPaymentDirect(location, data) {
 
     // Pull the matched row's car_desc (col B) to align the note's last-name
     // token with what Vlad typed on the row — same rule as the matcher path.
+    // For the direct path the caller didn't send lastNames, so the rewrite
+    // falls back to using the noteLine's current lastname token as its
+    // only candidate (and car_desc's last word if that doesn't match).
     var rowCarDesc = String(sheet.getRange(row, 2).getValue() || '').trim();
-    noteLine = _rewriteNoteLineLastName(noteLine, rowCarDesc);
+    noteLine = _rewriteNoteLineLastName(noteLine, rowCarDesc, Array.isArray(data.last_names) ? data.last_names : null);
 
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
