@@ -16120,36 +16120,47 @@ function _paymentFormatPieces(payload){
   // Lowercase the last name — uppercase letters are wider in proportional
   // fonts and waste budget (CarPay portal names come ALL-CAPS).
   lastName = lastName.toLowerCase();
+  // Year — sheet convention is 2-digit (e.g. "17 Expedition sanche 4/23"),
+  // matches the yearAlts Apps Script matcher accepts on col B.
+  var year = '';
+  if (payload.vehicle_year){
+    var yStr = String(payload.vehicle_year).trim();
+    if (yStr.length === 4) year = yStr.slice(2);
+    else if (yStr.length === 2) year = yStr;
+    else if (/^\d+$/.test(yStr)) year = yStr.slice(-2);
+  }
   var dateStr = '';
   try {
     var d = payload.payment_date ? new Date(payload.payment_date + 'T12:00:00') : new Date();
     if (!isNaN(d.getTime())) dateStr = (d.getMonth() + 1) + '/' + d.getDate();
   } catch(e){}
-  return { model: model, color: color, lastName: lastName, dateStr: dateStr };
+  return { year: year, model: model, color: color, lastName: lastName, dateStr: dateStr };
 }
 
 // Hard target: one physical line in Google Sheets cell notes, even with
-// proportional-font wrap. 32 was too generous — users reported wrap on
-// many posts. Target 26 total with progressive drops so NOTHING wraps.
+// proportional-font wrap. Target 26 total with progressive drops so
+// NOTHING wraps.
 //
-// Truncation order (first to drop):
+// Truncation order (first to drop) — v545 added year; year is kept
+// longer than color because it's the strongest matcher signal after
+// model:
 //   1. color   (e.g. "silver")
-//   2. model is reduced to its first token (e.g. "Grand Prix" → "Grand")
-//   3. lastName is truncated after 12 chars
+//   2. year    (e.g. "17")  — dropped only if still too long
+//   3. model is reduced to its first token (e.g. "Grand Prix" → "Grand")
+//   4. lastName is truncated
 // Amount + date are non-negotiable (amount is the data, date is the
 // dedup key).
 // 26 chars — dropped from 30 after Vlad reported visual wrap on
 // "320 Silverado 1500 garcia 4/23" and "250 Accord silver alverio
 // 4/23" at font size 13pt. 30 passes a char-count test but wraps
 // in the proportional font at that size; 26 is the known-safe
-// threshold (same value used successfully on the retroactive
-// Profit26 note cleanup).
+// threshold.
 var _PAY_NOTE_MAX = 26;
 
-// Fit {amount model [color] lastName date} into MAX chars. Amount and
-// date are reserved first (never lost); the middle "core" (model/color/
-// lastName) is truncated progressively:
-//   color dropped → model reduced to first token → lastName truncated.
+// Fit {amount year model [color] lastName date} into MAX chars. Amount
+// and date are reserved first (never lost); the middle "core" is
+// truncated progressively:
+//   color dropped → year dropped → model reduced → lastName truncated.
 // Guarantees ≤ MAX and that amount + date always survive.
 function _paymentNoteLineFit(amtStr, pieces){
   var MAX = _PAY_NOTE_MAX;
@@ -16163,20 +16174,26 @@ function _paymentNoteLineFit(amtStr, pieces){
     // Too tight — amount + date only
     return (amt + (date ? ' ' + date : '')).trim();
   }
+  var year = pieces.year || '';
   var model = pieces.model || '';
   var color = pieces.color || '';
   var last = pieces.lastName || '';
-  var fitCore = function(m, c, l){
-    return [m, c, l].filter(Boolean).join(' ');
+  var fitCore = function(y, m, c, l){
+    return [y, m, c, l].filter(Boolean).join(' ');
   };
   var core;
-  core = fitCore(model, color, last);
-  if (core.length > coreBudget) core = fitCore(model, '', last);
+  // Step 1: everything
+  core = fitCore(year, model, color, last);
+  // Step 2: drop color
+  if (core.length > coreBudget) core = fitCore(year, model, '', last);
+  // Step 3: drop year (color already gone)
+  if (core.length > coreBudget) core = fitCore('', model, '', last);
+  // Step 4: reduce model to first token
   if (core.length > coreBudget){
     var modelShort = String(model).split(/\s+/)[0];
-    core = fitCore(modelShort, '', last);
+    core = fitCore('', modelShort, '', last);
     if (core.length > coreBudget){
-      // Truncate lastName to whatever fits
+      // Step 5: truncate lastName to whatever fits
       var maxLast = coreBudget - modelShort.length - (modelShort ? 1 : 0);
       if (maxLast < 1){
         core = modelShort.slice(0, coreBudget);

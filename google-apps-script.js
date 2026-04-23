@@ -1976,6 +1976,30 @@ function _searchTabsForMatch(ss, lastNames, year, make, model, color) {
   return best;
 }
 
+// Known vehicle-model tokens that are ALSO common English/Spanish words
+// people use as surnames. When the customer's parsed lastname list only
+// contains tokens from this set, the lastname filter is dangerously wide
+// (e.g. "Pedro SIERRA Sanchez" paying for an Expedition — "sierra" would
+// match every GMC Sierra row in the sheet). In that case the matcher
+// falls back to a pure year+model scan. Tokens here are also used to
+// down-rank ambiguous lastname tokens in favor of non-ambiguous ones.
+var _AMBIGUOUS_LASTNAME_TOKENS = {
+  'sierra': true, 'expedition': true, 'explorer': true, 'ranger': true,
+  'frontier': true, 'titan': true, 'tahoe': true, 'yukon': true,
+  'suburban': true, 'colorado': true, 'silverado': true, 'sonata': true,
+  'elantra': true, 'tucson': true, 'malibu': true, 'fusion': true,
+  'escape': true, 'edge': true, 'focus': true, 'taurus': true,
+  'traverse': true, 'impala': true, 'cruze': true, 'equinox': true,
+  'outlook': true, 'cooper': true, 'santa': true, 'rogue': true,
+  'sentra': true, 'altima': true, 'maxima': true, 'accord': true,
+  'civic': true, 'pilot': true, 'odyssey': true, 'camry': true,
+  'corolla': true, 'tacoma': true, 'tundra': true, 'mustang': true,
+  'charger': true, 'challenger': true, 'ram': true, 'beetle': true,
+  'jetta': true, 'passat': true, 'wrangler': true, 'cherokee': true,
+  'compass': true, 'patriot': true, 'journey': true, 'durango': true,
+  'avenger': true, 'caliber': true
+};
+
 // Find a deal row in the given Deals tab whose col B (car_desc) matches
 // the payment's qualifiers. Matching rule (option B, locked with user):
 //
@@ -2016,53 +2040,116 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
   }
   var colorL = color ? String(color).toLowerCase() : '';
 
-  // Normalize lastNames to an array of non-empty strings
-  var nameList = [];
+  // Normalize lastNames to an array of non-empty strings. Partition into
+  // "strong" (non-ambiguous) and "weak" (matches a known model token).
+  // When we only have weak candidates — e.g. "Pedro SIERRA Sanchez" paying
+  // for an Expedition — the lastname filter is dangerously wide because
+  // "sierra" is a GMC model. We still try weak tokens (some customers
+  // genuinely are named Sierra), but if they zero out we fall back to a
+  // pure year+model scan instead of flooding Review with wrong candidates.
+  var nameListAll = [];
+  var nameListStrong = [];
+  var nameListWeak = [];
   if (Array.isArray(lastNames)) {
     for (var lnx = 0; lnx < lastNames.length; lnx++) {
       var lnn = String(lastNames[lnx] || '').trim().toLowerCase();
-      if (lnn) nameList.push(lnn);
+      if (!lnn) continue;
+      nameListAll.push(lnn);
+      if (_AMBIGUOUS_LASTNAME_TOKENS[lnn]) nameListWeak.push(lnn);
+      else nameListStrong.push(lnn);
     }
   } else if (lastNames) {
     var lnStr = String(lastNames).trim().toLowerCase();
-    if (lnStr) nameList.push(lnStr);
+    if (lnStr) {
+      nameListAll.push(lnStr);
+      if (_AMBIGUOUS_LASTNAME_TOKENS[lnStr]) nameListWeak.push(lnStr);
+      else nameListStrong.push(lnStr);
+    }
   }
-  if (!nameList.length) return { status: 'no_match' };
+  if (!nameListAll.length) return { status: 'no_match' };
 
-  // ── Progressive narrowing (locked Apr 2026 after too many scanned-payment
-  // mismatches under the old strict rule that required lastName + year +
-  // model all-at-once):
-  //   1. Filter to rows where ANY last-name token matches (word boundary).
+  // Prefer strong tokens; only fall back to weak if no strong tokens exist.
+  var nameList = nameListStrong.length ? nameListStrong : nameListAll;
+  var onlyWeak = !nameListStrong.length && nameListWeak.length > 0;
+
+  // Pre-scan full sheet once so we can do a year+model fallback later.
+  var allRows = [];
+  for (var ri = 0; ri < vals.length; ri++) {
+    var descR = String(vals[ri][0] || '').trim();
+    if (!descR) continue;
+    var descRL = descR.toLowerCase();
+    allRows.push({
+      row: startRow + ri,
+      car_desc: descR,
+      descL: descRL,
+      has_last: nameListAll.some(function(n){ return _wordBoundary(descRL, n); }),
+      has_year: yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descRL, y.toLowerCase()); }) : false,
+      has_make: make ? _wordBoundary(descRL, make) : false,
+      has_model: model ? _wordBoundary(descRL, model) : false,
+      has_color: colorL ? _wordBoundary(descRL, colorL) : false
+    });
+  }
+
+  // ── Progressive narrowing (locked Apr 2026, revised for v58 after
+  // misfires on ambiguous-lastname payments like "Pedro Sierra Sanchez"
+  // → Expedition, where "sierra" matched every GMC Sierra row):
+  //   1. Filter to rows where a non-ambiguous last-name token matches.
+  //      (If only ambiguous tokens exist, use those but plan a year+model
+  //       fallback for zero / bad hits.)
   //   2. If 1 hit → that's the match.
   //   3. Multiple hits + model → keep only rows where model also matches.
   //   4. 1 hit → match. Multiple → narrow by year. 1 hit → match.
   //   5. Still multiple → narrow by color. 1 hit → match.
   //   6. Still ambiguous → return as 'multiple' candidates.
-  //   Also: if model filter zeros out, the prior set is returned as
-  //   'partial' candidates for manual review.
-  var lastHits = [];
-  for (var i = 0; i < vals.length; i++) {
-    var desc = String(vals[i][0] || '').trim();
-    if (!desc) continue;
-    var descL = desc.toLowerCase();
-    if (nameList.some(function(n){ return _wordBoundary(descL, n); })){
-      lastHits.push({
-        row: startRow + i,
-        car_desc: desc,
-        descL: descL,
-        has_last: true,
-        has_year: yearAlts.length ? yearAlts.some(function(y){ return _wordBoundary(descL, y.toLowerCase()); }) : false,
-        has_make: make ? _wordBoundary(descL, make) : false,
-        has_model: model ? _wordBoundary(descL, model) : false,
-        has_color: colorL ? _wordBoundary(descL, colorL) : false
-      });
-    }
-  }
-  if (!lastHits.length) return { status: 'no_match' };
+  //   Fallback: if model narrowing zeros out, OR we only had weak tokens
+  //   and got zero hits, scan the sheet for year+model matches and
+  //   surface those as partial candidates (merged with any lastname
+  //   hits we did find, deduped).
+  var lastHits = allRows.filter(function(r){
+    return nameList.some(function(n){ return _wordBoundary(r.descL, n); });
+  });
 
   var ret = function(row){ return { status: 'matched', row: row.row, car_desc: row.car_desc }; };
-  // Step 2: exactly one last-name hit → matched
-  if (lastHits.length === 1) return ret(lastHits[0]);
+
+  // Helper: build year+model fallback candidates for Review
+  var yearModelFallback = function(){
+    if (!model && !yearAlts.length) return [];
+    return allRows.filter(function(r){
+      // Prefer rows with model; year alone is too broad
+      if (model && r.has_model) return true;
+      if (model && !r.has_model) return false;
+      // No model in payload — fall back to year alone
+      if (!model && yearAlts.length) return r.has_year;
+      return false;
+    });
+  };
+
+  var dedupRows = function(rows){
+    var seen = {}; var out = [];
+    rows.forEach(function(r){ if (!seen[r.row]){ seen[r.row] = true; out.push(r); } });
+    return out;
+  };
+
+  if (!lastHits.length) {
+    // Zero lastname hits — try year+model fallback
+    var fb = yearModelFallback();
+    if (fb.length === 1 && !onlyWeak) return ret(fb[0]);
+    if (fb.length) return { status: 'partial', candidates: _stripInternal(fb) };
+    return { status: 'no_match' };
+  }
+
+  // Step 2: exactly one last-name hit — but if the only token was weak
+  // (ambiguous with a model name) AND model doesn't also line up on
+  // this row, don't trust it. Demote to partial and add y+m fallback.
+  if (lastHits.length === 1) {
+    var only = lastHits[0];
+    if (onlyWeak && model && !only.has_model) {
+      var fb1 = yearModelFallback();
+      var merged1 = dedupRows(lastHits.concat(fb1));
+      return { status: 'partial', candidates: _stripInternal(merged1) };
+    }
+    return ret(only);
+  }
 
   // Step 3: narrow by model when we have a model string
   var modelHits = lastHits;
@@ -2070,8 +2157,12 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
     modelHits = lastHits.filter(function(r){ return r.has_model; });
     if (modelHits.length === 1) return ret(modelHits[0]);
     if (modelHits.length === 0){
-      // Model filter zeroed it out — let user pick among the last-name hits
-      return { status: 'partial', candidates: _stripInternal(lastHits) };
+      // Model filter zeroed it out. v58: also pull year+model matches
+      // (any row) so Review shows the likely-correct deal even when the
+      // lastname was wrong or nicknamed. Merge + dedupe.
+      var fb2 = yearModelFallback();
+      var merged2 = dedupRows(lastHits.concat(fb2));
+      return { status: 'partial', candidates: _stripInternal(merged2) };
     }
   }
 
