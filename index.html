@@ -16607,6 +16607,72 @@ async function _carpayRecordPosting(cp, payload, outcome){
 // Single CarPay payment → match → post or queue for review. Mirrors
 // _appendPaymentToDeals26Checked but writes outcome to
 // carpay_payment_postings keyed by the CarPay reference.
+// Last-name-only candidate search. When we can't run the normal
+// matcher (no vehicle / no customer), query Deals26 for any rows
+// whose car_desc contains any of the candidate last names across
+// BOTH locations. Returns an array of review candidates or [].
+// Capped at 20 total to keep the review card usable.
+async function _carpayFindNameCandidates(lastNames){
+  if (!lastNames || !lastNames.length) return [];
+  var seen = {};
+  var candidates = [];
+  for (var i = 0; i < lastNames.length; i++){
+    var ln = String(lastNames[i] || '').trim();
+    if (!ln || ln.length < 3) continue;
+    try {
+      var rows = await sbGet('deals26',
+        'car_desc=ilike.' + encodeURIComponent('*' + ln + '*') +
+        '&select=id,car_desc,location,sort_order,owed' +
+        '&limit=20');
+      (rows || []).forEach(function(r){
+        var key = (r.location || '') + '|' + r.sort_order;
+        if (seen[key]) return;
+        seen[key] = true;
+        candidates.push({
+          tab: 'Deals26',
+          row: r.sort_order,
+          car_desc: r.car_desc,
+          location: r.location,
+          owed: r.owed,
+          has_last: true,
+          has_car: false // name-only signal; no vehicle match guaranteed
+        });
+      });
+    } catch(e){ console.warn('name candidate query failed for ' + ln + ':', e); }
+    if (candidates.length >= 20) break;
+  }
+  return candidates;
+}
+
+// Insert a payment_review row with the given reason + candidates.
+// Returns the inserted review's id (or null on failure).
+async function _carpayQueueReview(payload, reason, candidates){
+  try {
+    var r = await sbPost('payment_reviews', {
+      payment_id: null,
+      customer_name: payload.customer_name || '',
+      amount: payload.amount || 0,
+      vehicle_year: payload.vehicle_year || '',
+      vehicle_make: payload.vehicle_make || '',
+      vehicle_model: payload.vehicle_model || '',
+      vehicle_color: payload.vehicle_color || '',
+      vehicle_vin: payload.vehicle_vin || '',
+      location: payload.location,
+      payment_date: payload.payment_date || null,
+      payment_method: payload.payment_method || '',
+      note_line: _paymentNoteLine(payload.amount || 0, payload),
+      reason: reason,
+      candidates: JSON.stringify(candidates || []),
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+    return Array.isArray(r) && r.length ? r[0].id : null;
+  } catch(e){
+    console.warn('payment_reviews insert failed:', e);
+    return null;
+  }
+}
+
 async function _appendCarPayPaymentToDeals26(cp, custByAccount){
   if (!cp || !cp.reference){
     return { status: 'skipped_no_reference' };
@@ -16617,27 +16683,18 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           || custByAccount[cp.account + '|deland']
           || null;
 
-  // No customer row yet — route to review so user can manually assign
+  // No customer row yet — last-name candidates from deals26 (both locations)
   if (!cust){
-    var outcome = { status: 'no_customer', error: 'account ' + cp.account + ' not found in carpay_customers' };
     var noCustPayload = _carpayPaymentToPayload(cp, null);
-    try {
-      var rev = await sbPost('payment_reviews', {
-        payment_id: null,
-        customer_name: noCustPayload.customer_name,
-        amount: noCustPayload.amount,
-        vehicle_year: '', vehicle_make: '', vehicle_model: '', vehicle_color: '', vehicle_vin: '',
-        location: noCustPayload.location,
-        payment_date: noCustPayload.payment_date || null,
-        payment_method: noCustPayload.payment_method,
-        note_line: _paymentNoteLine(noCustPayload.amount, noCustPayload),
-        reason: 'no_customer',
-        candidates: JSON.stringify([]),
-        status: 'pending',
-        created_at: new Date().toISOString()
-      });
-      if (Array.isArray(rev) && rev.length) outcome.review_id = rev[0].id;
-    } catch(e){ outcome.error = (outcome.error || '') + '; review insert failed: ' + (e.message || e); }
+    var lastNames = _paymentLastNames(noCustPayload.customer_name);
+    var cands = await _carpayFindNameCandidates(lastNames);
+    var reason = cands.length ? 'no_customer_name_matches' : 'no_customer';
+    var rid = await _carpayQueueReview(noCustPayload, reason, cands);
+    var outcome = {
+      status: cands.length ? 'review' : 'no_customer',
+      error: 'account ' + cp.account + ' not in carpay_customers' + (cands.length ? ' (' + cands.length + ' name candidates)' : ''),
+      review_id: rid
+    };
     await _carpayRecordPosting(cp, noCustPayload, outcome);
     return outcome;
   }
@@ -16649,26 +16706,18 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
     return { status: 'zero_amount' };
   }
   if (!payload.vehicle_model){
-    // Vehicle missing on carpay_customer — route to review
-    var ro = { status: 'no_vehicle', error: 'customer ' + cp.account + ' has no vehicle string' };
-    try {
-      var r2 = await sbPost('payment_reviews', {
-        payment_id: null,
-        customer_name: payload.customer_name,
-        amount: amt,
-        vehicle_year: payload.vehicle_year, vehicle_make: payload.vehicle_make,
-        vehicle_model: '', vehicle_color: '', vehicle_vin: '',
-        location: payload.location,
-        payment_date: payload.payment_date || null,
-        payment_method: payload.payment_method,
-        note_line: _paymentNoteLine(amt, payload),
-        reason: 'no_vehicle',
-        candidates: JSON.stringify([]),
-        status: 'pending',
-        created_at: new Date().toISOString()
-      });
-      if (Array.isArray(r2) && r2.length) ro.review_id = r2[0].id;
-    } catch(e){ ro.error += '; review insert failed: ' + (e.message || e); }
+    // Vehicle missing on carpay_customer — run last-name search so
+    // the user has candidates to approve in Review. Without this
+    // the Review card was empty and useless.
+    var lastNames2 = _paymentLastNames(payload.customer_name);
+    var cands2 = await _carpayFindNameCandidates(lastNames2);
+    var reason2 = cands2.length ? 'no_vehicle_name_matches' : 'no_vehicle';
+    var rid2 = await _carpayQueueReview(payload, reason2, cands2);
+    var ro = {
+      status: cands2.length ? 'review' : 'no_vehicle',
+      error: 'customer ' + cp.account + ' has no vehicle' + (cands2.length ? ' (' + cands2.length + ' name candidates)' : ''),
+      review_id: rid2
+    };
     await _carpayRecordPosting(cp, payload, ro);
     return ro;
   }
@@ -16781,6 +16830,16 @@ async function processCarPayPaymentsUI(){
   // Load the three tables once, then walk sequentially with progress.
   var processed, cpRows, custMap;
   try {
+    // Clear stale non-final outcomes so newer code gets to retry them.
+    // Final statuses — posted, already_posted, review (user-visible),
+    // skipped_pre_cutoff, zero_amount — stay. Transient ones like
+    // no_customer / no_vehicle / error roll over into the next run.
+    try {
+      await fetch(SB_URL + '/rest/v1/carpay_payment_postings?status=in.(no_customer,no_vehicle,error)', {
+        method: 'DELETE', headers: SB_HEADERS
+      });
+    } catch(e){ console.warn('retry-stale clear failed:', e); }
+
     var processedRows = await sbGet('carpay_payment_postings', 'select=reference&limit=10000');
     processed = {};
     (processedRows || []).forEach(function(r){ if (r.reference) processed[r.reference] = true; });
