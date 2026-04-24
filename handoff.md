@@ -983,3 +983,128 @@ When a customer sells/pays off a car, mark their old deal_link
 - [scripts/backfill-payments.py](scripts/backfill-payments.py)
 - [scripts/audit-profit26.py](scripts/audit-profit26.py) (read-only;
   historical entries left alone per Vlad's call)
+
+---
+
+# Day 6 late evening — Tax-fill server-side automation
+
+## What got fixed after Vlad went to bed wrote this section
+
+### Server-side tax-fill cron (the big automation win)
+- [scripts/tax-fill.py](scripts/tax-fill.py) — Python port of the
+  in-app `_fillMissingTaxes()` loop. Queries deals26 taxes=0 + VIN,
+  filters OOS via `deals.out_of_state`, matches CSV entries, PATCHes
+  Supabase + mirrors to Google Sheet via Apps Script update action.
+- [.github/workflows/tax-fill.yml](.github/workflows/tax-fill.yml)
+  — runs every 4 hours (cron) + on push to `PendingSalesDebary.csv`
+  or `PendingSalesDeland.csv` + workflow_dispatch for manual runs.
+
+### The end-to-end flow (no more "why isn't it filling?")
+1. Drop fresh DMS export in `Pending Sales/{Debary,Deland}/`.
+2. Push.
+3. `pending-sales-sync.yml` (already existed) promotes newest to
+   `PendingSalesDebary.csv` / `PendingSalesDeland.csv` at repo root.
+4. That auto-commit triggers `tax-fill.yml`.
+5. Tax-fill runs, fills what it can, writes back to Supabase + Sheet.
+6. Even with no push, the 4-hour cron keeps it moving.
+
+### CSV was stale until we fixed it
+The app's in-browser `_fillMissingTaxes` was silently running against
+the Apr 21 export for 2 days because the fresh exports were dropped
+into `Pending Sales/Deland/` but never promoted to root.
+`pending-sales-sync` should've been doing this automatically — it
+was, actually, it just hadn't fired because nobody had pushed a
+change to those paths. Tonight's push cascaded through the chain
+correctly and filled Wyche, Vera, Walker, Irving, Bruten, Wiggins,
+Alicea.
+
+### Deal-by-deal status
+| Deal | Row | Location | Taxes | Notes |
+|---|---|---|---:|---|
+| Walker Suburban | r57 | DeLand | $616.74 | filled |
+| Wiggins Genesis | r59 | DeLand | $675.94 | filled |
+| Wyche Sonata | r60 | DeLand | $406.69 | filled (after DMS update) |
+| Vera Outlander | r61 (was r62, shifted after Wyche dup delete) | DeLand | $645.94 | filled (after DMS update) |
+| Irving Model S | r125 | DeBary | $1,081.19 | filled |
+| Bruten Impala | r58 | DeLand | $513.19 | filled |
+| Alicea Civic | r126 | DeBary | $869.10 | filled after VIN fix |
+| McKee Camaro | r6 | DeBary | n/a | OOS (legacy deals row inserted) |
+| Azera r93 | — | DeBary | n/a | OOS (existing) |
+| Corvette Smith r116 | — | DeBary | n/a | OOS (existing) |
+
+### Alicea VIN correction
+deals26 r126 had VIN `2HGFG4A54CH704758` (187k miles Civic from
+inventory) but the car_desc said "153k" — matching a DIFFERENT
+2012 orange Civic in inventory, VIN `2HGFG4A56CH700517`, which was
+also the VIN in the DMS export. Someone picked the wrong Civic at
+deal-upload time. Updated both `deals26.sold_inv_vin` and
+`deals.vin` to the correct 153k one. Tax-fill then matched.
+
+### McKee legacy OOS handling
+McKee's Camaro was entered directly on the sheet before the app
+existed, so `deals` table had no row to hold the `out_of_state`
+flag. Tax-fill would've kept logging NOT-IN-CSV forever. Fix:
+inserted a retroactive `deals` row:
+```
+vin: 2G1FJ1EJXA9180313
+customer_name: "McKee (legacy, pre-app)"
+vehicle_desc: "2010 Chevrolet Camaro SS"
+location: DeBary
+deal_type: finance
+out_of_state: true
+```
+Confirmed the subsequent tax-fill run now logs `SKIP OOS r6`.
+
+### Wyche Sonata duplicate cleanup
+deals26 had two identical rows (r60 + r61) for the same Wyche
+Sonata — same VIN, same cost/expenses/money, only different
+`deal_num` (4 and 5). Deleted r61 via the Apps Script delete
+action (used sheet row 62, method=deleteRow). **BUT**: Supabase
+reconciler hadn't caught up when I re-ran tax-fill immediately
+after, so the Supabase still had `sort_order=61` pointing at the
+deleted Wyche. The tax-fill's `update` action wrote Wyche's
+$406.69 to what was now sheet_row 62 (Vera Outlander), and
+Vera's $645.94 to the newly-empty sheet_row 63. Caught it by
+reading the sheet, corrected sheet_row 62 to Vera's $645.94 and
+cleared sheet_row 63. The reconciler (5-min cycle) will clean up
+the Supabase ghost at sort_order 61. Filter `taxes=eq.0` blocks
+further bad fills since the ghost row now has non-zero taxes.
+
+**Lesson for tomorrow:** after deleting a sheet row, wait for the
+reconciler OR trigger a manual resync before running any script
+that PATCHes Supabase → Sheet through `sort_order`. The sort_order
+→ sheet_row mapping drifts for 5 min after a delete.
+
+## What's live / needs nothing more from you
+- Tax-fill cron, CSV promotion chain — both committed to main.
+- All April tax gaps closed except any deals added AFTER the last
+  DMS export. Drop another export into `Pending Sales/Deland/`
+  whenever you enter new deals in the DMS and the chain fires.
+- Customer + deal_links tables populated (317 + 59).
+- CarPay Customers editor points at the new deal_links table.
+- Profit-cap rule live across all 7 Profit26 post paths (v546).
+- v59 matcher with ambiguous-lastname deprioritization live on
+  Apps Script (deployed as v64).
+
+## Tomorrow's priorities
+1. **Stage 2 resolver swap** — biggest remaining work. Wire
+   `_resolveCustomerDealLink(payload)` into
+   `_appendPaymentToDeals26Checked` and
+   `_appendCarPayPaymentToDeals26`. Keep fuzzy matcher as a
+   fallback. Eventually retire `payment_deal_aliases` and the
+   carpay-posting-based alias lookup.
+2. **Bulk-link the 253 unlinked CarPay customers** using the
+   purple "CarPay customers" button. Each tap = one link.
+3. **Process the 24 pending reviews** (5 dup + 6 rollback + 9
+   partial + 3 no_match + 1 deal_pending).
+4. **Run Process CarPay Payments** from 2026-04-09 onward.
+5. If you notice any "NOT-IN-CSV" entries in the tax-fill cron
+   logs (GitHub Actions → Tax Fill → latest run), those are deals
+   you still need to enter in the DMS.
+
+## Commits from this late-evening session
+- `a8b886b` Fresh Pending Sales CSVs (Apr 23 exports)
+- `43b2859` Tax-fill server-side cron + Python port
+- `2c250ea` DeLand CSV updated with Wyche + Vera
+- `9d2dbe9` Promoted root DeLand CSV
+- `05ba2b8` (auto-merge)
