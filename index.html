@@ -1683,6 +1683,24 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
 </div>
 
+<!-- ICON CROP — position the uploaded photo before saving -->
+<div id="icon-crop-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:700;align-items:center;justify-content:center;">
+  <div style="background:#0d0d0d;border-radius:20px;width:100%;max-width:380px;padding:20px;border:1px solid #1e1e1e;">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;">Position Photo</div>
+    <div style="font-size:11px;color:#666;margin-bottom:14px;">Drag to move · use the slider to zoom. The square frame is what the tile will show.</div>
+    <div id="icon-crop-stage" style="position:relative;width:100%;aspect-ratio:1;background:#000;border-radius:14px;overflow:hidden;touch-action:none;user-select:none;">
+      <img id="icon-crop-img" alt="" style="position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;user-select:none;"/>
+      <div style="position:absolute;inset:0;pointer-events:none;box-shadow:0 0 0 2px rgba(167,139,250,.7) inset;border-radius:14px;"></div>
+    </div>
+    <div style="margin:12px 0 6px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;">Zoom</div>
+    <input id="icon-crop-zoom" type="range" min="100" max="300" value="100" style="width:100%;accent-color:#a78bfa;"/>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button onclick="iconCropCancel()" style="flex:1;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="iconCropSave()" style="flex:2;padding:12px;background:linear-gradient(145deg,#0a0a2a,#2a2a6a);border:1px solid rgba(167,139,250,.4);border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;">Save Photo</button>
+    </div>
+  </div>
+</div>
+
 <!-- EMPLOYEE CAR ACTION SHEET (photo + notes) -->
 <div id="m-emp-car" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:510;align-items:flex-end;justify-content:center;">
   <div style="background:#0d0d0d;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 18px 44px;border-top:1px solid #1e1e1e;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
@@ -10199,19 +10217,21 @@ function empCarPhotos(){
 }
 function empSetCarIcon(e){
   var f=e.target.files[0];if(!f||!_empCarId)return;
-  enhancePhoto(f,async function(url){
-    var prev=document.getElementById('emp-car-icon-preview');
-    if(prev){prev.src=url;prev.style.display='block';}
-    var txt=document.getElementById('emp-car-icon-txt');if(txt)txt.textContent='Tap to retake';
-    showLoading('Saving...');
-    try{
-      await sbPatch('inventory',_empCarId,{photo:url});
-      var car=S.inventory.find(function(c){return c.id===_empCarId;});
-      if(car) car.photo=url;
-      sv();
-      empRenderInv();
-      hideLoading();
-    }catch(ex){hideLoading();console.error(ex);}
+  enhancePhoto(f,function(url){
+    iconCropOpen(url, async function(finalUrl){
+      var prev=document.getElementById('emp-car-icon-preview');
+      if(prev){prev.src=finalUrl;prev.style.display='block';}
+      var txt=document.getElementById('emp-car-icon-txt');if(txt)txt.textContent='Tap to retake';
+      showLoading('Saving...');
+      try{
+        await sbPatch('inventory',_empCarId,{photo:finalUrl});
+        var car=S.inventory.find(function(c){return c.id===_empCarId;});
+        if(car) car.photo=finalUrl;
+        sv();
+        empRenderInv();
+        hideLoading();
+      }catch(ex){hideLoading();console.error(ex);}
+    });
   });
 }
 // ── Shared car icon upload from any tile ──
@@ -10225,27 +10245,156 @@ function promptCarIcon(carId){
     inp.id='shared-car-icon-inp';inp.style.display='none';
     inp.onchange=function(){
       var f=inp.files[0];if(!f||!_iconUploadCarId)return;
-      enhancePhoto(f,async function(url){
-        showLoading('Saving photo...');
-        try{
-          await sbPatch('inventory',_iconUploadCarId,{photo:url});
-          var car=S.inventory.find(function(c){return c.id===_iconUploadCarId;});
-          if(car) car.photo=url;
-          sv();
-          // Re-render whichever view is active
-          if(typeof renderGrid==='function') try{renderGrid();}catch(e){}
-          if(typeof renderInv==='function') try{renderInv();}catch(e){}
-          if(typeof renderAssigned==='function') try{renderAssigned();}catch(e){}
-          if(typeof empRenderInv==='function') try{empRenderInv();}catch(e){}
-          if(empActiveCat) try{renderEmpCatCars(empActiveCat);}catch(e){}
-          hideLoading();
-        }catch(ex){hideLoading();console.error('Icon upload error:',ex);}
+      enhancePhoto(f,function(url){
+        // Route through the crop modal so the user can pick which part
+        // of the photo the square tile displays.
+        iconCropOpen(url, async function(finalUrl){
+          showLoading('Saving photo...');
+          try{
+            await sbPatch('inventory',_iconUploadCarId,{photo:finalUrl});
+            var car=S.inventory.find(function(c){return c.id===_iconUploadCarId;});
+            if(car) car.photo=finalUrl;
+            sv();
+            if(typeof renderGrid==='function') try{renderGrid();}catch(e){}
+            if(typeof renderInv==='function') try{renderInv();}catch(e){}
+            if(typeof renderAssigned==='function') try{renderAssigned();}catch(e){}
+            if(typeof empRenderInv==='function') try{empRenderInv();}catch(e){}
+            if(empActiveCat) try{renderEmpCatCars(empActiveCat);}catch(e){}
+            hideLoading();
+          }catch(ex){hideLoading();console.error('Icon upload error:',ex);}
+        });
       });
       inp.value='';
     };
     document.body.appendChild(inp);
   }
   inp.click();
+}
+
+// ── ICON CROP MODAL ──────────────────────────────────────────────────────
+// Lets the user drag + zoom the uploaded photo inside a square preview so
+// they pick exactly which portion the tile shows. Output: a square JPEG
+// data URL (512×512) that replaces the photo.
+var _iconCrop = { url:'', img:null, saveCb:null, scale:1, minScale:1,
+                  offsetX:0, offsetY:0, stageSize:0, imgW:0, imgH:0,
+                  dragging:false, lastX:0, lastY:0 };
+
+function iconCropOpen(dataUrl, saveCb){
+  _iconCrop.url = dataUrl;
+  _iconCrop.saveCb = saveCb;
+  var modal = document.getElementById('icon-crop-modal');
+  var stage = document.getElementById('icon-crop-stage');
+  var imgEl = document.getElementById('icon-crop-img');
+  modal.style.display = 'flex';
+  imgEl.src = dataUrl;
+  imgEl.onload = function(){
+    _iconCrop.imgW = imgEl.naturalWidth;
+    _iconCrop.imgH = imgEl.naturalHeight;
+    _iconCrop.stageSize = stage.clientWidth;
+    // Fit: smaller dimension fills the square (like object-fit:cover)
+    var coverScale = Math.max(
+      _iconCrop.stageSize / _iconCrop.imgW,
+      _iconCrop.stageSize / _iconCrop.imgH
+    );
+    _iconCrop.minScale = coverScale;
+    _iconCrop.scale = coverScale;
+    // Center the image
+    _iconCrop.offsetX = (_iconCrop.stageSize - _iconCrop.imgW * coverScale) / 2;
+    _iconCrop.offsetY = (_iconCrop.stageSize - _iconCrop.imgH * coverScale) / 2;
+    // Slider: 100% = cover fit, 300% = 3× zoom
+    var slider = document.getElementById('icon-crop-zoom');
+    slider.value = 100;
+    slider.oninput = function(){
+      var newScale = _iconCrop.minScale * (parseInt(slider.value, 10) / 100);
+      // Zoom toward the center of the stage so it doesn't jump
+      var cx = _iconCrop.stageSize / 2;
+      var cy = _iconCrop.stageSize / 2;
+      var ratio = newScale / _iconCrop.scale;
+      _iconCrop.offsetX = cx - (cx - _iconCrop.offsetX) * ratio;
+      _iconCrop.offsetY = cy - (cy - _iconCrop.offsetY) * ratio;
+      _iconCrop.scale = newScale;
+      _iconCropClampAndRender();
+    };
+    _iconCropClampAndRender();
+  };
+
+  // Drag handlers (pointer events — covers mouse + touch)
+  stage.onpointerdown = function(e){
+    _iconCrop.dragging = true;
+    _iconCrop.lastX = e.clientX;
+    _iconCrop.lastY = e.clientY;
+    stage.setPointerCapture(e.pointerId);
+  };
+  stage.onpointermove = function(e){
+    if (!_iconCrop.dragging) return;
+    var dx = e.clientX - _iconCrop.lastX;
+    var dy = e.clientY - _iconCrop.lastY;
+    _iconCrop.lastX = e.clientX;
+    _iconCrop.lastY = e.clientY;
+    _iconCrop.offsetX += dx;
+    _iconCrop.offsetY += dy;
+    _iconCropClampAndRender();
+  };
+  stage.onpointerup = function(e){
+    _iconCrop.dragging = false;
+    try { stage.releasePointerCapture(e.pointerId); } catch(_){}
+  };
+  stage.onpointercancel = stage.onpointerup;
+}
+
+function _iconCropClampAndRender(){
+  // Prevent panning the image past the edges of the frame
+  var drawW = _iconCrop.imgW * _iconCrop.scale;
+  var drawH = _iconCrop.imgH * _iconCrop.scale;
+  var S = _iconCrop.stageSize;
+  // Clamp: image can't be smaller than the frame (the slider minimum enforces
+  // scale ≥ minScale so drawW, drawH ≥ S); keep offsets so the frame stays
+  // fully covered.
+  if (drawW < S) _iconCrop.offsetX = (S - drawW) / 2;
+  else _iconCrop.offsetX = Math.min(0, Math.max(S - drawW, _iconCrop.offsetX));
+  if (drawH < S) _iconCrop.offsetY = (S - drawH) / 2;
+  else _iconCrop.offsetY = Math.min(0, Math.max(S - drawH, _iconCrop.offsetY));
+  var imgEl = document.getElementById('icon-crop-img');
+  imgEl.style.width = _iconCrop.imgW + 'px';
+  imgEl.style.height = _iconCrop.imgH + 'px';
+  imgEl.style.transform =
+    'translate(' + _iconCrop.offsetX + 'px,' + _iconCrop.offsetY + 'px) ' +
+    'scale(' + _iconCrop.scale + ')';
+}
+
+function iconCropCancel(){
+  document.getElementById('icon-crop-modal').style.display = 'none';
+  _iconCrop.saveCb = null;
+  _iconCrop.url = '';
+}
+
+function iconCropSave(){
+  if (!_iconCrop.saveCb || !_iconCrop.url){ iconCropCancel(); return; }
+  // Compute the source rectangle in the original image that corresponds to
+  // the square frame. Drawing the image at `scale` with top-left at
+  // (offsetX, offsetY): the top-left of the frame (0,0) corresponds to
+  // image coords (-offsetX/scale, -offsetY/scale); the frame side length
+  // in image coords is stageSize/scale.
+  var srcX = -_iconCrop.offsetX / _iconCrop.scale;
+  var srcY = -_iconCrop.offsetY / _iconCrop.scale;
+  var srcSize = _iconCrop.stageSize / _iconCrop.scale;
+  var out = 512;
+  var canvas = document.createElement('canvas');
+  canvas.width = out; canvas.height = out;
+  var ctx = canvas.getContext('2d');
+  var img = new Image();
+  img.onload = function(){
+    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, out, out);
+    var jpg = canvas.toDataURL('image/jpeg', 0.9);
+    var cb = _iconCrop.saveCb;
+    iconCropCancel();
+    if (cb) cb(jpg);
+  };
+  img.onerror = function(){
+    alert('Could not process the photo.');
+    iconCropCancel();
+  };
+  img.src = _iconCrop.url;
 }
 function empRenderNotes(){
   var el=document.getElementById('ecar-notes');if(!el)return;
