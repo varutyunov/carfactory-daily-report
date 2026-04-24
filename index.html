@@ -17502,11 +17502,20 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
               amount: stage2Payload.amount,
               note_line: _paymentNoteLine(stage2Payload.amount, stage2Payload),
               last_names: _paymentLastNames(stage2Payload.customer_name),
-              check_dup: true
+              check_dup: true,
+              expected_car_desc: lk2.car_desc || null  // v65 drift guard
             }
           })
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(_){}
+        // v65: drift / surname mismatch → disable stale link + queue review
+        if (data2 && data2.ok === false && (data2.error === 'row_drift' || data2.error === 'surname_mismatch')){
+          try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
+          var driftRid = await _carpayQueueReview(stage2Payload, 'row_drift', []);
+          await _carpayRecordPosting(cp, stage2Payload, { status: 'review', review_id: driftRid });
+          console.warn('CarPay v65 guard tripped, stale link ' + lk2.id + ' deactivated:', data2);
+          return { status: 'review' };
+        }
         if (data2 && data2.ok !== false){
           if (data2.status === 'already_posted'){
             await _carpayRecordPosting(cp, stage2Payload, {
@@ -18056,11 +18065,39 @@ async function _appendPaymentToDeals26Checked(payload){
             tab: lk.target_tab, row: lk.target_row,
             amount: amt, note_line: noteLine,
             last_names: _paymentLastNames(payload.customer_name),
-            check_dup: true
+            check_dup: true,
+            expected_car_desc: lk.car_desc || null  // v65 drift guard
           }
         })
       });
       var dData = null; try { dData = await dResp.json(); } catch(e){}
+      // v65: rows drifted or surname isn't on the target row. Deactivate
+      // the stale link + queue Review so the user can re-link.
+      if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch')){
+        try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
+        try {
+          await sbPost('payment_reviews', {
+            payment_id: payload.id || null,
+            customer_name: payload.customer_name || '',
+            amount: amt,
+            vehicle_year: payload.vehicle_year || '',
+            vehicle_make: payload.vehicle_make || '',
+            vehicle_model: payload.vehicle_model || '',
+            vehicle_color: payload.vehicle_color || '',
+            vehicle_vin: payload.vehicle_vin || '',
+            location: lk.location || loc,
+            payment_date: payload.payment_date || null,
+            payment_method: payload.payment_method || '',
+            note_line: noteLine,
+            reason: 'row_drift',
+            candidates: JSON.stringify([]),
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
+        } catch(_){}
+        console.warn('Resolver post blocked by v65 guard, stale link ' + lk.id + ' deactivated:', dData);
+        return { queued: true };
+      }
       if (dData && dData.ok !== false){
         if (dData.status === 'already_posted') return { skipped: true };
         if (dData.status === 'possible_duplicate'){

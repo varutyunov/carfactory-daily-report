@@ -1955,12 +1955,20 @@ function _handleDeals26AppendPayment(location, data) {
     var gCell = sheet.getRange(result.row, gCol);
     var fCell = sheet.getRange(result.row, fCol);
 
-    // Swap the noteLine's last-name token to whatever Vlad typed on the
-    // matched deals26 row. The payload's lastname comes from parsing
-    // customer_name (last space-separated token), which picks the wrong
-    // surname for compound names. Pass the full lastNames candidate
-    // array so the rewrite picks whichever surname appears on the row.
-    noteLine = _rewriteNoteLineLastName(noteLine, result.car_desc, lastNames);
+    // Swap the noteLine's last-name token to match the matched row's
+    // surname. Caller provides all surname candidates. v65: if none
+    // match, refuse the post — this matcher result should never point
+    // at a row without the customer's surname in it.
+    var rewritten = _rewriteNoteLineLastName(noteLine, result.car_desc, lastNames);
+    if (rewritten === null) {
+      return jsonResponse({
+        ok: false, error: 'surname_mismatch',
+        tab: usedTab, row: result.row,
+        actual_car_desc: result.car_desc,
+        note_line: noteLine
+      });
+    }
+    noteLine = rewritten;
 
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
@@ -2338,6 +2346,15 @@ function _findDealMatch(ss, tabName, lastNames, year, make, model, color) {
 //   "{amount} {model} [{color}] {lastname} [{M/D}]"
 // We identify the lastname token as the word right before the
 // trailing M/D (or the last word if no date).
+// Rewrite the note's lastname to match the row's car_desc — BUT only when
+// a caller-provided candidate actually appears on that row. If none of the
+// hints match, return null so the caller can refuse the post instead of
+// silently writing whatever surname the row happened to show.
+//
+// v65 change: killed the "fallback to car_desc's last word" branch.
+// That fallback is what turned a Monast payment into "gardner" on a
+// Gardner row after sheet drift — it hid the misposting instead of
+// surfacing it. Now if no hint matches, we return null.
 function _rewriteNoteLineLastName(noteLine, carDesc, lastNamesHint){
   if (!noteLine || !carDesc) return noteLine;
   var descL = String(carDesc).toLowerCase();
@@ -2354,8 +2371,6 @@ function _rewriteNoteLineLastName(noteLine, carDesc, lastNamesHint){
     return new RegExp('\\b' + esc + '\\b', 'i').test(hay);
   };
 
-  // Candidate pool: caller's hints first, then the noteLine's current
-  // lastname (so we don't drop info we already had).
   var candidates = [];
   if (Array.isArray(lastNamesHint)){
     for (var lh = 0; lh < lastNamesHint.length; lh++){
@@ -2366,20 +2381,17 @@ function _rewriteNoteLineLastName(noteLine, carDesc, lastNamesHint){
   var currentLast = tokens[lastIdx].toLowerCase();
   if (candidates.indexOf(currentLast) === -1) candidates.push(currentLast);
 
-  // Pick first candidate that actually appears on the deals26 row.
-  var newLast = null;
   for (var ci = 0; ci < candidates.length; ci++){
-    if (wordBoundary(descL, candidates[ci])){ newLast = candidates[ci]; break; }
+    if (wordBoundary(descL, candidates[ci])){
+      var match = candidates[ci];
+      if (currentLast === match) return noteLine;
+      tokens[lastIdx] = match;
+      return tokens.join(' ');
+    }
   }
-  // Fallback: no candidate matched → use car_desc's last word (old v56 behavior)
-  if (!newLast){
-    var descTokens = String(carDesc).trim().split(/\s+/);
-    newLast = descTokens[descTokens.length - 1];
-    if (newLast) newLast = newLast.toLowerCase();
-  }
-  if (!newLast || currentLast === newLast) return noteLine;
-  tokens[lastIdx] = newLast;
-  return tokens.join(' ');
+  // None of the candidate surnames appear on this row — surname mismatch,
+  // refuse to rewrite. Caller should treat this as a row-drift signal.
+  return null;
 }
 
 // Drop the lookup-only `descL` field when returning candidates.
@@ -2417,14 +2429,38 @@ function _handleDeals26AppendPaymentDirect(location, data) {
 
     var gCell = sheet.getRange(row, 7); // Col G
     var fCell = sheet.getRange(row, 6); // Col F
-
-    // Pull the matched row's car_desc (col B) to align the note's last-name
-    // token with what Vlad typed on the row — same rule as the matcher path.
-    // For the direct path the caller didn't send lastNames, so the rewrite
-    // falls back to using the noteLine's current lastname token as its
-    // only candidate (and car_desc's last word if that doesn't match).
     var rowCarDesc = String(sheet.getRange(row, 2).getValue() || '').trim();
-    noteLine = _rewriteNoteLineLastName(noteLine, rowCarDesc, Array.isArray(data.last_names) ? data.last_names : null);
+
+    // v65 guard: expected_car_desc — if the caller knows which car the
+    // row SHOULD be (from a deal_link or alias created earlier), verify
+    // the current sheet content still matches. If rows drifted since,
+    // refuse. Prevents a stale link from posting onto whoever drifted
+    // into the target row (the Monast→Gardner bug).
+    if (data.expected_car_desc) {
+      var exp = String(data.expected_car_desc).trim().toLowerCase();
+      if (rowCarDesc.toLowerCase() !== exp) {
+        return jsonResponse({
+          ok: false, error: 'row_drift',
+          tab: tabName, row: row,
+          expected_car_desc: data.expected_car_desc,
+          actual_car_desc: rowCarDesc
+        });
+      }
+    }
+
+    // Align the note's last-name token to the row's surname — only when
+    // a known surname is actually there. Returns null on mismatch, which
+    // we treat as a hard signal the caller is writing to the wrong row.
+    var rewritten = _rewriteNoteLineLastName(noteLine, rowCarDesc, Array.isArray(data.last_names) ? data.last_names : null);
+    if (rewritten === null) {
+      return jsonResponse({
+        ok: false, error: 'surname_mismatch',
+        tab: tabName, row: row,
+        actual_car_desc: rowCarDesc,
+        note_line: noteLine
+      });
+    }
+    noteLine = rewritten;
 
     var existingFormula = gCell.getFormula() || '';
     var existingValue = gCell.getValue();
