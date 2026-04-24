@@ -397,11 +397,36 @@ function doPost(e) {
           }
         }
         if (totalRowIdx > 0) {
-          // Insert a blank row BEFORE Total (shifts Total down by one).
-          // This inherits formatting from the row above (a real car row),
-          // so the new row gets normal formatting instead of Total-row style.
           sheet.insertRowBefore(totalRowIdx);
+          // Explicitly copy format (borders, backgrounds, number formats) from the
+          // last car row above. insertRowBefore may inherit from Total-row style
+          // instead, leaving the new row with missing borders or wrong colors.
+          if (totalRowIdx > config.startRow) {
+            var prevRow = totalRowIdx - 1;
+            var invColNums = Object.keys(config.columns).map(function(l){ return letterToColumn(l); });
+            invColNums.push(11); // include col K
+            var invMinC = Math.min.apply(null, invColNums);
+            var invMaxC = Math.max.apply(null, invColNums);
+            sheet.getRange(prevRow, invMinC, 1, invMaxC - invMinC + 1)
+                 .copyTo(sheet.getRange(totalRowIdx, invMinC, 1, invMaxC - invMinC + 1),
+                         SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+          }
           _writeRowToSheet(sheet, config, totalRowIdx, data);
+          // Set col K formula (=G+I+J) by copying from the row above
+          var kPrevRow = totalRowIdx - 1;
+          if (kPrevRow >= config.startRow) {
+            var aboveKCell = sheet.getRange(kPrevRow, 11);
+            var kFml = aboveKCell.getFormula();
+            if (kFml) {
+              aboveKCell.copyTo(sheet.getRange(totalRowIdx, 11));
+            } else {
+              sheet.getRange(totalRowIdx, 11).setFormula('=G' + totalRowIdx + '+I' + totalRowIdx + '+J' + totalRowIdx);
+            }
+          } else {
+            sheet.getRange(totalRowIdx, 11).setFormula('=G' + totalRowIdx + '+I' + totalRowIdx + '+J' + totalRowIdx);
+          }
+          // Ensure cost column (G) has no inherited red font or background
+          sheet.getRange(totalRowIdx, 7).setFontColor(null).setBackground(null);
           SpreadsheetApp.flush();
           return jsonResponse({ ok: true, action: 'insert', row: totalRowIdx, method: 'insertBeforeTotal' });
         }
@@ -470,7 +495,19 @@ function doPost(e) {
       // Full row delete — removes text + formatting (no orphan colored blanks)
       sheet.deleteRow(targetRow);
       SpreadsheetApp.flush();
-      return jsonResponse({ ok: true, action: 'delete', row: targetRow, method: 'deleteRow' });
+      // v66: on Deals26 delete, re-sequence deal_num for the remaining
+      // rows in the SAME calendar week as the deleted row. Previously
+      // deleting the week's 3rd deal left gaps (…1,2,_,4,5 → appears
+      // as skipped numbers). Now: …1,2,3,4 — stays contiguous.
+      var resequenced = 0;
+      if (config.table === 'deals26') {
+        try {
+          resequenced = _resequenceWeekDealNums(sheet, config, targetRow);
+        } catch (e) {
+          Logger.log('deal_num resequence error: ' + e.message);
+        }
+      }
+      return jsonResponse({ ok: true, action: 'delete', row: targetRow, method: 'deleteRow', resequenced: resequenced });
     }
 
     // ── ACTION: READ_ALL — read all rows for reconciliation ───
@@ -543,6 +580,52 @@ function doPost(e) {
   }
 }
 
+// v66: after deleting a Deals26 row, renumber deal_num (col J) for the
+// remaining rows in the SAME calendar week. Triggered from the delete
+// action. Without this the sequence develops gaps every time a row is
+// removed (Wyche dup delete → week went 1,2,3,4,_,6,7).
+//
+// We look at the week of the row immediately ABOVE the deleted one
+// (since the delete shifted rows up, that's now the deleted position).
+// Starts from the nearest row above with deal_num=1 and walks down
+// through consecutive rows, reassigning deal_num = 1..N in order.
+// Stops when it hits a blank row (between-week gap) or a row whose
+// date crosses into a different Sunday-anchored week.
+function _resequenceWeekDealNums(sheet, config, deletedRow) {
+  // Col B = car_desc, Col J = deal_num (for Deals26 default layout)
+  var B_COL = 2, J_COL = 10;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < config.startRow) return 0;
+  // Walk upward from deletedRow-1 to find the start of the current week
+  // (a row with deal_num === 1, or the first row below a blank row).
+  var r = deletedRow - 1;
+  if (r < config.startRow) r = config.startRow;
+  var weekStart = r;
+  while (weekStart > config.startRow) {
+    var desc = String(sheet.getRange(weekStart, B_COL).getValue() || '').trim();
+    if (!desc) { weekStart++; break; }  // previous blank — week starts here
+    var dn = parseInt(sheet.getRange(weekStart, J_COL).getValue()) || 0;
+    if (dn === 1) break;  // found the week's first deal
+    weekStart--;
+  }
+  if (weekStart < config.startRow) weekStart = config.startRow;
+  // Now walk down from weekStart reassigning deal_num 1..N. Stop at
+  // the first blank row (between weeks) or when we've gone past the
+  // last contiguous block.
+  var n = 0, patched = 0;
+  for (var rr = weekStart; rr <= lastRow; rr++) {
+    var descRow = String(sheet.getRange(rr, B_COL).getValue() || '').trim();
+    if (!descRow) break;
+    n++;
+    var cur = parseInt(sheet.getRange(rr, J_COL).getValue()) || 0;
+    if (cur !== n) {
+      sheet.getRange(rr, J_COL).setValue(n);
+      patched++;
+    }
+  }
+  return patched;
+}
+
 // Helper: write data fields + cell notes to a sheet row
 function _writeRowToSheet(sheet, config, targetRow, data) {
   var colKeys = Object.keys(config.columns);
@@ -556,6 +639,12 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
       var cell = sheet.getRange(targetRow, cNum);
       // Column G (payments) in Deals26 — skip writing if zero, leave empty for manual entry
       if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
+        continue;
+      }
+      // inventory_costs: skip expense columns when zero — leave blank, not $0
+      if (config.table === 'inventory_costs' &&
+          (cField === 'joint_expenses' || cField === 'vlad_expenses') &&
+          (!val || val === 0)) {
         continue;
       }
       // Column G (payments) in Deals26 — preserve the growing formula pattern.
@@ -876,6 +965,12 @@ function syncFullReconcile() {
     var dbByName = {};
     var _dbGroups = {};
     for (var d = 0; d < dbRows.length; d++) {
+      // v66: skip archived inventory_costs rows (sold cars) — they're
+      // kept forever as audit history and don't correspond to any live
+      // sheet row. Including them in dbByName would cause the reconciler
+      // to either patch the archive (if the sold car's name happens to
+      // match a new car's) or delete it (when no sheet row matches).
+      if (config.table === 'inventory_costs' && dbRows[d].sold_at) continue;
       var dName = dbRows[d][nameField] || '';
       if (!dName) continue;
       var dKey = dName.trim().toLowerCase();
@@ -997,14 +1092,22 @@ function syncFullReconcile() {
       }
     }
 
-    // Supabase → delete: cars in DB but not in sheet anymore
+    // Supabase → delete: cars in DB but not in sheet anymore.
+    // v66: for inventory_costs, PRESERVE rows with sold_at set —
+    // they're archive history (sold cars) kept forever for audit.
+    // The sheet rightfully doesn't show them; don't delete Supabase.
     var dbNames = Object.keys(dbByName);
     for (var dk = 0; dk < dbNames.length; dk++) {
       var dkName = dbNames[dk];
       if (!sheetByName[dkName]) {
+        var dbRecToDel = dbByName[dkName];
+        if (config.table === 'inventory_costs' && dbRecToDel.sold_at) {
+          // archived — keep it
+          continue;
+        }
         try {
-          Logger.log('Reconcile DELETE: ' + tabName + ' → "' + dkName + '" id=' + dbByName[dkName].id);
-          supabaseDelete(config.table, 'id=eq.' + dbByName[dkName].id);
+          Logger.log('Reconcile DELETE: ' + tabName + ' → "' + dkName + '" id=' + dbRecToDel.id);
+          supabaseDelete(config.table, 'id=eq.' + dbRecToDel.id);
         } catch (err) {
           Logger.log('Reconcile DELETE error for "' + dkName + '": ' + err.message);
         }
