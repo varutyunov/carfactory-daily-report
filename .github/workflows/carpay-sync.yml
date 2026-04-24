@@ -15,8 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm install node-fetch@2
-      - run: node scripts/carpay-sync.js
+      - name: Pull from CarPay portal into Supabase
+        run: node scripts/carpay-sync.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -24,3 +28,12 @@ jobs:
           CARPAY_PASSWORD: ${{ secrets.CARPAY_PASSWORD }}
           CARPAY_DEBARY_ID: ${{ secrets.CARPAY_DEBARY_ID }}
           CARPAY_DELAND_ID: ${{ secrets.CARPAY_DELAND_ID }}
+      # After the sync populates new payments into carpay_payments,
+      # route each one through the Stage-2 resolver: confident matches
+      # auto-post, everything else lands in payment_reviews so the
+      # user sees it immediately without having to tap Process CarPay.
+      - name: Process newly-synced payments (v563 resolver)
+        run: python scripts/carpay-process.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
