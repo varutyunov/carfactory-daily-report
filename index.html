@@ -19333,16 +19333,15 @@ async function _reviewRematch(id, evt){
   var amt = parseFloat(r.amount) || 0;
   if (!amt) { alert('Invalid amount on this review item.'); return; }
   var lastName = _paymentLastName(r.customer_name);
+  var allLastNamesRematch = _paymentLastNames(r.customer_name);
+  if (!lastName) { alert('Missing last name — can\'t search.'); return; }
   var model = (r.vehicle_model || '').toLowerCase().trim();
-  if (!lastName || !model) { alert('Missing last name or model — can\'t re-run matcher.'); return; }
   var loc = r.location || 'DeBary';
   var noteLine = r.note_line || _paymentNoteLine(amt, {
     customer_name: r.customer_name, vehicle_model: r.vehicle_model,
     vehicle_color: r.vehicle_color, payment_date: r.payment_date
   });
 
-  // Immediate visual feedback — the matcher round-trip can take 1-3s
-  // while it scans both spreadsheets. Without this, taps feel dead.
   var btn = (evt && evt.target) ? evt.target : (typeof event !== 'undefined' && event.target ? event.target : null);
   var origBtnText = null;
   if (btn){
@@ -19361,28 +19360,66 @@ async function _reviewRematch(id, evt){
     }
   };
 
+  // surname-only fallback — searches both lots by last name and surfaces
+  // candidates when the auto-matcher can't run (no model) or finds nothing.
+  var _rematchByName = async function(){
+    var _fetch = function(loc2){
+      return fetch(_SHEETS_URL, {
+        method:'POST', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals_lookup_by_lastname',
+          location: loc2,
+          data: { last_names: allLastNamesRematch, owed_positive_only: false, limit: 40 }
+        })
+      }).then(function(x){ return x.json(); }).catch(function(){ return null; });
+    };
+    var results = await Promise.all([_fetch('DeBary'), _fetch('DeLand')]);
+    var cands = [];
+    results.forEach(function(d){ if (d && d.ok && Array.isArray(d.candidates)) cands = cands.concat(d.candidates); });
+    return cands;
+  };
+
   try {
-    var allLastNamesRematch = _paymentLastNames(r.customer_name);
-    var resp = await fetch(_SHEETS_URL, {
-      method: 'POST', headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify({
-        secret: _SHEETS_SECRET,
-        action: 'deals26_append_payment',
-        location: loc,
-        data: {
-          last_name: lastName,
-          last_names: allLastNamesRematch,
-          year: r.vehicle_year ? String(r.vehicle_year).trim() : '',
-          make: r.vehicle_make ? String(r.vehicle_make).trim() : '',
-          model: r.vehicle_model ? String(r.vehicle_model).trim() : '',
-          color: r.vehicle_color ? String(r.vehicle_color).trim() : '',
-          amount: amt,
-          note_line: noteLine,
-          check_dup: true
-        }
-      })
-    });
-    var data = null; try { data = await resp.json(); } catch(e){}
+    // If no vehicle model, skip the auto-matcher (it can't narrow the match)
+    // and go straight to name-based candidate search across both lots.
+    if (!model){
+      var nameCands = await _rematchByName();
+      var existing = [];
+      try { var p = JSON.parse(r.candidates || '[]'); if (Array.isArray(p)) existing = p; } catch(e){}
+      var seen = {}; var merged = [];
+      existing.concat(nameCands).forEach(function(c){
+        var key = (c.location||'')+'|'+(c.tab||'')+'|'+(c.row||'');
+        if (seen[key]) return; seen[key] = true;
+        merged.push({ tab: c.tab, row: c.row, car_desc: c.car_desc, location: c.location, owed: c.owed, has_last: true, has_car: !!c.has_car });
+      });
+      await sbPatch('payment_reviews', id, { candidates: JSON.stringify(merged), reason: merged.length ? 'multiple' : r.reason });
+      var msg = merged.length ? 'Found ' + merged.length + ' candidate(s) by surname — pick one above.' : 'No matches by surname on either lot. Try Manual.';
+      _showReviewToast(msg, 3000);
+      await _reviewLoad();
+      return;
+    }
+
+    var data = null;
+    try {
+      var resp = await fetch(_SHEETS_URL, {
+        method: 'POST', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals26_append_payment',
+          location: loc,
+          data: {
+            last_name: lastName, last_names: allLastNamesRematch,
+            year: r.vehicle_year ? String(r.vehicle_year).trim() : '',
+            make: r.vehicle_make ? String(r.vehicle_make).trim() : '',
+            model: r.vehicle_model ? String(r.vehicle_model).trim() : '',
+            color: r.vehicle_color ? String(r.vehicle_color).trim() : '',
+            amount: amt, note_line: noteLine, check_dup: true
+          }
+        })
+      });
+      data = await resp.json();
+    } catch(e){ data = null; }
     if (!data || data.ok === false){
       restoreBtn();
       alert('Re-match failed: ' + (data && data.error ? data.error : 'unknown'));
