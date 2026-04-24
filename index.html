@@ -22808,10 +22808,13 @@ async function dealReturnFinal(id, reason) {
     if (/^\d{4}$/.test(toks[0])){ year = toks[0]; make = toks[1] || ''; model = toks.slice(2).join(' '); }
     else { make = toks[0] || ''; model = toks.slice(1).join(' '); }
   }
+  // stock is NOT NULL on inventory — fall back to VIN-tail if the deal
+  // has no stock (same pattern inventory-sync.js uses for conflicts).
+  var stockFallback = d.stock ? String(d.stock).trim() : vin.slice(-8);
   var invRow = {
     vin: vin,
     name: ((year ? year + ' ' : '') + (make ? make + ' ' : '') + model).trim() || desc || 'Recovered',
-    stock: d.stock || null,
+    stock: stockFallback,
     color: d.color ? String(d.color).toUpperCase() : null,
     miles: d.miles || null,
     location: d.location || 'DeBary',
@@ -22823,19 +22826,40 @@ async function dealReturnFinal(id, reason) {
 
   try {
     // Upsert inventory row keyed by VIN. If an old row exists (edge case),
-    // flip its fields; otherwise insert fresh.
+    // flip its fields; otherwise insert fresh. Do inventory FIRST so if it
+    // fails we don't leave the deal marked voided with no matching inventory.
     var existing = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
     if (Array.isArray(existing) && existing.length){
-      await fetch(SB_URL + '/rest/v1/inventory?id=eq.' + existing[0].id, {
+      var resPatch = await fetch(SB_URL + '/rest/v1/inventory?id=eq.' + existing[0].id, {
         method: 'PATCH',
         headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(invRow)
       });
+      if (!resPatch.ok) throw new Error('inventory patch: HTTP ' + resPatch.status + ' — ' + (await resPatch.text()).slice(0, 140));
     } else {
-      await sbPost('inventory', invRow);
+      var insertRes = await fetch(SB_URL + '/rest/v1/inventory', {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(invRow)
+      });
+      if (!insertRes.ok) {
+        var errText = await insertRes.text();
+        // Stock unique constraint? Retry with a different stock tail.
+        if (errText.indexOf('inventory_stock_key') !== -1) {
+          invRow.stock = vin.slice(-6) + '-R';
+          var retryRes = await fetch(SB_URL + '/rest/v1/inventory', {
+            method: 'POST',
+            headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify(invRow)
+          });
+          if (!retryRes.ok) throw new Error('inventory insert retry: HTTP ' + retryRes.status + ' — ' + (await retryRes.text()).slice(0, 140));
+        } else {
+          throw new Error('inventory insert: HTTP ' + insertRes.status + ' — ' + errText.slice(0, 140));
+        }
+      }
     }
 
-    // Mark the deal as voided with the reason; keep all payment/Profit data.
+    // Inventory upsert succeeded — now mark the deal as voided.
     await sbPatch('deals', id, { voided_reason: reason, voided_at: now });
 
     // Update local cache so UI reflects it
