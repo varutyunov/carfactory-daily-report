@@ -441,6 +441,7 @@ canvas{display:none;}
 .cal-dot{width:4px;height:4px;border-radius:50%;background:#34a853;flex-shrink:0;}
 .cal-dot-ev{width:4px;height:4px;border-radius:50%;background:#8ab4f8;flex-shrink:0;}
 .cal-dot-pickup{width:4px;height:4px;border-radius:50%;background:#fbbc04;flex-shrink:0;}
+.cal-dot-firstpmt{width:4px;height:4px;border-radius:50%;background:#34d399;flex-shrink:0;}
 /* ── Divider ── */
 .cal-divider{height:1px;background:#2d2d2d;margin:0 16px 0;}
 /* ── Day detail panel ── */
@@ -1126,10 +1127,16 @@ body.light .cal-fab{background:#4488ff !important;}
         </div>
       </div>
 
-      <!-- GPS Serial + Pick Up Payment (finance only) -->
+      <!-- GPS Serial + First & Pick Up Payment (finance only) -->
       <div id="deal-gps-wrap" style="display:none;margin-bottom:14px;">
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">GPS Serial Number</label>
         <input id="deal-gps" placeholder="Enter GPS serial #" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-top:12px;">First Payment Amount <span style="font-size:10px;color:#ef4444;text-transform:none;">*required</span></label>
+        <input id="deal-first-payment" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);dealFirstPaymentChanged()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
+        <div id="deal-first-due-wrap" style="display:none;margin-top:12px;">
+          <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">First Payment Due Date <span style="font-size:10px;color:#ef4444;text-transform:none;">*required</span></label>
+          <input id="deal-first-due" type="date" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;-webkit-appearance:none;"/>
+        </div>
         <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;display:block;margin-top:12px;">Pick Up Payment Amount <span style="font-size:10px;color:#444;text-transform:none;">(optional)</span></label>
         <input id="deal-pickup-payment" placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);dealPickupChanged()" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;"/>
         <div id="deal-pickup-due-wrap" style="display:none;margin-top:12px;">
@@ -2677,8 +2684,9 @@ async function syncFromSupabase(showUI){
       try{cpRenderAll();}catch(e){}
       // Sign car.photo URLs in background (bucket is private)
       _signInventoryPhotos();
-      // Sync pickup payments to calendar in background
+      // Sync pickup + first payments to calendar in background
       calSyncPickupPayments().catch(function(){});
+      calSyncFirstPayments().catch(function(){});
       return; // success — resolve promise only after data is loaded
     } catch(e){
       console.error('Sync failed (attempt '+(_attempt+1)+'/3):', e);
@@ -6990,8 +6998,9 @@ function calOpenSnapshot(){
     });
     events.forEach(function(ev){
       var isPickup=ev.title&&ev.title.indexOf('Pickup:')===0;
-      var dotColor=isPickup?'#f59e0b':'#f97316';
-      var textColor=isPickup?'#fbbf24':'#fb923c';
+      var isFirstPmt=ev.title&&ev.title.indexOf('First Pmt:')===0;
+      var dotColor=isPickup?'#f59e0b':isFirstPmt?'#34d399':'#f97316';
+      var textColor=isPickup?'#fbbf24':isFirstPmt?'#6ee7b7':'#fb923c';
       html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">';
       html+='<div style="width:6px;height:6px;border-radius:50%;background:'+dotColor+';flex-shrink:0;"></div>';
       html+='<div style="font-size:13px;color:'+textColor+';flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+ev.title+'</div>';
@@ -7071,7 +7080,8 @@ function renderCalendar(){
       for(var j=0;j<Math.min(ar.length,1);j++) dots+='<div class="cal-dot"></div>';
       for(var k=0;k<cu.length;k++){
         var isPickup=cu[k].title&&cu[k].title.indexOf('Pickup:')===0;
-        dots+='<div class="'+(isPickup?'cal-dot-pickup':'cal-dot-ev')+'"></div>';
+        var isFirstPmt=cu[k].title&&cu[k].title.indexOf('First Pmt:')===0;
+        dots+='<div class="'+(isPickup?'cal-dot-pickup':isFirstPmt?'cal-dot-firstpmt':'cal-dot-ev')+'"></div>';
       }
       dots+='</div>';
     }
@@ -7095,6 +7105,7 @@ function _calEventBarColor(ev,isArrival){
   if(isArrival) return 'background:#34a853';
   if(!ev) return 'background:#8ab4f8';
   if(ev.title&&ev.title.indexOf('Pickup:')===0) return 'background:#fbbc04';
+  if(ev.title&&ev.title.indexOf('First Pmt:')===0) return 'background:#34d399';
   return 'background:#8ab4f8';
 }
 
@@ -7130,7 +7141,8 @@ function _calScheduleHTML(selDay,year,month,arrivalMap,customMap,MON3,DAYS,today
     });
     cu.forEach(function(ev){
       var isPickup=ev.title&&ev.title.indexOf('Pickup:')===0;
-      var barColor=isPickup?'#fbbc04':'#8ab4f8';
+      var isFirstPmt=ev.title&&ev.title.indexOf('First Pmt:')===0;
+      var barColor=isPickup?'#fbbc04':isFirstPmt?'#34d399':'#8ab4f8';
       out+='<div class="cal-sched-event">';
       out+='<div class="cal-sched-bar" style="background:'+barColor+';"></div>';
       out+='<div class="cal-sched-body">';
@@ -7381,6 +7393,60 @@ async function calSyncPickupPayments(){
       if(document.getElementById('mgr-calendar-content')) renderCalendar();
     }
   }catch(e){console.error('Pickup calendar sync error:',e);}
+}
+
+// ── Auto-sync first payments to calendar ──
+async function calSyncFirstPayments(){
+  try{
+    var deals=await sbGet('deals','deal_type=eq.finance&first_payment=gt.0&order=first_payment_due.asc');
+    if(!Array.isArray(deals)||!deals.length) return;
+    if(!S.calendarEvents) S.calendarEvents=[];
+    var changed=false;
+    for(var i=0;i<deals.length;i++){
+      var d=deals[i];
+      if(!d.first_payment_due) continue;
+      var dueDate=d.first_payment_due.slice(0,10);
+      var amt=parseFloat(d.first_payment)||0;
+      var fmtAmt='$'+amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      var title='First Pmt: '+(d.customer_name||'Unknown')+' \u2014 '+fmtAmt;
+      var notes=(d.vehicle_desc||'')+(d.location?' ('+d.location+')':'');
+      var tag='firstpmt_deal_'+d.id;
+      var existing=S.calendarEvents.find(function(ev){return ev._firstpmt_tag===tag;});
+      if(existing){
+        if(existing.event_date!==dueDate||existing.title!==title||existing.notes!==notes){
+          existing.event_date=dueDate;existing.title=title;existing.notes=notes;
+          changed=true;
+          if(!String(existing.id).startsWith('local_')){
+            try{await sbPatch('calendar_events',existing.id,{event_date:dueDate,title:title,notes:notes});}catch(e){}
+          }
+        }
+        continue;
+      }
+      var evObj={title:title,event_date:dueDate,event_time:null,notes:notes,notify:true,created_by:'System',_firstpmt_tag:tag};
+      try{
+        var res=await sbPost('calendar_events',evObj);
+        var saved=Array.isArray(res)?res[0]:res;
+        if(!saved||!saved.id){evObj.id='local_'+Date.now()+'_'+i;saved=evObj;}
+        saved._firstpmt_tag=tag;
+        S.calendarEvents.push(saved);changed=true;
+        if(saved.notify) calScheduleNotification(saved);
+      }catch(e){evObj.id='local_'+Date.now()+'_'+i;S.calendarEvents.push(evObj);changed=true;}
+    }
+    // Remove orphaned first-payment events
+    var activeTags={};
+    deals.forEach(function(d){if(d.first_payment_due) activeTags['firstpmt_deal_'+d.id]=true;});
+    S.calendarEvents=S.calendarEvents.filter(function(ev){
+      if(!ev._firstpmt_tag) return true;
+      if(activeTags[ev._firstpmt_tag]) return true;
+      if(!String(ev.id).startsWith('local_')){try{sbDelete('calendar_events',ev.id);}catch(e){}}
+      changed=true;return false;
+    });
+    if(changed){
+      S.calendarEvents.sort(function(a,b){return (a.event_date||'').localeCompare(b.event_date||'');});
+      try{localStorage.setItem('cf_work_cal',JSON.stringify(S.calendarEvents));}catch(e){}
+      if(document.getElementById('mgr-calendar-content')) renderCalendar();
+    }
+  }catch(e){console.error('First payment calendar sync error:',e);}
 }
 
 function getProgressCars(){
@@ -19834,6 +19900,9 @@ function dealSelectCar(carId) {
   document.getElementById('deal-customer-mname').value = '';
   document.getElementById('deal-customer-lname').value = '';
   document.getElementById('deal-gps').value = '';
+  document.getElementById('deal-first-payment').value = '';
+  document.getElementById('deal-first-due').value = '';
+  document.getElementById('deal-first-due-wrap').style.display = 'none';
   document.getElementById('deal-pickup-payment').value = '';
   document.getElementById('deal-pickup-due').value = '';
   document.getElementById('deal-pickup-due-wrap').style.display = 'none';
@@ -19927,6 +19996,11 @@ function dealSetAddToWeek(on) {
 function dealPickupChanged() {
   var val = document.getElementById('deal-pickup-payment').value.replace(/[^0-9.]/g,'');
   var wrap = document.getElementById('deal-pickup-due-wrap');
+  wrap.style.display = (val && parseFloat(val) > 0) ? 'block' : 'none';
+}
+function dealFirstPaymentChanged() {
+  var val = document.getElementById('deal-first-payment').value.replace(/[^0-9.]/g,'');
+  var wrap = document.getElementById('deal-first-due-wrap');
   wrap.style.display = (val && parseFloat(val) > 0) ? 'block' : 'none';
 }
 
@@ -20036,6 +20110,12 @@ function dealGoStep3() {
     var gps = document.getElementById('deal-gps').value.trim();
     if(!gps) { alert('Please enter the GPS serial number.'); return; }
     _dealData.gpsSerial = gps;
+    var fpAmt = document.getElementById('deal-first-payment').value.replace(/[^0-9.]/g,'');
+    if(!fpAmt || parseFloat(fpAmt) <= 0) { alert('Please enter the first payment amount.'); return; }
+    var fpDue = document.getElementById('deal-first-due').value;
+    if(!fpDue) { alert('Please enter the first payment due date.'); return; }
+    _dealData.firstPayment = fpAmt;
+    _dealData.firstPaymentDue = fpDue;
     var puAmt = document.getElementById('deal-pickup-payment').value.replace(/[^0-9.]/g,'');
     _dealData.pickupPayment = puAmt;
     if(puAmt && parseFloat(puAmt) > 0) {
@@ -20147,6 +20227,11 @@ async function dealSubmit() {
       out_of_state: !!_dealOOS,
       created_at: new Date().toISOString()
     };
+    // Save first payment (finance only, mandatory)
+    if(_dealData.firstPayment && parseFloat(_dealData.firstPayment) > 0) {
+      record.first_payment = parseFloat(_dealData.firstPayment);
+      record.first_payment_due = _dealData.firstPaymentDue || null;
+    }
     // Save pickup payment as its own columns
     if(_dealData.pickupPayment && parseFloat(_dealData.pickupPayment) > 0) {
       record.pickup_payment = parseFloat(_dealData.pickupPayment);
@@ -20167,6 +20252,10 @@ async function dealSubmit() {
       await sendPushNotification(mgrNames,'🤝 New Deal',_dealData.customer+' — '+(car.name||'')+' — '+totalStr+' '+dealLoc);
     }catch(ex){console.warn('Deal push notify failed:',ex);}
 
+    // Sync first payment to calendar
+    if(record.first_payment && record.first_payment_due){
+      try{ await calSyncFirstPayments(); }catch(e){}
+    }
     // Sync pickup payment to calendar if applicable
     if(record.pickup_payment && record.pickup_payment_due){
       try{ await calSyncPickupPayments(); }catch(e){}
@@ -22924,6 +23013,22 @@ function openDealDetail(id) {
     html += '</div>';
     html += '<span style="font-size:13px;color:'+(gpsChecked?'#30d158':'#666')+';font-weight:600;">'+(gpsChecked?'GPS Registered':'GPS Not Registered')+'</span>';
     html += '</div>';
+    html += '</div>';
+  }
+  if(isFinance && d.first_payment) {
+    html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">First Payment</div>';
+    html += '<div style="font-size:22px;font-weight:700;color:#34d399;">$'+parseFloat(d.first_payment).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
+    if(d.first_payment_due) {
+      var fpDue = new Date(d.first_payment_due+'T00:00:00');
+      var fpToday = new Date(); fpToday.setHours(0,0,0,0);
+      var fpIsPast = fpDue < fpToday;
+      var fpIsToday = fpDue.getTime() === fpToday.getTime();
+      var fpDueFmt = fpDue.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      var fpDueColor = fpIsPast ? '#ef4444' : (fpIsToday ? '#f59e0b' : '#888');
+      var fpDueLabel = fpIsPast ? 'OVERDUE — ' : (fpIsToday ? 'DUE TODAY — ' : 'Due: ');
+      html += '<div style="font-size:13px;color:'+fpDueColor+';margin-top:6px;font-weight:'+(fpIsPast||fpIsToday?'700':'400')+';">'+fpDueLabel+fpDueFmt+'</div>';
+    }
     html += '</div>';
   }
   if(isFinance && d.pickup_payment) {
