@@ -16700,6 +16700,35 @@ async function _findCarPayAccountAlias(account, location){
 // Capped at 20 total to keep the review card usable.
 async function _carpayFindNameCandidates(lastNames){
   if (!lastNames || !lastNames.length) return [];
+  // Call the Apps Script lookup — scans Deals26/25/24 across BOTH
+  // locations by lastname word-boundary match. Covers rows older than
+  // the Supabase deals26 mirror (which only has current-year deals).
+  try {
+    var resp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals_lookup_by_lastname',
+        location: 'DeBary', // required param but action scans both locs internally
+        data: { last_names: lastNames, owed_positive_only: true, limit: 30 }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    if (data && data.ok && Array.isArray(data.candidates)){
+      return data.candidates.map(function(c){
+        return {
+          tab: c.tab, row: c.row, car_desc: c.car_desc,
+          location: c.location, owed: c.owed,
+          has_last: true, has_car: false
+        };
+      });
+    }
+    console.warn('deals_lookup_by_lastname failed, falling back to supabase query:', data);
+  } catch(e){
+    console.warn('deals_lookup_by_lastname error, falling back to supabase query:', e);
+  }
+  // Fallback: Supabase deals26 mirror (current-year only) so the UI
+  // still shows something if Apps Script is unreachable.
   var seen = {};
   var candidates = [];
   for (var i = 0; i < lastNames.length; i++){
@@ -16715,13 +16744,9 @@ async function _carpayFindNameCandidates(lastNames){
         if (seen[key]) return;
         seen[key] = true;
         candidates.push({
-          tab: 'Deals26',
-          row: r.sort_order,
-          car_desc: r.car_desc,
-          location: r.location,
-          owed: r.owed,
-          has_last: true,
-          has_car: false // name-only signal; no vehicle match guaranteed
+          tab: 'Deals26', row: r.sort_order, car_desc: r.car_desc,
+          location: r.location, owed: r.owed,
+          has_last: true, has_car: false
         });
       });
     } catch(e){ console.warn('name candidate query failed for ' + ln + ':', e); }

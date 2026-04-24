@@ -215,6 +215,72 @@ function doPost(e) {
     // without losing the growing-formula history.
     // Inputs: body.data.{ tab, row, payments_formula: '=400+400+340',
     //                     payment_notes: 'line1\\nline2' }
+    // ── Lastname-only lookup across Deals26/25/24 on BOTH locations ──
+    // Used by CarPay when the customer's vehicle info is missing from
+    // the CarPay portal — we still have a name, so scan every Deals tab
+    // on every location for rows where the car_desc contains that
+    // surname (word-boundary match). Returns all hits with location/tab
+    // tagged so the Review card can show them.
+    // Inputs: body.data.{ last_names: ['smith','johnson'], owed_positive_only: true }
+    if (action === 'deals_lookup_by_lastname') {
+      var lluNames = [];
+      if (body.data && Array.isArray(body.data.last_names)) {
+        body.data.last_names.forEach(function(n){
+          var t = String(n || '').trim().toLowerCase();
+          if (t && t.length >= 3) lluNames.push(t);
+        });
+      }
+      if (!lluNames.length) return jsonResponse({ ok: false, error: 'no_last_names' });
+      var owedOnly = body.data && body.data.owed_positive_only === true;
+      var limit = parseInt(body.data && body.data.limit) || 40;
+      var locsToScan = ['DeBary', 'DeLand'];
+      var tabsToScan = ['Deals26', 'Deals25', 'Deals24'];
+      var lluOut = [];
+      for (var lli = 0; lli < locsToScan.length; lli++) {
+        var lLoc = locsToScan[lli];
+        var lSs;
+        try { lSs = SpreadsheetApp.openById(_getSpreadsheetId(lLoc)); }
+        catch(e) { continue; }
+        for (var lti = 0; lti < tabsToScan.length; lti++) {
+          var lTab = tabsToScan[lti];
+          var lSheet = lSs.getSheetByName(lTab);
+          if (!lSheet) continue;
+          var lLastRow = lSheet.getLastRow();
+          if (lLastRow < 2) continue;
+          // Columns: A=cost, B=car_desc, F=owed (6), G=payments (7)
+          var lRng = lSheet.getRange(2, 1, lLastRow - 1, 7);
+          var lVals = lRng.getValues();
+          for (var lr = 0; lr < lVals.length; lr++) {
+            var lDesc = String(lVals[lr][1] || '').trim();
+            if (!lDesc) continue;
+            var lDescL = lDesc.toLowerCase();
+            var hit = false;
+            for (var lnmi = 0; lnmi < lluNames.length; lnmi++) {
+              if (_wordBoundary(lDescL, lluNames[lnmi])) { hit = true; break; }
+            }
+            if (!hit) continue;
+            var lOwed = parseFloat(String(lVals[lr][5]).replace(/[$,]/g, '')) || 0;
+            if (owedOnly && lOwed <= 0) continue; // paid off already
+            lluOut.push({
+              location: lLoc,
+              tab: lTab,
+              row: lr + 2,
+              car_desc: lDesc,
+              cost: lVals[lr][0],
+              owed: lOwed,
+              payments: lVals[lr][6],
+              has_last: true,
+              has_car: false
+            });
+            if (lluOut.length >= limit) break;
+          }
+          if (lluOut.length >= limit) break;
+        }
+        if (lluOut.length >= limit) break;
+      }
+      return jsonResponse({ ok: true, action: 'deals_lookup_by_lastname', candidates: lluOut });
+    }
+
     if (action === 'deals26_get_row_g') {
       var grgTab = String(body.data && body.data.tab || 'Deals26');
       var grgRow = parseInt(body.data && body.data.row);
@@ -223,12 +289,25 @@ function doPost(e) {
       var grgSheet = grgSs.getSheetByName(grgTab);
       if (!grgSheet) return jsonResponse({ ok: false, error: 'no_sheet' });
       var grgCell = grgSheet.getRange(grgRow, 7);
-      var grgB = grgSheet.getRange(grgRow, 2).getValue();
+      var rng = grgSheet.getRange(grgRow, 1, 1, 11);
+      var vals = rng.getValues()[0];
+      var formulas = rng.getFormulas()[0];
       return jsonResponse({
         ok: true, action: 'deals26_get_row_g',
         tab: grgTab, row: grgRow,
-        car_desc: String(grgB || ''),
-        value: grgCell.getValue(),
+        car_desc: String(vals[1] || ''),
+        cost: vals[0],
+        expenses: vals[2],
+        taxes: vals[3],
+        money: vals[4],
+        owed: vals[5],
+        value: vals[6],
+        dealer_fee: vals[7],
+        manny: vals[8],
+        formulas: {
+          A: formulas[0], C: formulas[2], D: formulas[3], E: formulas[4],
+          F: formulas[5], G: formulas[6], H: formulas[7], I: formulas[8]
+        },
         formula: grgCell.getFormula() || '',
         note: grgCell.getNote() || ''
       });
