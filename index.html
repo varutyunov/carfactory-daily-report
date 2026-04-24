@@ -16618,12 +16618,13 @@ async function cpCustOpen(){
   try {
     var rows = await sbGet('carpay_customers', 'select=account,name,vehicle,location&order=name.asc&limit=5000');
     _cpCustData = rows || [];
-    // Pull existing account aliases so the "Linked" status reflects
-    // what's already been set up (either via Review approve or here).
-    var aliases = await sbGet('carpay_account_aliases', 'select=account,location,target_tab,target_row,car_desc&limit=5000');
+    // Pull existing deal_links keyed by CarPay account — that's the new
+    // canonical location (replaces the non-existent carpay_account_aliases).
+    var links = await sbGet('deal_links',
+      'carpay_account=not.is.null&active=eq.true&select=carpay_account,location,target_tab,target_row,car_desc&limit=5000');
     _cpCustAliases = {};
-    (aliases || []).forEach(function(a){
-      _cpCustAliases[_cpCustAliasKey(a.account, a.location)] = a;
+    (links || []).forEach(function(l){
+      _cpCustAliases[_cpCustAliasKey(l.carpay_account, l.location)] = l;
     });
   } catch(e){
     document.getElementById('cpcust-body').innerHTML =
@@ -16758,27 +16759,75 @@ async function cpCustPickCandidate(rowIdx, candIdx, el){
   if (el){ el.style.background = '#0f2a15'; el.style.borderColor = '#22c55e'; }
 
   try {
-    // 1. Save account alias (future CarPay payments for this account short-circuit here)
-    await sbPost('carpay_account_aliases', {
-      account: c.account,
-      location: (c.location || '').toLowerCase(),
+    // New resolver model: the link lives in deal_links keyed by
+    // carpay_account. We ensure a customer row exists, then insert
+    // or update the deal_link for this car. The `vehicle` field on
+    // carpay_customers is still populated for backward-compat so
+    // _carpayPaymentToPayload fills year/model on new payments.
+    var locNorm = (c.location || '').toLowerCase();
+
+    // Step 1: find or create the customer. Match by exact normalized
+    // name across customers.name and name_aliases (contains).
+    var customerId = null;
+    var displayName = (c.name || '').trim();
+    if (displayName){
+      var q = 'or=(name.ilike.' + encodeURIComponent(displayName) + ',name_aliases.cs.' +
+              encodeURIComponent('["' + displayName + '"]') + ')&limit=1&select=id';
+      try {
+        var matched = await sbGet('customers', q);
+        if (matched && matched.length) customerId = matched[0].id;
+      } catch(e){ console.warn('customer match lookup failed:', e); }
+    }
+    if (!customerId){
+      var inserted = await sbPost('customers', {
+        name: displayName || ('CarPay #' + c.account),
+        name_aliases: displayName ? [displayName] : []
+      });
+      customerId = Array.isArray(inserted) && inserted.length ? inserted[0].id : null;
+    }
+    if (!customerId) throw new Error('could not resolve customer_id');
+
+    // Step 2: deal_link. Use PATCH-upsert semantics — if a link
+    // already exists for this carpay_account+location, update it;
+    // otherwise insert new.
+    var existingLink = null;
+    try {
+      var existing = await sbGet('deal_links',
+        'carpay_account=eq.' + encodeURIComponent(c.account) +
+        '&location=eq.' + encodeURIComponent(c.location || '') +
+        '&select=id&limit=1');
+      if (existing && existing.length) existingLink = existing[0];
+    } catch(e){}
+    var linkRow = {
+      customer_id: customerId,
+      location: c.location || 'DeBary',
       target_tab: cand.tab,
       target_row: cand.row,
+      vin: null,
+      carpay_account: c.account,
       car_desc: cand.car_desc || null,
-      created_by: (typeof me !== 'undefined' && me) ? me.name : 'cpcust-editor'
-    });
-    // 2. Save vehicle string on carpay_customers so subsequent payments also
-    //    carry year/make/model into their payloads.
+      active: true
+    };
+    if (existingLink){
+      await fetch(SB_URL + '/rest/v1/deal_links?id=eq.' + existingLink.id, {
+        method: 'PATCH',
+        headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(linkRow)
+      });
+    } else {
+      await sbPost('deal_links', linkRow);
+    }
+
+    // Step 3: also populate carpay_customers.vehicle so legacy payment
+    // builder (_carpayPaymentToPayload) still gets year/model until the
+    // resolver swap is complete.
     var vehStr = cand.car_desc || '';
-    // Try to build "YYYY Make Model" from car_desc — takes first 2-digit year
-    // token + next word as make + rest up to next non-vehicle word.
     var tokens = vehStr.split(/\s+/).filter(Boolean);
     var parsedVeh = '';
     if (tokens.length){
       var yr = '';
       if (/^\d{2}$/.test(tokens[0])) yr = '20' + tokens[0];
       else if (/^\d{4}$/.test(tokens[0])) yr = tokens[0];
-      // Skip leading year token, take next 1-2 words as model (make stays blank — the matcher handles without make)
       var rest = yr ? tokens.slice(1) : tokens;
       var model = rest.slice(0, 2).join(' ');
       parsedVeh = (yr ? yr + ' ' : '') + model;
@@ -16788,9 +16837,10 @@ async function cpCustPickCandidate(rowIdx, candIdx, el){
       headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ vehicle: parsedVeh || vehStr.slice(0, 40) })
     });
+
     // Update local cache
     _cpCustAliases[_cpCustAliasKey(c.account, c.location)] = {
-      account: c.account, location: c.location,
+      carpay_account: c.account, location: c.location,
       target_tab: cand.tab, target_row: cand.row, car_desc: cand.car_desc
     };
     for (var i = 0; i < _cpCustData.length; i++){
@@ -16811,9 +16861,12 @@ async function cpCustUnlink(rowIdx, btn){
   if (!confirm('Unlink ' + (c.name || '') + '? Their CarPay payments will go back to Review for fresh matching.')) return;
   if (btn){ btn.textContent = 'Unlinking…'; btn.disabled = true; btn.style.opacity = '0.6'; }
   try {
-    await fetch(SB_URL + '/rest/v1/carpay_account_aliases?account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
+    // Delete the deal_link for this CarPay account (the customer row
+    // stays — it can be re-linked to a different deal later).
+    await fetch(SB_URL + '/rest/v1/deal_links?carpay_account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
       method: 'DELETE', headers: SB_HEADERS
     });
+    // Clear the legacy vehicle string on carpay_customers.
     await fetch(SB_URL + '/rest/v1/carpay_customers?account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
       method: 'PATCH', headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ vehicle: null })

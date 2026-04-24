@@ -793,3 +793,193 @@ Both verified empty on re-preview.
 3. **Sheet is master.** When data repairs touch both sheet + Supabase,
    write to sheet via `sheetsPush` update/delete actions with name
    safety; Supabase reconciler catches up within 5 min.
+
+---
+
+# Day 6 (2026-04-23 evening) — Payment matcher v59 + Customer resolver foundation
+
+## Where the day ended (state of the app + data)
+
+**Apps Script:** v64 deployed. Key actions on top of v57:
+- v58/v59 — ambiguous-lastname deprioritization + year+model fallback.
+  47 tokens flagged as ambiguous (sierra, expedition, accord, civic, etc).
+  Fallback never auto-matches; always surfaces as partial candidates.
+  Requires BOTH year AND model when both provided (was: model only).
+- v60 — `deals26_get_row_g` read helper for surgical rollbacks.
+- v61 — `deals26_set_row_g` supports `clear: true` for empty rows.
+- v62/v63 — `deals26_get_row_g` returns all deal columns + formulas
+  (needed to discover the col F profit formula).
+- v64 — `deals_lookup_by_lastname` scans Deals26/25/24 on both
+  locations for lastname candidates, owed_positive_only optional.
+
+**App at v553, live on carfactory.work.** Cache bumped ~9 times today.
+Key capabilities added on top of the Day-5 approve-first baseline:
+
+- **v545** — year in payment notes. `_paymentFormatPieces` emits
+  2-digit year; `_paymentNoteLineFit` slots it between amount and
+  model. Drop priority updated: color → year → model reduced → last-
+  name truncated. 26-char cap unchanged.
+- **v546** — Profit26 break-even cap rule (critical, see below).
+- **v547/v548** — CarPay lastname lookup via Apps Script, Refresh-
+  candidates button on review cards (unions existing + new, no auto-
+  post; drops `owed > 0` filter so paid-off rows still show).
+- **v549** — review cards show the payment's vehicle info (or orange
+  "no vehicle on payment" hint when CarPay didn't send it).
+- **v550/v552** — CarPay Customers editor (purple button on Review
+  page). Lists every `carpay_customers` row; "Find deals" runs the
+  surname scan; tap a candidate to link. v552 initially wrote to a
+  non-existent table (`carpay_account_aliases`); v553 fixes it to
+  write `deal_links` + `customers` rows instead.
+- **v553** — CarPay Customers editor points at `deal_links` (new).
+
+## THE BIG RULE DISCOVERED TODAY — profit cap
+
+Vlad's col F formula: `=((A+C+D+399)-E-G)*-1`
+  - A cost, C expenses, D taxes, E money (down), G payments
+  - +399 hard-coded dealer fee
+  - Simplifies to: **col F = payments + money − cost − expenses − taxes − 399**
+  - Col F > 0 means "profit realized so far"; col F < 0 means "still
+    recovering break-even costs"
+
+**The rule:** every payment gets posted to the deal's col G in full
+(unchanged), but Profit26 Payments ONLY gets the portion that pushes
+col F into positive territory.
+
+Implementation: `_computeProfitCap(paymentAmt, owedAfter)` returns:
+  - `owedBefore >= 0` → full amount (deal already in profit)
+  - `owedAfter <= 0` → 0 (payment still recovered costs)
+  - Else (crossing zero) → owedAfter (the positive crossing amount)
+
+Wired into all 7 Profit26 call sites in v546:
+  - scanned payment alias post, scanned payment matcher post
+  - CarPay alias post, CarPay matcher fallback
+  - Review Approve, Re-match approve, batch-approve
+
+**Do NOT touch historical Profit26 entries.** Vlad entered them by
+hand using this rule; the fuzzy audit I ran showed $18k of apparent
+"over-posts" but most were false positives from surname-only match-
+ing. Rule applies going forward only.
+
+## Backfill + rollback history for the day
+
+1. Reverted from previous sessions' auto-post attempts, re-ran all
+   126 scanned payments server-side via [scripts/backfill-payments.py](scripts/backfill-payments.py):
+   - 26 posted via direct matcher
+   - 43 posted via alias
+   - 17 queued to Review
+   - 0 errors
+2. Discovered **5 stale aliases** pointing at rows that had shifted
+   after Vlad reverted the Google Sheets. Rolled back 5 bad posts
+   totalling $1,589:
+   - DeBary Deals25 r118 (Camry/Miller was posted $180 TL)
+   - DeLand Deals26 r137 (empty row was posted $100 Kelley)
+   - DeBary Deals26 r320 (empty row was posted $600 Mizin twice)
+   - DeBary Deals26 r45 (Hood/Civic was posted $350 Emery)
+   - DeBary Deals26 r358 (empty row was posted $359 Cooper)
+   Deleted 5 stale alias rows + re-queued the 6 payments for Review.
+3. Discovered the profit-cap rule from Bing row 340 — manually fixed:
+   merged split `400+16` into one `416` entry on Deals25 col G; in
+   Profit26 April Payments removed the $400 and $16 entries, inserted
+   single $322 (the actual profit-crossing amount).
+4. Pedro Sierra Sanchez review 177 (Expedition $400) — rolled back
+   Whitaker row 42 bad post, re-queued; new v59 correctly routed
+   to DeBary Deals26 r11 "17 Expedition silver 171k Passion" via
+   re-match.
+
+## Customer resolver — NEW ARCHITECTURE, PARTIAL BUILD
+
+Foundation for replacing the fuzzy payment→deal matcher with a clean
+customer→deal lookup. **Schema + populate done. Resolver swap NOT yet
+done.**
+
+### Tables created (Supabase)
+```
+customers              — one row per human
+  id bigserial, name text, name_aliases jsonb,
+  phone text, notes text, timestamps
+
+deal_links             — N deals per customer
+  id, customer_id FK, location, target_tab, target_row,
+  deal_num int, vin text (unique), carpay_account text (unique
+  per location), car_desc text, active bool, timestamps
+```
+Unique indexes: `deal_links_vin_unique` (vin where not null),
+`deal_links_account_unique` (carpay_account+location where not null).
+
+DDL in [scripts/customers-schema.sql](scripts/customers-schema.sql).
+Ran via Chrome MCP → "Run without RLS" (matches existing app pattern).
+
+### Populate in [scripts/populate-customers.py](scripts/populate-customers.py)
+Walks 3 sources. Merge strategy:
+1. Payments-by-VIN preload gives full customer_name for aliases
+   that have a VIN (strongest identifier).
+2. Alias's car_desc last word as surname fallback.
+3. Alias's stored customer_name_lower as weakest fallback.
+**No fuzzy-surname merge.** Exact normalized-name match only
+(avoids collapsing Marta Garcia into Waldo Borroto Garcia).
+
+Current state:
+  - customers: 317
+  - deal_links: 59 (53 VIN-keyed, 3 CarPay-account-keyed)
+  - 2 VIN-dup skips — same VIN on 2 different alias rows (deal moved
+    sheets over time); acceptable
+
+253 of the 256 CarPay customers have NO deal_link yet. They get
+linked as their first payment flows through Review (or via the
+CarPay Customers editor in-app).
+
+### Stage 2 (NOT DONE) — resolver swap
+The post paths still use the old fuzzy matcher via Apps Script.
+Plan to replace with:
+```
+function resolvePaymentToDealLink(payment):
+  if payment.vin:
+    return deal_links where vin = payment.vin
+  if payment.carpay_account:
+    return deal_links where carpay_account+location match
+  name match → customer → their deal_links
+    if 1 active → use it
+    if 0 → Review (link customer to deal, one-time)
+    if N → Review (pick which of THIS customer's deals)
+```
+Swap plan (tomorrow):
+1. Add `_resolveCustomerDealLink(payload)` helper.
+2. Plug it into `_appendPaymentToDeals26Checked` (alias path) and
+   `_appendCarPayPaymentToDeals26` (alias path). Keep fuzzy matcher
+   as fallback for 30 days.
+3. Review approve should also CREATE a deal_link when the user
+   picks a candidate (not just the legacy `payment_deal_aliases`).
+4. Retire `payment_deal_aliases` and `carpay_account_aliases`
+   reads after 30 days of clean running.
+
+## Customer multi-deal support
+A customer owns N deal_links (Hillary, Bing, etc buy multiple cars).
+Resolver always picks by identifier first (VIN / account) — both are
+per-car unique. Name-only payments route to Review with just that
+customer's own deal_links as options (2–3 instead of scanning the
+whole sheet).
+
+When a customer sells/pays off a car, mark their old deal_link
+`active=false`. When they buy a new one, add a new deal_link.
+
+## Known issues / follow-ups for tomorrow
+- **24 payment_reviews pending** as of EOD:
+  - 5 possible_duplicate (already manually posted today)
+  - 6 rollback_stale_alias (the Cooper/Emery/Kelley/Mizin×2/Solo ones)
+  - 9 partial (multiple lastname hits, matcher couldn't narrow)
+  - 3 no_match (Ollie Franklin Town Car, 2× Glennie Pinnock GS350)
+  - 1 deal_pending (Steffone Wyche Sonata needs deal row first)
+- **CarPay process not yet run today.** Cutoff is 2026-04-09.
+  Refresh carfactory.work to load v553, then tap Process CarPay
+  Payments.
+- **The 253 unlinked CarPay customers** can be bulk-linked via the
+  purple "CarPay customers" button on the Review page. Each tap
+  links one customer to one Deals row.
+- Stage 2 resolver swap described above — biggest remaining work.
+
+## Files added today
+- [scripts/customers-schema.sql](scripts/customers-schema.sql)
+- [scripts/populate-customers.py](scripts/populate-customers.py)
+- [scripts/backfill-payments.py](scripts/backfill-payments.py)
+- [scripts/audit-profit26.py](scripts/audit-profit26.py) (read-only;
+  historical entries left alone per Vlad's call)
