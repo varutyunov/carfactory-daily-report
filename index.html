@@ -22035,8 +22035,7 @@ async function cashOutDealOpen(){
       if(!dt)return false;
       return dt>=wkStart&&dt<=wkEnd&&(d.location||'DeBary')===_payLocation;
     });
-    // Update _dealsAllData cache while we're at it
-    _dealsAllData=allDeals.filter(function(d){return (d.location||'DeBary')===_payLocation;});
+    // Note: do NOT update _dealsAllData here — _payLocation != _dealsLocation
     if(!locDeals.length){
       list.innerHTML='<div style="text-align:center;color:#555;padding:24px;">No deals this week.</div>';
     } else {
