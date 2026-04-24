@@ -16600,12 +16600,16 @@ function _carpayParseDate(s){
 
 // "2015 Chevrolet Camaro" → { year, make, model }. Best-effort.
 // ══════════════════════════════════════════════════════════════
-// CarPay Customer manager — edit the `vehicle` field per account
-// so future CarPay payments come in with year/make/model pre-filled
-// via _carpayPaymentToPayload → _carpayParseVehicle.
+// CarPay Customer manager — for each customer, scan Deals by surname
+// and let user tap one candidate to save BOTH vehicle string AND a
+// payment_deal_aliases row. Future payments for that account then
+// route directly to the matched deal without review.
 // ══════════════════════════════════════════════════════════════
 var _cpCustData = [];
+var _cpCustAliases = {}; // key = account|loc  →  {target_tab, target_row, car_desc}
 var _cpCustFilterEmpty = true;
+
+function _cpCustAliasKey(acc, loc){ return (acc || '') + '|' + (loc || '').toLowerCase(); }
 
 async function cpCustOpen(){
   document.getElementById('cpcust-overlay').style.display = 'flex';
@@ -16614,6 +16618,13 @@ async function cpCustOpen(){
   try {
     var rows = await sbGet('carpay_customers', 'select=account,name,vehicle,location&order=name.asc&limit=5000');
     _cpCustData = rows || [];
+    // Pull existing account aliases so the "Linked" status reflects
+    // what's already been set up (either via Review approve or here).
+    var aliases = await sbGet('carpay_account_aliases', 'select=account,location,target_tab,target_row,car_desc&limit=5000');
+    _cpCustAliases = {};
+    (aliases || []).forEach(function(a){
+      _cpCustAliases[_cpCustAliasKey(a.account, a.location)] = a;
+    });
   } catch(e){
     document.getElementById('cpcust-body').innerHTML =
       '<div style="padding:20px;color:#ef4444;">Failed to load: ' + _escHtml(e.message || '') + '</div>';
@@ -16633,87 +16644,191 @@ function cpCustToggleFilter(){
   cpCustRender();
 }
 
+function _cpCustIsLinked(c){
+  return !!_cpCustAliases[_cpCustAliasKey(c.account, c.location)] ||
+         !!(c.vehicle && String(c.vehicle).trim());
+}
+
 function cpCustRender(){
   var rows = _cpCustFilterEmpty
-    ? _cpCustData.filter(function(c){ return !c.vehicle || !String(c.vehicle).trim(); })
+    ? _cpCustData.filter(function(c){ return !_cpCustIsLinked(c); })
     : _cpCustData;
   var total = _cpCustData.length;
-  var empty = _cpCustData.filter(function(c){ return !c.vehicle || !String(c.vehicle).trim(); }).length;
+  var unlinked = _cpCustData.filter(function(c){ return !_cpCustIsLinked(c); }).length;
   var html = '<div style="padding:12px;">';
   html += '<div style="font-size:11px;color:#666;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">' +
-          total + ' customers · ' + empty + ' without vehicle · showing ' + rows.length + '</div>';
-  html += '<div style="font-size:11px;color:#666;margin-bottom:12px;line-height:1.5;">Edit each vehicle as <strong style="color:#a78bfa;">YYYY Make Model</strong> (e.g. 2017 Ford Expedition). Saved values are pulled into new CarPay payments automatically so the matcher has year + model from the start.</div>';
+          total + ' customers · ' + unlinked + ' unlinked · showing ' + rows.length + '</div>';
+  html += '<div style="font-size:11px;color:#666;margin-bottom:12px;line-height:1.5;">Tap <strong style="color:#22c55e;">Find deals</strong> to scan Deals26/25/24 by surname. Pick the right car and it\'s saved as this customer\'s alias — future CarPay payments auto-route to that deal row.</div>';
   if (!rows.length){
     html += '<div style="padding:24px;text-align:center;color:#555;">' +
-            (_cpCustFilterEmpty ? 'Nothing to fill in — every customer has a vehicle.' : 'No CarPay customers loaded.') +
+            (_cpCustFilterEmpty ? 'Every customer is linked 🎉' : 'No CarPay customers loaded.') +
             '</div>';
     html += '</div>';
     document.getElementById('cpcust-body').innerHTML = html;
     return;
   }
-  rows.forEach(function(c){
+  rows.forEach(function(c, idx){
     var accEsc = _escHtml(c.account || '');
     var nameEsc = _escHtml(c.name || '');
     var locEsc = _escHtml(c.location || '');
+    var alias = _cpCustAliases[_cpCustAliasKey(c.account, c.location)];
     var veh = c.vehicle || '';
-    var hasVeh = !!(veh && String(veh).trim());
-    var borderColor = hasVeh ? '#1e1e1e' : '#f59e0b';
-    html += '<div id="cpcust-row-' + accEsc + '-' + locEsc + '" style="background:#0d0d0d;border:1px solid ' + borderColor + ';border-radius:12px;padding:12px;margin-bottom:8px;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px;">';
+    var linked = !!alias;
+    var borderColor = linked ? 'rgba(34,197,94,.4)' : (_cpCustIsLinked(c) ? '#1e1e1e' : '#f59e0b');
+    html += '<div id="cpcust-row-' + idx + '" style="background:#0d0d0d;border:1px solid ' + borderColor + ';border-radius:12px;padding:12px;margin-bottom:8px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px;">';
     html += '<div style="font-size:14px;color:#fff;font-weight:700;">' + nameEsc + '</div>';
     html += '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;">#' + accEsc + ' · ' + locEsc + '</div>';
     html += '</div>';
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<input id="cpcust-veh-' + accEsc + '-' + locEsc + '" type="text" value="' + _escHtml(veh) + '" placeholder="YYYY Make Model" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:8px 10px;font-size:13px;outline:none;"/>';
-    html += '<button onclick="cpCustSave(\'' + accEsc + '\',\'' + locEsc + '\', this)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;color:#a78bfa;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Save</button>';
-    html += '</div>';
+    if (linked){
+      html += '<div style="font-size:12px;color:#22c55e;margin-bottom:8px;">✓ Linked to ' + _escHtml(alias.car_desc || '(unknown)') + ' <span style="color:#666;">· ' + _escHtml(alias.target_tab || '') + ' r' + alias.target_row + '</span></div>';
+      html += '<button onclick="cpCustUnlink(' + idx + ', this)" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Unlink</button>';
+    } else if (veh){
+      html += '<div style="font-size:12px;color:#a78bfa;margin-bottom:8px;">🚗 ' + _escHtml(veh) + '</div>';
+      html += '<button onclick="cpCustFindDeals(' + idx + ', this)" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);border-radius:8px;color:#22c55e;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Find deals</button>';
+    } else {
+      html += '<button onclick="cpCustFindDeals(' + idx + ', this)" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);border-radius:8px;color:#22c55e;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Find deals</button>';
+    }
+    html += '<div id="cpcust-cands-' + idx + '" style="margin-top:10px;"></div>';
     html += '</div>';
   });
   html += '</div>';
   document.getElementById('cpcust-body').innerHTML = html;
 }
 
-async function cpCustSave(account, location, btn){
-  var inp = document.getElementById('cpcust-veh-' + account + '-' + location);
-  if (!inp) return;
-  var val = inp.value.trim();
-  var origText = btn ? btn.textContent : 'Save';
-  if (btn){ btn.textContent = 'Saving…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+async function cpCustFindDeals(idx, btn){
+  var c = _cpCustData.filter(function(x, i){
+    return (_cpCustFilterEmpty ? !_cpCustIsLinked(x) : true);
+  })[idx];
+  if (!c) return;
+  var names = _paymentLastNames(c.name);
+  if (!names.length){
+    alert('No surname on this customer — can\'t search.');
+    return;
+  }
+  var origText = btn ? btn.textContent : 'Find deals';
+  if (btn){ btn.textContent = 'Scanning…'; btn.disabled = true; btn.style.opacity = '0.6'; }
   try {
-    var params = 'account=eq.' + encodeURIComponent(account) + '&location=eq.' + encodeURIComponent(location);
-    var resp = await fetch(SB_URL + '/rest/v1/carpay_customers?' + params, {
-      method: 'PATCH',
-      headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ vehicle: val || null })
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals_lookup_by_lastname',
+        location: c.location || 'DeBary',
+        data: { last_names: names, owed_positive_only: false, limit: 30 }
+      })
     });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = null; try { data = await resp.json(); } catch(e){}
+    var candidates = (data && data.ok && Array.isArray(data.candidates)) ? data.candidates : [];
+    var target = document.getElementById('cpcust-cands-' + idx);
+    if (!candidates.length){
+      target.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px;">No Deals rows found with surname(s): ' + _escHtml(names.join(', ')) + '</div>';
+    } else {
+      var html = '<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">' + candidates.length + ' candidate(s) — tap one to link</div>';
+      candidates.forEach(function(cand, ci){
+        var desc = cand.car_desc || '';
+        var owedStr = cand.owed > 0 ? ('owed $' + Math.round(cand.owed)) : (cand.owed < 0 ? 'over-paid $' + Math.round(Math.abs(cand.owed)) : 'paid');
+        var paidColor = cand.owed > 0 ? '#60a5fa' : (cand.owed < 0 ? '#f59e0b' : '#666');
+        html += '<div onclick="cpCustPickCandidate(' + idx + ',' + ci + ', this)" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;transition:background .15s;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">' +
+                '<div style="font-size:13px;color:#fff;">' + _escHtml(desc) + '</div>' +
+                '<div style="font-size:10px;color:' + paidColor + ';flex-shrink:0;">' + owedStr + '</div>' +
+                '</div>' +
+                '<div style="font-size:10px;color:#666;margin-top:2px;">' + _escHtml(cand.location || '') + ' · ' + _escHtml(cand.tab || '') + ' r' + cand.row + '</div>' +
+                '</div>';
+      });
+      target.innerHTML = html;
+      target._cpCandidates = candidates;
+    }
+    if (btn){ btn.textContent = origText; btn.disabled = false; btn.style.opacity = ''; }
+  } catch(e){
+    if (btn){ btn.textContent = origText; btn.disabled = false; btn.style.opacity = ''; }
+    alert('Scan failed: ' + (e.message || e));
+  }
+}
+
+async function cpCustPickCandidate(rowIdx, candIdx, el){
+  var rowDiv = document.getElementById('cpcust-cands-' + rowIdx);
+  if (!rowDiv || !rowDiv._cpCandidates) return;
+  var cand = rowDiv._cpCandidates[candIdx];
+  if (!cand) return;
+  var c = _cpCustData.filter(function(x){ return _cpCustFilterEmpty ? !_cpCustIsLinked(x) : true; })[rowIdx];
+  if (!c) return;
+
+  if (el){ el.style.background = '#0f2a15'; el.style.borderColor = '#22c55e'; }
+
+  try {
+    // 1. Save account alias (future CarPay payments for this account short-circuit here)
+    await sbPost('carpay_account_aliases', {
+      account: c.account,
+      location: (c.location || '').toLowerCase(),
+      target_tab: cand.tab,
+      target_row: cand.row,
+      car_desc: cand.car_desc || null,
+      created_by: (typeof me !== 'undefined' && me) ? me.name : 'cpcust-editor'
+    });
+    // 2. Save vehicle string on carpay_customers so subsequent payments also
+    //    carry year/make/model into their payloads.
+    var vehStr = cand.car_desc || '';
+    // Try to build "YYYY Make Model" from car_desc — takes first 2-digit year
+    // token + next word as make + rest up to next non-vehicle word.
+    var tokens = vehStr.split(/\s+/).filter(Boolean);
+    var parsedVeh = '';
+    if (tokens.length){
+      var yr = '';
+      if (/^\d{2}$/.test(tokens[0])) yr = '20' + tokens[0];
+      else if (/^\d{4}$/.test(tokens[0])) yr = tokens[0];
+      // Skip leading year token, take next 1-2 words as model (make stays blank — the matcher handles without make)
+      var rest = yr ? tokens.slice(1) : tokens;
+      var model = rest.slice(0, 2).join(' ');
+      parsedVeh = (yr ? yr + ' ' : '') + model;
+    }
+    await fetch(SB_URL + '/rest/v1/carpay_customers?account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
+      method: 'PATCH',
+      headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ vehicle: parsedVeh || vehStr.slice(0, 40) })
+    });
     // Update local cache
+    _cpCustAliases[_cpCustAliasKey(c.account, c.location)] = {
+      account: c.account, location: c.location,
+      target_tab: cand.tab, target_row: cand.row, car_desc: cand.car_desc
+    };
     for (var i = 0; i < _cpCustData.length; i++){
-      if (_cpCustData[i].account === account && _cpCustData[i].location === location){
-        _cpCustData[i].vehicle = val || null;
+      if (_cpCustData[i].account === c.account && _cpCustData[i].location === c.location){
+        _cpCustData[i].vehicle = parsedVeh || vehStr.slice(0, 40);
         break;
       }
     }
-    if (btn){
-      btn.textContent = 'Saved';
-      btn.style.background = 'rgba(34,197,94,.15)';
-      btn.style.borderColor = 'rgba(34,197,94,.4)';
-      btn.style.color = '#22c55e';
-      setTimeout(function(){
-        if (_cpCustFilterEmpty && val) {
-          cpCustRender(); // filter will hide the now-filled row
-        } else {
-          btn.textContent = origText;
-          btn.disabled = false; btn.style.opacity = '';
-          btn.style.background = 'rgba(139,92,246,.15)';
-          btn.style.borderColor = 'rgba(139,92,246,.4)';
-          btn.style.color = '#a78bfa';
-        }
-      }, 800);
-    }
+    cpCustRender();
   } catch(e){
-    alert('Save failed: ' + (e.message || e));
-    if (btn){ btn.textContent = origText; btn.disabled = false; btn.style.opacity = ''; }
+    alert('Link failed: ' + (e.message || e));
+  }
+}
+
+async function cpCustUnlink(rowIdx, btn){
+  var c = _cpCustData.filter(function(x){ return _cpCustFilterEmpty ? !_cpCustIsLinked(x) : true; })[rowIdx];
+  if (!c) return;
+  if (!confirm('Unlink ' + (c.name || '') + '? Their CarPay payments will go back to Review for fresh matching.')) return;
+  if (btn){ btn.textContent = 'Unlinking…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    await fetch(SB_URL + '/rest/v1/carpay_account_aliases?account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
+      method: 'DELETE', headers: SB_HEADERS
+    });
+    await fetch(SB_URL + '/rest/v1/carpay_customers?account=eq.' + encodeURIComponent(c.account) + '&location=eq.' + encodeURIComponent(c.location || ''), {
+      method: 'PATCH', headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ vehicle: null })
+    });
+    delete _cpCustAliases[_cpCustAliasKey(c.account, c.location)];
+    for (var i = 0; i < _cpCustData.length; i++){
+      if (_cpCustData[i].account === c.account && _cpCustData[i].location === c.location){
+        _cpCustData[i].vehicle = null;
+        break;
+      }
+    }
+    cpCustRender();
+  } catch(e){
+    alert('Unlink failed: ' + (e.message || e));
+    if (btn){ btn.textContent = 'Unlink'; btn.disabled = false; btn.style.opacity = ''; }
   }
 }
 
