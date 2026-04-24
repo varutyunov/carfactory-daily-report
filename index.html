@@ -19689,59 +19689,32 @@ async function _reviewReprocessPending(){
         }
       }
 
-      // No link or post failed — search by name across both lots.
-      // Single candidate → auto-post and save deal_link.
-      // Multiple candidates → put on card for manual pick.
+      // No link — search both lots by surname, owed_positive_only:false
+      // so all active deals show up. Put candidates on the card for approval.
       try {
         var names = _paymentLastNames(r.customer_name);
         if (names.length){
-          var cands = await _carpayFindNameCandidates(names);
-          if (cands.length === 1){
-            // Only one match — confident enough to auto-post
-            var sc = cands[0];
-            var scAmt = parseFloat(r.amount) || 0;
-            var scData = null;
-            try {
-              var scResp = await fetch(_SHEETS_URL, {
-                method: 'POST', headers: {'Content-Type':'text/plain'},
-                body: JSON.stringify({
-                  secret: _SHEETS_SECRET,
-                  action: 'deals26_append_payment_direct',
-                  location: sc.location || r.location,
-                  data: { tab: sc.tab, row: sc.row, amount: scAmt,
-                          note_line: r.note_line || '', check_dup: true }
-                })
-              });
-              scData = await scResp.json();
-            } catch(e){}
-            var scOk = scData && scData.ok !== false && scData.status !== 'possible_duplicate';
-            if (scOk){
-              var scOwed = parseFloat(scData.owed) || 0;
-              var scCap = _computeProfitCap(scAmt, scOwed);
-              if (scCap > 0){
-                try { await _appendPaymentToProfit({
-                  customer_name: r.customer_name, amount: r.amount,
-                  vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
-                  vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
-                  vehicle_vin: r.vehicle_vin, location: sc.location || r.location,
-                  payment_date: r.payment_date }, scCap); } catch(ep){}
-              }
-              // Save deal_link so this account auto-routes forever
-              try { await _upsertCustomerDealLink(
-                { customer_name: r.customer_name, vehicle_vin: r.vehicle_vin || '', carpay_account: r.carpay_account || null },
-                { location: sc.location || r.location, tab: sc.tab, row: sc.row, car_desc: sc.car_desc || null }
-              ); } catch(e){}
-              try { await sbPatch('payment_reviews', r.id, {
-                status: 'approved', resolved_at: new Date().toISOString(),
-                resolved_by: 'reprocess', resolved_tab: sc.tab, resolved_row: sc.row
-              }); } catch(e){}
-              counts.posted++;
-              continue;
-            }
-          }
+          var _rpFetch = function(loc2){
+            return fetch(_SHEETS_URL, {
+              method:'POST', headers:{'Content-Type':'text/plain'},
+              body: JSON.stringify({
+                secret: _SHEETS_SECRET,
+                action: 'deals_lookup_by_lastname',
+                location: loc2,
+                data: { last_names: names, owed_positive_only: false, limit: 40 }
+              })
+            }).then(function(x){ return x.json(); }).catch(function(){ return null; });
+          };
+          var rpResults = await Promise.all([_rpFetch('DeBary'), _rpFetch('DeLand')]);
+          var cands = [];
+          rpResults.forEach(function(d){
+            if (d && d.ok && Array.isArray(d.candidates)) cands = cands.concat(d.candidates);
+          });
           if (cands.length){
-            await sbPatch('payment_reviews', r.id, { candidates: JSON.stringify(cands),
-              reason: cands.length === 1 ? r.reason : 'multiple' });
+            await sbPatch('payment_reviews', r.id, {
+              candidates: JSON.stringify(cands),
+              reason: 'multiple'
+            });
             counts.refreshed++;
           }
         }
@@ -19749,7 +19722,7 @@ async function _reviewReprocessPending(){
       counts.skipped++;
     }
 
-    _showReviewToast(counts.posted + ' auto-posted · ' + counts.refreshed + ' candidates refreshed · ' + counts.skipped + ' need manual pick', 5000);
+    _showReviewToast(counts.posted + ' auto-posted · ' + counts.refreshed + ' cards lined up · ' + counts.skipped + ' still need search', 5000);
     await _reviewLoad();
   } catch(e){
     alert('Re-process failed: ' + (e.message || e));
