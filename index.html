@@ -2645,7 +2645,7 @@ async function syncFromSupabase(showUI){
       S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
       const _rawCM=JSON.parse(localStorage.getItem('cf_colormap')||'{}');const colorMap={};Object.keys(_rawCM).forEach(function(k){colorMap[k]=fixColor(_rawCM[k]);});
       const pxSaved=localStorage.getItem('px_cache');
-      S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{}}));
+      S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
       var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
@@ -5512,6 +5512,7 @@ async function syncLocation(loc){
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock) return true;
       if((c.location||'DeBary')!==loc) return true; // don't touch other location
+      if(c.re_acquired) return true; // preserve repos / fallen-through deals
       if(csvStocks.has(c.stock)) return true;
       if(activeIds.has(c.id)) return true;
       if(c.vin&&locCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
@@ -5602,6 +5603,7 @@ async function syncNow(){
     var toRemoveDB=[];
     S.inventory=S.inventory.filter(function(c){
       if(!c.stock||csvStocks.has(c.stock)||activeIds.has(c.id)) return true;
+      if(c.re_acquired) return true; // preserve repos / fallen-through deals
       if(c.vin&&allCsvVins.has(c.vin)) return true; // VIN still in CSV (mid-transfer)
       // Don't remove DeLand cars if DeLand CSV wasn't loaded
       if(!hasDeland&&(c.location||'DeBary')==='DeLand') return true;
