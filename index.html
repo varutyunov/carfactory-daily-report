@@ -16547,9 +16547,10 @@ async function _resolveCustomerDealLink(payload){
   var acc = payload.carpay_account || null;
   if (acc){
     try {
+      // No location filter — carpay_account uniquely identifies the deal
+      // and the deal's lot may differ from the payment lot (cross-location).
       var byAcc = await sbGet('deal_links',
         'carpay_account=eq.' + encodeURIComponent(acc) +
-        '&location=eq.' + encodeURIComponent(loc) +
         '&active=eq.true&select=*&limit=1');
       if (Array.isArray(byAcc) && byAcc.length) return { link: byAcc[0] };
     } catch(e){ console.warn('resolver CarPay account lookup failed:', e); }
@@ -17459,6 +17460,7 @@ async function _carpayQueueReview(payload, reason, candidates){
       note_line: _paymentNoteLine(payload.amount || 0, payload),
       reason: reason,
       candidates: JSON.stringify(candidates || []),
+      carpay_account: payload.carpay_account || null,
       status: 'pending',
       created_at: new Date().toISOString()
     });
