@@ -1,0 +1,37 @@
+name: Tax Fill
+
+# Server-side port of the in-app _fillMissingTaxes loop. Runs whether or
+# not the user has the phone app open. Matches deals26 rows with taxes=0
+# against PendingSalesDebary.csv / PendingSalesDeland.csv (DMS exports
+# at repo root, kept current by the pending-sales-sync workflow), PATCHes
+# taxes + recomputed owed into Supabase, and mirrors the write to the
+# Google Sheet via the Apps Script endpoint.
+#
+# Trigger: every 4 hours + workflow_dispatch for manual runs. Also fires
+# after a push that updates the root-level CSVs, so a fresh DMS export
+# auto-promotes via pending-sales-sync AND then auto-fills via this.
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'PendingSalesDebary.csv'
+      - 'PendingSalesDeland.csv'
+    branches: [main, master]
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/tax-fill.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SHEETS_URL: ${{ secrets.SHEETS_URL }}
+          SHEETS_SECRET: ${{ secrets.SHEETS_SECRET }}
