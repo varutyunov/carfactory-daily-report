@@ -1064,6 +1064,7 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
   <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px 12px 0;display:flex;flex-direction:column;gap:8px;">
+      <button id="rv-reprocess-btn" onclick="_reviewReprocessPending()" title="Backfill CarPay accounts on pending reviews, auto-post where a deal link exists, refresh candidates for the rest" style="width:100%;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:10px;color:#34d399;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-process pending</button>
       <button onclick="runPaymentBackfill()" title="Sweep all existing scanned payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill scanned payments</button>
       <button onclick="processCarPayPaymentsUI()" title="Route any unprocessed CarPay portal payments through the matcher (posts confident, queues uncertain for review)" style="width:100%;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Process CarPay payments</button>
       <button onclick="cpCustOpen()" title="Edit the vehicle for each CarPay customer so future payments come in with year/make/model pre-filled" style="width:100%;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:10px;color:#a78bfa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">CarPay customers</button>
@@ -19600,6 +19601,115 @@ async function _reviewReject(id){
   } catch(e){
     alert('Error: ' + (e.message || e));
   }
+}
+
+// ── Re-process all pending reviews ───────────────────────────────────────
+// 1. Backfill carpay_account on rows that were queued before the fix.
+// 2. For reviews with a known account that has a deal_link → auto-post.
+// 3. Everything else → refresh candidates from both lots so cards are useful.
+async function _reviewReprocessPending(){
+  var btn = document.getElementById('rv-reprocess-btn');
+  if (btn){ btn.textContent = 'Working…'; btn.disabled = true; }
+  var restoreBtn = function(){ if (btn){ btn.textContent = 'Re-process pending'; btn.disabled = false; } };
+
+  try {
+    // Step 1 — load all pending reviews
+    var pending = await sbGet('payment_reviews', 'status=eq.pending&select=*&limit=500');
+    pending = pending || [];
+    if (!pending.length){ _showReviewToast('No pending reviews.', 2500); restoreBtn(); return; }
+
+    // Step 2 — backfill carpay_account from carpay_payment_postings for rows missing it
+    var noAcct = pending.filter(function(r){ return !r.carpay_account; });
+    if (noAcct.length){
+      var noAcctIds = noAcct.map(function(r){ return r.id; });
+      var postings = await sbGet('carpay_payment_postings',
+        'review_id=in.(' + noAcctIds.join(',') + ')&select=review_id,account&limit=1000');
+      var pMap = {};
+      (postings || []).forEach(function(p){ if (p.review_id && p.account) pMap[p.review_id] = p.account; });
+      for (var i = 0; i < noAcct.length; i++){
+        var rv = noAcct[i];
+        var acct = pMap[rv.id];
+        if (acct){
+          try { await sbPatch('payment_reviews', rv.id, { carpay_account: acct }); rv.carpay_account = acct; }
+          catch(e){ console.warn('backfill carpay_account failed for review ' + rv.id, e); }
+        }
+      }
+    }
+
+    // Step 3 — try to auto-post for reviews whose account has a deal_link
+    var counts = { posted: 0, refreshed: 0, skipped: 0 };
+    for (var i = 0; i < pending.length; i++){
+      var r = pending[i];
+      if (!r.carpay_account){ counts.skipped++; continue; }
+      var links = null;
+      try {
+        links = await sbGet('deal_links',
+          'carpay_account=eq.' + encodeURIComponent(r.carpay_account) +
+          '&active=eq.true&select=*&limit=1');
+      } catch(e){}
+
+      if (links && links.length){
+        var lk = links[0];
+        var amt = parseFloat(r.amount) || 0;
+        var postData = null;
+        try {
+          var postResp = await fetch(_SHEETS_URL, {
+            method: 'POST', headers: {'Content-Type':'text/plain'},
+            body: JSON.stringify({
+              secret: _SHEETS_SECRET,
+              action: 'deals26_append_payment_direct',
+              location: lk.location || r.location,
+              data: { tab: lk.target_tab, row: lk.target_row, amount: amt,
+                      note_line: r.note_line || '', check_dup: true }
+            })
+          });
+          postData = await postResp.json();
+        } catch(e){ console.warn('reprocess post failed for review ' + r.id, e); }
+
+        var ok = postData && postData.ok !== false &&
+                 postData.status !== 'possible_duplicate' &&
+                 postData.status !== 'error';
+        if (ok){
+          var owed = parseFloat(postData.owed) || 0;
+          var cap = _computeProfitCap(amt, owed);
+          if (cap > 0){
+            try { await _appendPaymentToProfit({
+              customer_name: r.customer_name, amount: r.amount,
+              vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
+              vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
+              vehicle_vin: r.vehicle_vin, location: lk.location || r.location,
+              payment_date: r.payment_date }, cap); } catch(ep){}
+          }
+          try { await sbPatch('payment_reviews', r.id, {
+            status: 'approved', resolved_at: new Date().toISOString(),
+            resolved_by: 'reprocess', resolved_tab: lk.target_tab, resolved_row: lk.target_row
+          }); } catch(e){}
+          counts.posted++;
+          continue;
+        }
+      }
+
+      // No link or post failed — refresh candidates so the card has something useful
+      try {
+        var names = _paymentLastNames(r.customer_name);
+        if (names.length){
+          var cands = await _carpayFindNameCandidates(names);
+          if (cands.length){
+            await sbPatch('payment_reviews', r.id, { candidates: JSON.stringify(cands),
+              reason: r.reason === 'no_vehicle' || r.reason === 'approve_first' ? 'multiple' : r.reason });
+            counts.refreshed++;
+          }
+        }
+      } catch(e){}
+      counts.skipped++;
+    }
+
+    _showReviewToast(counts.posted + ' auto-posted · ' + counts.refreshed + ' candidates refreshed · ' + counts.skipped + ' need manual pick', 5000);
+    await _reviewLoad();
+  } catch(e){
+    alert('Re-process failed: ' + (e.message || e));
+  }
+  restoreBtn();
 }
 
 // Refresh the badge on app load
