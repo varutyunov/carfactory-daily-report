@@ -16336,10 +16336,11 @@ async function _appendPaymentToDeals26(payload){
       if (dData && dData.ok !== false){
         var dOwed = parseFloat(dData.owed) || 0;
         var dPosted = false;
-        if (dOwed > 0){
-          try { await _appendPaymentToProfit(payload); dPosted = true; } catch(ep){ console.warn(ep); }
+        var dProfitCap = _computeProfitCap(amt, dOwed);
+        if (dProfitCap > 0){
+          try { await _appendPaymentToProfit(payload, dProfitCap); dPosted = true; } catch(ep){ console.warn(ep); }
         }
-        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row);
+        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row + ' · profitCap=$' + dProfitCap);
         return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:alias.target_row, via_alias:true };
       }
       // Alias direct-write failed — fall through to the normal matcher
@@ -16374,16 +16375,15 @@ async function _appendPaymentToDeals26(payload){
     if(data.status === 'matched'){
       var owed = parseFloat(data.owed) || 0;
       var posted = false;
-      // Gate the Profit26 Payments post on col F (owed). Positive only.
-      // Use the LOCATION the matcher actually wrote to — this handles the
-      // cross-location case where a payment is tagged one location but
-      // the deal is on the other's sheet. Profit26 should go where the
-      // deal lives, not where the payment was entered.
+      // Profit26 gets the portion of this payment that crossed col F
+      // into positive territory. Payments still recovering the deal's
+      // break-even go $0 to Profit26.
       var postLoc = data.location || payload.location;
-      if(owed > 0){
+      var profitCap = _computeProfitCap(amt, owed);
+      if(profitCap > 0){
         try {
           var profitPayload = Object.assign({}, payload, { location: postLoc });
-          await _appendPaymentToProfit(profitPayload);
+          await _appendPaymentToProfit(profitPayload, profitCap);
           posted = true;
         } catch(ep){ console.warn('Profit Payments post failed:', ep); }
       } else {
@@ -16828,8 +16828,9 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           }
           // matched — posted OK
           var aliasOwed = parseFloat(aliasData.owed) || 0;
-          if (aliasOwed > 0){
-            try { await _appendPaymentToProfit(aliasPayload); } catch(ep){ console.warn(ep); }
+          var aliasProfitCap = _computeProfitCap(parseFloat(aliasPayload.amount) || 0, aliasOwed);
+          if (aliasProfitCap > 0){
+            try { await _appendPaymentToProfit(aliasPayload, aliasProfitCap); } catch(ep){ console.warn(ep); }
           }
           await _carpayRecordPosting(cp, aliasPayload, {
             status: 'posted',
@@ -17323,12 +17324,13 @@ async function _appendPaymentToDeals26Checked(payload){
         } catch(e){}
         return { queued: true };
       }
-      // posted — check profit gate (use the matched location, not the
-      // payment's tagged one, for cross-location safety)
+      // posted — profit gate is the break-even rule: post only the
+      // portion of this payment that pushed col F above $0.
       var dOwed = parseFloat(dData.owed) || 0;
-      if (dOwed > 0){
+      var dProfitCap = _computeProfitCap(amt, dOwed);
+      if (dProfitCap > 0){
         var pfPayload = Object.assign({}, payload, { location: dData.location || payload.location });
-        try { await _appendPaymentToProfit(pfPayload); } catch(e){}
+        try { await _appendPaymentToProfit(pfPayload, dProfitCap); } catch(e){}
       }
       return { posted: true };
     }
@@ -17363,8 +17365,9 @@ async function _appendPaymentToDeals26Checked(payload){
 
   if (data.status === 'matched'){
     var owed = parseFloat(data.owed) || 0;
-    if (owed > 0){
-      try { await _appendPaymentToProfit(payload); } catch(e){ console.warn(e); }
+    var profitCap = _computeProfitCap(amt, owed);
+    if (profitCap > 0){
+      try { await _appendPaymentToProfit(payload, profitCap); } catch(e){ console.warn(e); }
     }
     return { posted: true };
   }
@@ -17849,24 +17852,29 @@ async function _reviewManualPost(id){
     }
 
     // Profit26 posting — honor the chosen mode.
-    //   'auto' → col F > 0 gate (needs Deals write to have happened)
-    //   'yes'  → force post regardless of col F
+    //   'auto' → profit-cap rule (break-even first, then profit)
+    //   'yes'  → force post the full payment amount (manual override)
     //   'no'   → skip Profit26
     var owed = data ? (parseFloat(data.owed) || 0) : 0;
+    var rAmt = parseFloat(r.amount) || 0;
+    var autoProfitCap = _computeProfitCap(rAmt, owed);
     var shouldPost = (pmMode === 'yes') ||
-                     (pmMode === 'auto' && data && data.status !== 'already_posted' && owed > 0);
+                     (pmMode === 'auto' && data && data.status !== 'already_posted' && autoProfitCap > 0);
     if (shouldPost){
       try {
+        // 'yes' sends the full payment amount; 'auto' sends only the
+        // profit portion (whatever pushed col F above 0).
+        var ovr = (pmMode === 'auto') ? autoProfitCap : undefined;
         await _appendPaymentToProfit({
           customer_name: r.customer_name, amount: r.amount,
           vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
           vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
           vehicle_vin: r.vehicle_vin, location: r.location,
           payment_date: r.payment_date
-        });
+        }, ovr);
       } catch(ep){ console.warn('Profit26 post failed:', ep); }
-    } else if (pmMode === 'auto' && data && owed <= 0 && data.status !== 'already_posted'){
-      console.log('Manual post: col F=' + owed + ' → skipping Profit26 (auto mode)');
+    } else if (pmMode === 'auto' && data && autoProfitCap <= 0 && data.status !== 'already_posted'){
+      console.log('Manual post: col F=' + owed + ' → deal still recovering break-even, skipping Profit26');
     }
 
     // Save alias ONLY when we have a row — profit-only posts don't
@@ -17980,7 +17988,9 @@ async function _reviewApprove(id, candidateIdx){
         source_review_id: id
       }).catch(function(e){ console.warn('Alias save failed:', e); })
     ];
-    if (owed > 0){
+    var rAmt = parseFloat(r.amount) || 0;
+    var profitCap = _computeProfitCap(rAmt, owed);
+    if (profitCap > 0){
       followups.push(
         _appendPaymentToProfit({
           customer_name: r.customer_name, amount: r.amount,
@@ -17988,7 +17998,7 @@ async function _reviewApprove(id, candidateIdx){
           vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
           vehicle_vin: r.vehicle_vin, location: r.location,
           payment_date: r.payment_date
-        }).catch(function(e){ console.warn('Profit26 post failed:', e); })
+        }, profitCap).catch(function(e){ console.warn('Profit26 post failed:', e); })
       );
     }
     // Fire and forget — user is free to move on
@@ -18219,7 +18229,9 @@ async function _runCascadeApproval(originalId, aliasVin, aliasCust, aliasModel, 
               resolved_tab: aliasTab
             }).catch(function(e){ console.warn(e); })
           ];
-          if (mOwed > 0){
+          var mAmt = parseFloat(m.amount) || 0;
+          var mProfitCap = _computeProfitCap(mAmt, mOwed);
+          if (mProfitCap > 0){
             followups.push(
               _appendPaymentToProfit({
                 customer_name: m.customer_name, amount: m.amount,
@@ -18227,7 +18239,7 @@ async function _runCascadeApproval(originalId, aliasVin, aliasCust, aliasModel, 
                 vehicle_model: m.vehicle_model, vehicle_color: m.vehicle_color,
                 vehicle_vin: m.vehicle_vin, location: m.location,
                 payment_date: m.payment_date
-              }).catch(function(e){ console.warn(e); })
+              }, mProfitCap).catch(function(e){ console.warn(e); })
             );
           }
           Promise.all(followups);
@@ -18356,10 +18368,12 @@ async function _reviewRematch(id, evt){
     }
 
     if (data.status === 'matched'){
-      // Confident match — post to Profit26 if col F > 0, save alias, resolve
+      // Confident match — post to Profit26 using the break-even rule
+      // (only the portion that pushed col F positive counts as profit).
       var owed = parseFloat(data.owed) || 0;
       var matchedLoc = data.location || loc;
-      if (owed > 0){
+      var rematchProfitCap = _computeProfitCap(amt, owed);
+      if (rematchProfitCap > 0){
         try {
           await _appendPaymentToProfit({
             customer_name: r.customer_name, amount: r.amount,
@@ -18367,7 +18381,7 @@ async function _reviewRematch(id, evt){
             vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
             vehicle_vin: r.vehicle_vin, location: matchedLoc,
             payment_date: r.payment_date
-          });
+          }, rematchProfitCap);
         } catch(ep){ console.warn('Profit26 post failed:', ep); }
       }
       try {
@@ -18455,7 +18469,28 @@ try { setTimeout(function(){ _reviewRefreshBadge(); }, 2000); } catch(e){}
 // Does not fire for deal auto-posts (those flow through dealSubmit
 // and go to Cash Sales via D3) or deposit auto-posts (separate).
 // ══════════════════════════════════════════════════════════════
-async function _appendPaymentToProfit(payload){
+// Compute the profit portion of a payment based on col F (profit-so-far)
+// values before and after the payment posted. The rule (locked with Vlad
+// Apr 2026): a payment first covers the deal's break-even loss, and only
+// the remainder (the part that pushes col F above $0) counts as profit.
+//   - col F was already positive → full payment amount is profit
+//   - col F stayed ≤ 0 after the payment → $0 profit (payment was still
+//     recovering costs)
+//   - col F crossed from negative to positive → only the positive part
+//     (col F after) counts as profit
+// paymentAmt is the amount just posted to col G; owedAfter is col F
+// after the post (returned by the deals26_append_payment* actions).
+function _computeProfitCap(paymentAmt, owedAfter){
+  var amt = parseFloat(paymentAmt) || 0;
+  var after = parseFloat(owedAfter) || 0;
+  if (amt <= 0) return 0;
+  var before = after - amt;
+  if (before >= 0) return amt;
+  if (after <= 0) return 0;
+  return after;
+}
+
+async function _appendPaymentToProfit(payload, amountOverride){
   try{
     if(!payload) return;
     // Don't propagate Deal or Deposit auto-posts (they flow through separate paths)
@@ -18464,7 +18499,12 @@ async function _appendPaymentToProfit(payload){
     var d = payload.payment_date ? new Date(payload.payment_date+'T12:00:00') : new Date();
     var monthIdx = d.getMonth();
     var loc = payload.location || (me ? me.location : 'DeBary');
-    var amt = parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,''))||0;
+    // Caller can override the amount with the profit-capped portion.
+    // Without override we fall back to the payload's raw amount (legacy
+    // callers that don't know col F).
+    var amt = (amountOverride !== undefined && amountOverride !== null)
+      ? (parseFloat(amountOverride) || 0)
+      : (parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,''))||0);
     if(amt === 0) return;
     // Description: "model color LastName M/D" — unified with Deals26 col G
     // note format. Apps Script prepends the amount automatically.
