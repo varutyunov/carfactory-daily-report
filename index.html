@@ -16453,6 +16453,128 @@ function _paymentDescFromPayload(payload){
 // match in Review, we saved (VIN, customer+model, location) → (tab, row).
 // Future payments for the same deal skip the matcher entirely.
 // Returns { target_tab, target_row, car_desc } or null.
+// Stage-2 resolver. Given a payment payload, walk the strongest
+// identifiers first (VIN → CarPay account → customer name) and return
+// the `deal_link` that matches — OR an ambiguous list when a customer
+// owns multiple active deals. Null means "fall back to the legacy
+// fuzzy matcher or Review queue".
+//
+// Returns:
+//   { link: <deal_link row> }                — confident single match
+//   { ambiguous: [links], customer_id }      — customer found, 2+ active deals
+//   null                                     — not found
+async function _resolveCustomerDealLink(payload){
+  if (!payload) return null;
+  var loc = payload.location || 'DeBary';
+
+  // 1. VIN — unique across the fleet.
+  var vin = String(payload.vehicle_vin || '').trim().toUpperCase();
+  if (vin){
+    try {
+      var byVin = await sbGet('deal_links',
+        'vin=eq.' + encodeURIComponent(vin) + '&active=eq.true&select=*&limit=1');
+      if (Array.isArray(byVin) && byVin.length) return { link: byVin[0] };
+    } catch(e){ console.warn('resolver VIN lookup failed:', e); }
+  }
+
+  // 2. CarPay account — unique per car per location.
+  var acc = payload.carpay_account || null;
+  if (acc){
+    try {
+      var byAcc = await sbGet('deal_links',
+        'carpay_account=eq.' + encodeURIComponent(acc) +
+        '&location=eq.' + encodeURIComponent(loc) +
+        '&active=eq.true&select=*&limit=1');
+      if (Array.isArray(byAcc) && byAcc.length) return { link: byAcc[0] };
+    } catch(e){ console.warn('resolver CarPay account lookup failed:', e); }
+  }
+
+  // 3. Customer name — exact name or listed alias. If the human has one
+  //    active deal, post there. If 2+, surface as ambiguous so the user
+  //    picks in Review (from their own cars only, not the whole sheet).
+  var name = String(payload.customer_name || '').trim();
+  if (!name) return null;
+  try {
+    var safeName = name.replace(/\"/g, '');
+    var custRes = await sbGet('customers',
+      'or=(name.ilike.' + encodeURIComponent(safeName) +
+      ',name_aliases.cs.' + encodeURIComponent('["' + safeName + '"]') +
+      ')&select=id&limit=5');
+    if (!Array.isArray(custRes) || !custRes.length) return null;
+    var ids = custRes.map(function(c){ return c.id; });
+    var dlRes = await sbGet('deal_links',
+      'customer_id=in.(' + ids.join(',') +
+      ')&active=eq.true&select=*');
+    if (!Array.isArray(dlRes) || !dlRes.length) return null;
+    if (dlRes.length === 1) return { link: dlRes[0] };
+    return { ambiguous: dlRes, customer_id: ids[0] };
+  } catch(e){ console.warn('resolver name lookup failed:', e); }
+  return null;
+}
+
+// Upsert customer + deal_link after a user-approved Review pick.
+// Every approval grows the resolver graph so future payments for the
+// same customer short-circuit without the fuzzy matcher.
+async function _upsertCustomerDealLink(payload, target){
+  try {
+    var displayName = String(payload.customer_name || '').trim() || 'Customer';
+    var safe = displayName.replace(/\"/g, '');
+    var vin = String(payload.vehicle_vin || '').trim().toUpperCase();
+    // Find or create customer by exact name or alias
+    var cid = null;
+    try {
+      var custs = await sbGet('customers',
+        'or=(name.ilike.' + encodeURIComponent(safe) +
+        ',name_aliases.cs.' + encodeURIComponent('["' + safe + '"]') +
+        ')&select=id&limit=1');
+      if (Array.isArray(custs) && custs.length) cid = custs[0].id;
+    } catch(_){}
+    if (!cid){
+      var ins = await sbPost('customers', {
+        name: displayName,
+        name_aliases: [displayName]
+      });
+      if (Array.isArray(ins) && ins.length) cid = ins[0].id;
+    }
+    if (!cid) return null;
+
+    // Check if a deal_link for this row already exists — update it in place
+    var existing = null;
+    try {
+      var lookup = 'location=eq.' + encodeURIComponent(target.location) +
+                   '&target_tab=eq.' + encodeURIComponent(target.tab) +
+                   '&target_row=eq.' + target.row +
+                   '&select=id&limit=1';
+      var existingArr = await sbGet('deal_links', lookup);
+      if (Array.isArray(existingArr) && existingArr.length) existing = existingArr[0];
+    } catch(_){}
+
+    var linkRow = {
+      customer_id: cid,
+      location: target.location,
+      target_tab: target.tab,
+      target_row: target.row,
+      vin: vin || null,
+      carpay_account: payload.carpay_account || null,
+      car_desc: target.car_desc || null,
+      active: true
+    };
+    if (existing){
+      await fetch(SB_URL + '/rest/v1/deal_links?id=eq.' + existing.id, {
+        method: 'PATCH',
+        headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(linkRow)
+      });
+    } else {
+      await sbPost('deal_links', linkRow);
+    }
+    return cid;
+  } catch(e){
+    console.warn('upsert customer/deal_link failed:', e);
+    return null;
+  }
+}
+
 async function _findDealAlias(payload){
   try {
     var vin = (payload.vehicle_vin || '').trim().toUpperCase();
@@ -17115,7 +17237,8 @@ function _carpayPaymentToPayload(cp, cust){
     vehicle_vin: '',
     location: _carpayNormalizeLocation(cp.location),
     raw_ocr_text: 'CarPay \u2014 ' + (cp.reference || ''),
-    carpay_reference: cp.reference || null
+    carpay_reference: cp.reference || null,
+    carpay_account: cp.account || null  // lets the Stage-2 resolver do exact-account lookup
   };
 }
 
@@ -17290,6 +17413,74 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           || custByAccount[cp.account + '|debary']
           || custByAccount[cp.account + '|deland']
           || null;
+
+  // Stage-2 resolver — runs BEFORE approve-first so user-verified
+  // links (via CarPay account deal_links) auto-post. The customer
+  // explicitly linked the car once (either by approving a review or
+  // tapping "Find deals" in the CarPay Customers editor), so further
+  // payments for that account route directly without re-reviewing.
+  try {
+    var stage2Payload = _carpayPaymentToPayload(cp, cust);
+    if (stage2Payload.amount > 0){
+      var stage2 = await _resolveCustomerDealLink(stage2Payload);
+      if (stage2 && stage2.link){
+        var lk2 = stage2.link;
+        var resp2 = await fetch(_SHEETS_URL, {
+          method:'POST', headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            secret: _SHEETS_SECRET,
+            action: 'deals26_append_payment_direct',
+            location: lk2.location || cpLoc,
+            data: {
+              tab: lk2.target_tab, row: lk2.target_row,
+              amount: stage2Payload.amount,
+              note_line: _paymentNoteLine(stage2Payload.amount, stage2Payload),
+              last_names: _paymentLastNames(stage2Payload.customer_name),
+              check_dup: true
+            }
+          })
+        });
+        var data2 = null; try { data2 = await resp2.json(); } catch(_){}
+        if (data2 && data2.ok !== false){
+          if (data2.status === 'already_posted'){
+            await _carpayRecordPosting(cp, stage2Payload, {
+              status: 'already_posted',
+              target_tab: lk2.target_tab, target_row: lk2.target_row,
+              car_desc: lk2.car_desc
+            });
+            return { status: 'already_posted' };
+          }
+          if (data2.status === 'possible_duplicate'){
+            var rid2 = await _carpayQueueReview(stage2Payload, 'possible_duplicate',
+              [{ tab: lk2.target_tab, row: lk2.target_row, car_desc: lk2.car_desc, location: lk2.location, has_last: true, has_car: true }]);
+            await _carpayRecordPosting(cp, stage2Payload, { status: 'review', review_id: rid2 });
+            return { status: 'review' };
+          }
+          // matched
+          var owed2 = parseFloat(data2.owed) || 0;
+          var cap2 = _computeProfitCap(stage2Payload.amount, owed2);
+          if (cap2 > 0){
+            try { await _appendPaymentToProfit(stage2Payload, cap2); } catch(_){}
+          }
+          await _carpayRecordPosting(cp, stage2Payload, {
+            status: 'posted',
+            target_tab: lk2.target_tab, target_row: lk2.target_row,
+            car_desc: lk2.car_desc
+          });
+          return { status: 'posted' };
+        }
+        console.warn('CarPay Stage-2 post failed, falling through:', data2);
+      } else if (stage2 && stage2.ambiguous){
+        // Customer has multiple active deals — Review card with their cars only.
+        var ambCands = stage2.ambiguous.map(function(l){
+          return { tab: l.target_tab, row: l.target_row, car_desc: l.car_desc, location: l.location, has_last: true, has_car: true };
+        });
+        var ambRid = await _carpayQueueReview(stage2Payload, 'multiple_customer_deals', ambCands);
+        await _carpayRecordPosting(cp, stage2Payload, { status: 'review', review_id: ambRid });
+        return { status: 'review' };
+      }
+    }
+  } catch(e){ console.warn('CarPay Stage-2 resolver errored, falling through:', e); }
 
   // Approve-first: queue every CarPay payment as a review with
   // any name candidates we can find. No alias short-circuit, no
@@ -17780,6 +17971,89 @@ async function _appendPaymentToDeals26Checked(payload){
   if (!lastName || !model) return { skipped: true };
   var loc = payload.location || 'DeBary';
   var noteLine = _paymentNoteLine(amt, payload);
+
+  // Stage-2 resolver. User-verified links (VIN / CarPay account /
+  // customer with 1 active deal) auto-post because they were picked
+  // explicitly — no fuzzy guessing. Approve-first still applies when
+  // the resolver comes back empty or ambiguous.
+  try {
+    var resolved = await _resolveCustomerDealLink(payload);
+    if (resolved && resolved.link){
+      var lk = resolved.link;
+      var dResp = await fetch(_SHEETS_URL, {
+        method: 'POST', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals26_append_payment_direct',
+          location: lk.location || loc,
+          data: {
+            tab: lk.target_tab, row: lk.target_row,
+            amount: amt, note_line: noteLine,
+            last_names: _paymentLastNames(payload.customer_name),
+            check_dup: true
+          }
+        })
+      });
+      var dData = null; try { dData = await dResp.json(); } catch(e){}
+      if (dData && dData.ok !== false){
+        if (dData.status === 'already_posted') return { skipped: true };
+        if (dData.status === 'possible_duplicate'){
+          try {
+            await sbPost('payment_reviews', {
+              payment_id: payload.id || null,
+              customer_name: payload.customer_name || '',
+              amount: amt,
+              vehicle_year: payload.vehicle_year || '',
+              vehicle_make: payload.vehicle_make || '',
+              vehicle_model: payload.vehicle_model || '',
+              vehicle_color: payload.vehicle_color || '',
+              vehicle_vin: payload.vehicle_vin || '',
+              location: lk.location || loc,
+              payment_date: payload.payment_date || null,
+              payment_method: payload.payment_method || '',
+              note_line: noteLine, reason: 'possible_duplicate',
+              candidates: JSON.stringify([{ tab: lk.target_tab, row: lk.target_row, car_desc: lk.car_desc }]),
+              status: 'pending', created_at: new Date().toISOString()
+            });
+          } catch(_){}
+          return { queued: true };
+        }
+        // matched — apply profit cap + post to Profit26
+        var dOwed = parseFloat(dData.owed) || 0;
+        var dProfitCap = _computeProfitCap(amt, dOwed);
+        if (dProfitCap > 0){
+          var pfPayload = Object.assign({}, payload, { location: lk.location || loc });
+          try { await _appendPaymentToProfit(pfPayload, dProfitCap); } catch(_){}
+        }
+        return { posted: true };
+      }
+      console.warn('Resolver post failed, falling back:', dData);
+    } else if (resolved && resolved.ambiguous){
+      // Customer owns multiple active deals — queue with JUST their cars.
+      try {
+        await sbPost('payment_reviews', {
+          payment_id: payload.id || null,
+          customer_name: payload.customer_name || '',
+          amount: amt,
+          vehicle_year: payload.vehicle_year || '',
+          vehicle_make: payload.vehicle_make || '',
+          vehicle_model: payload.vehicle_model || '',
+          vehicle_color: payload.vehicle_color || '',
+          vehicle_vin: payload.vehicle_vin || '',
+          location: loc,
+          payment_date: payload.payment_date || null,
+          payment_method: payload.payment_method || '',
+          note_line: noteLine,
+          reason: 'multiple_customer_deals',
+          candidates: JSON.stringify(resolved.ambiguous.map(function(l){
+            return { tab: l.target_tab, row: l.target_row, car_desc: l.car_desc, location: l.location, has_last: true, has_car: true };
+          })),
+          status: 'pending', created_at: new Date().toISOString()
+        });
+      } catch(_){}
+      return { queued: true };
+    }
+  } catch(e){ console.warn('Stage-2 resolver errored, falling through:', e); }
 
   // Approve-first: never auto-post. Queue a review card carrying the
   // full payload — reason 'approve_first' renders with an Approve
@@ -18427,6 +18701,18 @@ async function _reviewManualPost(id){
           source_review_id: id
         });
       } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+      // Stage-2: grow the resolver graph — every approved pick becomes a
+      // deal_link so future payments for this customer short-circuit the
+      // fuzzy matcher.
+      try {
+        await _upsertCustomerDealLink(
+          {
+            customer_name: r.customer_name, vehicle_vin: r.vehicle_vin,
+            carpay_account: r.carpay_account || null
+          },
+          { location: r.location, tab: tab, row: row, car_desc: label }
+        );
+      } catch(lkErr){ console.warn('deal_link upsert failed:', lkErr); }
       // CarPay stamp: if this review came from a CarPay payment,
       // record the (tab,row) target on its carpay_payment_postings
       // row so future payments for the same account auto-match.
@@ -18520,7 +18806,12 @@ async function _reviewApprove(id, candidateIdx){
         car_desc: c.car_desc || null,
         created_by: me ? me.name : '',
         source_review_id: id
-      }).catch(function(e){ console.warn('Alias save failed:', e); })
+      }).catch(function(e){ console.warn('Alias save failed:', e); }),
+      // Stage-2: grow the resolver graph on candidate approve too.
+      _upsertCustomerDealLink(
+        { customer_name: r.customer_name, vehicle_vin: r.vehicle_vin, carpay_account: r.carpay_account || null },
+        { location: aliasLoc, tab: aliasTab, row: aliasRow, car_desc: c.car_desc || null }
+      ).catch(function(e){ console.warn('deal_link upsert failed:', e); })
     ];
     var rAmt = parseFloat(r.amount) || 0;
     var profitCap = _computeProfitCap(rAmt, owed);
@@ -19014,6 +19305,13 @@ async function _reviewRematch(id, evt){
           source_review_id: id
         });
       } catch(aliasErr){ console.warn('Alias save failed:', aliasErr); }
+      // Stage-2: grow the resolver graph on rematch approve too.
+      try {
+        await _upsertCustomerDealLink(
+          { customer_name: r.customer_name, vehicle_vin: r.vehicle_vin, carpay_account: r.carpay_account || null },
+          { location: matchedLoc, tab: data.tab, row: data.row, car_desc: data.car_desc || null }
+        );
+      } catch(lkErr){ console.warn('deal_link upsert failed:', lkErr); }
       // CarPay stamp — future payments for the same account auto-match.
       try { await _patchCarPayPostingsForReview(id, data.tab, data.row, data.car_desc || null); }
       catch(e){ console.warn('CarPay alias stamp failed:', e); }
@@ -23240,6 +23538,7 @@ function deToggleOOS(id){
 
 async function dealEditSave(id){
   var d=_dealsData.find(function(x){return x.id===id;});
+  if(!d) d=(_dealsAllData||[]).find(function(x){return x.id===id;});
   if(!d)return;
   var btn=document.getElementById('de-save-'+id);
   if(btn){btn.textContent='Saving...';btn.disabled=true;btn.style.opacity='.5';}
