@@ -17692,6 +17692,7 @@ function _reviewRender(){
     html += '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;">';
     html += '<button onclick="_reviewRematch(' + r.id + ', event)" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
+    html += '<button onclick="_reviewRefreshCandidates(' + r.id + ', event)" title="Refresh the candidate list by scanning Deals26/25/24 across both locations for this surname" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:10px;color:#22c55e;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Refresh</button>';
     html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Manual</button>';
     html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
     html += '</div>';
@@ -18326,6 +18327,53 @@ function _showReviewToast(msg, durationMs){
 // Re-run the current matcher on a pending review item. Useful for items
 // stranded by older matcher versions (e.g. v46's early-shortcut that
 // skipped Deals25 when Deals26 had a partial). Behavior:
+// Refresh-only candidate lookup. Never posts, never auto-matches —
+// just scans Deals26/25/24 on both locations for rows with the review's
+// surname(s) and replaces the card's candidate list with fresh hits.
+// Covers CarPay no_vehicle cases and any card where the candidates went
+// stale after a sheet edit.
+async function _reviewRefreshCandidates(id, evt){
+  var r = _reviewData.find(function(x){ return x.id === id; });
+  if (!r) return;
+  var lastNames = _paymentLastNames(r.customer_name);
+  if (!lastNames.length) { alert('No surname on this review card — can\'t search.'); return; }
+
+  var btn = (evt && evt.target) ? evt.target : (typeof event !== 'undefined' && event.target ? event.target : null);
+  var origBtnText = null;
+  if (btn){
+    origBtnText = btn.textContent;
+    btn.textContent = 'Scanning…';
+    btn.disabled = true; btn.style.opacity = '0.55'; btn.style.cursor = 'wait';
+  }
+  var restoreBtn = function(){
+    if (btn){
+      btn.textContent = origBtnText || 'Refresh';
+      btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = 'pointer';
+    }
+  };
+
+  try {
+    var candidates = await _carpayFindNameCandidates(lastNames);
+    if (!candidates.length){
+      restoreBtn();
+      alert('No Deals rows found with surname(s): ' + lastNames.join(', '));
+      return;
+    }
+    // Persist the new candidates on the review row and refresh the card.
+    await sbPatch('payment_reviews', id, {
+      candidates: JSON.stringify(candidates),
+      reason: r.reason === 'no_vehicle' || r.reason === 'no_customer'
+        ? 'no_vehicle_name_matches'
+        : r.reason
+    });
+    _showReviewToast('Refreshed — ' + candidates.length + ' candidate(s).', 2500);
+    await _reviewLoad();
+  } catch(e){
+    restoreBtn();
+    alert('Refresh failed: ' + (e.message || e));
+  }
+}
+
 //   - Current matcher says 'matched' → auto-approve (post col G, gate
 //     Profit26 on col F, save alias, resolve review).
 //   - Still ambiguous → update the review's candidates/reason in place
