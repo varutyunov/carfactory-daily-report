@@ -81,10 +81,16 @@ async function main() {
 
   console.log('Total INSTOCK (both lots):', csvCars.length);
 
-  // Get ALL existing vehicles from Supabase
-  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color,miles');
+  // Get ALL existing vehicles from Supabase (include re_acquired so we can
+  // preserve cars that came back via the app's "Return to Inventory" button
+  // even though the back-office CSV still considers them sold).
+  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color,miles,re_acquired');
   const existingByVin = new Map(existing.filter(c => c.vin).map(c => [c.vin, c]));
   console.log('Currently in DB:', existing.length);
+  const reAcquiredVins = new Set(existing.filter(c => c.re_acquired).map(c => c.vin));
+  if (reAcquiredVins.size) {
+    console.log('Preserving re_acquired cars:', reAcquiredVins.size);
+  }
 
   // --- ADD NEW CARS (VIN not in DB) ---
   const toInsert = csvCars.filter(c => !existingByVin.has(c.vin));
@@ -126,6 +132,15 @@ async function main() {
     if (c.location && c.location !== ex.location) patch.location = c.location;
     if (c.stock && c.stock !== ex.stock) patch.stock = c.stock;
     if (c.miles && c.miles !== ex.miles) patch.miles = c.miles;
+    // If a re_acquired car shows up in the CSV again, the back-office has
+    // re-listed it — clear the re_acquired flag so it behaves like a normal
+    // car going forward.
+    if (ex.re_acquired) {
+      patch.re_acquired = false;
+      patch.re_acquired_reason = null;
+      patch.re_acquired_at = null;
+      patch.re_acquired_from_deal_id = null;
+    }
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
@@ -145,6 +160,10 @@ async function main() {
     if (!c.vin) return false;
     if (allCsvVins.has(c.vin)) return false;
     if (activeAssignments.has(c.id)) return false;
+    // Preserve cars returned to inventory via the app's "Return to Inventory"
+    // button (deals that fell through, repossessions). Back-office CSV still
+    // has them as sold, but they're physically on the lot.
+    if (c.re_acquired) return false;
     return true;
   });
 

@@ -22648,6 +22648,21 @@ function openDealDetail(id) {
     html += '</div>';
   }
 
+  // Return to Inventory — for deals that fell through or cars we repossessed.
+  // Re-adds the car to the searchable inventory with re_acquired=true so the
+  // nightly inventory-sync workflow doesn't wipe it. Doesn't touch payments
+  // or Profit26 entries (per Vlad's rule: keep what we already collected).
+  var hasVin = !!(d.vin && String(d.vin).trim());
+  if (hasVin){
+    html += '<div style="margin-top:10px;">';
+    if (d.voided_reason){
+      html += '<div style="padding:12px 14px;background:#1a1000;border:1px solid #f59e0b;border-radius:14px;color:#f59e0b;font-size:13px;font-weight:600;text-align:center;">Already returned to inventory — ' + _escHtml(d.voided_reason) + '</div>';
+    } else {
+      html += '<button id="deal-return-btn" onclick="dealReturnConfirm('+d.id+')" style="width:100%;padding:14px;background:none;border:1px solid #3a2a1a;border-radius:14px;color:#f59e0b;font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;">Return Car to Inventory</button>';
+    }
+    html += '</div>';
+  }
+
   // Delete
   html += '<button id="deal-delete-btn" onclick="dealDeleteConfirm('+d.id+')" style="width:100%;margin-top:10px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Deal</button>';
 
@@ -22678,6 +22693,88 @@ function dealDeleteConfirm(id) {
   btn.style.color = '#fff';
   btn.style.borderColor = '#ef4444';
   btn.onclick = function(){ dealDeleteFinal(id); };
+}
+
+// Return to Inventory — opens a small reason picker inline, then:
+//   1. inserts/upserts a row in `inventory` keyed by VIN, marked
+//      re_acquired=true so the nightly inventory-sync preserves it
+//   2. marks the deal as voided_reason=<reason> so subsequent paperwork
+//      knows this deal ended with the car coming back
+//   3. leaves col G / Profit26 / payments alone (per Vlad's rule)
+function dealReturnConfirm(id) {
+  var btn = document.getElementById('deal-return-btn');
+  if (!btn) return;
+  btn.outerHTML =
+    '<div id="deal-return-picker" style="background:#1a1000;border:1px solid #3a2a1a;border-radius:14px;padding:14px;">' +
+      '<div style="font-size:11px;color:#f59e0b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Why is this car coming back?</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;">' +
+        '<button onclick="dealReturnFinal('+id+',\'deal_fell_through\')" style="padding:12px;background:#0a0a0a;border:1px solid #333;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;">Deal fell through</button>' +
+        '<button onclick="dealReturnFinal('+id+',\'repossession\')" style="padding:12px;background:#0a0a0a;border:1px solid #333;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;">Repossession</button>' +
+        '<button onclick="dealReturnFinal('+id+',\'other\')" style="padding:12px;background:#0a0a0a;border:1px solid #333;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;">Other</button>' +
+        '<button onclick="openDealDetail('+id+')" style="padding:10px;background:none;border:none;color:#666;font-size:13px;cursor:pointer;margin-top:4px;">Cancel</button>' +
+      '</div>' +
+    '</div>';
+}
+
+async function dealReturnFinal(id, reason) {
+  var picker = document.getElementById('deal-return-picker');
+  if (picker) picker.innerHTML =
+    '<div style="padding:18px;text-align:center;color:#f59e0b;font-size:14px;font-weight:600;">Returning car to inventory…</div>';
+  var d = _dealsData.find(function(x){ return x.id === id; }) ||
+          (_dealsAllData||[]).find(function(x){ return x.id === id; });
+  if (!d) { if (picker) picker.innerHTML = '<div style="padding:12px;color:#ef4444;">Deal not found.</div>'; return; }
+  var vin = String(d.vin || '').trim().toUpperCase();
+  if (!vin) { if (picker) picker.innerHTML = '<div style="padding:12px;color:#ef4444;">No VIN on this deal — cannot re-add to inventory.</div>'; return; }
+
+  var now = new Date().toISOString();
+  var year = '', make = '', model = '';
+  var desc = String(d.vehicle_desc || '').trim();
+  if (desc){
+    var toks = desc.split(/\s+/);
+    if (/^\d{4}$/.test(toks[0])){ year = toks[0]; make = toks[1] || ''; model = toks.slice(2).join(' '); }
+    else { make = toks[0] || ''; model = toks.slice(1).join(' '); }
+  }
+  var invRow = {
+    vin: vin,
+    name: ((year ? year + ' ' : '') + (make ? make + ' ' : '') + model).trim() || desc || 'Recovered',
+    stock: d.stock || null,
+    color: d.color ? String(d.color).toUpperCase() : null,
+    miles: d.miles || null,
+    location: d.location || 'DeBary',
+    re_acquired: true,
+    re_acquired_reason: reason,
+    re_acquired_at: now,
+    re_acquired_from_deal_id: id
+  };
+
+  try {
+    // Upsert inventory row keyed by VIN. If an old row exists (edge case),
+    // flip its fields; otherwise insert fresh.
+    var existing = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
+    if (Array.isArray(existing) && existing.length){
+      await fetch(SB_URL + '/rest/v1/inventory?id=eq.' + existing[0].id, {
+        method: 'PATCH',
+        headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(invRow)
+      });
+    } else {
+      await sbPost('inventory', invRow);
+    }
+
+    // Mark the deal as voided with the reason; keep all payment/Profit data.
+    await sbPatch('deals', id, { voided_reason: reason, voided_at: now });
+
+    // Update local cache so UI reflects it
+    d.voided_reason = reason;
+    d.voided_at = now;
+
+    if (picker) picker.outerHTML =
+      '<div style="padding:12px 14px;background:#1a1000;border:1px solid #f59e0b;border-radius:14px;color:#f59e0b;font-size:13px;font-weight:600;text-align:center;">' +
+      'Returned to inventory ✓ — ' + _escHtml(reason.replace(/_/g, ' ')) + '</div>';
+  } catch(e){
+    if (picker) picker.innerHTML =
+      '<div style="padding:12px;color:#ef4444;font-size:13px;">Return failed: ' + _escHtml(e.message || '') + '</div>';
+  }
 }
 
 async function dealDeleteFinal(id) {
