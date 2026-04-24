@@ -17689,6 +17689,18 @@ function _reviewRender(){
     html += '<div style="font-size:11px;color:' + reasonColor + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">' + _escHtml(reasonLabel) + '</div>';
     html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || '') + '</div>';
     html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
+    // Vehicle info from the payment record — helps spot when CarPay
+    // didn't send vehicle details (empty line) vs a mismatch between
+    // the payment's car and the candidate deals.
+    var vehBits = [r.vehicle_year, r.vehicle_make, r.vehicle_model, r.vehicle_color].filter(function(x){ return x && String(x).trim(); });
+    var vinBit = r.vehicle_vin ? String(r.vehicle_vin).trim() : '';
+    if (vehBits.length || vinBit){
+      html += '<div style="font-size:11px;color:#666;margin-top:2px;">' +
+              (vehBits.length ? _escHtml(vehBits.join(' ')) : '<span style="color:#f59e0b;">no vehicle on payment</span>') +
+              (vinBit ? ' · VIN ' + _escHtml(vinBit.slice(-6)) : '') + '</div>';
+    } else {
+      html += '<div style="font-size:11px;color:#f59e0b;margin-top:2px;">no vehicle on payment — use Refresh to pull candidates by surname</div>';
+    }
     html += '</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;">';
     html += '<button onclick="_reviewRematch(' + r.id + ', event)" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
@@ -18353,20 +18365,56 @@ async function _reviewRefreshCandidates(id, evt){
   };
 
   try {
-    var candidates = await _carpayFindNameCandidates(lastNames);
-    if (!candidates.length){
+    // Scan ALL rows with this surname (including paid-off deals — user
+    // may be paying on overpayment refund or the scan itself may have
+    // shifted col F. Better to show too many than hide the right one.)
+    var resp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals_lookup_by_lastname',
+        location: 'DeBary',
+        data: { last_names: lastNames, owed_positive_only: false, limit: 40 }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(e){}
+    var fresh = (data && data.ok && Array.isArray(data.candidates)) ? data.candidates : [];
+    if (!fresh.length){
       restoreBtn();
       alert('No Deals rows found with surname(s): ' + lastNames.join(', '));
       return;
     }
-    // Persist the new candidates on the review row and refresh the card.
+
+    // UNION with existing candidates — Refresh never drops a row that
+    // was already on the card (prevents accidental loss of the correct
+    // match from a mis-tap). Dedupe by (location, tab, row).
+    var existing = [];
+    try {
+      var parsed = typeof r.candidates === 'string' ? JSON.parse(r.candidates || '[]') : (r.candidates || []);
+      if (Array.isArray(parsed)) existing = parsed;
+    } catch(e){}
+    var seen = {};
+    var merged = [];
+    existing.concat(fresh).forEach(function(c){
+      var key = (c.location || '') + '|' + (c.tab || '') + '|' + (c.row || '');
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push({
+        tab: c.tab, row: c.row, car_desc: c.car_desc,
+        location: c.location, owed: c.owed,
+        has_last: true, has_car: !!c.has_car
+      });
+    });
+
     await sbPatch('payment_reviews', id, {
-      candidates: JSON.stringify(candidates),
+      candidates: JSON.stringify(merged),
       reason: r.reason === 'no_vehicle' || r.reason === 'no_customer'
         ? 'no_vehicle_name_matches'
         : r.reason
     });
-    _showReviewToast('Refreshed — ' + candidates.length + ' candidate(s).', 2500);
+    var addedCount = merged.length - existing.length;
+    _showReviewToast('Refreshed — ' + merged.length + ' candidate(s)' +
+                     (addedCount > 0 ? ' (+' + addedCount + ' new)' : ''), 2500);
     await _reviewLoad();
   } catch(e){
     restoreBtn();
