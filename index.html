@@ -1065,6 +1065,7 @@ body.light .cal-fab{background:#4488ff !important;}
     <div style="padding:12px 12px 0;display:flex;flex-direction:column;gap:8px;">
       <button onclick="runPaymentBackfill()" title="Sweep all existing scanned payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill scanned payments</button>
       <button onclick="processCarPayPaymentsUI()" title="Route any unprocessed CarPay portal payments through the matcher (posts confident, queues uncertain for review)" style="width:100%;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Process CarPay payments</button>
+      <button onclick="cpCustOpen()" title="Edit the vehicle for each CarPay customer so future payments come in with year/make/model pre-filled" style="width:100%;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:10px;color:#a78bfa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">CarPay customers</button>
     </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
@@ -1521,6 +1522,18 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
   <div id="cust-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading customers...</div>
+  </div>
+</div>
+
+<!-- CARPAY CUSTOMERS — edit vehicle per account -->
+<div id="cpcust-overlay" style="display:none;position:fixed;inset:0;z-index:8820;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:8830;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="cpCustClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">CARPAY CUSTOMERS</span>
+    <button onclick="cpCustToggleFilter()" id="cpcust-filter-btn" style="background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.4);border-radius:8px;color:#60a5fa;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Empty only</button>
+  </div>
+  <div id="cpcust-body" style="padding-top:66px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading...</div>
   </div>
 </div>
 
@@ -16586,6 +16599,124 @@ function _carpayParseDate(s){
 }
 
 // "2015 Chevrolet Camaro" → { year, make, model }. Best-effort.
+// ══════════════════════════════════════════════════════════════
+// CarPay Customer manager — edit the `vehicle` field per account
+// so future CarPay payments come in with year/make/model pre-filled
+// via _carpayPaymentToPayload → _carpayParseVehicle.
+// ══════════════════════════════════════════════════════════════
+var _cpCustData = [];
+var _cpCustFilterEmpty = true;
+
+async function cpCustOpen(){
+  document.getElementById('cpcust-overlay').style.display = 'flex';
+  document.getElementById('cpcust-body').innerHTML =
+    '<div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading…</div>';
+  try {
+    var rows = await sbGet('carpay_customers', 'select=account,name,vehicle,location&order=name.asc&limit=5000');
+    _cpCustData = rows || [];
+  } catch(e){
+    document.getElementById('cpcust-body').innerHTML =
+      '<div style="padding:20px;color:#ef4444;">Failed to load: ' + _escHtml(e.message || '') + '</div>';
+    return;
+  }
+  cpCustRender();
+}
+
+function cpCustClose(){
+  document.getElementById('cpcust-overlay').style.display = 'none';
+}
+
+function cpCustToggleFilter(){
+  _cpCustFilterEmpty = !_cpCustFilterEmpty;
+  var btn = document.getElementById('cpcust-filter-btn');
+  if (btn) btn.textContent = _cpCustFilterEmpty ? 'Empty only' : 'Show all';
+  cpCustRender();
+}
+
+function cpCustRender(){
+  var rows = _cpCustFilterEmpty
+    ? _cpCustData.filter(function(c){ return !c.vehicle || !String(c.vehicle).trim(); })
+    : _cpCustData;
+  var total = _cpCustData.length;
+  var empty = _cpCustData.filter(function(c){ return !c.vehicle || !String(c.vehicle).trim(); }).length;
+  var html = '<div style="padding:12px;">';
+  html += '<div style="font-size:11px;color:#666;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">' +
+          total + ' customers · ' + empty + ' without vehicle · showing ' + rows.length + '</div>';
+  html += '<div style="font-size:11px;color:#666;margin-bottom:12px;line-height:1.5;">Edit each vehicle as <strong style="color:#a78bfa;">YYYY Make Model</strong> (e.g. 2017 Ford Expedition). Saved values are pulled into new CarPay payments automatically so the matcher has year + model from the start.</div>';
+  if (!rows.length){
+    html += '<div style="padding:24px;text-align:center;color:#555;">' +
+            (_cpCustFilterEmpty ? 'Nothing to fill in — every customer has a vehicle.' : 'No CarPay customers loaded.') +
+            '</div>';
+    html += '</div>';
+    document.getElementById('cpcust-body').innerHTML = html;
+    return;
+  }
+  rows.forEach(function(c){
+    var accEsc = _escHtml(c.account || '');
+    var nameEsc = _escHtml(c.name || '');
+    var locEsc = _escHtml(c.location || '');
+    var veh = c.vehicle || '';
+    var hasVeh = !!(veh && String(veh).trim());
+    var borderColor = hasVeh ? '#1e1e1e' : '#f59e0b';
+    html += '<div id="cpcust-row-' + accEsc + '-' + locEsc + '" style="background:#0d0d0d;border:1px solid ' + borderColor + ';border-radius:12px;padding:12px;margin-bottom:8px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px;">';
+    html += '<div style="font-size:14px;color:#fff;font-weight:700;">' + nameEsc + '</div>';
+    html += '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;">#' + accEsc + ' · ' + locEsc + '</div>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input id="cpcust-veh-' + accEsc + '-' + locEsc + '" type="text" value="' + _escHtml(veh) + '" placeholder="YYYY Make Model" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:8px 10px;font-size:13px;outline:none;"/>';
+    html += '<button onclick="cpCustSave(\'' + accEsc + '\',\'' + locEsc + '\', this)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;color:#a78bfa;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Save</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('cpcust-body').innerHTML = html;
+}
+
+async function cpCustSave(account, location, btn){
+  var inp = document.getElementById('cpcust-veh-' + account + '-' + location);
+  if (!inp) return;
+  var val = inp.value.trim();
+  var origText = btn ? btn.textContent : 'Save';
+  if (btn){ btn.textContent = 'Saving…'; btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    var params = 'account=eq.' + encodeURIComponent(account) + '&location=eq.' + encodeURIComponent(location);
+    var resp = await fetch(SB_URL + '/rest/v1/carpay_customers?' + params, {
+      method: 'PATCH',
+      headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ vehicle: val || null })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Update local cache
+    for (var i = 0; i < _cpCustData.length; i++){
+      if (_cpCustData[i].account === account && _cpCustData[i].location === location){
+        _cpCustData[i].vehicle = val || null;
+        break;
+      }
+    }
+    if (btn){
+      btn.textContent = 'Saved';
+      btn.style.background = 'rgba(34,197,94,.15)';
+      btn.style.borderColor = 'rgba(34,197,94,.4)';
+      btn.style.color = '#22c55e';
+      setTimeout(function(){
+        if (_cpCustFilterEmpty && val) {
+          cpCustRender(); // filter will hide the now-filled row
+        } else {
+          btn.textContent = origText;
+          btn.disabled = false; btn.style.opacity = '';
+          btn.style.background = 'rgba(139,92,246,.15)';
+          btn.style.borderColor = 'rgba(139,92,246,.4)';
+          btn.style.color = '#a78bfa';
+        }
+      }, 800);
+    }
+  } catch(e){
+    alert('Save failed: ' + (e.message || e));
+    if (btn){ btn.textContent = origText; btn.disabled = false; btn.style.opacity = ''; }
+  }
+}
+
 function _carpayParseVehicle(s){
   s = String(s || '').trim();
   if (!s) return { year: '', make: '', model: '' };
