@@ -1,3 +1,15 @@
+# STANDING RULE — NO AUTO-POSTING (set 2026-04-24)
+
+**Nothing posts to Deals26, Profit26, or any Google Sheet without Vlad tapping Approve in the Review tab.**
+
+This applies to every automated flow: CarPay payments, scanned payments, Re-process pending, and anything built in the future. Do not add auto-posting logic unless Vlad explicitly says otherwise.
+
+The only exception: the Stage-2 deal_link path in `_appendCarPayPaymentToDeals26` for CarPay accounts that were previously approved by Vlad (this predates the rule and he has accepted it).
+
+`_APPROVE_FIRST_MODE = true` — do not change this flag.
+
+---
+
 # Handoff — Car Factory session of 2026-04-20 → 23
 
 > Day 1 (Apr 20–21): inventory/deals26 sync fixes, Payroll tab, Profit

@@ -154,6 +154,20 @@ _payBreakdown         — {cash, card, check, other, total}
 - Every modal/overlay MUST have a back/close button
 - `syncFromSupabase()` — pull all data, called after login and periodically
 
+## ABSOLUTE RULE: No Auto-Posting — Everything Goes Through Review
+
+**All payment automation MUST queue a Review card and wait for Vlad's explicit approval tap before writing anything to Deals26, Profit26, or any Google Sheet.**
+
+This is a standing owner directive as of 2026-04-24. It applies to:
+- CarPay payments (all, including accounts with known deal_links via Stage-2)
+- Scanned payments
+- Re-process pending (may auto-post for previously-approved deal_link accounts only — all other matches go to card for approval)
+- Any new automated flow added in the future
+
+**Do NOT add auto-posting logic** to any function unless Vlad explicitly says "you can auto-post now." The single exception is the Stage-2 deal_link path in `_appendCarPayPaymentToDeals26` (live CarPay sync for accounts previously approved by Vlad — this was already working before APPROVE_FIRST_MODE and Vlad has accepted it). Everything else must queue and wait.
+
+`_APPROVE_FIRST_MODE = true` is the enforcing flag. Do not set it to false.
+
 ## ABSOLUTE RULE: Never Delete Working Code
 
 **NEVER delete, replace, or overwrite existing working functions.** The user has never asked to delete code. Every function in the app was built for a reason and must be preserved. Violations of this rule have caused repeated loss of critical features.
