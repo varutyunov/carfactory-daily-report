@@ -1693,7 +1693,7 @@ body.light .cal-fab{background:#4488ff !important;}
       <div style="position:absolute;inset:0;pointer-events:none;box-shadow:0 0 0 2px rgba(167,139,250,.7) inset;border-radius:14px;"></div>
     </div>
     <div style="margin:12px 0 6px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;">Zoom</div>
-    <input id="icon-crop-zoom" type="range" min="100" max="300" value="100" style="width:100%;accent-color:#a78bfa;"/>
+    <input id="icon-crop-zoom" type="range" min="40" max="300" value="100" style="width:100%;accent-color:#a78bfa;"/>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button onclick="iconCropCancel()" style="flex:1;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
       <button onclick="iconCropSave()" style="flex:2;padding:12px;background:linear-gradient(145deg,#0a0a2a,#2a2a6a);border:1px solid rgba(167,139,250,.4);border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;">Save Photo</button>
@@ -10384,6 +10384,11 @@ function iconCropSave(){
   var ctx = canvas.getContext('2d');
   var img = new Image();
   img.onload = function(){
+    // Background fill — matches the empty tile state so zoomed-out photos
+    // get a dark letterbox instead of a black blob when parts of the
+    // source rect fall outside the image bounds.
+    ctx.fillStyle = '#141414';
+    ctx.fillRect(0, 0, out, out);
     ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, out, out);
     var jpg = canvas.toDataURL('image/jpeg', 0.9);
     var cb = _iconCrop.saveCb;
