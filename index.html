@@ -22401,7 +22401,18 @@ function openDealDetail(id) {
   html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
   if(d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
-  if(d.color) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Color: '+fixColor(d.color)+'</div>';
+  // Color — click to edit. Covers cases where the VIN decoder got it wrong
+  // (e.g. factory color vs repaint) or a blank was left on upload.
+  var colorDisplay = d.color ? fixColor(d.color) : '(not set)';
+  html += '<div id="deal-color-display-'+d.id+'" style="font-size:12px;color:#666;margin-top:2px;display:flex;align-items:center;gap:6px;">';
+  html += '<span>Color: <span style="color:#ccc;">'+_escHtml(colorDisplay)+'</span></span>';
+  html += '<button onclick="dealColorEditOpen('+d.id+')" style="background:none;border:none;color:#60a5fa;font-size:11px;font-weight:600;cursor:pointer;padding:2px 6px;text-decoration:underline;-webkit-tap-highlight-color:transparent;">edit</button>';
+  html += '</div>';
+  html += '<div id="deal-color-edit-'+d.id+'" style="display:none;margin-top:6px;gap:6px;">';
+  html += '<input id="deal-color-input-'+d.id+'" type="text" value="'+_escHtml(d.color||'')+'" placeholder="e.g. Silver" style="flex:1;background:#0a0a0a;border:1px solid #1e3a5f;border-radius:8px;color:#fff;padding:8px 10px;font-size:13px;outline:none;"/>';
+  html += '<button onclick="dealColorSave('+d.id+')" style="background:#1d4ed8;border:none;border-radius:8px;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>';
+  html += '<button onclick="dealColorEditCancel('+d.id+')" style="background:none;border:1px solid #333;border-radius:8px;color:#888;padding:8px 12px;font-size:12px;cursor:pointer;">Cancel</button>';
+  html += '</div>';
   html += '</div>';
 
   // GPS Serial + GPS Uploaded toggle + Pick Up Payment (finance only)
@@ -22701,6 +22712,69 @@ function dealDeleteConfirm(id) {
 //   2. marks the deal as voided_reason=<reason> so subsequent paperwork
 //      knows this deal ended with the car coming back
 //   3. leaves col G / Profit26 / payments alone (per Vlad's rule)
+// Inline color editor — for when the VIN decoder got the color wrong
+// or it was left blank at upload. Updates deals.color + inventory.color
+// (keyed by VIN) so both places stay in sync. The deals26 sheet car_desc
+// has the color embedded in text — not overwritten here; Vlad edits those
+// on the sheet if needed.
+function dealColorEditOpen(id){
+  var disp = document.getElementById('deal-color-display-'+id);
+  var edit = document.getElementById('deal-color-edit-'+id);
+  if (!disp || !edit) return;
+  disp.style.display = 'none';
+  edit.style.display = 'flex';
+  var inp = document.getElementById('deal-color-input-'+id);
+  if (inp){ inp.focus(); inp.select(); }
+}
+
+function dealColorEditCancel(id){
+  var disp = document.getElementById('deal-color-display-'+id);
+  var edit = document.getElementById('deal-color-edit-'+id);
+  if (!disp || !edit) return;
+  edit.style.display = 'none';
+  disp.style.display = 'flex';
+}
+
+async function dealColorSave(id){
+  var inp = document.getElementById('deal-color-input-'+id);
+  if (!inp) return;
+  var newColor = String(inp.value || '').trim();
+  var d = _dealsData.find(function(x){ return x.id === id; }) ||
+          (_dealsAllData||[]).find(function(x){ return x.id === id; });
+  if (!d) return;
+  var saveBtn = inp.nextElementSibling;
+  var origTxt = saveBtn ? saveBtn.textContent : 'Save';
+  if (saveBtn){ saveBtn.textContent = 'Saving…'; saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; }
+  try {
+    await sbPatch('deals', id, { color: newColor || null });
+    // Also update inventory row (if the car is currently in inventory) — keyed by VIN.
+    var vin = String(d.vin || '').trim().toUpperCase();
+    if (vin){
+      try {
+        await fetch(SB_URL + '/rest/v1/inventory?vin=eq.' + encodeURIComponent(vin), {
+          method: 'PATCH',
+          headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ color: newColor ? newColor.toUpperCase() : null })
+        });
+      } catch(ie){ console.warn('inventory color patch failed:', ie); }
+    }
+    d.color = newColor || null;
+    // Re-render the Color display row
+    var disp = document.getElementById('deal-color-display-'+id);
+    if (disp){
+      disp.innerHTML =
+        '<span>Color: <span style="color:#ccc;">'+_escHtml(newColor ? fixColor(newColor) : '(not set)')+'</span></span>' +
+        '<button onclick="dealColorEditOpen('+id+')" style="background:none;border:none;color:#60a5fa;font-size:11px;font-weight:600;cursor:pointer;padding:2px 6px;text-decoration:underline;-webkit-tap-highlight-color:transparent;">edit</button>';
+      disp.style.display = 'flex';
+    }
+    var edit = document.getElementById('deal-color-edit-'+id);
+    if (edit) edit.style.display = 'none';
+  } catch(e){
+    if (saveBtn){ saveBtn.textContent = origTxt; saveBtn.disabled = false; saveBtn.style.opacity = ''; }
+    alert('Color save failed: ' + (e.message || e));
+  }
+}
+
 function dealReturnConfirm(id) {
   var btn = document.getElementById('deal-return-btn');
   if (!btn) return;
