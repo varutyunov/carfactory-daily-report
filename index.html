@@ -18466,7 +18466,7 @@ function _reviewRender(){
       html += '<div id="rv-card-' + r.id + '" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;transition:opacity .2s, transform .2s;">';
       html += '<div style="font-size:11px;color:' + tint + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>';
       html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
-      html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · <span style="color:#4ade80;">Lot: ' + _escHtml(r.location || '') + '</span> · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
 
       // Snapshot block — what was linked at the moment this review
       // was queued. This is the durable memory the approval will
@@ -18561,7 +18561,7 @@ function _reviewRender(){
     html += '<div style="flex:1;">';
     html += '<div style="font-size:11px;color:' + reasonColor + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">' + _escHtml(reasonLabel) + '</div>';
     html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || '') + '</div>';
-    html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · Pay: ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
     // Vehicle info from the payment record — helps spot when CarPay
     // didn't send vehicle details (empty line) vs a mismatch between
     // the payment's car and the candidate deals.
@@ -18585,6 +18585,12 @@ function _reviewRender(){
     // Manual-assign inline form (hidden until user taps Manual)
     html += '<div id="rv-manual-' + r.id + '" style="display:none;background:#091220;border:1px solid #1e3a5f;border-radius:12px;padding:12px;margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Manual assignment</div>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
+    html += '<select id="rv-mloc-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e3a5f;border-radius:10px;color:#60a5fa;padding:10px;font-size:14px;outline:none;appearance:auto;font-weight:700;">';
+    html += '<option value="DeBary"' + (r.location !== 'DeLand' ? ' selected' : '') + '>DeBary</option>';
+    html += '<option value="DeLand"' + (r.location === 'DeLand' ? ' selected' : '') + '>DeLand</option>';
+    html += '</select>';
+    html += '</div>';
     html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
     html += '<select id="rv-mtab-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;appearance:auto;">';
     html += '<option value="Deals26">Deals26</option><option value="Deals25">Deals25</option><option value="Deals24">Deals24</option>';
@@ -18620,7 +18626,7 @@ function _reviewRender(){
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:10px 12px;">';
         html += '<div style="flex:1;min-width:0;">';
         html += '<div style="font-size:13px;color:#fff;">' + _escHtml(c.car_desc || '') + tabTag + partialTags + '</div>';
-        html += '<div style="font-size:11px;color:#666;margin-top:2px;">row ' + (c.row || '?') + '</div>';
+        html += '<div style="font-size:11px;color:#666;margin-top:2px;">' + (c.location ? '<span style="color:#60a5fa;">' + _escHtml(c.location) + '</span> · ' : '') + 'row ' + (c.row || '?') + '</div>';
         html += '</div>';
         html += '<button onclick="_reviewApprove(' + r.id + ',' + ci + ')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve</button>';
         html += '</div>';
@@ -18682,6 +18688,7 @@ async function _reviewManualPost(id){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
   var tab = (document.getElementById('rv-mtab-' + id) || {}).value || 'Deals26';
+  var manualLoc = ((document.getElementById('rv-mloc-' + id) || {}).value) || r.location || 'DeBary';
   var rawRow = (document.getElementById('rv-mrow-' + id) || {}).value;
   var row = rawRow === '' || rawRow == null ? 0 : parseInt(rawRow, 10);
   var label = ((document.getElementById('rv-mlabel-' + id) || {}).value || '').trim();
@@ -18722,7 +18729,7 @@ async function _reviewManualPost(id){
 
   var confirmMsg;
   if (profitOnly){
-    confirmMsg = 'Profit26-only post: $' + amt + ' for ' + r.location + '\n\nNote: "' + noteLine + '"\n\nNo Deals tab row will be written. No alias will be saved (can\'t remember without a row).';
+    confirmMsg = 'Profit26-only post: $' + amt + ' for ' + manualLoc + '\n\nNote: "' + noteLine + '"\n\nNo Deals tab row will be written. No alias will be saved (can\'t remember without a row).';
   } else {
     confirmMsg = 'Post $' + amt + ' to ' + tab + ' row ' + row + '?\n\nNote: "' + noteLine + '"\n\nThis row will also be remembered for future payments with the same customer + car.';
   }
@@ -18738,7 +18745,7 @@ async function _reviewManualPost(id){
         body: JSON.stringify({
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
-          location: r.location,
+          location: manualLoc,
           data: { tab: tab, row: row, amount: amt, note_line: noteLine, check_dup: true }
         })
       });
@@ -18752,7 +18759,7 @@ async function _reviewManualPost(id){
           body: JSON.stringify({
             secret: _SHEETS_SECRET,
             action: 'deals26_append_payment_direct',
-            location: r.location,
+            location: manualLoc,
             data: { tab: tab, row: row, amount: amt, note_line: noteLine }
           })
         });
@@ -18780,7 +18787,7 @@ async function _reviewManualPost(id){
           customer_name: r.customer_name, amount: r.amount,
           vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
           vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
-          vehicle_vin: r.vehicle_vin, location: r.location,
+          vehicle_vin: r.vehicle_vin, location: manualLoc,
           payment_date: r.payment_date
         }, ovr);
       } catch(ep){ console.warn('Profit26 post failed:', ep); }
@@ -18796,7 +18803,7 @@ async function _reviewManualPost(id){
           vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
           customer_name_lower: _paymentLastName(r.customer_name) || null,
           vehicle_model_lower: (r.vehicle_model || '').toLowerCase().trim() || null,
-          location: r.location,
+          location: manualLoc,
           target_tab: tab,
           target_row: row,
           car_desc: label,
@@ -18813,7 +18820,7 @@ async function _reviewManualPost(id){
             customer_name: r.customer_name, vehicle_vin: r.vehicle_vin,
             carpay_account: r.carpay_account || null
           },
-          { location: r.location, tab: tab, row: row, car_desc: label }
+          { location: manualLoc, tab: tab, row: row, car_desc: label }
         );
       } catch(lkErr){ console.warn('deal_link upsert failed:', lkErr); }
       // CarPay stamp: if this review came from a CarPay payment,
@@ -18853,7 +18860,7 @@ async function _reviewApprove(id, candidateIdx){
   var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
   var aliasCust = _paymentLastName(r.customer_name);
   var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
-  var aliasLoc = r.location;
+  var aliasLoc = c.location || r.location;
   var aliasTab = c.tab || 'Deals26';
   var aliasRow = c.row;
 
