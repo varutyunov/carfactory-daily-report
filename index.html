@@ -1654,7 +1654,7 @@ body.light .cal-fab{background:#4488ff !important;}
         <button onclick="caAddNote()" style="background:#64d2ff;border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;cursor:pointer;padding:0 16px;flex-shrink:0;">Send</button>
       </div>
     </div>
-    <div class="ca-grid" style="display:none;"><!-- HIDDEN: assign feature disabled for now -->
+    <div class="ca-grid">
       <div class="ca-tile" style="background:linear-gradient(145deg,#1c0800,#4a1500,#7c2800);box-shadow:0 6px 28px rgba(251,146,60,0.28),0 10px 40px rgba(0,0,0,0.7);" onclick="openCarAssign('repair')">
         <svg viewBox="0 0 24 24" fill="none" stroke="rgba(251,146,60,0.9)" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
         <span class="ca-tile-label">Repair</span>
@@ -7557,7 +7557,8 @@ function openCarActions(carId){
   var rows = [];
   if(car.stock) rows.push('<span style="font-size:12px;color:#666;">Stock # <span style="color:#aaa;font-weight:600;">'+car.stock+'</span></span>');
   if(car.vin) rows.push('<span style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">VIN <span style="color:#aaa;font-weight:600;letter-spacing:.5px;">'+car.vin+'</span><button data-vin="'+car.vin+'" onclick="event.stopPropagation();copyVin(this)" style="background:rgba(255,255,255,.07);border:1px solid #2a2a2a;color:#555;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;-webkit-tap-highlight-color:transparent;">Copy</button></span>');
-  if(car.color) rows.push('<span style="font-size:12px;color:#666;">Color <span style="color:#aaa;font-weight:600;">'+car.color+'</span></span>');
+  var _colTxt = car.color ? _escHtml(car.color) : '<span style="color:#555;">(not set)</span>';
+  rows.push('<span id="ca-color-row" style="font-size:12px;color:#666;display:flex;align-items:center;gap:6px;">Color <span style="color:#aaa;font-weight:600;">'+_colTxt+'</span><button onclick="event.stopPropagation();caColorEditOpen('+carId+')" style="background:rgba(255,255,255,.05);border:1px solid #2a2a2a;color:#60a5fa;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;-webkit-tap-highlight-color:transparent;">Edit</button></span>');
   var milesVal=car.miles!=null?car.miles:getCarMiles(car.id);
   if(milesVal) rows.push('<span style="font-size:12px;color:#666;">Miles <span style="color:#aaa;font-weight:600;">'+Number(milesVal).toLocaleString()+'</span></span>');
   if(car.location) rows.push('<span style="font-size:12px;color:#666;">Location <span style="color:#aaa;font-weight:600;">'+car.location+'</span></span>');
@@ -7593,6 +7594,46 @@ function openCarActions(carId){
 function closeCarActions(){
   document.getElementById('m-car-actions').style.display = 'none';
   caCarId = null;
+}
+
+// Color edit from the inventory tile popup. Mirror of the deal-detail
+// inline editor — prompts for a new color, patches Supabase inventory,
+// updates local S.inventory + localStorage colormap, then refreshes the
+// popup so the new value shows immediately.
+async function caColorEditOpen(carId){
+  var car = S.inventory.find(function(c){ return c.id === carId; });
+  if (!car) return;
+  var current = car.color || '';
+  var next = prompt('Color for ' + car.name + ':', current);
+  if (next === null) return; // cancel
+  next = String(next).trim();
+  if (next === current) return; // no change
+  try {
+    await sbPatch('inventory', carId, { color: next ? next.toUpperCase() : null });
+    // Keep the deal's color in sync too (keyed by VIN, if any)
+    if (car.vin){
+      try {
+        await fetch(SB_URL + '/rest/v1/deals?vin=eq.' + encodeURIComponent(car.vin), {
+          method: 'PATCH',
+          headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ color: next || null })
+        });
+      } catch(_){}
+    }
+    car.color = fixColor(next);
+    // Persist to the local color map so future loads + syncs keep it
+    try {
+      var cm = JSON.parse(localStorage.getItem('cf_colormap')||'{}');
+      if (car.vin) cm[car.vin] = next;
+      if (car.stock) cm[car.stock] = next;
+      localStorage.setItem('cf_colormap', JSON.stringify(cm));
+    } catch(_){}
+    // Refresh the popup + inventory grid so the new value shows
+    openCarActions(carId);
+    renderInv();
+  } catch(e){
+    alert('Color save failed: ' + (e.message || e));
+  }
 }
 
 async function caAddNote(){
