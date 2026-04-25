@@ -19001,6 +19001,23 @@ async function _reviewManualPost(id){
   var dateTag = _manualDateTag(r.payment_date);
   var noteLine = String(amt) + ' ' + label + (dateTag ? ' ' + dateTag : '');
 
+  // Row owner's surname comes from the label's trailing token. Pass it
+  // as a last_names hint so the Apps Script's v65 surname guard finds
+  // a match when the payer's surname differs from the row owner's.
+  var manualLastNames = [];
+  try {
+    var lt = label.trim().split(/\s+/);
+    var lblLast = (lt[lt.length - 1] || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (lblLast) manualLastNames.push(lblLast);
+  } catch(_){}
+  try {
+    var payerNm = _paymentLastNames(r.customer_name) || [];
+    payerNm.forEach(function(n){
+      var nl = String(n || '').toLowerCase();
+      if (nl && manualLastNames.indexOf(nl) === -1) manualLastNames.push(nl);
+    });
+  } catch(_){}
+
   var confirmMsg;
   if (profitOnly){
     confirmMsg = 'Profit26-only post: $' + amt + ' for ' + manualLoc + '\n\nNote: "' + noteLine + '"\n\nNo Deals tab row will be written. No alias will be saved (can\'t remember without a row).';
@@ -19020,7 +19037,7 @@ async function _reviewManualPost(id){
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
           location: manualLoc,
-          data: { tab: tab, row: row, amount: amt, note_line: noteLine, check_dup: true }
+          data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames, check_dup: true }
         })
       });
       try { data = await resp.json(); } catch(e){}
@@ -19034,7 +19051,7 @@ async function _reviewManualPost(id){
             secret: _SHEETS_SECRET,
             action: 'deals26_append_payment_direct',
             location: manualLoc,
-            data: { tab: tab, row: row, amount: amt, note_line: noteLine }
+            data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames }
           })
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(e){}
@@ -19182,13 +19199,41 @@ async function _reviewApprove(id, candidateIdx){
   try {
     // The one truly-blocking call (but it's running while the UI
     // already feels responsive — user can tap another card).
+    // Manual approve: the user explicitly picked this row, so trust the
+    // pick over the surname guard. Pull the row owner's surname out of
+    // the candidate's car_desc and pass it as a last_names hint — the
+    // Apps Script's v65 _rewriteNoteLineLastName then finds a match
+    // and writes the row's surname to col G even when the payer's
+    // surname differs (cosigner / spouse / family paying for someone
+    // else's deal — Oscar Carrasquillo on a Smith row, etc.).
+    var approveLastNames = [];
+    try {
+      var dt = String(c.car_desc || '').trim().split(/\s+/);
+      var ownerLast = (dt[dt.length - 1] || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (ownerLast) approveLastNames.push(ownerLast);
+    } catch(_){}
+    // Always include the payer's own surname variants too, so a
+    // matching row still uses the payer's name when appropriate.
+    try {
+      var payerNames = _paymentLastNames(r.customer_name) || [];
+      payerNames.forEach(function(n){
+        var nl = String(n || '').toLowerCase();
+        if (nl && approveLastNames.indexOf(nl) === -1) approveLastNames.push(nl);
+      });
+    } catch(_){}
+
     var resp = await fetch(_SHEETS_URL, {
       method: 'POST', headers: {'Content-Type':'text/plain'},
       body: JSON.stringify({
         secret: _SHEETS_SECRET,
         action: 'deals26_append_payment_direct',
         location: r.location,
-        data: { tab: aliasTab, row: aliasRow, amount: parseFloat(r.amount) || 0, note_line: noteLineToPost }
+        data: {
+          tab: aliasTab, row: aliasRow,
+          amount: parseFloat(r.amount) || 0,
+          note_line: noteLineToPost,
+          last_names: approveLastNames
+        }
       })
     });
     var data = null; try { data = await resp.json(); } catch(e){}
