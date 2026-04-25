@@ -19976,8 +19976,8 @@ async function _reviewReject(id){
 // 3. Everything else → refresh candidates from both lots so cards are useful.
 async function _reviewReprocessPending(){
   var btn = document.getElementById('rv-reprocess-btn');
-  if (btn){ btn.textContent = 'Working…'; btn.disabled = true; }
-  var restoreBtn = function(){ if (btn){ btn.textContent = 'Re-process pending'; btn.disabled = false; } };
+  if (btn){ btn.textContent = '…'; btn.disabled = true; }
+  var restoreBtn = function(){ if (btn){ btn.textContent = '↻'; btn.disabled = false; } };
 
   try {
     // Step 1 — load all pending reviews
@@ -20003,20 +20003,28 @@ async function _reviewReprocessPending(){
       }
     }
 
-    // Step 3 — try to auto-post for reviews whose account has a deal_link
+    // Step 3 — for every pending review:
+    //   a) Resolve via VIN / carpay_account / customer-name (the full resolver,
+    //      same path used at intake) — if a single deal_link is found, auto-post.
+    //   b) Otherwise, always refresh candidates from both lots by surname so
+    //      the card has cars to choose from. No more silent skips.
     var counts = { posted: 0, refreshed: 0, skipped: 0 };
     for (var i = 0; i < pending.length; i++){
       var r = pending[i];
-      if (!r.carpay_account){ counts.skipped++; continue; }
-      var links = null;
-      try {
-        links = await sbGet('deal_links',
-          'carpay_account=eq.' + encodeURIComponent(r.carpay_account) +
-          '&active=eq.true&select=*&limit=1');
-      } catch(e){}
 
-      if (links && links.length){
-        var lk = links[0];
+      // a) Try the full resolver — covers VIN, carpay_account, and customer name/alias.
+      var resolved = null;
+      try {
+        resolved = await _resolveCustomerDealLink({
+          vehicle_vin: r.vehicle_vin,
+          carpay_account: r.carpay_account,
+          customer_name: r.customer_name,
+          location: r.location
+        });
+      } catch(e){ console.warn('reprocess resolver failed for review ' + r.id, e); }
+
+      if (resolved && resolved.link){
+        var lk = resolved.link;
         var amt = parseFloat(r.amount) || 0;
         var postData = null;
         try {
@@ -20047,6 +20055,18 @@ async function _reviewReprocessPending(){
               vehicle_vin: r.vehicle_vin, location: lk.location || r.location,
               payment_date: r.payment_date }, cap); } catch(ep){}
           }
+          // Patch the deal_link with carpay_account if it was missing — keeps
+          // the resolver fast for next time even when the prior approval had
+          // no account on the row.
+          if (!lk.carpay_account && r.carpay_account){
+            try {
+              await fetch(SB_URL + '/rest/v1/deal_links?id=eq.' + lk.id, {
+                method: 'PATCH',
+                headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ carpay_account: r.carpay_account })
+              });
+            } catch(_){}
+          }
           try { await sbPatch('payment_reviews', r.id, {
             status: 'approved', resolved_at: new Date().toISOString(),
             resolved_by: 'reprocess', resolved_tab: lk.target_tab, resolved_row: lk.target_row
@@ -20056,8 +20076,10 @@ async function _reviewReprocessPending(){
         }
       }
 
-      // No link — search both lots by surname, owed_positive_only:false
-      // so all active deals show up. Put candidates on the card for approval.
+      // b) No single link (or auto-post failed) — refresh candidates by surname
+      //    from both lots so the card has options. Always runs, regardless of
+      //    whether carpay_account is populated.
+      var refreshed = false;
       try {
         var names = _paymentLastNames(r.customer_name);
         if (names.length){
@@ -20080,13 +20102,13 @@ async function _reviewReprocessPending(){
           if (cands.length){
             await sbPatch('payment_reviews', r.id, {
               candidates: JSON.stringify(cands),
-              reason: 'multiple'
+              reason: (resolved && resolved.ambiguous) ? 'ambiguous' : 'multiple'
             });
-            counts.refreshed++;
+            refreshed = true;
           }
         }
       } catch(e){}
-      counts.skipped++;
+      if (refreshed) counts.refreshed++; else counts.skipped++;
     }
 
     _showReviewToast(counts.posted + ' auto-posted · ' + counts.refreshed + ' cards lined up · ' + counts.skipped + ' still need search', 5000);
