@@ -2398,6 +2398,65 @@ async function sbDelete(table, id) {
   if(!r.ok) throw new Error(await r.text());
 }
 
+// ══════════════════════════════════════════════════════════════
+// AUDIT LOG — every meaningful write lands here with before/after
+// snapshots so "what happened to X" is one Supabase query.
+//
+// Never throws. Audit failures must never block the actual write.
+// Fire-and-forget is intentional; callers await only if they need
+// the audit row id for follow-ups.
+// ══════════════════════════════════════════════════════════════
+async function _auditLog(action, target_type, target_key, before, after, context, reviewId){
+  try {
+    var row = {
+      actor: (typeof me !== 'undefined' && me && me.name) ? me.name : 'system',
+      action: String(action || 'unknown'),
+      target_type: String(target_type || 'unknown'),
+      target_key: target_key != null ? String(target_key) : null,
+      before: before === undefined ? null : before,
+      after:  after  === undefined ? null : after,
+      context: context || {},
+      review_id: reviewId || null,
+      success: context && context._failure ? false : true,
+      error: (context && context._error) ? String(context._error).slice(0, 500) : null
+    };
+    // Strip helper fields from context before storing
+    if (row.context && (row.context._failure || row.context._error)){
+      var clean = {};
+      Object.keys(row.context).forEach(function(k){
+        if (k !== '_failure' && k !== '_error') clean[k] = row.context[k];
+      });
+      row.context = clean;
+    }
+    await fetch(SB_URL + '/rest/v1/audit_log', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(row)
+    });
+  } catch(e){
+    console.warn('audit_log write failed (non-fatal):', e);
+  }
+}
+
+// Archive an inventory_costs row on sale — replaces sbDelete('inventory_costs',id).
+// Keeps the cost + expense history forever; reconciler skips rows with sold_at.
+async function _archiveInventoryCost(icId, dealId, context){
+  if (!icId) return;
+  try {
+    await sbPatch('inventory_costs', icId, {
+      sold_at: new Date().toISOString(),
+      sold_to_deal_id: dealId || null
+    });
+    try { await _auditLog('ic_archive', 'inventory_costs', icId, null, null,
+      Object.assign({ deal_id: dealId }, context || {})); } catch(_){}
+  } catch(e){
+    console.warn('archive inventory_costs failed:', e);
+    try { await _auditLog('ic_archive', 'inventory_costs', icId, null, null,
+      Object.assign({ deal_id: dealId, _failure: true, _error: e && e.message }, context || {})); } catch(_){}
+    throw e;
+  }
+}
+
 // ── SUPABASE STORAGE ────────────────────────────────────────────────────────
 // Signed URL cache — avoids re-signing the same path within a session
 var _signedUrlCache={};
@@ -19768,6 +19827,12 @@ async function _appendPaymentToProfit(payload, amountOverride){
     if(!payload) return;
     // Don't propagate Deal or Deposit auto-posts (they flow through separate paths)
     if(!_profitShouldPropagate(payload)) return;
+    var _auditCtx = {
+      customer: payload.customer_name, vin: payload.vehicle_vin,
+      location: payload.location, payment_date: payload.payment_date,
+      full_amount: payload.amount,
+      override_amount: amountOverride !== undefined ? amountOverride : null
+    };
     // Month from payment_date; fall back to today
     var d = payload.payment_date ? new Date(payload.payment_date+'T12:00:00') : new Date();
     var monthIdx = d.getMonth();
@@ -19791,8 +19856,18 @@ async function _appendPaymentToProfit(payload, amountOverride){
     var data=null;try{data=await resp.json();}catch(e){}
     if(!data || data.ok===false){
       console.warn('Profit Payments append failed:',data);
+      try { await _auditLog('profit26_append_failed', 'profit26_cell',
+        loc + ':payments:m' + monthIdx, null, null,
+        Object.assign({ posted_amount: amt, description: desc, _failure: true,
+          _error: (data && data.error) || 'unknown' }, _auditCtx)); } catch(_){}
       return;
     }
+    try {
+      await _auditLog('profit26_append', 'profit26_cell',
+        loc + ':payments:m' + monthIdx, null,
+        { amount: amt, description: desc, new_value: data.new_value },
+        _auditCtx);
+    } catch(_){}
     // Background: keep the Supabase profit mirror fresh for the next Profit tab load
     try{
       fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
@@ -20993,21 +21068,24 @@ async function _autopopulateDeals26(record, car, icOverride) {
     _d26Data.push(res[0]);
   }
 
-  // Step D: Remove sold car from inventory_costs (car transferred to
-  //         Deals26). Runs only now — after the sheet write succeeded.
-  //         SKIP on carDescWarning — the linked ic row was for a
-  //         different car, deleting it would lose cost data for a real
-  //         car that's still in stock. Leave it; user sees the alert.
+  // Step D: Archive the inventory_costs row (car transferred to Deals26).
+  //         Replaces the old sbDelete — we now KEEP the cost/expense
+  //         history forever with sold_at + sold_to_deal_id set. The
+  //         reconciler skips rows with sold_at, sheet display can hide
+  //         them separately. "What did this car cost us?" is now always
+  //         answerable even years after sale.
+  //         SKIP on carDescWarning — linked row was for a different car.
   if (ic && ic.id && !carDescWarning) {
     var _icSort = ic.sort_order;
     var _icName = ic.car_name || '';
     var _icLoc = record.location || 'DeBary';
     try {
-      await sbDelete('inventory_costs', ic.id);
+      // Archive in Supabase (preserves history)
+      await _archiveInventoryCost(ic.id, record.id,
+        { car_name: _icName, location: _icLoc, vin: vin, customer: record.customer_name });
+      // Still remove the row from the sheet — Vlad's working view of the
+      // Inventory tab should only show CURRENT stock. Sheet is display-only.
       if (_icSort){
-        // await — if the sheet delete fails we want to know so we can
-        // re-insert. But we DON'T roll back the deals26 insert — the
-        // car is sold and that's what matters. Just log loudly.
         var delRes = await sheetsPush('Inventory', _icSort, { car_name: _icName }, 'delete', _icLoc);
         if (!delRes || delRes.ok === false){
           console.warn('inventory_costs sheet delete failed for id=' + ic.id + ':', delRes && delRes.error);
@@ -21015,9 +21093,20 @@ async function _autopopulateDeals26(record, car, icOverride) {
       }
       if (Array.isArray(_isData)) _isData = _isData.filter(function(r){ return r.id !== ic.id; });
     } catch (delErr) {
-      console.warn('Failed to remove sold car from inventory_costs id=' + ic.id + ':', delErr);
+      console.warn('Failed to archive sold car inventory_costs id=' + ic.id + ':', delErr);
     }
   }
+
+  // Audit: record the deal_upload end-to-end.
+  try {
+    await _auditLog('deal_upload', 'deals26_row',
+      (record.location || 'DeBary') + ':Deals26:r' + sortOrder,
+      null,
+      { cost: cost, expenses: expenses, money: money, taxes: taxes, owed: owed,
+        deal_num: dealNum, car_desc: carDesc, vin: vin },
+      { deal_id: record.id, customer: record.customer_name,
+        inventory_cost_id: ic ? ic.id : null, carDescWarning: carDescWarning || null });
+  } catch(_){}
 
   // 13. Return a snapshot so dealSubmit can decide if Cash Sales should post
   //     now (owed is final: OOS, or CSV tax match found) vs. defer to
@@ -21426,15 +21515,43 @@ async function _autoCreateInventoryCosts(insertedRows) {
     };
 
     try {
-      await sbPost('inventory_costs', icRow);
-      sheetsPush('Inventory', nextSort, icRow, 'insert', (row.location || 'DeBary'));
+      var inserted = await sbPost('inventory_costs', icRow);
+      var newIcId = Array.isArray(inserted) && inserted.length ? inserted[0].id : null;
+      // AWAIT the sheet insert. Previously fire-and-forget — if it
+      // silently failed, the Supabase row was orphaned and the
+      // reconciler later deleted it, leaving the car with no ic row
+      // on the sheet for Vlad to fill cost into. That's the "cost
+      // keeps getting left out" bug. Now we wait and audit.
+      var sheetRes = await sheetsPush('Inventory', nextSort, icRow, 'insert', (row.location || 'DeBary'));
+      if (!sheetRes || sheetRes.ok === false){
+        // Sheet write failed. Roll back the Supabase insert to avoid
+        // a ghost row that the reconciler will delete anyway.
+        if (newIcId){
+          try { await sbDelete('inventory_costs', newIcId); } catch(_){}
+        }
+        try {
+          await _auditLog('ic_create_failed', 'inventory_costs', null, null, icRow,
+            { _failure: true, _error: (sheetRes && sheetRes.error) || 'unknown sheet error',
+              car_id: row.id, car_name: carName, location: row.location });
+        } catch(_){}
+        console.warn('_autoCreateInventoryCosts: sheet insert failed for ' + carName + ', rolled back Supabase row');
+        continue;
+      }
+      try {
+        await _auditLog('ic_create', 'inventory_costs', newIcId, null, icRow,
+          { car_id: row.id, car_name: carName, location: row.location });
+      } catch(_){}
       // Bump Total row down
       if (totalRow) {
         totalRow.sort_order = nextSort + 1;
         await sbPatch('inventory_costs', totalRow.id, { sort_order: totalRow.sort_order });
       }
       nextSort++;
-    } catch(e) { console.warn('Auto inventory_costs insert failed for ' + carName + ':', e); }
+    } catch(e) {
+      console.warn('Auto inventory_costs insert failed for ' + carName + ':', e);
+      try { await _auditLog('ic_create_failed', 'inventory_costs', null, null, icRow,
+        { _failure: true, _error: e && e.message, car_id: row.id, car_name: carName, location: row.location }); } catch(_){}
+    }
   }
 }
 
