@@ -1068,6 +1068,7 @@ body.light .cal-fab{background:#4488ff !important;}
       <div id="rv-gear-menu" style="display:none;position:absolute;right:0;top:42px;background:#111;border:1px solid #222;border-radius:12px;padding:6px;min-width:240px;z-index:9320;box-shadow:0 8px 24px rgba(0,0,0,.9);">
         <button onclick="processCarPayPaymentsUI();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#60a5fa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">▶ Process CarPay payments</button>
         <button onclick="runPaymentBackfill();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fbbf24;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">↑ Backfill scanned payments</button>
+        <button onclick="runCashSaleBackfill();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#10b981;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">$ Backfill cash sales</button>
         <button onclick="cpCustOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#a78bfa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">👥 CarPay customers</button>
         <button onclick="auditViewOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#94a3b8;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">📋 Audit history</button>
       </div>
@@ -17333,7 +17334,143 @@ function _backfillCancelReq(){
     _backfillCancel = true;
     var t = document.getElementById('backfill-progress-text');
     if (t) t.textContent = 'Cancelling…';
+    var t2 = document.getElementById('cashsale-progress-text');
+    if (t2) t2.textContent = 'Cancelling…';
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// CASH SALE BACKFILL — sweep all full-purchase deals, queue any
+// whose profit hasn't yet been posted to Profit26 Cash Sales.
+// Mirrors the new-deal flow: nothing auto-posts. Each candidate
+// becomes a cash_sale_pending review the user must approve.
+//
+// Skip rules:
+//   - Pending cash_sale_pending review already exists for this deal
+//   - Profit26 mirror for the deal's (location, month) already has a
+//     cash_sales line whose note/label contains the deal's car_desc
+//   - deals26 row not found, or owed<=0 (no profit / not finalized)
+// ──────────────────────────────────────────────────────────────
+async function runCashSaleBackfill(){
+  if (_backfillRunning){
+    if (confirm('Backfill already running. Cancel it?')) { _backfillCancel = true; }
+    return;
+  }
+  var msg = 'Sweep every full-purchase (cash) deal and queue a Profit26 Cash Sales review for any not yet posted.\n\nSafe to re-run — already-posted deals and existing pending reviews are skipped.\nNothing posts directly; every match becomes a Review card you approve.\n\nContinue?';
+  if (!confirm(msg)) return;
+
+  _backfillRunning = true;
+  _backfillCancel = false;
+  var list = document.getElementById('review-list');
+
+  var deals;
+  try {
+    deals = await sbGet('deals',
+      'deal_type=eq.cash&select=id,customer_name,vehicle_desc,vin,location,total_collected,created_at,deal_type,color&order=created_at.asc&limit=4000');
+  } catch(e){
+    alert('Failed to load deals: ' + e.message);
+    _backfillRunning = false;
+    return;
+  }
+  deals = (deals || []).filter(function(d){ return d && d.vin; });
+
+  var alreadyQueued = {};
+  try {
+    var existing = await sbGet('payment_reviews',
+      'reason=eq.cash_sale_pending&status=eq.pending&select=deal_id&limit=2000');
+    (existing || []).forEach(function(r){ if (r.deal_id) alreadyQueued[r.deal_id] = true; });
+  } catch(_){}
+
+  var total = deals.length;
+  var done = 0, queued = 0, alreadyPosted = 0, alreadyReview = 0, notReady = 0, errored = 0;
+
+  var progressId = 'cashsale-backfill-progress';
+  if (list){
+    var prev = document.getElementById(progressId);
+    if (prev) prev.remove();
+    list.insertAdjacentHTML('afterbegin',
+      '<div id="' + progressId + '" style="background:#10241a;border:1px solid #10b981;border-radius:14px;padding:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="font-size:13px;color:#10b981;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Cash sale backfill</div>' +
+          '<button onclick="_backfillCancelReq()" style="background:none;border:1px solid #444;border-radius:8px;color:#ccc;padding:4px 10px;font-size:11px;cursor:pointer;">Cancel</button>' +
+        '</div>' +
+        '<div id="cashsale-progress-text" style="font-size:13px;color:#ddd;">Starting… (0 / ' + total + ')</div>' +
+        '<div style="margin-top:8px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="cashsale-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#059669);transition:width .2s;"></div></div>' +
+      '</div>');
+  }
+  var updProgress = function(){
+    var t = document.getElementById('cashsale-progress-text');
+    var b = document.getElementById('cashsale-progress-bar');
+    if (t) t.textContent = done + ' / ' + total + ' · queued ' + queued + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview + (notReady ? ' · not ready ' + notReady : '') + (errored ? ' · errors ' + errored : '');
+    if (b) b.style.width = (total ? Math.round(done*100/total) : 0) + '%';
+  };
+
+  var mirrorCache = {};
+  async function getMirror(loc, monthIdx){
+    var key = loc + '|' + monthIdx;
+    if (mirrorCache[key]) return mirrorCache[key];
+    try {
+      var rows = await sbGet('profit',
+        'location=eq.' + encodeURIComponent(loc) +
+        '&month_idx=eq.' + monthIdx +
+        '&select=note,label_note,label&limit=300');
+      mirrorCache[key] = rows || [];
+    } catch(_){
+      mirrorCache[key] = [];
+    }
+    return mirrorCache[key];
+  }
+  function descAlreadyPosted(mirror, desc){
+    if (!desc) return false;
+    var descL = desc.toLowerCase();
+    for (var i = 0; i < mirror.length; i++){
+      var r = mirror[i];
+      var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
+      if (hay.indexOf(descL) !== -1) return true;
+    }
+    return false;
+  }
+
+  for (var i = 0; i < deals.length; i++){
+    if (_backfillCancel) break;
+    var d = deals[i];
+    done++;
+    try {
+      if (alreadyQueued[d.id]) { alreadyReview++; updProgress(); continue; }
+
+      var d26Rows = await sbGet('deals26',
+        'sold_inv_vin=eq.' + encodeURIComponent(d.vin) +
+        '&select=car_desc,owed,location,sort_order&limit=1');
+      var d26 = (d26Rows && d26Rows[0]) || null;
+      if (!d26 || !d26.car_desc) { notReady++; updProgress(); continue; }
+      var owed = parseFloat(d26.owed);
+      if (!isFinite(owed) || owed <= 0) { notReady++; updProgress(); continue; }
+
+      var loc = d26.location || d.location || 'DeBary';
+      var dt = d.created_at ? new Date(d.created_at) : new Date();
+      var monthIdx = dt.getMonth();
+      var mirror = await getMirror(loc, monthIdx);
+      if (descAlreadyPosted(mirror, d26.car_desc)) {
+        alreadyPosted++; updProgress(); continue;
+      }
+
+      await _queueCashSaleReview(d, null, owed, d26.car_desc);
+      queued++;
+      updProgress();
+    } catch(e){
+      errored++;
+      console.warn('Cash sale backfill row failed deal_id=' + d.id, e);
+    }
+    await new Promise(function(r){ setTimeout(r, 50); });
+  }
+
+  _backfillRunning = false;
+  var finishMsg = _backfillCancel
+    ? ('Cancelled at ' + done + '/' + total + ' · queued ' + queued + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview)
+    : ('Done · ' + queued + ' queued · ' + alreadyPosted + ' already posted · ' + alreadyReview + ' in review' + (notReady ? ' · ' + notReady + ' not ready' : '') + (errored ? ' · ' + errored + ' errored' : ''));
+  alert(finishMsg);
+  _backfillCancel = false;
+  try { await _reviewLoad(); } catch(_){}
 }
 
 // ══════════════════════════════════════════════════════════════
