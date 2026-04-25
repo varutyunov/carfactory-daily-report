@@ -14804,13 +14804,16 @@ function payAddMethodRow(method, amount){
   row.className='pay-method-row';
   row.style.cssText='background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:10px;';
   var m=method||'cash';
+  var standardMethods=['cash','card','check','money_order'];
+  var methodLabels={cash:'Cash',card:'Card',check:'Check',money_order:'M.O.'};
+  var isStandard=standardMethods.indexOf(m)!==-1;
+  var writeInVal=isStandard?'':m;
+  var activeBtn=isStandard?m:'';
   row.setAttribute('data-method',m);
   row.setAttribute('data-card-fee','false');
-  var methods=['cash','card','check','money_order','other'];
-  var methodLabels={cash:'Cash',card:'Card',check:'Check',money_order:'M.O.',other:'Other'};
   var btns='';
-  methods.forEach(function(mt){
-    var active=mt===m;
+  standardMethods.forEach(function(mt){
+    var active=mt===activeBtn;
     btns+='<button onclick="payRowMethodSelect(this,\''+mt+'\')" style="flex:1;padding:9px 2px;background:'+(active?'#fff':'none')+';border:none;border-radius:10px;color:'+(active?'#000':'#555')+';font-size:11px;font-weight:700;cursor:pointer;text-align:center;">'+(methodLabels[mt]||mt)+'</button>';
   });
   row.innerHTML=
@@ -14818,6 +14821,7 @@ function payAddMethodRow(method, amount){
       '<div style="flex:1;display:flex;gap:3px;background:#111;border:1px solid #1a1a1a;border-radius:11px;padding:2px;">'+btns+'</div>'+
       '<button onclick="payRemoveMethodRow(this)" class="pay-row-remove" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;">✕</button>'+
     '</div>'+
+    '<input class="pay-row-writein" placeholder="Other (write in)..." value="'+writeInVal+'" oninput="payRowWriteIn(this)" style="margin-bottom:6px;width:100%;box-sizing:border-box;background:#111;border:1px solid #1a1a1a;border-radius:10px;color:#fff;padding:9px 14px;font-size:13px;outline:none;"/>'+
     '<input placeholder="$0.00" inputmode="decimal" oninput="moneyInput(this);payUpdateTotal();payRowAutoCardFee(this)" onblur="payRowCardBlur(this)" value="'+(amount||'')+'" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #1a1a1a;border-radius:10px;color:#fff;padding:12px 14px;font-size:18px;font-weight:700;outline:none;"/>'+
     '<div class="pay-row-card-fee" style="display:none;margin-top:8px;">'+
       '<div class="pay-row-fee-detail" style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;">'+
@@ -14866,10 +14870,21 @@ function payUpdateTotal(){
   if(el) el.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
+function payRowWriteIn(inp){
+  var row=inp.closest('.pay-method-row');
+  if(!row)return;
+  var val=inp.value.trim();
+  row.setAttribute('data-method',val||'cash');
+  var btns=row.querySelectorAll('button[onclick*="payRowMethodSelect"]');
+  btns.forEach(function(b){b.style.background='none';b.style.color='#555';});
+}
+
 function payRowMethodSelect(btn,method){
   var row=btn.closest('.pay-method-row');
   if(!row)return;
   row.setAttribute('data-method',method);
+  var wi=row.querySelector('.pay-row-writein');
+  if(wi) wi.value='';
   var btns=row.querySelectorAll('div > button[onclick*="payRowMethodSelect"]');
   btns.forEach(function(b){
     var match=b.getAttribute('onclick').match(/payRowMethodSelect\(this,'([^']+)'\)/);
@@ -16272,7 +16287,7 @@ async function runPayScanOCR(imgSrc){
     document.getElementById('pay-scan-model').value=parsed.vehicle_model||'';
     document.getElementById('pay-scan-vin').value=parsed.vehicle_vin||'';
     var parsedAmt=(parsed.amount||'').replace(/[^0-9.]/g,'');
-    var parsedMethod=(parsed.payment_method&&['cash','card','check','money_order','other'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
+    var parsedMethod=(parsed.payment_method&&['cash','card','check','money_order'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
     // Reset payment rows and fill with OCR data
     var ml=document.getElementById('pay-methods-list');
     if(ml)ml.innerHTML='';
