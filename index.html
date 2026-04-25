@@ -1058,18 +1058,21 @@ body.light .cal-fab{background:#4488ff !important;}
      position:fixed inner header with just ← TITLE. Body padded to
      clear the header. Backfill lives in the body, not the header. -->
 <div id="review-overlay" style="display:none;position:fixed;inset:0;z-index:9300;background:#000;flex-direction:column;">
-  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9310;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 12px;gap:10px;">
     <button onclick="closeReviewQueue()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
     <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">REVIEW <span id="review-count" style="font-size:13px;color:#888;font-weight:600;"></span></span>
+    <button id="rv-reprocess-btn" onclick="_reviewReprocessPending()" title="Auto-post resolved deals and refresh stale candidates" style="background:none;border:1px solid #2a2a2a;border-radius:8px;color:#555;font-size:17px;cursor:pointer;padding:5px 10px;line-height:1;">↻</button>
+    <div style="position:relative;">
+      <button onclick="_reviewGearToggle()" style="background:none;border:1px solid #2a2a2a;border-radius:8px;color:#555;font-size:17px;cursor:pointer;padding:5px 10px;line-height:1;">⚙</button>
+      <div id="rv-gear-menu" style="display:none;position:absolute;right:0;top:42px;background:#111;border:1px solid #222;border-radius:12px;padding:6px;min-width:240px;z-index:9320;box-shadow:0 8px 24px rgba(0,0,0,.9);">
+        <button onclick="processCarPayPaymentsUI();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#60a5fa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">▶ Process CarPay payments</button>
+        <button onclick="runPaymentBackfill();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fbbf24;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">↑ Backfill scanned payments</button>
+        <button onclick="cpCustOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#a78bfa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">👥 CarPay customers</button>
+        <button onclick="auditViewOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#94a3b8;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">📋 Audit history</button>
+      </div>
+    </div>
   </div>
   <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <div style="padding:12px 12px 0;display:flex;flex-direction:column;gap:8px;">
-      <button id="rv-reprocess-btn" onclick="_reviewReprocessPending()" title="Backfill CarPay accounts on pending reviews, auto-post where a deal link exists, refresh candidates for the rest" style="width:100%;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:10px;color:#34d399;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-process pending</button>
-      <button onclick="runPaymentBackfill()" title="Sweep all existing scanned payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill scanned payments</button>
-      <button onclick="processCarPayPaymentsUI()" title="Route any unprocessed CarPay portal payments through the matcher (posts confident, queues uncertain for review)" style="width:100%;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Process CarPay payments</button>
-      <button onclick="cpCustOpen()" title="Edit the vehicle for each CarPay customer so future payments come in with year/make/model pre-filled" style="width:100%;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:10px;color:#a78bfa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">CarPay customers</button>
-      <button onclick="auditViewOpen()" title="Full history of every deal upload / payment post / review approve / inventory cost change — filter by car, customer, or date" style="width:100%;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.35);border-radius:10px;color:#94a3b8;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Audit history</button>
-    </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
     </div>
@@ -18697,195 +18700,194 @@ function _reviewRender(){
   var list = document.getElementById('review-list');
   if (!list) return;
   if (!_reviewData.length){
-    list.innerHTML = '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ No pending reviews</div>';
+    list.innerHTML = '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ All clear</div>';
     return;
   }
   var html = '';
   for (var i = 0; i < _reviewData.length; i++){
     var r = _reviewData[i];
-    // ── Approve-first post-type cards ──
-    // Render a simple Approve/Dismiss card for deal_pending (deal
-    // upload → Deals26) and cash_sale_pending (deal → Profit26).
+
+    // ── Deal upload / cash sale cards ──
     if (r.reason === 'deal_pending' || r.reason === 'cash_sale_pending'){
       var amt = parseFloat(r.amount) || 0;
       var isDeal = r.reason === 'deal_pending';
-      var tint = isDeal ? '#4ade80' : '#fbbf24';
-      var tintBg = isDeal ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)';
-      var tintBd = isDeal ? 'rgba(74,222,128,.35)' : 'rgba(251,191,36,.35)';
-      var label = isDeal ? 'Deal upload → Deals26' : 'Cash sale → Profit26';
-      html += '<div id="rv-card-' + r.id + '" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;transition:opacity .2s, transform .2s;">';
-      html += '<div style="font-size:11px;color:' + tint + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>';
-      html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
-      html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · <span style="color:#4ade80;">Lot: ' + _escHtml(r.location || '') + '</span> · $' + amt + (isDeal && r.payment_method ? ' · ' + _escHtml(r.payment_method) : '') + (r.vehicle_vin ? ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6)) : '') + '</div>';
+      var tint   = isDeal ? '#4ade80' : '#fbbf24';
+      var tintBg = isDeal ? 'rgba(74,222,128,.15)' : 'rgba(251,191,36,.15)';
+      var tintBd = isDeal ? 'rgba(74,222,128,.35)'  : 'rgba(251,191,36,.35)';
+      var label  = isDeal ? 'Deal upload → Deals26'  : 'Cash sale → Profit26';
 
-      // Snapshot block — what was linked at the moment this review
-      // was queued. This is the durable memory the approval will
-      // use, even if inventory_costs has changed since.
+      html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+
+      // Header row
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
+      html += '<div style="font-size:11px;color:' + tint + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;">' + label + '</div>';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
+      html += '</div>';
+
+      // Deal info
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:2px;">' + _escHtml(r.customer_name || '') + ' · <span style="color:' + tint + ';">' + _escHtml(r.location || '') + '</span> · $' + amt;
+      if (isDeal && r.payment_method) html += ' · ' + _escHtml(r.payment_method);
+      if (r.vehicle_vin) html += ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6));
+      html += '</div></div>';
+
+      // Snapshot
       if (isDeal && r.snapshot && r.snapshot.ic){
         var ss = r.snapshot.ic;
         var ssCost = parseFloat(ss.purchase_cost) || 0;
-        var ssExp = (parseFloat(ss.joint_expenses) || 0) + (parseFloat(ss.vlad_expenses) || 0);
+        var ssExp  = (parseFloat(ss.joint_expenses) || 0) + (parseFloat(ss.vlad_expenses) || 0);
         var ssExpNotes = [];
         if (ss.expense_notes) ssExpNotes.push(ss.expense_notes);
         if (ss.vlad_expense_notes) ssExpNotes.push(ss.vlad_expense_notes);
         var ssNoteText = ssExpNotes.join('\n');
-        html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#062019;border:1px solid #166534;">';
-        html += '<div style="font-size:10px;color:#4ade80;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Snapshot at upload \u00b7 will be posted on approve</div>';
+        html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#062019;border:1px solid #166534;">';
+        html += '<div style="font-size:10px;color:#4ade80;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Snapshot · posted on approve</div>';
         html += '<div style="font-size:13px;color:#fff;font-weight:700;">' + _escHtml(ss.car_name || '') + '</div>';
-        html += '<div style="font-size:11px;color:#888;margin-top:3px;">cost $' + ssCost + ' \u00b7 expenses $' + ssExp + '</div>';
-        if (ssNoteText){
-          html += '<div style="font-size:11px;color:#bbb;margin-top:6px;white-space:pre-wrap;background:#000;border-radius:8px;padding:8px;font-family:ui-monospace,monospace;">' + _escHtml(ssNoteText) + '</div>';
-        }
+        html += '<div style="font-size:11px;color:#888;margin-top:2px;">cost $' + ssCost + ' · exp $' + ssExp + '</div>';
+        if (ssNoteText) html += '<div style="font-size:11px;color:#bbb;margin-top:6px;white-space:pre-wrap;background:#000;border-radius:6px;padding:6px;font-family:monospace;">' + _escHtml(ssNoteText) + '</div>';
         html += '</div>';
       }
-      // Link preview — show which inventory_costs row would be used,
-      // whether color/year agrees, and (when missing) a fallback list
-      // of name-matched candidates the user can pick + link manually.
+
+      // Link preview
       if (isDeal){
         var pv = r._preview;
-        // Hard warning if this deal is ALREADY in deals26 — approving
-        // would create a duplicate.
         if (pv && pv.existing){
-          html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#2a0505;border:1px solid #7f1d1d;">';
-          html += '<div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-weight:800;">\u26a0 Already posted to Deals26</div>';
-          html += '<div style="font-size:13px;color:#fff;">' + _escHtml(pv.existing.car_desc || '') + '</div>';
-          html += '<div style="font-size:11px;color:#888;margin-top:3px;">row ' + (pv.existing.sort_order || '?') + ' \u00b7 ' + _escHtml(pv.existing.location || '') + ' \u00b7 Approving would duplicate this row. Tap Dismiss.</div>';
+          html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#2a0505;border:1px solid #7f1d1d;">';
+          html += '<div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;font-weight:800;">⚠ Already in Deals26 — tap Dismiss</div>';
+          html += '<div style="font-size:13px;color:#fff;margin-top:4px;">' + _escHtml(pv.existing.car_desc || '') + '</div>';
+          html += '<div style="font-size:11px;color:#888;margin-top:2px;">row ' + (pv.existing.sort_order || '?') + ' · ' + _escHtml(pv.existing.location || '') + '</div>';
           html += '</div>';
         }
-        html += '<div style="margin-top:10px;padding:10px;border-radius:10px;background:#0a0a0a;border:1px solid #1a1a1a;">';
-        html += '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Would link to</div>';
+        html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#0a0a0a;border:1px solid #1a1a1a;">';
+        html += '<div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Links to</div>';
         if (pv && pv.ic){
           var tintWarn = pv.conflict ? '#ef4444' : '#4ade80';
-          var icCost = (parseFloat(pv.ic.purchase_cost) || 0);
-          var icExp = (parseFloat(pv.ic.joint_expenses) || 0) + (parseFloat(pv.ic.vlad_expenses) || 0);
+          var icCost = parseFloat(pv.ic.purchase_cost) || 0;
+          var icExp  = (parseFloat(pv.ic.joint_expenses) || 0) + (parseFloat(pv.ic.vlad_expenses) || 0);
           html += '<div style="font-size:13px;color:' + tintWarn + ';font-weight:700;">' + _escHtml(pv.ic.car_name || '') + '</div>';
-          html += '<div style="font-size:11px;color:#888;margin-top:3px;">cost $' + icCost + ' · expenses $' + icExp + ' · sort ' + (pv.ic.sort_order || '?') + '</div>';
-          if (pv.conflict){
-            html += '<div style="font-size:11px;color:#ef4444;margin-top:6px;font-weight:700;">⚠ ' + _escHtml(pv.conflict) + '</div>';
-            html += '<div style="font-size:11px;color:#888;margin-top:2px;">Approve anyway to rebuild car_desc from deal data (cost + expenses zeroed, cost row left intact).</div>';
-          }
+          html += '<div style="font-size:11px;color:#888;margin-top:2px;">cost $' + icCost + ' · exp $' + icExp + ' · sort ' + (pv.ic.sort_order || '?') + '</div>';
+          if (pv.conflict) html += '<div style="font-size:11px;color:#ef4444;margin-top:4px;font-weight:700;">⚠ ' + _escHtml(pv.conflict) + '</div>';
         } else if (pv && pv.candidates && pv.candidates.length){
-          html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:8px;">No direct car_id link. Pick the matching cost row, or approve without linking (cost + expenses will be 0).</div>';
+          html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:6px;">No direct link — pick a cost row or approve without one.</div>';
           html += '<div style="display:flex;flex-direction:column;gap:4px;">';
           for (var ci = 0; ci < pv.candidates.length; ci++){
             var c = pv.candidates[ci];
             var cCost = parseFloat(c.purchase_cost) || 0;
-            var cExp = (parseFloat(c.joint_expenses) || 0) + (parseFloat(c.vlad_expenses) || 0);
-            html += '<button onclick="_reviewLinkIcToDeal(' + r.id + ',' + c.id + ')" style="display:block;text-align:left;background:#111;border:1px solid #222;border-radius:8px;color:#fff;padding:8px 10px;font-size:12px;cursor:pointer;width:100%;">' +
+            var cExp  = (parseFloat(c.joint_expenses) || 0) + (parseFloat(c.vlad_expenses) || 0);
+            html += '<button onclick="_reviewLinkIcToDeal(' + r.id + ',' + c.id + ')" style="text-align:left;background:#111;border:1px solid #222;border-radius:8px;color:#fff;padding:8px 10px;font-size:12px;cursor:pointer;width:100%;">' +
               '<span style="font-weight:700;">' + _escHtml(c.car_name || '') + '</span> ' +
-              '<span style="color:#888;font-size:11px;">· $' + cCost + ' cost · $' + cExp + ' exp · sort ' + (c.sort_order || '?') + '</span>' +
-              '</button>';
+              '<span style="color:#888;font-size:11px;">· $' + cCost + ' cost · $' + cExp + ' exp · sort ' + (c.sort_order || '?') + '</span></button>';
           }
           html += '</div>';
         } else if (pv && pv.inv){
           html += '<div style="font-size:13px;color:#fbbf24;font-weight:700;">' + _escHtml(pv.inv.name || '') + '</div>';
-          html += '<div style="font-size:11px;color:#888;margin-top:3px;">inventory row exists (id ' + pv.inv.id + ') but no matching inventory_costs row linked. Approve → car_desc built from deal data; cost/expenses start at 0.</div>';
+          html += '<div style="font-size:11px;color:#888;margin-top:2px;">no cost row — cost/expenses start at 0</div>';
         } else {
-          html += '<div style="font-size:11px;color:#888;">No inventory match by VIN. Approve → car_desc built from deal data; cost/expenses start at 0.</div>';
+          html += '<div style="font-size:11px;color:#888;">No inventory match — cost/expenses start at 0</div>';
         }
         html += '</div>';
       }
 
-      html += '<div style="display:flex;gap:8px;margin-top:12px;">';
-      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:12px;font-size:13px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve · post now</button>';
-      html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:12px;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
+      // Approve button
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · post now</button>';
       html += '</div>';
       html += '</div>';
       continue;
     }
+
+    // ── Payment review cards ──
     var candidates = [];
     try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){ candidates = []; }
-    var reasonLabel = r.reason === 'no_match' ? 'No match found'
-                    : r.reason === 'multiple' ? 'Multiple matches — pick one'
-                    : r.reason === 'partial'  ? 'Partial match — pick one or reject'
-                    : r.reason === 'possible_duplicate' ? 'Possible duplicate — same amount already on deal'
-                    : r.reason === 'approve_first' ? 'Approve before posting'
+    var reasonLabel = r.reason === 'no_match'           ? 'No match found'
+                    : r.reason === 'multiple'           ? 'Multiple matches'
+                    : r.reason === 'partial'            ? 'Partial match'
+                    : r.reason === 'possible_duplicate' ? 'Possible duplicate'
+                    : r.reason === 'approve_first'      ? 'Approve before posting'
                     : r.reason;
-    var reasonColor = r.reason === 'no_match' ? '#ef4444'
-                    : r.reason === 'multiple' ? '#fbbf24'
+    var reasonColor = r.reason === 'no_match'           ? '#ef4444'
+                    : r.reason === 'multiple'           ? '#fbbf24'
                     : r.reason === 'possible_duplicate' ? '#f97316'
                     : '#60a5fa';
-    html += '<div id="rv-card-' + r.id + '" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;transition:opacity .2s, transform .2s;">';
-    // Header
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;">';
-    html += '<div style="flex:1;">';
-    html += '<div style="font-size:11px;color:' + reasonColor + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">' + _escHtml(reasonLabel) + '</div>';
-    html += '<div style="font-size:15px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || '') + '</div>';
-    html += '<div style="font-size:12px;color:#888;margin-top:3px;">' + _escHtml(r.customer_name || '') + ' · Pay: ' + _escHtml(r.location || '') + ' · $' + (parseFloat(r.amount)||0) + '</div>';
-    // Vehicle info from the payment record — helps spot when CarPay
-    // didn't send vehicle details (empty line) vs a mismatch between
-    // the payment's car and the candidate deals.
+    var rLoc  = r.location === 'DeLand' ? 'DeLand' : 'DeBary';
+    var dbAct = rLoc === 'DeBary';
+    var dlAct = rLoc === 'DeLand';
+
+    html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+
+    // Header row: reason + dismiss
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
+    html += '<div style="font-size:11px;color:' + reasonColor + ';font-weight:800;letter-spacing:1px;text-transform:uppercase;">' + _escHtml(reasonLabel) + '</div>';
+    html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
+    html += '</div>';
+
+    // Payment info
+    html += '<div style="padding:0 12px 12px;">';
+    html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(r.customer_name || '') + '</div>';
+    html += '<div style="font-size:13px;color:#888;margin-top:2px;">$' + (parseFloat(r.amount)||0) + ' · ' + _escHtml(r.location || '') + ' · ' + _manualDateTag(r.payment_date) + '</div>';
     var vehBits = [r.vehicle_year, r.vehicle_make, r.vehicle_model, r.vehicle_color].filter(function(x){ return x && String(x).trim(); });
-    var vinBit = r.vehicle_vin ? String(r.vehicle_vin).trim() : '';
+    var vinBit  = r.vehicle_vin ? String(r.vehicle_vin).trim() : '';
     if (vehBits.length || vinBit){
-      html += '<div style="font-size:11px;color:#666;margin-top:2px;">' +
-              (vehBits.length ? _escHtml(vehBits.join(' ')) : '<span style="color:#f59e0b;">no vehicle on payment</span>') +
-              (vinBit ? ' · VIN ' + _escHtml(vinBit.slice(-6)) : '') + '</div>';
+      html += '<div style="font-size:12px;color:#666;margin-top:2px;">' +
+              (vehBits.length ? _escHtml(vehBits.join(' ')) : '<span style="color:#f59e0b;">no vehicle</span>') +
+              (vinBit ? ' · ' + _escHtml(vinBit.slice(-6)) : '') + '</div>';
     } else {
-      html += '<div style="font-size:11px;color:#f59e0b;margin-top:2px;">no vehicle on payment — use Refresh to pull candidates by surname</div>';
+      html += '<div style="font-size:12px;color:#f59e0b;margin-top:2px;">no vehicle — candidates by surname</div>';
     }
     html += '</div>';
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    html += '<button onclick="_reviewRematch(' + r.id + ', event)" title="Re-run the matcher against the current logic" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);border-radius:10px;color:#a855f7;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Re-match</button>';
-    html += '<button onclick="_reviewRefreshCandidates(' + r.id + ', event)" title="Refresh the candidate list by scanning Deals26/25/24 across both locations for this surname" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:10px;color:#22c55e;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Refresh</button>';
-    html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Manual</button>';
-    html += '<button onclick="_reviewReject(' + r.id + ')" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Dismiss</button>';
-    html += '</div>';
-    html += '</div>';
-    // Manual-assign inline form (hidden until user taps Manual)
-    html += '<div id="rv-manual-' + r.id + '" style="display:none;background:#091220;border:1px solid #1e3a5f;border-radius:12px;padding:12px;margin-bottom:10px;">';
-    html += '<div style="font-size:11px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Manual assignment</div>';
-    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
-    html += '<select id="rv-mloc-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e3a5f;border-radius:10px;color:#60a5fa;padding:10px;font-size:14px;outline:none;appearance:auto;font-weight:700;">';
-    html += '<option value="DeBary"' + (r.location !== 'DeLand' ? ' selected' : '') + '>DeBary</option>';
-    html += '<option value="DeLand"' + (r.location === 'DeLand' ? ' selected' : '') + '>DeLand</option>';
-    html += '</select>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
-    html += '<select id="rv-mtab-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;appearance:auto;">';
-    html += '<option value="Deals26">Deals26</option><option value="Deals25">Deals25</option><option value="Deals24">Deals24</option>';
-    html += '</select>';
-    html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row # (optional w/ Force post)" inputmode="numeric" style="width:180px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;"/>';
-    html += '</div>';
-    html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label (e.g. Focus St alex)" value="' + _escHtml(r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
-    html += '<input id="rv-mcolor-' + r.id + '" type="text" placeholder="Color (optional \u2014 set it if the matched deal has a color)" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:8px;"/>';
-    html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Amount auto-prepends: <strong style="color:#4ade80;">' + (parseFloat(r.amount)||0) + '</strong> \u00b7 M/D auto-appends: <strong style="color:#4ade80;">' + _manualDateTag(r.payment_date) + '</strong> \u00b7 Color (if set) is inserted between the model and the name.</div>';
-    // Profit26 posting mode — auto (col F > 0) / force yes / force no
-    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Profit26 Payments</div>';
-    html += '<div style="display:flex;gap:4px;margin-bottom:10px;">';
-    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'auto\')" id="rv-mpm-auto-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;text-transform:uppercase;letter-spacing:.5px;" data-mode="auto">Auto (col F)</button>';
-    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'yes\')" id="rv-mpm-yes-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;text-transform:uppercase;letter-spacing:.5px;" data-mode="yes">Force post</button>';
-    html += '<button type="button" onclick="_reviewManualProfitMode(' + r.id + ',\'no\')" id="rv-mpm-no-' + r.id + '" class="rv-mpm-btn" style="flex:1;padding:8px 6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;text-transform:uppercase;letter-spacing:.5px;" data-mode="no">Skip</button>';
-    html += '</div>';
-    html += '<input type="hidden" id="rv-mpm-val-' + r.id + '" value="auto"/>';
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<button onclick="_reviewManualCancel(' + r.id + ')" style="flex:1;background:none;border:1px solid #333;border-radius:10px;color:#888;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Cancel</button>';
-    html += '<button onclick="_reviewManualPost(' + r.id + ')" style="flex:1;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Post + Remember</button>';
-    html += '</div>';
-    html += '</div>';
+
     // Candidates
     if (candidates.length){
-      html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Candidates</div>';
-      html += '<div style="display:flex;flex-direction:column;gap:6px;">';
       for (var ci = 0; ci < candidates.length; ci++){
         var c = candidates[ci];
-        var tabTag = c.tab ? ('<span style="font-size:10px;color:#888;background:#1a1a1a;padding:2px 6px;border-radius:6px;margin-left:6px;">' + c.tab + '</span>') : '';
-        var partialTags = '';
-        if (c.has_last === false) partialTags += '<span style="font-size:10px;color:#ef4444;margin-left:6px;">name mismatch</span>';
-        if (c.has_car === false) partialTags += '<span style="font-size:10px;color:#ef4444;margin-left:6px;">car mismatch</span>';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:10px 12px;">';
-        html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-size:13px;color:#fff;">' + _escHtml(c.car_desc || '') + tabTag + partialTags + '</div>';
-        html += '<div style="font-size:11px;color:#666;margin-top:2px;">' + (c.location ? '<span style="color:#60a5fa;">' + _escHtml(c.location) + '</span> · ' : '') + 'row ' + (c.row || '?') + '</div>';
-        html += '</div>';
-        html += '<button onclick="_reviewApprove(' + r.id + ',' + ci + ')" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Approve</button>';
+        var partialWarn = '';
+        if (c.has_last === false) partialWarn += ' <span style="font-size:10px;color:#ef4444;">name mismatch</span>';
+        if (c.has_car  === false) partialWarn += ' <span style="font-size:10px;color:#ef4444;">car mismatch</span>';
+        html += '<div style="border-top:1px solid #1a1a1a;padding:12px;">';
+        html += '<div style="font-size:14px;color:#fff;font-weight:600;margin-bottom:2px;">' + _escHtml(c.car_desc || '') + partialWarn + '</div>';
+        html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">' + (c.location ? '<span style="color:#60a5fa;">' + _escHtml(c.location) + '</span> · ' : '') + _escHtml(c.tab || '') + ' · row ' + (c.row || '?') + '</div>';
+        html += '<button onclick="_reviewApprove(' + r.id + ',' + ci + ')" style="width:100%;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;padding:12px;font-size:14px;font-weight:800;cursor:pointer;">✓ Approve</button>';
         html += '</div>';
       }
-      html += '</div>';
     } else {
-      html += '<div style="font-size:12px;color:#888;padding:8px 0;">No candidates returned. Dismiss to remove from the queue, then post manually on Deals26 / Deals25 if needed.</div>';
+      html += '<div style="border-top:1px solid #1a1a1a;padding:12px;font-size:12px;color:#555;">No candidates found.</div>';
     }
+
+    // Force post button
+    html += '<div style="border-top:1px solid #1a1a1a;padding:12px;">';
+    html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="width:100%;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#444;padding:10px;font-size:13px;font-weight:700;cursor:pointer;">Force post</button>';
     html += '</div>';
+
+    // Force post form (hidden)
+    html += '<div id="rv-manual-' + r.id + '" style="display:none;border-top:1px solid #1a1a1a;padding:12px;">';
+    // Location toggle
+    html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+    html += '<button type="button" onclick="_rvLocToggle(' + r.id + ',\'DeBary\')" id="rv-loc-debary-' + r.id + '" style="flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid ' + (dbAct?'#60a5fa':'#2a2a2a') + ';background:' + (dbAct?'#60a5fa':'transparent') + ';color:' + (dbAct?'#000':'#555') + ';">DeBary</button>';
+    html += '<button type="button" onclick="_rvLocToggle(' + r.id + ',\'DeLand\')" id="rv-loc-deland-' + r.id + '" style="flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid ' + (dlAct?'#60a5fa':'#2a2a2a') + ';background:' + (dlAct?'#60a5fa':'transparent') + ';color:' + (dlAct?'#000':'#555') + ';">DeLand</button>';
+    html += '</div>';
+    // Tab + Row
+    html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+    html += '<select id="rv-mtab-' + r.id + '" style="flex:1;background:#0a0a0a;border:1px solid #1e3a5f;border-radius:8px;color:#60a5fa;padding:9px;font-size:14px;outline:none;font-weight:700;">';
+    html += '<option value="Deals26">Deals26</option><option value="Deals25">Deals25</option><option value="Deals24">Deals24</option>';
+    html += '</select>';
+    html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row #" inputmode="numeric" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:9px;font-size:14px;outline:none;"/>';
+    html += '</div>';
+    // Label — single line, Enter blocked
+    html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label" value="' + _escHtml(r.note_line || '') + '" maxlength="40" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:6px;" onkeydown="if(event.key===\'Enter\')event.preventDefault()"/>';
+    html += '<div style="font-size:11px;color:#444;margin-bottom:8px;">$' + (parseFloat(r.amount)||0) + ' · ' + _manualDateTag(r.payment_date) + ' auto-applied</div>';
+    // Hidden compat fields
+    html += '<input type="hidden" id="rv-mloc-' + r.id + '" value="' + _escHtml(rLoc) + '"/>';
+    html += '<input type="hidden" id="rv-mpm-val-' + r.id + '" value="auto"/>';
+    html += '<input type="hidden" id="rv-mcolor-' + r.id + '" value=""/>';
+    // Actions
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button onclick="_reviewManualCancel(' + r.id + ')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:8px;color:#444;padding:10px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>';
+    html += '<button onclick="_reviewManualPost(' + r.id + ')" style="flex:2;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:8px;color:#4ade80;padding:10px;font-size:13px;font-weight:800;cursor:pointer;">Post + Remember</button>';
+    html += '</div>';
+    html += '</div>'; // rv-manual
+
+    html += '</div>'; // rv-card
   }
   list.innerHTML = html;
 }
@@ -18902,6 +18904,24 @@ function _manualDateTag(paymentDateStr){
     if (!isNaN(d.getTime())) return (d.getMonth()+1) + '/' + d.getDate();
   } catch(e){}
   return '';
+}
+
+function _reviewGearToggle(){
+  var m = document.getElementById('rv-gear-menu');
+  if (m) m.style.display = (m.style.display === 'none' ? 'block' : 'none');
+}
+
+function _rvLocToggle(id, loc){
+  var hidden = document.getElementById('rv-mloc-' + id);
+  if (hidden) hidden.value = loc;
+  ['DeBary','DeLand'].forEach(function(l){
+    var btn = document.getElementById('rv-loc-' + l.toLowerCase() + '-' + id);
+    if (!btn) return;
+    var active = (l === loc);
+    btn.style.background   = active ? '#60a5fa' : 'transparent';
+    btn.style.color        = active ? '#000'    : '#555';
+    btn.style.borderColor  = active ? '#60a5fa' : '#2a2a2a';
+  });
 }
 
 function _reviewManualOpen(id){
