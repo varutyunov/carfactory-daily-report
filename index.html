@@ -18581,10 +18581,10 @@ async function openReviewQueue(){
   var tb = document.querySelector('.tb'); if (tb) tb.style.display = 'none';
   document.body.style.overflow = 'hidden';
   await _reviewLoad();
-  // (intentional) CarPay processing is button-triggered only. iOS
-  // Safari suspends background async and a silent auto-run loses
-  // progress without telling the user. Tap "Process CarPay" for a
-  // visible progress bar, like the scanned-payment Backfill.
+  // Auto-run candidate refresh in background so stale/empty cards
+  // get populated without a manual tap. _reviewReprocessPending ends
+  // with its own _reviewLoad() call so cards update when done.
+  _reviewReprocessPending();
 }
 
 function closeReviewQueue(){
