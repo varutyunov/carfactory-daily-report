@@ -3141,6 +3141,8 @@ function renderEmpCatCars(section){
     if(car) allCarsData.push(car);
   });
   poolCars.forEach(function(car){ allCarsData.push(car); });
+  var _isWidgetOnly=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  var canRemove=(me&&me.role==='owner')||_isWidgetOnly;
   // Render as inventory-style tile grid
   function makeTile(car){
     var ws=getWorkState(car.id);
@@ -3150,10 +3152,11 @@ function renderEmpCatCars(section){
     var isConfirmed=catWs.confirmed||false;
     var status=isConfirmed?'done':isPending?'review':isDone?'done':'prog';
     var badge=isConfirmed?'<span class="tile-badge tbd">✓</span>':isPending?'<span class="tile-badge tbr">Review</span>':isDone?'<span class="tile-badge tbd">Done</span>':'';
+    var removeBtn=canRemove?'<button onclick="event.stopPropagation();empRemoveCat('+car.id+',\''+section+'\')" style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.75);border:1px solid rgba(239,68,68,.45);border-radius:7px;color:#ef4444;font-size:11px;font-weight:800;padding:3px 8px;cursor:pointer;z-index:3;-webkit-tap-highlight-color:transparent;">✕</button>':'';
     var pxUrl=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?'<img class="tile-photo" src="'+car.photo+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':pxUrl?'<img class="tile-photo" src="'+pxUrl+'"/><div class="tile-vig"></div><div class="tile-grad"></div>':'<div class="tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
     var sub=(car.stock||'')+(car.color?' · '+car.color:'');
-    return '<div class="car-tile st-'+status+'" onclick="empOpenCar('+car.id+')">'+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div></div>';
+    return '<div class="car-tile st-'+status+'" onclick="empOpenCar('+car.id+')">'+removeBtn+badge+'<div class="tile-photo-wrap">'+photoHTML+'</div><div class="tile-body"><div class="tile-name">'+car.name+'</div><div class="tile-stock">'+sub+'</div></div></div>';
   }
   container.innerHTML='<div class="car-grid" style="padding:0 14px 80px;">'+allCarsData.map(makeTile).join('')+'</div>';
   applyPexels(allCarsData);
@@ -7596,6 +7599,11 @@ async function removeCatFromProgress(carId,cat){
   await saveWorkState(carId);
   renderProgress();updateTabBadges();updateHomeBadges();
 }
+async function empRemoveCat(carId, section){
+  await removeCatFromProgress(carId, section);
+  if(typeof empActiveCat!=='undefined' && empActiveCat) renderEmpCatCars(empActiveCat);
+  renderEmpHome();
+}
 async function repairSheetClearDone(carId){
   var ws=getWorkState(carId);
   if(!ws.categories||!ws.categories.repair) return;
@@ -10328,12 +10336,14 @@ function empRenderInv(){
   }
   var stEl=document.getElementById('emp-sync-st');
   if(stEl&&!stEl.dataset.syncing) stEl.textContent=(_empInvRecent?'Newest '+items.length+' vehicles':items.length+' vehicles')+' · '+myLoc;
+  var _invIsWidget=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
   list.innerHTML='<div class="inv-grid">'+items.map(function(car){
     var pxI=!car.photo&&pxCache[String(car.id)];
     var photoHTML=car.photo?'<img class="inv-tile-photo" src="'+car.photo+'"/>':pxI?'<img class="inv-tile-photo" src="'+pxI+'"/>':'<div class="inv-tile-ph" data-px="'+car.id+'">'+carImage(car.name)+'</div>';
     var dispColor=car.color;
     var meta=(car.stock||'')+(dispColor?' \xB7 '+dispColor:'')+(car.miles?' \xB7 '+(Number(car.miles)||0).toLocaleString()+' mi':'');
-    return '<div class="inv-tile" onclick="empOpenCar('+car.id+')"><div class="inv-tile-wrap">'+photoHTML+'</div><div class="inv-tile-body"><div class="inv-tile-name">'+car.name+'</div><div class="inv-tile-sub">'+meta+'</div></div></div>';
+    var tileClick=_invIsWidget?'openCarActions('+car.id+')':'empOpenCar('+car.id+')';
+    return '<div class="inv-tile" onclick="'+tileClick+'"><div class="inv-tile-wrap">'+photoHTML+'</div><div class="inv-tile-body"><div class="inv-tile-name">'+car.name+'</div><div class="inv-tile-sub">'+meta+'</div></div></div>';
   }).join('')+'</div>';
   if(!items.length) list.innerHTML='<div style="text-align:center;color:#444;padding:40px 0;font-size:14px;">No vehicles found</div>';
 }
