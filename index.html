@@ -12754,7 +12754,7 @@ function depUpdateTotal() {
   if(el) el.textContent = '$' + total.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
   // Keep hidden input in sync for preview/save
   var hiddenAmt = document.getElementById('dep-amount');
-  if(hiddenAmt) hiddenAmt.value = total > 0 ? total.toFixed(2) : '';
+  if(hiddenAmt) hiddenAmt.value = total.toFixed(2);
 }
 function depUpdateWeekToggle() {
   // Show auto-post info if any cash payment
