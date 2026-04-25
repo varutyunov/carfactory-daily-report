@@ -2534,6 +2534,20 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     var fCell = sheet.getRange(row, 6); // Col F
     var rowCarDesc = String(sheet.getRange(row, 2).getValue() || '').trim();
 
+    // v66 guard: empty row drift — if col B (car_desc) is blank, the
+    // target row is unoccupied. Almost always means the original deal
+    // shifted away from this row and the alias is stale. Refuse the
+    // post regardless of bypass_surname_check, since writing into a
+    // blank cell can never be correct. Caller treats this as drift
+    // and queues a Review card.
+    if (!rowCarDesc) {
+      return jsonResponse({
+        ok: false, error: 'empty_row',
+        tab: tabName, row: row,
+        actual_car_desc: ''
+      });
+    }
+
     // v65 guard: expected_car_desc — if the caller knows which car the
     // row SHOULD be (from a deal_link or alias created earlier), verify
     // the current sheet content still matches. If rows drifted since,

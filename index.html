@@ -16706,17 +16706,20 @@ async function _resolveCustomerDealLink(payload){
   if (!payload) return null;
   var loc = payload.location || 'DeBary';
 
-  // 1. VIN — unique across the fleet.
+  // 1. VIN — unique across the fleet. Prefer the most-recently-updated
+  //    link when multiple exist (e.g. a manual Review approval supersedes
+  //    an older link from the original sale flow on a different lot).
   var vin = String(payload.vehicle_vin || '').trim().toUpperCase();
   if (vin){
     try {
       var byVin = await sbGet('deal_links',
-        'vin=eq.' + encodeURIComponent(vin) + '&active=eq.true&select=*&limit=1');
+        'vin=eq.' + encodeURIComponent(vin) +
+        '&active=eq.true&order=updated_at.desc.nullslast,id.desc&select=*&limit=1');
       if (Array.isArray(byVin) && byVin.length) return { link: byVin[0] };
     } catch(e){ console.warn('resolver VIN lookup failed:', e); }
   }
 
-  // 2. CarPay account — unique per car per location.
+  // 2. CarPay account — unique per car per location. Same recency rule.
   var acc = payload.carpay_account || null;
   if (acc){
     try {
@@ -16724,7 +16727,7 @@ async function _resolveCustomerDealLink(payload){
       // and the deal's lot may differ from the payment lot (cross-location).
       var byAcc = await sbGet('deal_links',
         'carpay_account=eq.' + encodeURIComponent(acc) +
-        '&active=eq.true&select=*&limit=1');
+        '&active=eq.true&order=updated_at.desc.nullslast,id.desc&select=*&limit=1');
       if (Array.isArray(byAcc) && byAcc.length) return { link: byAcc[0] };
     } catch(e){ console.warn('resolver CarPay account lookup failed:', e); }
   }
@@ -16807,6 +16810,27 @@ async function _upsertCustomerDealLink(payload, target){
       });
     } else {
       await sbPost('deal_links', linkRow);
+    }
+
+    // Deactivate older active links pointing somewhere else for the
+    // same VIN — the user's manual pick supersedes any prior link
+    // (e.g. a sale-flow auto-link from the lot the car was sold on,
+    // when the account actually lives on the other lot now).
+    if (vin){
+      try {
+        var stale = await sbGet('deal_links',
+          'vin=eq.' + encodeURIComponent(vin) +
+          '&active=eq.true' +
+          '&or=(location.neq.' + encodeURIComponent(target.location) +
+          ',target_tab.neq.' + encodeURIComponent(target.tab) +
+          ',target_row.neq.' + target.row +
+          ')&select=id&limit=20');
+        if (Array.isArray(stale) && stale.length){
+          for (var si = 0; si < stale.length; si++){
+            try { await sbPatch('deal_links', stale[si].id, { active: false }); } catch(_){}
+          }
+        }
+      } catch(_){}
     }
     return cid;
   } catch(e){
@@ -17791,7 +17815,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(_){}
         // v65: drift / surname mismatch → disable stale link + queue review
-        if (data2 && data2.ok === false && (data2.error === 'row_drift' || data2.error === 'surname_mismatch')){
+        if (data2 && data2.ok === false && (data2.error === 'row_drift' || data2.error === 'surname_mismatch' || data2.error === 'empty_row')){
           try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
           var driftRid = await _carpayQueueReview(stage2Payload, 'row_drift', []);
           await _carpayRecordPosting(cp, stage2Payload, { status: 'review', review_id: driftRid });
@@ -18355,7 +18379,7 @@ async function _appendPaymentToDeals26Checked(payload){
       var dData = null; try { dData = await dResp.json(); } catch(e){}
       // v65: rows drifted or surname isn't on the target row. Deactivate
       // the stale link + queue Review so the user can re-link.
-      if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch')){
+      if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch' || dData.error === 'empty_row')){
         try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
         try {
           await sbPost('payment_reviews', {
