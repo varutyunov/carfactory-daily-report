@@ -19033,6 +19033,18 @@ function _reviewRender(){
     // ── Payment review cards ──
     var candidates = [];
     try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){ candidates = []; }
+    // Dedupe by (location, tab, row) — older cards were saved with
+    // duplicates because the lookup was called once per lot but the AS
+    // already returns both lots, doubling everything.
+    if (Array.isArray(candidates) && candidates.length){
+      var _dseen = {};
+      candidates = candidates.filter(function(c){
+        var k = (c.location || '') + '|' + (c.tab || '') + '|' + c.row;
+        if (_dseen[k]) return false;
+        _dseen[k] = true;
+        return true;
+      });
+    }
     var reasonLabel = r.reason === 'no_match'           ? 'No match found'
                     : r.reason === 'multiple'           ? 'Multiple matches'
                     : r.reason === 'partial'            ? 'Partial match'
@@ -20006,24 +20018,27 @@ async function _reviewRematch(id, evt){
     }
   };
 
-  // surname-only fallback — searches both lots by last name and surfaces
-  // candidates when the auto-matcher can't run (no model) or finds nothing.
+  // surname-only fallback — Apps Script lookup scans both lots internally,
+  // so one call covers everything. (Earlier per-lot calls duplicated rows.)
   var _rematchByName = async function(){
-    var _fetch = function(loc2){
-      return fetch(_SHEETS_URL, {
-        method:'POST', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify({
-          secret: _SHEETS_SECRET,
-          action: 'deals_lookup_by_lastname',
-          location: loc2,
-          data: { last_names: allLastNamesRematch, owed_positive_only: false, limit: 40 }
-        })
-      }).then(function(x){ return x.json(); }).catch(function(){ return null; });
-    };
-    var results = await Promise.all([_fetch('DeBary'), _fetch('DeLand')]);
-    var cands = [];
-    results.forEach(function(d){ if (d && d.ok && Array.isArray(d.candidates)) cands = cands.concat(d.candidates); });
-    return cands;
+    var data = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'deals_lookup_by_lastname',
+        location: 'DeBary',
+        data: { last_names: allLastNamesRematch, owed_positive_only: false, limit: 40 }
+      })
+    }).then(function(x){ return x.json(); }).catch(function(){ return null; });
+    if (!data || !data.ok || !Array.isArray(data.candidates)) return [];
+    var seenK = {}, out = [];
+    data.candidates.forEach(function(c){
+      var k = (c.location || '') + '|' + (c.tab || '') + '|' + c.row;
+      if (seenK[k]) return;
+      seenK[k] = true;
+      out.push(c);
+    });
+    return out;
   };
 
   try {
@@ -20360,29 +20375,35 @@ async function _reviewReprocessPending(){
         }
       }
 
-      // b) No single link (or auto-post failed) — refresh candidates by surname
-      //    from both lots so the card has options. Always runs, regardless of
-      //    whether carpay_account is populated.
+      // b) No single link (or auto-post failed) — refresh candidates by surname.
+      //    deals_lookup_by_lastname scans BOTH lots internally, so one call
+      //    is enough. (Calling per-lot doubled every candidate.)
       var refreshed = false;
       try {
         var names = _paymentLastNames(r.customer_name);
         if (names.length){
-          var _rpFetch = function(loc2){
-            return fetch(_SHEETS_URL, {
+          var rpResp = null;
+          try {
+            rpResp = await fetch(_SHEETS_URL, {
               method:'POST', headers:{'Content-Type':'text/plain'},
               body: JSON.stringify({
                 secret: _SHEETS_SECRET,
                 action: 'deals_lookup_by_lastname',
-                location: loc2,
+                location: 'DeBary',
                 data: { last_names: names, owed_positive_only: false, limit: 40 }
               })
             }).then(function(x){ return x.json(); }).catch(function(){ return null; });
-          };
-          var rpResults = await Promise.all([_rpFetch('DeBary'), _rpFetch('DeLand')]);
+          } catch(_){}
           var cands = [];
-          rpResults.forEach(function(d){
-            if (d && d.ok && Array.isArray(d.candidates)) cands = cands.concat(d.candidates);
-          });
+          if (rpResp && rpResp.ok && Array.isArray(rpResp.candidates)){
+            var seenC = {};
+            rpResp.candidates.forEach(function(c){
+              var k = (c.location || '') + '|' + (c.tab || '') + '|' + c.row;
+              if (seenC[k]) return;
+              seenC[k] = true;
+              cands.push(c);
+            });
+          }
           if (cands.length){
             await sbPatch('payment_reviews', r.id, {
               candidates: JSON.stringify(cands),
