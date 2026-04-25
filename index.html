@@ -10368,6 +10368,10 @@ function empOpenCar(carId){
     openPhotoGallery(carId,'photos','📷 '+car.name+' Photos');
     return;
   }
+  // Widget-only (Jesse) in repair/parts — open rich section detail view
+  var _empCatWidget=me&&['jesse'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;});
+  if(_empCatWidget&&empActiveCat==='repair'){jessOpenRepair(carId);return;}
+  if(_empCatWidget&&empActiveCat==='parts'){jessOpenParts(carId);return;}
   document.getElementById('ecar-name').textContent=car.name;
   var info=[];
   if(car.stock) info.push('Stock # '+car.stock);
@@ -10386,6 +10390,182 @@ function closeEmpCar(){
   document.getElementById('m-emp-car').style.display='none';
   _empCarId=null;
 }
+
+// ── Jesse section detail views (repair + parts) ─────────────────────────────
+var _jessCarId=null;
+function jessCloseSection(){
+  var ov=document.getElementById('jess-section-overlay');
+  if(ov) ov.remove();
+  _jessCarId=null;
+  if(typeof empActiveCat!=='undefined'&&empActiveCat) renderEmpCatCars(empActiveCat);
+}
+function jessOpenRepair(carId){_jessCarId=carId;jessRenderRepair();}
+function jessOpenParts(carId){_jessCarId=carId;jessRenderParts();}
+
+function _jessOverlay(){
+  var ov=document.getElementById('jess-section-overlay');
+  if(!ov){ov=document.createElement('div');ov.id='jess-section-overlay';ov.style.cssText='position:fixed;inset:0;background:#000;z-index:99999;overflow-y:auto;-webkit-overflow-scrolling:touch;';document.body.appendChild(ov);}
+  return ov;
+}
+function _jessHeader(car){
+  var pxUrl=!car.photo&&pxCache[String(car.id)];
+  var thumbSrc=car.photo||pxUrl||'';
+  var thumb=thumbSrc?'<img src="'+thumbSrc+'" style="width:48px;height:48px;border-radius:12px;object-fit:cover;flex-shrink:0;"/>':'<div style="width:48px;height:48px;border-radius:12px;overflow:hidden;flex-shrink:0;">'+carImage(car.name)+'</div>';
+  return '<div style="position:sticky;top:0;background:#000;z-index:2;padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;">'
+    +'<div style="display:flex;align-items:center;gap:14px;">'
+    +'<button onclick="jessCloseSection()" style="background:rgba(255,255,255,.06);border:1px solid #222;color:#aaa;font-size:20px;cursor:pointer;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">←</button>'
+    +thumb
+    +'<div style="flex:1;min-width:0;">'
+    +'<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+car.name+'</div>'
+    +'<div style="font-size:12px;color:#555;margin-top:1px;">'+(car.stock||'')+(car.color?' · '+car.color:'')+'</div>'
+    +'</div></div></div>';
+}
+
+function jessRenderRepair(){
+  var car=S.inventory.find(function(c){return c.id===_jessCarId;});
+  if(!car){jessCloseSection();return;}
+  var ws=getWorkState(car.id);
+  var items=(ws.categories&&ws.categories.repair&&ws.categories.repair.items)||[];
+  var partItems=(ws.categories&&ws.categories.parts&&ws.categories.parts.repairs)||[];
+  var o=_jessHeader(car)+'<div style="padding:20px 16px 40px;">';
+  // Repairs
+  o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.12em;margin-bottom:12px;">🔧 REPAIRS</div>';
+  if(!items.length) o+='<div style="color:#444;font-size:14px;padding:4px 0 14px;">No repairs listed yet — add below.</div>';
+  items.forEach(function(item,i){
+    var txt=typeof item==='string'?item:(item.text||'');
+    var done=typeof item==='object'?!!item.done:false;
+    o+='<div style="background:'+(done?'#0a1a0d':'#0d0d0d')+';border:1px solid '+(done?'rgba(48,209,88,.2)':'#1e1e1e')+';border-radius:14px;margin-bottom:8px;">'
+      +'<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;">'
+      +'<div onclick="jessRepairToggle('+car.id+','+i+')" style="width:26px;height:26px;border-radius:50%;border:2.5px solid '+(done?'#30d158':'#555')+';background:'+(done?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">'
+      +(done?'<svg width="11" height="9" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')
+      +'</div>'
+      +'<div style="flex:1;font-size:16px;color:'+(done?'#3a3a3a':'#fff')+';font-weight:600;text-decoration:'+(done?'line-through':'none')+';">'+txt+'</div>'
+      +'<button onclick="jessRepairRemove('+car.id+','+i+')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>'
+      +'</div></div>';
+  });
+  o+='<div style="display:flex;gap:8px;margin-bottom:22px;">'
+    +'<input id="jess-repair-inp" placeholder="Add a repair..." onkeydown="if(event.key===\'Enter\')jessRepairAdd('+car.id+')" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:13px 15px;color:#fff;font-size:15px;outline:none;"/>'
+    +'<button onclick="jessRepairAdd('+car.id+')" style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.3);border-radius:12px;padding:13px 17px;color:#fb923c;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0;">+</button>'
+    +'</div>';
+  // Parts needed
+  o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.12em;margin-bottom:12px;">📦 PARTS NEEDED</div>';
+  if(!partItems.length) o+='<div style="color:#444;font-size:14px;padding:4px 0 14px;">No parts listed yet — add below.</div>';
+  partItems.forEach(function(p,i){
+    var txt=typeof p==='string'?p:(p.text||'');
+    var bought=typeof p==='object'?!!p.bought:false;
+    o+='<div style="background:'+(bought?'#0d1a0a':'#0d0d0d')+';border:1px solid '+(bought?'rgba(48,209,88,.2)':'#1e1e1e')+';border-radius:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;padding:13px 15px;">'
+      +'<div onclick="jessPartToggle('+car.id+','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(bought?'#30d158':'#555')+';background:'+(bought?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">'
+      +(bought?'<svg width="10" height="8" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')
+      +'</div>'
+      +'<div style="flex:1;font-size:15px;color:'+(bought?'#555':'#fff')+';font-weight:600;text-decoration:'+(bought?'line-through':'none')+';">'+txt+'</div>'
+      +'<button onclick="jessPartRemove('+car.id+','+i+')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>'
+      +'</div>';
+  });
+  o+='<div style="display:flex;gap:8px;margin-bottom:24px;">'
+    +'<input id="jess-part-inp" placeholder="Add a part..." onkeydown="if(event.key===\'Enter\')jessPartAdd('+car.id+')" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:13px 15px;color:#fff;font-size:15px;outline:none;"/>'
+    +'<button onclick="jessPartAdd('+car.id+')" style="background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);border-radius:12px;padding:13px 17px;color:#fbbf24;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0;">+</button>'
+    +'</div>';
+  var allDone=items.length>0&&items.every(function(x){return typeof x==='object'&&x.done;});
+  if(allDone) o+='<button onclick="jessMarkDone('+car.id+',\'repair\')" style="width:100%;padding:16px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);border-radius:14px;color:#30d158;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">✓ Mark Repairs Done</button>';
+  o+='</div>';
+  _jessOverlay().innerHTML=o;
+}
+
+function jessRenderParts(){
+  var car=S.inventory.find(function(c){return c.id===_jessCarId;});
+  if(!car){jessCloseSection();return;}
+  var ws=getWorkState(car.id);
+  var items=(ws.categories&&ws.categories.parts&&ws.categories.parts.repairs)||[];
+  var isDone=(ws.categories&&ws.categories.parts&&ws.categories.parts.done)||false;
+  var o=_jessHeader(car)+'<div style="padding:20px 16px 40px;">';
+  o+='<div style="font-size:11px;font-weight:700;color:#555;letter-spacing:.12em;margin-bottom:12px;">📦 PARTS</div>';
+  if(!items.length) o+='<div style="color:#444;font-size:14px;padding:4px 0 14px;">No parts listed yet — add below.</div>';
+  items.forEach(function(p,i){
+    var txt=typeof p==='string'?p:(p.text||'');
+    var bought=typeof p==='object'?!!p.bought:false;
+    o+='<div style="background:'+(bought?'#0d1a0a':'#0d0d0d')+';border:1px solid '+(bought?'rgba(48,209,88,.2)':'#1e1e1e')+';border-radius:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;padding:14px 16px;">'
+      +'<div onclick="jessPartToggle('+car.id+','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(bought?'#30d158':'#555')+';background:'+(bought?'#30d158':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">'
+      +(bought?'<svg width="10" height="8" viewBox="0 0 12 10" fill="none"><polyline points="1,5 5,9 11,1" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')
+      +'</div>'
+      +'<div style="flex:1;font-size:16px;color:'+(bought?'#555':'#fff')+';font-weight:600;text-decoration:'+(bought?'line-through':'none')+';">'+txt+'</div>'
+      +'<button onclick="jessPartRemove('+car.id+','+i+')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>'
+      +'</div>';
+  });
+  o+='<div style="display:flex;gap:8px;margin-bottom:24px;">'
+    +'<input id="jess-part-inp" placeholder="Add a part..." onkeydown="if(event.key===\'Enter\')jessPartAdd('+car.id+')" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:13px 15px;color:#fff;font-size:15px;outline:none;"/>'
+    +'<button onclick="jessPartAdd('+car.id+')" style="background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);border-radius:12px;padding:13px 17px;color:#fbbf24;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0;">+</button>'
+    +'</div>';
+  o+='<button onclick="jessMarkDone('+car.id+',\'parts\')" style="width:100%;padding:16px;background:rgba(48,209,88,'+(isDone?'.18':'.08')+')'
+    +';border:1px solid rgba(48,209,88,'+(isDone?'.5':'.25')+');border-radius:14px;color:'+(isDone?'#30d158':'#aaa')+';font-size:16px;font-weight:700;cursor:pointer;">'
+    +(isDone?'✓ Parts Done':'Mark Parts Done')+'</button>';
+  o+='</div>';
+  _jessOverlay().innerHTML=o;
+}
+
+async function jessMarkDone(carId,section){
+  jessCloseSection();
+  await empMarkDone(carId,section);
+}
+async function jessRepairAdd(carId){
+  var inp=document.getElementById('jess-repair-inp');if(!inp)return;
+  var txt=inp.value.trim();if(!txt)return;
+  var ws=getWorkState(carId);
+  if(!ws.categories)ws.categories={};
+  if(!ws.categories.repair)ws.categories.repair={sectionPool:true,items:[]};
+  if(!ws.categories.repair.items)ws.categories.repair.items=[];
+  ws.categories.repair.items.push({text:txt,done:false});
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  inp.value='';await saveWorkState(carId);jessRenderRepair();
+}
+async function jessRepairToggle(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair)return;
+  var items=ws.categories.repair.items||[];if(idx<0||idx>=items.length)return;
+  var it=items[idx];items[idx]={text:typeof it==='string'?it:(it.text||''),done:!(typeof it==='object'?!!it.done:false)};
+  ws.categories.repair.items=items;
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  await saveWorkState(carId);jessRenderRepair();
+}
+async function jessRepairRemove(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.repair)return;
+  ws.categories.repair.items=(ws.categories.repair.items||[]);
+  ws.categories.repair.items.splice(idx,1);
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  await saveWorkState(carId);jessRenderRepair();
+}
+async function jessPartAdd(carId){
+  var inp=document.getElementById('jess-part-inp');if(!inp)return;
+  var txt=inp.value.trim();if(!txt)return;
+  var ws=getWorkState(carId);
+  if(!ws.categories)ws.categories={};
+  if(!ws.categories.parts)ws.categories.parts={sectionPool:true,repairs:[]};
+  if(!ws.categories.parts.repairs)ws.categories.parts.repairs=[];
+  ws.categories.parts.repairs.push({text:txt,bought:false});
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  inp.value='';await saveWorkState(carId);
+  if(empActiveCat==='parts')jessRenderParts();else jessRenderRepair();
+}
+async function jessPartToggle(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.parts)return;
+  var items=ws.categories.parts.repairs||[];if(idx<0||idx>=items.length)return;
+  var it=items[idx];items[idx]={text:typeof it==='string'?it:(it.text||''),bought:!(typeof it==='object'?!!it.bought:false)};
+  ws.categories.parts.repairs=items;
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  await saveWorkState(carId);
+  if(empActiveCat==='parts')jessRenderParts();else jessRenderRepair();
+}
+async function jessPartRemove(carId,idx){
+  var ws=getWorkState(carId);
+  if(!ws.categories||!ws.categories.parts)return;
+  (ws.categories.parts.repairs||[]).splice(idx,1);
+  var car=S.inventory.find(function(c){return c.id===carId;});if(car)car.work=ws;
+  await saveWorkState(carId);
+  if(empActiveCat==='parts')jessRenderParts();else jessRenderRepair();
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 function empCarPhotos(){
   if(!_empCarId)return;
   var car=S.inventory.find(function(c){return c.id===_empCarId;});
