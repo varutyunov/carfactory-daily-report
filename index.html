@@ -1068,6 +1068,7 @@ body.light .cal-fab{background:#4488ff !important;}
       <button onclick="runPaymentBackfill()" title="Sweep all existing scanned payments into Deals26 col G (safe to re-run)" style="width:100%;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);border-radius:10px;color:#fbbf24;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Backfill scanned payments</button>
       <button onclick="processCarPayPaymentsUI()" title="Route any unprocessed CarPay portal payments through the matcher (posts confident, queues uncertain for review)" style="width:100%;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Process CarPay payments</button>
       <button onclick="cpCustOpen()" title="Edit the vehicle for each CarPay customer so future payments come in with year/make/model pre-filled" style="width:100%;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:10px;color:#a78bfa;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">CarPay customers</button>
+      <button onclick="auditViewOpen()" title="Full history of every deal upload / payment post / review approve / inventory cost change — filter by car, customer, or date" style="width:100%;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.35);border-radius:10px;color:#94a3b8;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Audit history</button>
     </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
@@ -1530,6 +1531,39 @@ body.light .cal-fab{background:#4488ff !important;}
   </div>
   <div id="cust-view-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
     <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading customers...</div>
+  </div>
+</div>
+
+<!-- AUDIT HISTORY — full write log with filters -->
+<div id="audit-overlay" style="display:none;position:fixed;inset:0;z-index:9520;background:#000;flex-direction:column;">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9530;background:#000;border-bottom:1px solid #1a1a1a;height:54px;display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <button onclick="auditViewClose()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:8px 4px;line-height:1;">&#8592;</button>
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff;letter-spacing:2px;text-transform:uppercase;flex:1;">AUDIT HISTORY</span>
+    <button onclick="auditReload()" style="background:rgba(148,163,184,.15);border:1px solid rgba(148,163,184,.4);border-radius:8px;color:#94a3b8;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Reload</button>
+  </div>
+  <div style="position:fixed;top:54px;left:0;right:0;z-index:9525;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:10px 12px;display:flex;flex-direction:column;gap:6px;">
+    <input id="audit-q" type="search" placeholder="Search customer, VIN, car, action..." oninput="auditApplyFilter()" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:8px 12px;font-size:13px;outline:none;"/>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <select id="audit-action" onchange="auditApplyFilter()" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:8px;font-size:12px;outline:none;">
+        <option value="">All actions</option>
+        <option value="deal_upload">Deal upload</option>
+        <option value="profit26_append">Profit26 append</option>
+        <option value="profit26_append_failed">Profit26 failed</option>
+        <option value="ic_archive">IC archive</option>
+        <option value="ic_create">IC create</option>
+        <option value="ic_create_failed">IC create failed</option>
+        <option value="row_drift_detected">Row drift</option>
+      </select>
+      <select id="audit-days" onchange="auditReload()" style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:8px;font-size:12px;outline:none;">
+        <option value="1">Last 24h</option>
+        <option value="3" selected>Last 3 days</option>
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+  </div>
+  <div id="audit-body" style="padding-top:140px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <div style="padding:12px;text-align:center;color:#555;padding-top:40px;">Loading...</div>
   </div>
 </div>
 
@@ -17046,6 +17080,113 @@ function _carpayParseDate(s){
 
 // "2015 Chevrolet Camaro" → { year, make, model }. Best-effort.
 // ══════════════════════════════════════════════════════════════
+// AUDIT HISTORY VIEW — full timeline of every meaningful write
+// (deal uploads, payment posts, IC archives, Profit26 appends, row
+// drift events, review approvals). One query answers "what happened
+// to X" for any car, customer, or date range.
+// ══════════════════════════════════════════════════════════════
+var _auditRows = [];
+
+async function auditViewOpen(){
+  document.getElementById('audit-overlay').style.display = 'flex';
+  await auditReload();
+}
+function auditViewClose(){
+  document.getElementById('audit-overlay').style.display = 'none';
+}
+
+async function auditReload(){
+  var body = document.getElementById('audit-body');
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#555;">Loading...</div>';
+  var days = parseInt(document.getElementById('audit-days').value || '3', 10) || 3;
+  var since = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+  try {
+    var rows = await sbGet('audit_log',
+      'ts=gte.' + encodeURIComponent(since) +
+      '&order=ts.desc&limit=500&select=*');
+    _auditRows = Array.isArray(rows) ? rows : [];
+    auditApplyFilter();
+  } catch(e){
+    body.innerHTML = '<div style="padding:20px;color:#ef4444;">Load failed: ' + _escHtml(e.message || '') +
+      '<br><br><span style="color:#888;font-size:12px;">The audit_log table may not exist yet. Paste scripts/audit-history-schema.sql into the Supabase SQL editor and run.</span></div>';
+  }
+}
+
+function auditApplyFilter(){
+  var q = (document.getElementById('audit-q').value || '').trim().toLowerCase();
+  var action = document.getElementById('audit-action').value || '';
+  var rows = _auditRows.filter(function(r){
+    if (action && r.action !== action) return false;
+    if (!q) return true;
+    // Match across many fields
+    var hay = JSON.stringify({
+      a: r.action, t: r.target_key, ctx: r.context,
+      b: r.before, af: r.after, actor: r.actor
+    }).toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
+  auditRender(rows);
+}
+
+function auditRender(rows){
+  var body = document.getElementById('audit-body');
+  if (!rows.length){
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:#555;">No entries match.</div>';
+    return;
+  }
+  var actionColor = {
+    deal_upload: '#22c55e',
+    profit26_append: '#60a5fa',
+    profit26_append_failed: '#ef4444',
+    ic_archive: '#a78bfa',
+    ic_create: '#f59e0b',
+    ic_create_failed: '#ef4444',
+    row_drift_detected: '#ef4444'
+  };
+  var html = '<div style="padding:10px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">' + rows.length + ' entries</div>';
+  rows.forEach(function(r){
+    var color = actionColor[r.action] || '#888';
+    var ts = r.ts ? new Date(r.ts) : null;
+    var tsStr = ts ? ts.toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    var ctx = r.context || {};
+    var summary = '';
+    // Friendly summary per action
+    if (r.action === 'deal_upload' && r.after){
+      summary = '$' + (r.after.money || 0) + ' / ' + (r.after.car_desc || '') + ' · ' + (r.target_key || '');
+    } else if (r.action === 'profit26_append' && r.after){
+      summary = '$' + (r.after.amount || 0) + ' ' + (r.after.description || '');
+    } else if (r.action === 'ic_archive'){
+      summary = (ctx.car_name || '') + (ctx.customer ? ' → ' + ctx.customer : '');
+    } else if (r.action === 'ic_create' && r.after){
+      summary = r.after.car_name || '';
+    } else {
+      summary = r.target_key || '';
+    }
+    html += '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-left:3px solid ' + color + ';border-radius:10px;padding:12px 14px;margin:0 10px 8px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;">';
+    html += '<div style="font-size:11px;color:' + color + ';font-weight:700;letter-spacing:.5px;text-transform:uppercase;">' + _escHtml(r.action) + '</div>';
+    html += '<div style="font-size:10px;color:#555;white-space:nowrap;">' + tsStr + ' · ' + _escHtml(r.actor || 'system') + '</div>';
+    html += '</div>';
+    if (summary){
+      html += '<div style="font-size:13px;color:#fff;margin-bottom:4px;">' + _escHtml(summary) + '</div>';
+    }
+    if (ctx.customer){
+      html += '<div style="font-size:11px;color:#888;">cust: ' + _escHtml(ctx.customer) + (ctx.vin ? ' · VIN …' + _escHtml(String(ctx.vin).slice(-6)) : '') + '</div>';
+    }
+    if (!r.success && r.error){
+      html += '<div style="font-size:11px;color:#ef4444;margin-top:4px;">error: ' + _escHtml(r.error) + '</div>';
+    }
+    // Expandable raw JSON
+    html += '<details style="margin-top:6px;"><summary style="font-size:10px;color:#555;cursor:pointer;">raw</summary>' +
+            '<pre style="background:#000;border:1px solid #1a1a1a;border-radius:6px;padding:8px;font-size:10px;color:#888;overflow-x:auto;margin:6px 0 0;white-space:pre-wrap;">' +
+            _escHtml(JSON.stringify({ before: r.before, after: r.after, context: r.context, review_id: r.review_id }, null, 2)) +
+            '</pre></details>';
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
 // CarPay Customer manager — for each customer, scan Deals by surname
 // and let user tap one candidate to save BOTH vehicle string AND a
 // payment_deal_aliases row. Future payments for that account then
@@ -19036,6 +19177,45 @@ async function _reviewLinkIcToDeal(reviewId, icId){
 //   deal_pending      → run _autopopulateDeals26 + queue cash-sale-pending
 //   cash_sale_pending → run _appendCashSaleToProfit
 // Both need the deal row + its inventory car, loaded fresh from Supabase.
+// Preview-before-commit modal — shows the data that's about to be
+// written and asks the user to confirm explicitly. Replaces the
+// lightweight browser confirm() so the user can see cost/amount/car
+// mismatches before committing.
+// Opts: { title, review, fields: {Label: value}, warning: string|null, confirmLabel }
+function _reviewApprovePreview(opts){
+  return new Promise(function(resolve){
+    var wrap = document.createElement('div');
+    wrap.id = 'review-preview-modal';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var fieldsHtml = '';
+    Object.keys(opts.fields || {}).forEach(function(k){
+      fieldsHtml += '<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #1a1a1a;">' +
+        '<span style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;">' + _escHtml(k) + '</span>' +
+        '<span style="font-size:13px;color:#fff;font-weight:600;text-align:right;max-width:60%;word-break:break-word;">' + _escHtml(opts.fields[k] || '') + '</span>' +
+      '</div>';
+    });
+    var warningHtml = opts.warning
+      ? '<div style="background:#1a0c00;border:1px solid #c2410c;border-radius:10px;padding:10px 12px;margin:0 0 12px;color:#fb923c;font-size:12px;line-height:1.5;">⚠ ' + _escHtml(opts.warning) + '</div>'
+      : '';
+    wrap.innerHTML =
+      '<div style="background:#0d0d0d;border-radius:18px;border:1px solid #1e1e1e;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:20px;">' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">' + _escHtml(opts.title || 'Confirm') + '</div>' +
+        '<div style="font-size:11px;color:#666;margin-bottom:14px;">Review what\'s about to be written. Nothing posts until you tap the green button.</div>' +
+        warningHtml +
+        '<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:12px;padding:4px 14px;margin-bottom:14px;">' + fieldsHtml + '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button id="rpm-cancel" style="flex:1;padding:12px;background:none;border:1px solid #333;border-radius:10px;color:#888;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">Cancel</button>' +
+          '<button id="rpm-confirm" style="flex:2;padding:12px;background:linear-gradient(145deg,#041a0e,#0a3d1c,#0f5c2a);border:1px solid rgba(34,197,94,.4);border-radius:10px;color:#22c55e;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">' + _escHtml(opts.confirmLabel || 'Confirm') + '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    var close = function(result){ try { document.body.removeChild(wrap); } catch(_){} resolve(result); };
+    wrap.querySelector('#rpm-cancel').onclick = function(){ close(false); };
+    wrap.querySelector('#rpm-confirm').onclick = function(){ close(true); };
+    wrap.onclick = function(e){ if (e.target === wrap) close(false); };
+  });
+}
+
 async function _reviewApprovePending(id){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
@@ -19051,7 +19231,22 @@ async function _reviewApprovePending(id){
       alert('This deal is already in Deals26 (row ' + (r._preview.existing.sort_order || '?') + ', ' + (r._preview.existing.car_desc || '') + '). Approving would duplicate it. Tap Dismiss instead.');
       return;
     }
-    if (!confirm('Post this deal to Deals26?\n\n' + (r.note_line || r.customer_name || '') + '\n\nRuns the normal autopopulate (sanity-checked links, lowercase name, ≤30-char note).')) return;
+    var confirmed = await _reviewApprovePreview({
+      title: 'Post deal to Deals26?',
+      review: r,
+      fields: {
+        'Customer': r.customer_name || '—',
+        'Car': (r._preview && r._preview.car_desc) || r.note_line || '—',
+        'Amount collected': '$' + (r.amount || 0),
+        'Note line': r.note_line || '',
+        'Location': r.location || '',
+      },
+      warning: (r._preview && r._preview.ic && (r._preview.ic.purchase_cost || 0) <= 0)
+        ? 'Inventory cost is $0 for this car. Upload will be REFUSED by the v571 guard until cost is filled in on the Inventory Costs sheet.'
+        : null,
+      confirmLabel: 'Post to Deals26'
+    });
+    if (!confirmed) return;
     _removeReviewCard(id);
     try {
       var ctx = await _loadDealForReview(r.deal_id);
