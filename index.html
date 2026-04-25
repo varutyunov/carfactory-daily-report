@@ -16495,6 +16495,29 @@ function _paymentLastName(customerName){
   return parts.length ? parts[parts.length - 1].toLowerCase() : '';
 }
 
+// Parse a deals row's car_desc cell (e.g. "16 Outlander white 180k Gonzales")
+// into year/model/color so review-approve can rebuild the payment note line
+// when the queued review didn't have vehicle info (CarPay sync sends only
+// customer + amount).
+var _CAR_DESC_COLORS = ['white','black','silver','grey','gray','blue','red',
+  'green','yellow','beige','tan','gold','brown','orange','purple','maroon',
+  'burgundy','navy','pink','champagne'];
+function _parseCarDescVehicle(desc){
+  if(!desc) return {year:'', model:'', color:''};
+  var parts = String(desc).trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return {year:'', model:'', color:''};
+  var i = 0, year = '';
+  if(/^\d{2}$/.test(parts[0])){ year = parts[0]; i = 1; }
+  else if(/^(19|20)\d{2}$/.test(parts[0])){ year = parts[0].slice(2); i = 1; }
+  var model = parts[i] || '';
+  var color = '';
+  for(var j = i + 1; j < parts.length; j++){
+    var pl = parts[j].toLowerCase();
+    if(_CAR_DESC_COLORS.indexOf(pl) !== -1){ color = pl; break; }
+  }
+  return {year: year, model: model, color: color};
+}
+
 // Extract the ordered format pieces from a payload — shared by the
 // Deals26 col G note builder and the Profit26 description builder so
 // both places produce identical strings (important for update/remove
@@ -19071,10 +19094,16 @@ async function _reviewManualPost(id){
   }
 }
 
+// Tracks reviews currently mid-approve so a second click on the same
+// card (e.g. after _reviewLoad re-renders it before the DB patch lands)
+// is ignored instead of double-posting.
+var _reviewApprovingIds = (typeof _reviewApprovingIds !== 'undefined') ? _reviewApprovingIds : new Set();
+
 // Approve a candidate — calls the Apps Script direct row-write action,
 // then posts to Profit26 Payments if owed > 0. Marks the review as
 // 'approved' so it leaves the queue.
 async function _reviewApprove(id, candidateIdx){
+  if (_reviewApprovingIds.has(id)) return;          // dedup re-clicks
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
   var candidates = [];
@@ -19084,12 +19113,42 @@ async function _reviewApprove(id, candidateIdx){
 
   if (!confirm('Post $' + (parseFloat(r.amount)||0) + ' to ' + (c.tab || 'Deals26') + ' row ' + c.row + '?\n\n' + (c.car_desc || ''))) return;
 
+  _reviewApprovingIds.add(id);
+
   var aliasVin = (r.vehicle_vin || '').trim().toUpperCase() || null;
   var aliasCust = _paymentLastName(r.customer_name);
   var aliasModel = (r.vehicle_model || '').toLowerCase().trim();
   var aliasLoc = c.location || r.location;
   var aliasTab = c.tab || 'Deals26';
   var aliasRow = c.row;
+
+  // Build a fresh note line from the candidate's car_desc so year+model
+  // appear in the post even when the queued review had no vehicle info
+  // (CarPay payments arrive customer+amount only). Falls back to the
+  // stored note_line if parsing yields nothing useful.
+  var carV = _parseCarDescVehicle(c.car_desc || '');
+  var notePayload = {
+    customer_name: r.customer_name,
+    vehicle_year:  carV.year  || r.vehicle_year  || '',
+    vehicle_model: carV.model || r.vehicle_model || '',
+    vehicle_color: carV.color || r.vehicle_color || '',
+    payment_date:  r.payment_date,
+    amount:        r.amount
+  };
+  var freshNote = '';
+  try { freshNote = _paymentNoteLine(parseFloat(r.amount) || 0, notePayload); } catch(e){}
+  var noteLineToPost = freshNote || r.note_line || '';
+
+  // Lock the row in the DB BEFORE the AS post so any concurrent reload
+  // (badge poll, manual refresh, queue reopen) sees status!='pending' and
+  // doesn't render a stale card. If the AS post fails we revert below.
+  try {
+    await sbPatch('payment_reviews', id, { status: 'approving' });
+  } catch(e){
+    _reviewApprovingIds.delete(id);
+    alert('Could not lock review: ' + (e.message || e));
+    return;
+  }
 
   // Truly optimistic UI: remove the card NOW, before the server call.
   // User can immediately move on to the next review. If the server call
@@ -19105,13 +19164,16 @@ async function _reviewApprove(id, candidateIdx){
         secret: _SHEETS_SECRET,
         action: 'deals26_append_payment_direct',
         location: r.location,
-        data: { tab: aliasTab, row: aliasRow, amount: parseFloat(r.amount) || 0, note_line: r.note_line || '' }
+        data: { tab: aliasTab, row: aliasRow, amount: parseFloat(r.amount) || 0, note_line: noteLineToPost }
       })
     });
     var data = null; try { data = await resp.json(); } catch(e){}
     if (!data || data.ok === false){
       _showReviewToast('Approve failed — ' + ((data && data.error) || 'unknown') + '. Restoring.', 4000);
-      await _reviewLoad(); // brings back the pending item
+      // Revert the lock so the card returns to the queue.
+      try { await sbPatch('payment_reviews', id, { status: 'pending' }); } catch(e){}
+      _reviewApprovingIds.delete(id);
+      await _reviewLoad();
       return;
     }
 
@@ -19156,8 +19218,8 @@ async function _reviewApprove(id, candidateIdx){
       followups.push(
         _appendPaymentToProfit({
           customer_name: r.customer_name, amount: r.amount,
-          vehicle_year: r.vehicle_year, vehicle_make: r.vehicle_make,
-          vehicle_model: r.vehicle_model, vehicle_color: r.vehicle_color,
+          vehicle_year: notePayload.vehicle_year, vehicle_make: r.vehicle_make,
+          vehicle_model: notePayload.vehicle_model, vehicle_color: notePayload.vehicle_color,
           vehicle_vin: r.vehicle_vin, location: r.location,
           payment_date: r.payment_date
         }, profitCap).catch(function(e){ console.warn('Profit26 post failed:', e); })
@@ -19166,6 +19228,8 @@ async function _reviewApprove(id, candidateIdx){
     // Fire and forget — user is free to move on
     Promise.all(followups).then(function(){
       console.log('Approve follow-ups done for #' + id);
+    }).finally(function(){
+      _reviewApprovingIds.delete(id);
     });
 
     // Cascade runs in the background — no confirm, no blocking. The
@@ -19174,6 +19238,8 @@ async function _reviewApprove(id, candidateIdx){
     _runCascadeApproval(id, aliasVin, aliasCust, aliasModel, aliasLoc, aliasTab, aliasRow);
   } catch(e){
     _showReviewToast('Approve error — ' + (e.message || e), 4000);
+    try { await sbPatch('payment_reviews', id, { status: 'pending' }); } catch(e2){}
+    _reviewApprovingIds.delete(id);
     await _reviewLoad();
   }
 }
