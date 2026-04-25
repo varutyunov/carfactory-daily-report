@@ -123,26 +123,59 @@ def parse_vehicle(s):
 
 
 def last_names(name):
+    """Broad surname lookup tokens: canonical surname(s) + hyphen-split
+    parts + Spanish s↔z phonetic swaps. Used for surname-scan candidate
+    retrieval — emits more keys than the canonical so GONZALES probes
+    'gonzalez' and HERNANDEZ-GONZALEZ probes 'hernandez'/'gonzalez'."""
     s = (name or '').strip()
     if not s:
         return []
-    if ',' in s:
-        raw = s.split(',', 1)[0].strip()
-        parts = [p for p in raw.split() if p]
-        return [p.lower() for p in parts]
-    parts = [p for p in s.split() if p]
+    raw = s.split(',', 1)[0].strip() if ',' in s else s
+    parts = [p for p in raw.split() if p]
     if not parts:
         return []
-    if len(parts) == 1:
-        return [parts[0].lower()]
-    if len(parts) == 2:
-        return [parts[1].lower()]
-    return [parts[-2].lower(), parts[-1].lower()]
+    if ',' in s:
+        primary = parts
+    elif len(parts) == 1:
+        primary = parts
+    elif len(parts) == 2:
+        primary = [parts[1]]
+    else:
+        primary = [parts[-2], parts[-1]]
+    seen = set()
+    out = []
+    def push(t):
+        k = (t or '').strip().lower()
+        if len(k) < 3 or k in seen:
+            return
+        seen.add(k)
+        out.append(k)
+    for p in primary:
+        t = p.lower()
+        push(t)
+        if '-' in t:
+            for sub in t.split('-'):
+                push(sub)
+    for t in list(out):
+        if not t:
+            continue
+        last = t[-1]
+        if last == 's':
+            push(t[:-1] + 'z')
+        elif last == 'z':
+            push(t[:-1] + 's')
+    return out
 
 
 def last_name(name):
-    a = last_names(name)
-    return a[-1] if a else ''
+    """Single canonical surname for stable alias/note generation —
+    intentionally does NOT emit variants (those are for searching)."""
+    s = (name or '').strip()
+    if not s:
+        return ''
+    raw = s.split(',', 1)[0].strip() if ',' in s else s
+    parts = [p for p in raw.split() if p]
+    return parts[-1].lower() if parts else ''
 
 
 def build_note(amount, year, model, color, lname, date_str):

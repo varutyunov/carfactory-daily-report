@@ -16440,35 +16440,59 @@ function payDealSelect(dealId){
 //   "Martinez, Juan"           → ["martinez"]
 //   "Borroto Garcia, Juan"     → ["borroto", "garcia"]
 //   "Juan Garcia-Martinez"     → ["garcia-martinez"]
+// Returns broad set of surname lookup tokens for matching/scanning:
+// canonical surname(s) + hyphen-split parts + Spanish s↔z swaps so
+// "GONZALES" also probes "gonzalez", "HERNANDEZ-GONZALEZ" probes
+// "hernandez" / "gonzalez" individually.
 function _paymentLastNames(customerName){
   if(!customerName) return [];
   var s = String(customerName).trim();
   if(!s) return [];
-  var raw;
-  if(s.indexOf(',') !== -1){
-    // "LAST1 LAST2, FIRST MIDDLE" form
-    raw = s.split(',')[0].trim();
-  } else {
-    raw = s;
-  }
+  var raw = s.indexOf(',') !== -1 ? s.split(',')[0].trim() : s;
   var parts = raw.split(/\s+/).filter(Boolean);
   if(!parts.length) return [];
+  var primary;
   if(s.indexOf(',') !== -1){
-    // Everything before the comma is last-name material
-    return parts.map(function(t){ return t.toLowerCase(); });
+    primary = parts;
+  } else if(parts.length === 1){
+    primary = parts;
+  } else if(parts.length === 2){
+    primary = [parts[1]];
+  } else {
+    primary = [parts[parts.length - 2], parts[parts.length - 1]];
   }
-  // No comma: skip the first token (given name), return up to the last
-  // two remaining tokens as surname candidates.
-  if(parts.length === 1) return [parts[0].toLowerCase()];
-  if(parts.length === 2) return [parts[1].toLowerCase()];
-  return [parts[parts.length - 2].toLowerCase(), parts[parts.length - 1].toLowerCase()];
+  var seen = {}, out = [];
+  function push(t){
+    var k = String(t || '').trim().toLowerCase();
+    if (k.length < 3) return;
+    if (seen[k]) return;
+    seen[k] = true; out.push(k);
+  }
+  primary.forEach(function(p){
+    var t = String(p).toLowerCase();
+    push(t);
+    if (t.indexOf('-') !== -1){
+      t.split('-').forEach(push);
+    }
+  });
+  out.slice().forEach(function(t){
+    var last = t.charAt(t.length - 1);
+    if (last === 's') push(t.slice(0, -1) + 'z');
+    else if (last === 'z') push(t.slice(0, -1) + 's');
+  });
+  return out;
 }
 
-// Back-compat single-name helper — kept for existing call sites. Returns
-// the primary (last-token) surname for alias storage / legacy flows.
+// Single canonical surname (last token before the comma, or last
+// whitespace token). Stable across the variant expansion above so
+// alias/note generation stays deterministic.
 function _paymentLastName(customerName){
-  var all = _paymentLastNames(customerName);
-  return all.length ? all[all.length - 1] : '';
+  if(!customerName) return '';
+  var s = String(customerName).trim();
+  if(!s) return '';
+  var raw = s.indexOf(',') !== -1 ? s.split(',')[0].trim() : s;
+  var parts = raw.split(/\s+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1].toLowerCase() : '';
 }
 
 // Extract the ordered format pieces from a payload — shared by the
