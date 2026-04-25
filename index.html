@@ -21596,6 +21596,42 @@ function _buildCarDescFromDeal(record, car){
   return [yearShort, model, color, miles].filter(Boolean).join(' ');
 }
 
+// Compare ic.car_name (e.g. "16 Expedition white 249k") against
+// inventory.name (e.g. "2017 Kia Forte"). Return true when they look
+// like different cars — year mismatch OR no model token in common.
+// Used by:
+//   Layer 1 — isLinkSelect (warn before patching ic.car_id)
+//   Layer 3 — invSheetsRender (show mismatch badge after the fact)
+// Returns false on any "can't tell" case (missing data, ambiguous).
+function _icInvNameMismatch(icName, invName){
+  var ic = String(icName || '').toLowerCase().trim();
+  var inv = String(invName || '').toLowerCase().trim();
+  if (!ic || !inv) return false;
+  // Year: ic uses 2-digit short ("16 Expedition..."), inv uses 4-digit ("2016 Ford...")
+  var icYearM = ic.match(/\b\d{2}\b/);
+  var invYearM = inv.match(/\b(19|20)(\d{2})\b/);
+  var icYear = icYearM ? icYearM[0] : '';
+  var invYearShort = invYearM ? invYearM[2] : '';
+  if (icYear && invYearShort && icYear !== invYearShort) return true;
+  // Model token check — if inv has model words and none appear in ic, mismatch.
+  var SKIP = {ford:1,chevy:1,chevrolet:1,toyota:1,honda:1,kia:1,hyundai:1,nissan:1,jeep:1,dodge:1,ram:1,gmc:1,buick:1,cadillac:1,lexus:1,acura:1,infiniti:1,mazda:1,subaru:1,vw:1,volkswagen:1,bmw:1,mercedes:1,'mercedes-benz':1,benz:1,audi:1,tesla:1,mitsubishi:1,volvo:1,porsche:1,land:1,rover:1,lincoln:1,chrysler:1,fiat:1,scion:1,suzuki:1,saturn:1,pontiac:1,mini:1};
+  var COLORS = {white:1,black:1,gray:1,grey:1,silver:1,red:1,blue:1,green:1,yellow:1,orange:1,purple:1,brown:1,gold:1,beige:1,tan:1,maroon:1,navy:1};
+  function modelTokens(s){
+    return s.split(/\s+/).filter(function(t){
+      if (!t) return false;
+      if (/^\d/.test(t)) return false; // years, "249k"
+      if (COLORS[t]) return false;
+      if (SKIP[t]) return false;
+      return t.length > 1;
+    });
+  }
+  var icSet = {};
+  modelTokens(ic).forEach(function(t){ icSet[t] = 1; });
+  var invMod = modelTokens(inv);
+  if (invMod.length === 0) return false;
+  return !invMod.some(function(t){ return icSet[t]; });
+}
+
 async function _autopopulateDeals26(record, car, icOverride) {
   var vin = (record.vin || '').trim();
   if (!vin) return;
@@ -26462,7 +26498,20 @@ function invSheetsRender(){
     var realIdx=_isData.indexOf(c);
     var linked=c.car_id?true:false;
     var carHtml=(c.car_name||'Unnamed');
-    if(linked) carHtml+=' <span style="color:#4ade80;font-size:8px;vertical-align:middle;">&#9679;</span>';
+    if(linked){
+      // Layer 3 — flag stale/wrong links so they're visible in the sheet.
+      // Look up the linked inventory record by id; if its name disagrees
+      // with c.car_name (year/model mismatch), show a red badge instead
+      // of the green dot. (Hoogstra ic 123 had car_id=Forte but car_name
+      // was an Expedition — exactly this bug.)
+      var _linkedInv=(window.S&&S.inventory)?S.inventory.find(function(x){return x.id===c.car_id;}):null;
+      var _mismatch=_linkedInv?_icInvNameMismatch(c.car_name, _linkedInv.name):false;
+      if(_mismatch){
+        carHtml+=' <span title="Linked to '+(_linkedInv.name||'?').replace(/"/g,'&quot;')+' \u2014 names disagree" style="color:#ef4444;font-size:10px;vertical-align:middle;font-weight:700;">&#9888;</span>';
+      } else {
+        carHtml+=' <span style="color:#4ade80;font-size:8px;vertical-align:middle;">&#9679;</span>';
+      }
+    }
     var rowBg=i%2===0?'#111':'#0d0d0d';
     var jointVal=fmt(joint);
     var vladVal=fmt(vlad);
@@ -26781,6 +26830,18 @@ function isLinkFilter(){
 async function isLinkSelect(carId){
   if(_isLinkIdx<0)return;
   var c=_isData[_isLinkIdx];if(!c)return;
+  // Layer 1 — sanity check. ic.car_name is what Vlad typed for THIS sheet
+  // row; inv.name is the inventory record being linked. If year/model
+  // disagree we're about to create a phantom link (Hoogstra Forte got
+  // pointed at an Expedition row this way). Confirm before patching.
+  var inv=(_isInv||[]).find(function(x){return x.id===carId;});
+  if(inv && _icInvNameMismatch(c.car_name, inv.name)){
+    var msg='These look like different cars:\n\n'+
+            'Inventory Costs row: '+(c.car_name||'(unnamed)')+'\n'+
+            'Inventory car: '+(inv.name||'(unnamed)')+(inv.stock?' #'+inv.stock:'')+'\n\n'+
+            'Link them anyway?';
+    if(!confirm(msg)) return;
+  }
   try{
     await sbPatch('inventory_costs',c.id,{car_id:carId,updated_at:new Date().toISOString()});
     c.car_id=carId;
