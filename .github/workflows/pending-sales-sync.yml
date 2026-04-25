@@ -62,8 +62,9 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Auto: promote newest Pending Sales CSV to repo root"
-            # Push back; dual push refspec in the user repo will mirror to main + master.
-            git push
+            # Push back to BOTH branches so master never drifts behind main.
+            # (The local dual-refspec only applies to Vlad's machine, not this runner.)
+            git push origin HEAD:main HEAD:master
           else
             echo "No CSV changes to commit."
           fi

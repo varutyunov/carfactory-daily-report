@@ -13,9 +13,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Update version.json
         run: echo "{\"v\":\"$(date +%s)\"}" > version.json
-      - name: Commit version
+      - name: Commit version and mirror to master
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add version.json
-          git diff --staged --quiet || (git commit -m "chore: update version timestamp" && git push)
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update version timestamp"
+            git push origin HEAD:main HEAD:master
+          fi
