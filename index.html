@@ -16692,6 +16692,23 @@ function _paymentLastNames(customerName){
     if (last === 's') push(t.slice(0, -1) + 'z');
     else if (last === 'z') push(t.slice(0, -1) + 's');
   });
+  // Double-letter variants: Elliott↔Eliot, Connell↔Conel, etc.
+  // Emit each pair-collapsed variant, and each consonant-doubled variant.
+  var CONSONANTS = 'bcdfghjklmnpqrstvwxz';
+  out.slice().forEach(function(t){
+    for (var i = 0; i < t.length - 1; i++){
+      if (t.charAt(i) === t.charAt(i + 1)){
+        push(t.slice(0, i) + t.slice(i + 1));
+      }
+    }
+    for (var j = 0; j < t.length; j++){
+      var ch = t.charAt(j);
+      if (CONSONANTS.indexOf(ch) === -1) continue;
+      if (j > 0 && t.charAt(j - 1) === ch) continue;
+      if (j + 1 < t.length && t.charAt(j + 1) === ch) continue;
+      push(t.slice(0, j + 1) + ch + t.slice(j + 1));
+    }
+  });
   return out;
 }
 
