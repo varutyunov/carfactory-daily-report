@@ -2554,14 +2554,27 @@ function _handleDeals26AppendPaymentDirect(location, data) {
     // Align the note's last-name token to the row's surname — only when
     // a known surname is actually there. Returns null on mismatch, which
     // we treat as a hard signal the caller is writing to the wrong row.
+    //
+    // bypass_surname_check: when the caller is a human manually approving
+    // a candidate they explicitly picked, the surname guard would block
+    // legitimate posts where the payer differs from the row owner
+    // (cosigner, spouse, family paying for someone else's deal). The
+    // user has already verified the row, so we trust the pick. We still
+    // try the rewrite to keep col G's surname matching the row owner —
+    // we just don't refuse if it can't find a hint.
     var rewritten = _rewriteNoteLineLastName(noteLine, rowCarDesc, Array.isArray(data.last_names) ? data.last_names : null);
     if (rewritten === null) {
-      return jsonResponse({
-        ok: false, error: 'surname_mismatch',
-        tab: tabName, row: row,
-        actual_car_desc: rowCarDesc,
-        note_line: noteLine
-      });
+      if (data.bypass_surname_check === true) {
+        // Trust the user's pick — leave the note as-is.
+        rewritten = noteLine;
+      } else {
+        return jsonResponse({
+          ok: false, error: 'surname_mismatch',
+          tab: tabName, row: row,
+          actual_car_desc: rowCarDesc,
+          note_line: noteLine
+        });
+      }
     }
     noteLine = rewritten;
 

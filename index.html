@@ -19052,7 +19052,7 @@ async function _reviewManualPost(id){
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
           location: manualLoc,
-          data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames, check_dup: true }
+          data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames, bypass_surname_check: true, check_dup: true }
         })
       });
       try { data = await resp.json(); } catch(e){}
@@ -19066,7 +19066,7 @@ async function _reviewManualPost(id){
             secret: _SHEETS_SECRET,
             action: 'deals26_append_payment_direct',
             location: manualLoc,
-            data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames }
+            data: { tab: tab, row: row, amount: amt, note_line: noteLine, last_names: manualLastNames, bypass_surname_check: true }
           })
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(e){}
@@ -19247,7 +19247,8 @@ async function _reviewApprove(id, candidateIdx){
           tab: aliasTab, row: aliasRow,
           amount: parseFloat(r.amount) || 0,
           note_line: noteLineToPost,
-          last_names: approveLastNames
+          last_names: approveLastNames,
+          bypass_surname_check: true
         }
       })
     });
