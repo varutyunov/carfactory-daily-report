@@ -350,11 +350,25 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Tax lookup:** Fetches `PendingSalesDebary.csv` / `PendingSalesDeland.csv` from GitHub, matches by VIN, pulls salestax + tagfee + titlefee.
 - **Periodic tax fill:** `_fillMissingTaxes()` runs every 30 min + on page load. Retries until CSV has the data.
 
-### Inventory Auto-Create (CSV Sync → App Sheets)
-- **On CSV sync:** `_autoCreateInventoryCosts(insertedRows)` creates `inventory_costs` row with short name format, linked via `car_id`
-- **Inserts before Total row:** Finds "Total" row and inserts above it, bumps Total's sort_order
-- **Name-based dedupe (April 2026):** before inserting, checks `existingNameKeys` (trimmed-lower `car_name + location`). Prevents creating a duplicate when the CSV replaces an inventory row with a fresh `inventory.id` but the `inventory_costs` row for that car already exists unlinked.
-- **Manual + ADD dedupe:** `invSheetsAddCar` checks for existing `car_name + location` before POSTing; if match, prompts to open the existing row instead of creating a duplicate.
+### Inventory Auto-Create (CSV Sync → Review → App Sheets)
+- **v592 (Apr 25, 2026): everything goes through Review now — same as payments.** No direct sheet writes from CSV sync or `+ ADD`.
+- **On CSV sync:** `_autoCreateInventoryCosts(insertedRows)` builds the short car_name + draft IC payload and calls `_queueInventoryAddReview(icDraft, 'csv-sync')`. That POSTs a `payment_reviews` row with `reason='inv_create_pending'`, `status='pending'`, `snapshot.ic = {car_name, car_id, purchase_cost, joint_expenses, vlad_expenses, expense_notes, vlad_expense_notes, location, source}`. Dedupes by car_id, then by `car_name + location` against pending reviews.
+- **On lot move:** `_relocateInventoryCosts` detects when the CSV reports a vehicle in a different location than its IC row; queues `payment_reviews` row with `reason='inv_relocate_pending'`, `snapshot.move = {ic_id, car_name, oldLoc, newLoc, car_id}`.
+- **On manual + ADD:** `invSheetsAddCar(name)` queues `inv_create_pending` (source `'manual'`); user gets an alert "queued for review."
+- **Approve handlers:** in `_reviewApprovePending`, BEFORE the `if (!r.deal_id)` deal-only branch:
+  - `inv_create_pending` → `_executeInventoryAdd(icDraft)` computes sort_order from this lot's Total row, creates IC row in Supabase (deduping by car_id and name+location), calls `sheetsPush('insert', sort_order, …)` to write the row before Total, bumps Total's sort_order. Rolls back IC row on sheet failure.
+  - `inv_relocate_pending` → `_executeRelocate(move)` re-fetches live IC row, deletes from old sheet, computes new sort_order from new lot's Total, PATCHes Supabase, calls `sheetsPush('insert', …)` for new sheet, bumps new Total, decrements old-loc sort_orders.
+- **Review cards:** `_reviewRender` has two new branches before the "Payment review cards" section. `inv_create_pending` is a blue card "New inventory → DeBary/DeLand Sheet" with car_name, location, source, cost. `inv_relocate_pending` is a purple card "Lot move → DeLand/DeBary Sheet" with car_name, oldLoc → newLoc, cost.
+- **Why this changed:** Standing rule from 2026-04-24 — nothing posts to Google Sheets without Vlad's tap. Inventory adds and lot moves were the last auto-posters.
+
+### Inventory Master CSV Promotion Pipeline
+- **Source:** Dealer software exports timestamped CSVs to `Inventory/DeBary/InventoryMaster YYYYMMDDHHmm-Company-33532001.csv` and `Inventory/Deland/InventoryMaster YYYYMMDDHHmm-Company-33532002.csv`.
+- **Promotion:** `.github/workflows/inventory-master-sync.yml` runs on push to `Inventory/**/*.csv` (or workflow_dispatch). It picks the newest filename per location, copies to root `InventoryMaster.csv` / `InventoryMasterDeland.csv`, commits as `github-actions[bot]`, pushes to BOTH `main` and `master` so dual-branch deploy stays in sync. Mirrors `pending-sales-sync.yml` exactly.
+- **Downstream effects of root-CSV change (chain):**
+  1. Push to `InventoryMaster*.csv` triggers `inventory-sync.yml` → runs `scripts/inventory-sync.js` → updates Supabase `inventory` table (insert new VINs, patch location/miles/color, soft-delete sold).
+  2. App fetches root CSVs via `raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster*.csv` on next open → `_autoCreateInventoryCosts` and `_relocateInventoryCosts` queue `inv_create_pending` / `inv_relocate_pending` reviews.
+  3. Vlad approves in Review tab → IC row created + sheet row inserted (or relocated).
+- **`inventory-sync.yml` schedule:** cron `30 12,14,16,18,20,22,0 * * 1-6` (UTC, Mon–Sat). On push it also re-runs.
 
 ### Expense / Payment Popup Parsing
 - **Popups:** `isShowExpPopup` (inventory Joint/Vlad), `d26ShowExpPopup` (deals26 expenses), `d26ShowPmtPopup` (deals26 payments).

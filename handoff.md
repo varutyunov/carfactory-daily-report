@@ -10,6 +10,113 @@ The only exception: the Stage-2 deal_link path in `_appendCarPayPaymentToDeals26
 
 ---
 
+# Day 6 (2026-04-25 → 26) — Inventory Add/Move review flow + CSV promotion pipeline
+
+## Context
+The standing rule (no auto-posting) was being violated by two paths:
+- `_autoCreateInventoryCosts` (CSV sync detected a new VIN) wrote IC row + sheet row directly
+- `_relocateInventoryCosts` (CSV sync detected a lot change) deleted the old sheet row + inserted at the new lot directly
+- `invSheetsAddCar` (manual `+ ADD` button in the Inventory Sheets tab) wrote IC row + sheet row directly
+
+Vlad's request: "New cars get added to inventory, the script picks up there's an addition … but before they are added to Google Sheets they go to review, I look at the way they're going to be added, the formatting, and then it hits Google Sheets after approval. Same with cars getting moved."
+
+## What shipped — index.html v592, sw.js cache `cf-cache-v592`
+
+### `_queueInventoryAddReview(icDraft, source)` — new helper
+Builds + POSTs a `payment_reviews` row with:
+- `reason: 'inv_create_pending'`
+- `status: 'pending'`
+- `location: icDraft.location || 'DeBary'`
+- `note_line: icDraft.car_name`
+- `customer_name: source === 'manual' ? 'Manual add' : 'CSV sync'`
+- `snapshot: { ic: {car_name, car_id, purchase_cost, joint_expenses, vlad_expenses, expense_notes, vlad_expense_notes, location, source} }`
+
+Dedupes against existing `status=pending&reason=inv_create_pending` reviews:
+1. By `snapshot.ic.car_id` if draft has a car_id
+2. Else by trimmed-lower `car_name + location`
+
+### `_autoCreateInventoryCosts` (CSV sync new-car path) — refactored
+Now only builds car_name + queues `inv_create_pending` reviews. No IC row creation, no sheet writes.
+
+### `_relocateInventoryCosts` (CSV sync lot-change path) — refactored
+Now only detects + queues `inv_relocate_pending` reviews with `snapshot.move = {ic_id, car_name, oldLoc, newLoc, car_id}`. Dedupes against pending relocate reviews by `ic_id`.
+
+### `invSheetsAddCar` (manual + ADD) — refactored
+Now queues `inv_create_pending` (source `'manual'`) and shows alert: `"<name>" queued for review. Approve in Review to add to <Loc> Sheet.`
+
+### `_executeInventoryAdd(icDraft)` — new
+Called when Vlad taps Approve on an `inv_create_pending` card:
+1. Re-fetch existing IC rows for the location to compute Total row + new `sort_order`
+2. Re-check duplicate (car_id, then name+location)
+3. POST IC row to Supabase with computed sort_order
+4. Call `sheetsPush('insert', sort_order, …)` to write the row before Total
+5. Bump Total's sort_order in Supabase + sheet
+6. Roll back IC row on sheet failure (best-effort)
+
+Returns `{ok, error?, ic?}` to the approve handler.
+
+### `_executeRelocate(move)` — new
+Called when Vlad taps Approve on an `inv_relocate_pending` card:
+1. Re-fetch live IC row by `move.ic_id` (in case Vlad already manually moved it)
+2. Delete row from old sheet via `sheetsPush('delete', oldSortOrder, {car_name})`
+3. Compute new sort_order from new location's Total
+4. PATCH Supabase IC row: `location = newLoc`, `sort_order = newSortOrder`
+5. `sheetsPush('insert', newSortOrder, …)` at new lot
+6. Bump new lot's Total
+7. Decrement sort_orders on rows after old position in old lot (Supabase only — Apps Script reconciler picks up sheet shift on next 5-min run)
+
+### Review-card branches in `_reviewRender` (before Payment review cards)
+- **`inv_create_pending`** — blue card "New inventory → DeBary/DeLand Sheet" with car_name, location, source (csv-sync vs manual), cost. Approve button: "✓ Approve · add to Sheet".
+- **`inv_relocate_pending`** — purple card "Lot move → DeLand/DeBary Sheet" with car_name, oldLoc → newLoc arrow, cost preserved. Approve button: "✓ Approve · move row".
+
+### Approve handlers in `_reviewApprovePending` (BEFORE `if (!r.deal_id)`)
+- `inv_create_pending`: confirm, call `_executeInventoryAdd(snapshot.ic)`, mark `status='approved'` on success, refresh review list.
+- `inv_relocate_pending`: confirm, call `_executeRelocate(snapshot.move)`, mark `status='approved'` on success.
+
+## CSV promotion pipeline — new GitHub Actions workflow
+
+### Problem
+The dealer software exports timestamped CSVs to `Inventory/DeBary/InventoryMaster YYYYMMDDHHmm-Company-33532001.csv` and `Inventory/Deland/InventoryMaster YYYYMMDDHHmm-Company-33532002.csv`. Nothing was promoting the newest export to root `InventoryMaster.csv` / `InventoryMasterDeland.csv` — so the app (which fetches the root files via `raw.githubusercontent`) was reading stale data. The 4/25 exports landed in `Inventory/**` but root files were still 4/21. Result: Vlad added cars locally but reviews never queued.
+
+`pending-sales-sync.yml` was already doing the analogous job for `Pending Sales/**` → root `PendingSalesDebary.csv` / `PendingSalesDeland.csv`. No equivalent existed for inventory.
+
+### `.github/workflows/inventory-master-sync.yml` — new
+Mirrors `pending-sales-sync.yml`. Triggers on push to `Inventory/**/*.csv` (or workflow_dispatch). For each location:
+- `Inventory/DeBary/*.csv` → newest by filename → `InventoryMaster.csv`
+- `Inventory/Deland/*.csv` → newest by filename → `InventoryMasterDeland.csv`
+- Skip if content matches (no-op commit avoidance)
+- Commits as `github-actions[bot]`, pushes `HEAD:main HEAD:master`
+
+### Full flow now
+1. Dealer CSV exports committed under `Inventory/<Lot>/`
+2. `inventory-master-sync.yml` promotes newest to root, pushes
+3. `inventory-sync.yml` (cron `30 12,14,16,18,20,22,0 * * 1-6` UTC + on push) updates Supabase `inventory` table from root CSVs
+4. App opens → CSV sync queues `inv_create_pending` / `inv_relocate_pending` reviews
+5. Vlad approves in Review → IC row + Google Sheet row
+
+## One-time backfill done in v592 commit
+- Promoted `Inventory/DeBary/InventoryMaster 202604252203-Company-33532001.csv` → `InventoryMaster.csv` (241 lines, +6 INSTOCK vs old root)
+- Promoted `Inventory/Deland/InventoryMaster 202604252204-Company-33532002.csv` → `InventoryMasterDeland.csv` (94 lines, +5 INSTOCK vs old root)
+
+Newly-detected vehicles that should queue `inv_create_pending` reviews on next app open:
+- DeBary: 15 Hyundai Genesis 3.8L V6 TAN 156k (stock 4904), 11 BMW 535i BLACK 112k (4905), 13 Acura TL Tech BLACK 79k (4906), 16 BMW 320i BLACK 144k (4907), 11 Toyota Sienna XLE ALUMINUM 243k (4908)
+- DeLand: 14 Mitsubishi Outlander Sport ES ALUMINUM 181k (4909) — but this should match existing IC #141 (DeBary) and queue an **`inv_relocate_pending`** instead of a create
+
+The 14 Honda Odyssey EX-L BLUE 206k (4901) and 13 Kia Soul GRAY 69k (4902) are already in IC at DeLand (IC #188, #187) so they should be skipped by the dedupe checks.
+
+## Data-only fact at handoff time
+Latest IC rows in Supabase as of 2026-04-26 03:37 UTC:
+- DeBary: 12 Odyssey white 175k (#224), 06 Tundra 4D black 215k (#225), 08 Accord cp grey lowered 176k (#227), blank (#230 — orphan, no car_name, no car_id), 96 Rav4 blue 258k trade (#232), 13 Accord white 195k (#234), 12 Ram white 223k trade (#235)
+- DeLand: 06 Charger white 137k trade (#226), 10 Yaris burgundy 201k (#231), 03 RSX red 189k (#233), 15 Camry tan 203k (#236), 03 RAV4 red 49k (#237)
+
+## Open follow-ups
+- **Backfill mechanism** for IC rows already in Supabase that aren't on the Sheet — the new flow only catches things via CSV sync. If you want to push existing-but-unsheeted IC rows through Review, build a one-shot scan that iterates IC rows missing from `read_all` and queues `inv_create_pending` per row.
+- **IC #230 orphan** — DeBary, sort_order 93, blank `car_name`, no `car_id`. Probably a leftover from an earlier failed insert. Safe to delete after Vlad confirms it's not pointing at a real sheet row.
+- **Vera Outlander r62 + Freda Passat r63 cost backfill** — values pending from Vlad.
+- **134 CarPay reviews** still waiting on bulk-link.
+
+---
+
 # Handoff — Car Factory session of 2026-04-20 → 23
 
 > Day 1 (Apr 20–21): inventory/deals26 sync fixes, Payroll tab, Profit
