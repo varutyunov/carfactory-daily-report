@@ -5824,6 +5824,13 @@ function parseCSV(csv,forceLocation){
     if(status&&status!=='INSTOCK'&&status!=='REPO') continue;
     if(!stock) continue;
     var year=row['year']||'';var model=row['model']||'';var vin=row['vin']||'';
+    var trim=row['trim']||'';
+    // Generic model names ("5-Series", "C Class") lose detail — sub in
+    // the trim ("535i", "C300") which is what the IC sheet conventionally
+    // uses for these brands. Skip if trim is "Base" or empty.
+    if (/-?series\b|class\b/i.test(model) && trim && !/^base$/i.test(trim)) {
+      model = trim;
+    }
     var color=row['colorexterior']||row['color']||row['extcolor']||row['ext color']||row['exterior color']||'';
     var lot=row['lotno']||'';
     var location=forceLocation||(lot==='2'?'DeLand':'DeBary');
@@ -19229,8 +19236,9 @@ function _reviewRender(){
       html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
       html += '</div>';
       html += '<div style="padding:0 12px 12px;">';
-      html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(icDraft.car_name || r.note_line || '') + '</div>';
-      html += '<div style="font-size:13px;color:#888;margin-top:2px;"><span style="color:#60a5fa;">' + _escHtml(icLoc) + '</span> · ' + _escHtml(icSrc) + ' · cost $' + icCost + (icExp ? ' · exp $' + icExp : '') + '</div>';
+      html += '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Posts to sheet as</div>';
+      html += '<input id="rv-icname-' + r.id + '" type="text" value="' + _escHtml(icDraft.car_name || r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;padding:10px 12px;font-size:16px;font-weight:700;outline:none;"/>';
+      html += '<div style="font-size:13px;color:#888;margin-top:8px;"><span style="color:#60a5fa;">' + _escHtml(icLoc) + '</span> · ' + _escHtml(icSrc) + ' · cost $' + icCost + (icExp ? ' · exp $' + icExp : '') + '</div>';
       html += '</div>';
       html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
       html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">✕ Decline</button>';
@@ -19858,7 +19866,16 @@ async function _reviewApprovePending(id){
       alert('Review snapshot is missing — can\'t add to Sheet.');
       return;
     }
-    if (!confirm('Add "' + (icDraft.car_name || '') + '" to ' + (icDraft.location || 'DeBary') + ' Inventory Sheet?')) return;
+    // Pull edited car_name from the card input — user may have refined
+    // it (e.g. "5-Series" → "535i") before approving.
+    var _nameEl = document.getElementById('rv-icname-' + id);
+    var _editedName = _nameEl ? _nameEl.value.trim() : '';
+    if (_editedName) icDraft.car_name = _editedName;
+    if (!icDraft.car_name){
+      alert('Sheet name can\'t be empty.');
+      return;
+    }
+    if (!confirm('Add "' + icDraft.car_name + '" to ' + (icDraft.location || 'DeBary') + ' Inventory Sheet?')) return;
     _removeReviewCard(id);
     try {
       var addRes = await _executeInventoryAdd(icDraft);
@@ -22670,10 +22687,15 @@ async function _autoCreateInventoryCosts(insertedRows) {
     var nameParts = (row.name || '').split(' ');
     var fullYear = nameParts[0] || '';
     var shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
-    var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : (nameParts[1] || '');
+    var make = nameParts[1] || '';
+    var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : '';
     var color = (row.color || '').toLowerCase();
     var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
-    var carName = [shortYr, model, color, milesK].filter(Boolean).join(' ');
+    // Trim-style models like "535i" / "320i" / "C300" are ambiguous on
+    // their own — keep the make in the IC name so the sheet reads
+    // "11 BMW 535i ..." instead of "11 535i ...".
+    var modelHasDigits = /\d/.test(model) && !/\s/.test(model);
+    var carName = [shortYr, modelHasDigits ? make : '', model, color, milesK].filter(Boolean).join(' ');
 
     var loc = row.location || 'DeBary';
     var _nameKey = _normalizeIcKey(carName) + '||' + loc;
