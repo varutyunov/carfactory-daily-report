@@ -17556,8 +17556,8 @@ async function cleanUpStaleCashSales(){
       var rows = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
-        '&row_type=eq.cash_sales' +
-        '&select=note,label_note,label&limit=300');
+        '&label=eq.' + encodeURIComponent('Cash Sales') +
+        '&select=note,label_note,label&limit=10');
       mirrorCache[key] = rows || [];
     } catch(_){
       mirrorCache[key] = [];
@@ -17747,8 +17747,8 @@ async function runCashSaleBackfill(){
       var rows = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
-        '&row_type=eq.cash_sales' +
-        '&select=note,label_note,label&limit=300');
+        '&label=eq.' + encodeURIComponent('Cash Sales') +
+        '&select=note,label_note,label&limit=10');
       mirrorCache[key] = rows || [];
     } catch(_){
       mirrorCache[key] = [];
@@ -22709,8 +22709,8 @@ async function _appendCashSaleToProfit(opts) {
       var mirror = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
-        '&row_type=eq.cash_sales' +
-        '&select=note,label_note,label,value&limit=200');
+        '&label=eq.' + encodeURIComponent('Cash Sales') +
+        '&select=note,label_note,label,value&limit=10');
       if (Array.isArray(mirror)) {
         var _idemTokens = _cashSaleTokens(record, opts.carDesc || desc);
         var _alreadyPosted = _findPostedNoteForTokens(mirror, _idemTokens);
