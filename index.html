@@ -5853,8 +5853,10 @@ function parseCSV(csv,forceLocation){
     var location=forceLocation||(lot==='2'?'DeLand':'DeBary');
     var milesRaw=row['currentmiles']||row['miles']||row['mileage']||row['odometer']||'';
     var miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;
-    // Purchase cost from dealer CSV — feeds inventory_costs col G on review approval
-    var costRaw=row['cost']||row['purchasecost']||row['purchase_cost']||'';
+    // Purchase cost from dealer CSV — feeds inventory_costs col G on review approval.
+    // Prefer `totalcost` (= base cost + buyer/auction fee) so col G reflects what
+    // the dealer actually paid, not just the hammer price.
+    var costRaw=row['totalcost']||row['netcost']||row['cost']||row['purchasecost']||row['purchase_cost']||'';
     var cost=costRaw?parseFloat(String(costRaw).replace(/[^0-9.]/g,''))||0:0;
     cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,status:status||'INSTOCK',photo:null,cost:cost});
   }
