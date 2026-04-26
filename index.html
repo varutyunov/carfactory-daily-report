@@ -17780,8 +17780,9 @@ async function runCashSaleBackfill(){
       var tokens = _cashSaleTokens(d, d26.car_desc);
       var posted = _findPostedNoteForTokens(mirror, tokens);
       if (posted){
-        if (Math.abs((posted.amount || 0) - owed) < 0.01){
-          // Present and equal — Profit26 already matches Sheets master.
+        if (Math.abs((posted.amount || 0) - owed) < 1.00){
+          // Present and within $1 — Profit26 matches Sheets master
+          // (whole-dollar rounding rule introduced v605).
           alreadyPosted++; updProgress(); continue;
         }
         // Present but wrong — queue a one-tap correction card.
@@ -18777,7 +18778,7 @@ async function _queueCashSaleCorrectionReview(dealRecord, expected, posted, carD
       payment_id: null,
       deal_id: dealRecord.id || null,
       customer_name: dealRecord.customer_name || '',
-      amount: expected,
+      amount: Math.round(expected),
       vehicle_year: '',
       vehicle_make: '',
       vehicle_model: '',
@@ -20445,14 +20446,14 @@ async function _reviewApprovePending(id){
     var snap = r.snapshot || {};
     var oldAmt = parseFloat(snap.posted_amount);
     var oldDesc = snap.posted_desc || '';
-    var newAmt = parseFloat(r.amount) || 0;
+    var newAmt = Math.round(parseFloat(r.amount) || 0);
     var newDesc = r.note_line || oldDesc || '';
     if (!isFinite(oldAmt)) {
       alert('Posted amount is missing on this review — can\'t correct safely. Tap Dismiss instead.');
       return;
     }
-    if (Math.abs(oldAmt - newAmt) < 0.01) {
-      alert('Posted amount already matches Sheets master. Tap Dismiss.');
+    if (Math.abs(oldAmt - newAmt) < 1.00) {
+      alert('Posted amount already matches Sheets master (within $1). Tap Dismiss.');
       return;
     }
     var diff = newAmt - oldAmt;
@@ -21314,6 +21315,9 @@ async function _appendPaymentToProfit(payload, amountOverride){
       ? (parseFloat(amountOverride) || 0)
       : (parseFloat(String(payload.amount||'').replace(/[^0-9.\-]/g,''))||0);
     if(amt === 0) return;
+    // Profit26 entries rounded to whole dollars (app-wide rule v605).
+    var amtRounded = Math.round(amt);
+    if(amtRounded === 0) return;
     // Description: "model color LastName M/D" — unified with Deals26 col G
     // note format. Apps Script prepends the amount automatically.
     var desc = _paymentDescFromPayload(payload);
@@ -21321,21 +21325,21 @@ async function _appendPaymentToProfit(payload, amountOverride){
       secret:_SHEETS_SECRET,
       action:'profit_append_entry',
       location:loc,
-      data:{month_idx:monthIdx,row_type:'payments',amount:amt,description:desc}
+      data:{month_idx:monthIdx,row_type:'payments',amount:amtRounded,description:desc}
     })});
     var data=null;try{data=await resp.json();}catch(e){}
     if(!data || data.ok===false){
       console.warn('Profit Payments append failed:',data);
       try { await _auditLog('profit26_append_failed', 'profit26_cell',
         loc + ':payments:m' + monthIdx, null, null,
-        Object.assign({ posted_amount: amt, description: desc, _failure: true,
+        Object.assign({ posted_amount: amtRounded, raw_amount: amt, description: desc, _failure: true,
           _error: (data && data.error) || 'unknown' }, _auditCtx)); } catch(_){}
       return;
     }
     try {
       await _auditLog('profit26_append', 'profit26_cell',
         loc + ':payments:m' + monthIdx, null,
-        { amount: amt, description: desc, new_value: data.new_value },
+        { amount: amtRounded, raw_amount: amt, description: desc, new_value: data.new_value },
         _auditCtx);
     } catch(_){}
     // Background: keep the Supabase profit mirror fresh for the next Profit tab load
@@ -21373,6 +21377,9 @@ async function _updatePaymentInProfit(oldPayload, newPayload){
     var oldAmt=_profitAmountFromPayment(oldPayload);
     var newAmt=_profitAmountFromPayment(newPayload);
     if(oldAmt===0 && newAmt===0) return;
+    // Round new_amount only — old stays raw so the AS can find legacy
+    // entries that were posted with cents.
+    var newAmtRounded=Math.round(newAmt);
     var oldDesc=_profitDescFromPayment(oldPayload);
     var newDesc=_profitDescFromPayment(newPayload);
     var resp=await fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
@@ -21381,7 +21388,7 @@ async function _updatePaymentInProfit(oldPayload, newPayload){
       location:loc,
       data:{month_idx:monthIdx,row_type:'payments',
             old_amount:oldAmt,old_description:oldDesc,
-            new_amount:newAmt,new_description:newDesc}
+            new_amount:newAmtRounded,new_description:newDesc}
     })});
     var data=null;try{data=await resp.json();}catch(e){}
     if(!data||data.ok===false){console.warn('Profit Payments update failed:',data);return;}
@@ -22719,6 +22726,9 @@ async function _appendCashSaleToProfit(opts) {
       return;
     }
 
+    // Profit26 entries are rounded to whole dollars (app-wide rule v605).
+    // Deals26 ledger keeps cents; the reconciler tolerates < $1.00 drift.
+    var amountRounded = Math.round(amount);
     var resp = await fetch(_SHEETS_URL, {
       method: 'POST',
       headers: {'Content-Type': 'text/plain'},
@@ -22726,7 +22736,7 @@ async function _appendCashSaleToProfit(opts) {
         secret: _SHEETS_SECRET,
         action: 'profit_append_entry',
         location: loc,
-        data: { month_idx: monthIdx, row_type: 'cash_sales', amount: amount, description: desc }
+        data: { month_idx: monthIdx, row_type: 'cash_sales', amount: amountRounded, description: desc }
       })
     });
     var data = null; try { data = await resp.json(); } catch(e){}
@@ -22734,7 +22744,7 @@ async function _appendCashSaleToProfit(opts) {
       console.warn('Profit Cash Sales append failed:', data);
       return;
     }
-    console.log('Profit Cash Sales +$' + amount + ' ' + desc + ' → ' + loc + ' month=' + monthIdx);
+    console.log('Profit Cash Sales +$' + amountRounded + ' (raw $' + amount + ') ' + desc + ' → ' + loc + ' month=' + monthIdx);
     // Background re-sync so next Profit tab load shows fresh data
     try {
       fetch(_SHEETS_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
@@ -25298,7 +25308,7 @@ async function _prPostNetToExtras(){
         secret:_SHEETS_SECRET,
         action:'profit_append_entry',
         location:loc,
-        data:{ month_idx:monthIdx, row_type:'extras', amount:net, description:dfTag }
+        data:{ month_idx:monthIdx, row_type:'extras', amount:Math.round(net), description:dfTag }
       })
     });
     var data=null; try{ data=await resp.json(); }catch(e){}
