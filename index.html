@@ -22605,15 +22605,19 @@ async function _queueInventoryAddReview(icDraft, source) {
   if (!icDraft || !icDraft.car_name) return null;
   var loc = icDraft.location || 'DeBary';
   // Dedupe: skip if the same car_id (or same car_name+location for
-  // manual unlinked adds) already has a pending review.
+  // manual unlinked adds) already has a review — including rejected.
+  // Rejected = user already said "no, don't track this car's costs"
+  // (typical for trades, parts cars, scrap). Without this, every
+  // CSV sync re-queues every previously-rejected car indefinitely.
+  // To re-add a rejected car, the user creates the IC directly.
   try {
-    var existingPending = await sbGet('payment_reviews',
-      'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot,location&limit=500');
-    if (Array.isArray(existingPending)){
-      for (var i = 0; i < existingPending.length; i++){
-        var er = existingPending[i];
+    var existingReviews = await sbGet('payment_reviews',
+      'reason=eq.inv_create_pending&status=in.(pending,rejected)&select=id,snapshot,location,status&limit=1000');
+    if (Array.isArray(existingReviews)){
+      for (var i = 0; i < existingReviews.length; i++){
+        var er = existingReviews[i];
         var es = (er.snapshot && er.snapshot.ic) || {};
-        if (icDraft.car_id && es.car_id === icDraft.car_id) return er; // already queued
+        if (icDraft.car_id && es.car_id === icDraft.car_id) return er; // already queued or rejected
         if (!icDraft.car_id &&
             (es.car_name || '').trim().toLowerCase() === (icDraft.car_name || '').trim().toLowerCase() &&
             (er.location || 'DeBary') === loc){
