@@ -1785,11 +1785,20 @@ body.light .cal-fab{background:#4488ff !important;}
     </div>
     <div style="margin-bottom:12px;">
       <label style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Sale Price</label>
-      <input id="dc-sale-price" type="number" inputmode="decimal" placeholder="e.g. 12500" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcUpdate()"/>
+      <input id="dc-sale-price" type="number" inputmode="decimal" placeholder="e.g. 12500" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="var _o=document.getElementById('dc-otd');if(_o)_o.value='';dcUpdate()"/>
     </div>
     <div style="margin-bottom:20px;">
       <label style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Down Payment <span style="color:#333;font-weight:400;text-transform:none;font-size:11px;">— leave blank for cash deal</span></label>
       <input id="dc-down-payment" type="number" inputmode="decimal" placeholder="e.g. 1000  (or $0)" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcUpdate()"/>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px;">
+      <div style="flex:1;height:1px;background:#1e1e1e;"></div>
+      <div style="font-size:11px;color:#333;font-weight:700;letter-spacing:1.5px;">OR</div>
+      <div style="flex:1;height:1px;background:#1e1e1e;"></div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="font-size:11px;color:#4ade80;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Out the Door <span style="color:#333;font-weight:400;text-transform:none;font-size:11px;">— back-calculate from final price</span></label>
+      <input id="dc-otd" type="number" inputmode="decimal" placeholder="e.g. 14200" style="width:100%;background:#0d1a10;border:1px solid #1e3a22;border-radius:10px;color:#4ade80;font-size:20px;padding:12px 14px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcOtdUpdate()"/>
     </div>
     <div id="dc-result" style="display:none;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;"></div>
     <div id="dc-adjust" style="display:none;margin-top:14px;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;">
@@ -10872,6 +10881,7 @@ async function empRequestAttention(carId,type){
 function openDealCalc(){
   document.getElementById('dc-sale-price').value='';
   document.getElementById('dc-down-payment').value='';
+  document.getElementById('dc-otd').value='';
   document.getElementById('dc-result').style.display='none';
   document.getElementById('dc-adjust').style.display='none';
   document.getElementById('dc-pay-amt').value='';
@@ -10920,6 +10930,7 @@ function dcUpdate(){
   var dpStr=(document.getElementById('dc-down-payment').value||'').trim();
   var el=document.getElementById('dc-result');
   var adjEl=document.getElementById('dc-adjust');
+  var _noteEl=document.getElementById('dc-otd-note');if(_noteEl)_noteEl.textContent='';
   if(!sp||sp<=0){el.style.display='none';adjEl.style.display='none';return;}
   var hasDown=dpStr!=='';
   var dp=hasDown?Math.max(0,parseFloat(dpStr)||0):0;
@@ -11007,6 +11018,37 @@ function _dcAdjustSummary(amt,count){
     '<span style="font-size:12px;color:#666;">'+count+' × '+_dcFmt(amt)+'</span>' +
     '<span style="font-size:12px;color:#888;">= '+_dcFmt(total)+' ('+overUnder+')</span>' +
   '</div>';
+}
+
+function dcOtdUpdate(){
+  var otd=parseFloat((document.getElementById('dc-otd').value||'').trim());
+  // Clear sale price so forward calc doesn't interfere
+  document.getElementById('dc-sale-price').value='';
+  var el=document.getElementById('dc-result');
+  var adjEl=document.getElementById('dc-adjust');
+  if(!otd||otd<=0){el.style.display='none';adjEl.style.display='none';return;}
+  var dpStr=(document.getElementById('dc-down-payment').value||'').trim();
+  var hasDown=dpStr!=='';
+  var dp=hasDown?Math.max(0,parseFloat(dpStr)||0):0;
+  // Fixed fees
+  var fixedTaxable=hasDown?(500+399+150):(399+150); // finance adds $500 fee
+  var fixedNonTax=78+20; // title + reg = 98
+  // Reverse: totalDue = taxSub*1.065+98 (low) or taxSub*1.06+123 (high, taxSub>5000)
+  var taxSubLow=(otd-fixedNonTax)/1.065;
+  var taxSub=taxSubLow<=5000?taxSubLow:(otd-123)/1.06;
+  var sp=Math.max(0,taxSub-fixedTaxable);
+  // Populate sale price and run forward calc
+  document.getElementById('dc-sale-price').value=sp.toFixed(2);
+  dcUpdate();
+  // Mark result as reverse-engineered
+  var note=document.getElementById('dc-otd-note');
+  if(!note){
+    note=document.createElement('div');
+    note.id='dc-otd-note';
+    note.style.cssText='font-size:11px;color:#4ade80;margin-top:8px;text-align:center;opacity:.7;';
+    el.parentNode.insertBefore(note,el.nextSibling);
+  }
+  note.textContent='↑ Sale price back-calculated from $'+otd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' out the door';
 }
 
 // ═══════════════════════════════════════════════════════════════════
