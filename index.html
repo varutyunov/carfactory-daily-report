@@ -19232,8 +19232,9 @@ function _reviewRender(){
       html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(icDraft.car_name || r.note_line || '') + '</div>';
       html += '<div style="font-size:13px;color:#888;margin-top:2px;"><span style="color:#60a5fa;">' + _escHtml(icLoc) + '</span> · ' + _escHtml(icSrc) + ' · cost $' + icCost + (icExp ? ' · exp $' + icExp : '') + '</div>';
       html += '</div>';
-      html += '<div style="padding:0 12px 12px;">';
-      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · add to Sheet</button>';
+      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
+      html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">✕ Decline</button>';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · add to Sheet</button>';
       html += '</div>';
       html += '</div>';
       continue;
@@ -19251,8 +19252,9 @@ function _reviewRender(){
       html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(mv.car_name || r.note_line || '') + '</div>';
       html += '<div style="font-size:13px;color:#888;margin-top:2px;"><span style="color:#a78bfa;">' + _escHtml(mv.oldLoc || '') + '</span> → <span style="color:#a78bfa;">' + _escHtml(mv.newLoc || '') + '</span> · cost $' + (parseFloat(mv.purchase_cost)||0) + ' preserved</div>';
       html += '</div>';
-      html += '<div style="padding:0 12px 12px;">';
-      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.35);border-radius:10px;color:#a78bfa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · move row</button>';
+      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
+      html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">✕ Decline</button>';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.35);border-radius:10px;color:#a78bfa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · move row</button>';
       html += '</div>';
       html += '</div>';
       continue;
@@ -20545,6 +20547,31 @@ async function _reviewReject(id){
     await _reviewLoad();
   } catch(e){
     alert('Error: ' + (e.message || e));
+  }
+}
+
+// Quiet decline — no confirm dialog. Used by inv_create / inv_relocate
+// cards where the user often has dozens to clear at once and the review
+// is easy to recreate (next sync re-queues if the IC row still missing).
+async function _reviewDeclineQuiet(id){
+  var card = document.getElementById('rv-card-' + id);
+  if (card){ card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+  try {
+    await sbPatch('payment_reviews', id, {
+      status: 'rejected',
+      resolved_at: new Date().toISOString(),
+      resolved_by: me ? me.name : ''
+    });
+    if (card && card.parentNode) card.parentNode.removeChild(card);
+    try { _reviewRefreshBadge && _reviewRefreshBadge(); } catch(_){}
+    var countEl = document.getElementById('review-count');
+    if (countEl){
+      var m = (countEl.textContent || '').match(/\d+/);
+      if (m){ countEl.textContent = '(' + Math.max(0, parseInt(m[0]) - 1) + ')'; }
+    }
+  } catch(e){
+    if (card){ card.style.opacity = ''; card.style.pointerEvents = ''; }
+    alert('Decline failed: ' + (e.message || e));
   }
 }
 
