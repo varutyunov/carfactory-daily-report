@@ -5668,6 +5668,10 @@ async function syncLocation(loc){
     stEl.textContent=loc+' synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
     renderInv();
+    // Catch any recent inventory rows added by the server-side cron
+    // (GitHub Actions inventory-sync.js) that this client never saw as
+    // "just inserted" — queue inv_create_pending reviews for them.
+    try{ await _scanInventoryForMissingIc(14); }catch(e){ console.warn('Missing-IC scan failed:',e); }
   }catch(e){stEl.textContent='Sync failed: '+e.message;}
 }
 async function syncNow(){
@@ -5765,6 +5769,10 @@ async function syncNow(){
     stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
     renderInv();
+    // Catch any recent inventory rows added by the server-side cron
+    // (GitHub Actions inventory-sync.js) that this client never saw as
+    // "just inserted" — queue inv_create_pending reviews for them.
+    try{ await _scanInventoryForMissingIc(14); }catch(e){ console.warn('Missing-IC scan failed:',e); }
   }catch(e){stEl.textContent='Sync failed: '+e.message;}
 }
 async function clearAllQueues(){
@@ -22594,6 +22602,18 @@ async function _queueInventoryAddReview(icDraft, source) {
 // Builds the canonical car_name from the inventory row and queues a
 // review for each new car. Approval in the Review queue is what
 // actually creates the inventory_costs row + pushes to the Sheet.
+// Normalize a car_name for dedupe: lowercase + trim + collapse common
+// color spelling variants so "13 Soul gray 69k" matches "13 Soul grey 69k".
+function _normalizeIcKey(s) {
+  return (s || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\bgrey\b/g, 'gray')
+    .replace(/\baluminium\b/g, 'aluminum')
+    .replace(/\s+/g, ' ');
+}
+
 async function _autoCreateInventoryCosts(insertedRows) {
   if (!Array.isArray(insertedRows) || !insertedRows.length) return;
 
@@ -22605,7 +22625,7 @@ async function _autoCreateInventoryCosts(insertedRows) {
   var existingNameKeys = new Set();
   if (Array.isArray(allIc)) allIc.forEach(function(r) {
     if (r.car_id) existingCarIds.add(r.car_id);
-    var _n = (r.car_name || '').trim().toLowerCase();
+    var _n = _normalizeIcKey(r.car_name);
     if (_n && _n !== 'total') existingNameKeys.add(_n + '||' + (r.location || 'DeBary'));
   });
 
@@ -22623,7 +22643,7 @@ async function _autoCreateInventoryCosts(insertedRows) {
     var carName = [shortYr, model, color, milesK].filter(Boolean).join(' ');
 
     var loc = row.location || 'DeBary';
-    var _nameKey = carName.trim().toLowerCase() + '||' + loc;
+    var _nameKey = _normalizeIcKey(carName) + '||' + loc;
     if (existingNameKeys.has(_nameKey)) {
       console.log('_autoCreateInventoryCosts: skipping duplicate name "' + carName + '" for ' + loc);
       continue;
@@ -22645,6 +22665,29 @@ async function _autoCreateInventoryCosts(insertedRows) {
       console.warn('Queue inv-create review failed for ' + carName + ':', e);
     }
   }
+}
+
+// Catch the case where inventory rows landed via the server-side
+// inventory-sync.js (GitHub Actions) — the in-app syncNow only calls
+// _autoCreateInventoryCosts for rows IT just inserted, so anything the
+// server-side cron pre-inserted misses out. This sweep finds inventory
+// rows added in the last `daysWindow` days that aren't yet in IC and
+// queues inv_create_pending reviews for them. _queueInventoryAddReview
+// dedupes against existing pending reviews so this is idempotent.
+async function _scanInventoryForMissingIc(daysWindow) {
+  var days = (daysWindow && daysWindow > 0) ? daysWindow : 14;
+  var cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  var recent = [];
+  try {
+    recent = await sbGet('inventory',
+      'created_at=gte.' + cutoff + '&select=id,name,location,color,miles,created_at&order=created_at.desc&limit=500');
+  } catch(e) {
+    console.warn('_scanInventoryForMissingIc: inventory fetch failed', e);
+    return;
+  }
+  if (!Array.isArray(recent) || !recent.length) return;
+  // Reuse the queueing path — its dedupe handles existing IC + pending reviews.
+  await _autoCreateInventoryCosts(recent);
 }
 
 // ══════════════════════════════════════════════════════════════
