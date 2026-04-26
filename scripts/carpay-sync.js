@@ -291,6 +291,17 @@ const LOCATIONS = [
   { name: 'deland', dealerId: process.env.CARPAY_DELAND_ID || '657' }
 ];
 
+// Per-account overrides: when an Encore customer's deal lives at a different
+// lot than CarPay reports. Account number → the lot the deal actually
+// belongs to ('debary' | 'deland'). Without this, every sync re-tags the
+// customer back to whatever CarPay says, undoing any manual reroutes done
+// in Supabase. Order of operations in main() matters: the debary delete
+// runs before the deland fetch, so a deland → debary override survives
+// (the override is applied during the deland iteration, after both deletes).
+const LOCATION_OVERRIDES = {
+  '4481': 'debary'  // GARCIA, JUSTIN — 96 Honda Legend (Encore filed at DeLand, deal lives in DeBary books)
+};
+
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   if (!SB_URL || !SB_KEY) { console.error('Missing SUPABASE_URL or SUPABASE_KEY'); process.exit(1); }
@@ -317,10 +328,10 @@ async function main() {
     console.log('  Fetched ' + payments.length + ' payments from list page');
 
     customers.forEach(c => {
-      c.location = loc.name;
+      c.location = LOCATION_OVERRIDES[c.account] || loc.name;
       applyPreserved(c, preserved);
     });
-    payments.forEach(p => { p.location = loc.name; });
+    payments.forEach(p => { p.location = LOCATION_OVERRIDES[p.account] || loc.name; });
 
     await sbDeleteByLocation('carpay_customers', loc.name);
     await sbDeleteByLocation('carpay_payments', loc.name);
