@@ -5598,6 +5598,11 @@ async function syncLocation(loc){
     if(!imp.length) throw new Error('No INSTOCK vehicles found in CSV');
     var colorMap=JSON.parse(localStorage.getItem('cf_colormap')||'{}');
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
+    // VIN/stock → cost map: inventory table has no cost column, so we
+    // merge cost from the parsed CSV onto the inserted rows before
+    // _autoCreateInventoryCosts queues the inv_create_pending review.
+    var costByVin={},costByStock={};
+    imp.forEach(function(c){if(c.vin)costByVin[c.vin]=c.cost||0;if(c.stock)costByStock[c.stock]=c.cost||0;});
     var existByStock={};var existByVin={};
     S.inventory.forEach(function(c){
       if(c.stock) existByStock[c.stock]=c;
@@ -5642,6 +5647,9 @@ async function syncLocation(loc){
           if(Array.isArray(inserted)){
             inserted.forEach(function(row){
               S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
+              // Stamp cost from the CSV onto the inserted row so the
+              // review-queue review carries the dealer purchase price.
+              row.cost=(row.vin&&costByVin[row.vin])||(row.stock&&costByStock[row.stock])||0;
             });
             // Auto-create inventory_costs rows for new cars → syncs to Google Sheet
             try{ await _autoCreateInventoryCosts(inserted); }catch(e){ console.warn('Auto inventory_costs failed:',e); }
@@ -5845,7 +5853,10 @@ function parseCSV(csv,forceLocation){
     var location=forceLocation||(lot==='2'?'DeLand':'DeBary');
     var milesRaw=row['currentmiles']||row['miles']||row['mileage']||row['odometer']||'';
     var miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;
-    cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,status:status||'INSTOCK',photo:null});
+    // Purchase cost from dealer CSV — feeds inventory_costs col G on review approval
+    var costRaw=row['cost']||row['purchasecost']||row['purchase_cost']||'';
+    var cost=costRaw?parseFloat(String(costRaw).replace(/[^0-9.]/g,''))||0:0;
+    cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,status:status||'INSTOCK',photo:null,cost:cost});
   }
   return cars;
 }
@@ -22768,7 +22779,7 @@ async function _autoCreateInventoryCosts(insertedRows) {
       await _queueInventoryAddReview({
         car_name: carName,
         car_id: row.id,
-        purchase_cost: 0,
+        purchase_cost: row.cost || 0,
         joint_expenses: 0,
         vlad_expenses: 0,
         expense_notes: '',
@@ -22794,12 +22805,36 @@ async function _scanInventoryForMissingIc(daysWindow) {
   var recent = [];
   try {
     recent = await sbGet('inventory',
-      'created_at=gte.' + cutoff + '&select=id,name,location,color,miles,created_at&order=created_at.desc&limit=500');
+      'created_at=gte.' + cutoff + '&select=id,name,vin,stock,location,color,miles,created_at&order=created_at.desc&limit=500');
   } catch(e) {
     console.warn('_scanInventoryForMissingIc: inventory fetch failed', e);
     return;
   }
   if (!Array.isArray(recent) || !recent.length) return;
+  // Build VIN/stock → cost map from the dealer CSVs so cron-inserted rows
+  // (server-side inventory-sync.js) carry the right purchase_cost into
+  // the inv_create_pending review queue.
+  var costByVin = {}, costByStock = {};
+  try {
+    var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+    var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
+    var urls = [{url:S.syncUrl||DEBARY_URL,loc:'DeBary'},{url:DELAND_URL,loc:'DeLand'}];
+    for (var u = 0; u < urls.length; u++) {
+      try {
+        var r = await fetch(urls[u].url + '?t=' + Date.now());
+        if (!r.ok) continue;
+        var csvText = await r.text();
+        var parsed = parseCSV(csvText, urls[u].loc);
+        parsed.forEach(function(c){
+          if (c.vin && c.cost) costByVin[c.vin] = c.cost;
+          if (c.stock && c.cost) costByStock[c.stock] = c.cost;
+        });
+      } catch(_){}
+    }
+  } catch(_){}
+  recent.forEach(function(row){
+    row.cost = (row.vin && costByVin[row.vin]) || (row.stock && costByStock[row.stock]) || 0;
+  });
   // Reuse the queueing path — its dedupe handles existing IC + pending reviews.
   await _autoCreateInventoryCosts(recent);
 }
