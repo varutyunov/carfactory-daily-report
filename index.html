@@ -21749,17 +21749,28 @@ async function _autopopulateDeals26(record, car, icOverride) {
   if (_useIc && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
-  // 6. Calculate deal_num — match the Deals tab. The Deals tab numbers all
-  //    deals in this location's Sunday-week chronologically (oldest=#1,
-  //    newest=#N) by counting `deals` rows. We use the SAME source of truth
-  //    here so the d26 sheet number matches what Vlad sees in the app.
+  // 6. Calculate deal_num so column R reads 1, 2, 3, ... down each
+  //    week in the Google Sheet. The Sheet is sorted by sort_order
+  //    (= approval order = insertion order to deals26), so dn must
+  //    increment in sort_order, NOT chronological sale order. A week
+  //    is bounded by sale-date — late-approved deals from a prior
+  //    week stay in that week's count and don't affect the next
+  //    week's restart at 1.
   //
-  //    Why not look at deals26 itself? Approve-late deals broke the old
-  //    max(deal_num)+1 lookup: a 4/18-sale row inserted on 4/23 leaks into
-  //    the next week's filter (filter was on the d26 row's created_at, not
-  //    the sale date), so the next 4/22-sale insert started counting from
-  //    that stale max instead of restarting at 1. Counting `deals` directly
-  //    by `deals.created_at` sidesteps the problem entirely.
+  //    Algorithm at insertion time:
+  //      a) sale week = Sunday-week of record.created_at
+  //      b) find all deals in that week + location (any d26 status)
+  //      c) count existing d26 rows whose sold_inv_vin matches one
+  //         of those week-VINs
+  //      d) dealNum = count + 1
+  //    Because sort_order is also assigned at insertion time
+  //    (= total+1), the new row will sit AT THE END of the week's
+  //    block by sort_order, so dn aligns with sheet position.
+  //
+  //    Old logic looked at max(deals26.deal_num)+1 within a window
+  //    on deals26.created_at — approve-late rows leaked into the
+  //    next week's filter, double-counting. Walking via deals.vin
+  //    sidesteps that.
   var _locForNum = record.location || 'DeBary';
   var dealNum = 1;
   try {
@@ -21775,15 +21786,18 @@ async function _autopopulateDeals26(record, car, icOverride) {
       'location=eq.' + encodeURIComponent(_locForNum) +
       '&created_at=gte.' + encodeURIComponent(_weekStartIso) +
       '&created_at=lt.' + encodeURIComponent(_weekEndIso) +
-      '&order=created_at.asc&select=id,created_at&limit=200');
-    if (Array.isArray(weekDeals)) {
-      var _pos = -1;
-      for (var _i = 0; _i < weekDeals.length; _i++){
-        if (weekDeals[_i].id === record.id){ _pos = _i; break; }
+      '&select=id,vin&limit=200');
+    if (Array.isArray(weekDeals) && weekDeals.length){
+      var _vins = weekDeals.map(function(d){return (d.vin||'').trim();}).filter(Boolean);
+      if (_vins.length){
+        var _vinList = _vins.map(function(v){return '"' + v + '"';}).join(',');
+        var existingD26 = await sbGet('deals26',
+          'location=eq.' + encodeURIComponent(_locForNum) +
+          '&sold_inv_vin=in.(' + _vinList + ')' +
+          '&select=id&limit=200');
+        var _count = Array.isArray(existingD26) ? existingD26.length : 0;
+        dealNum = _count + 1;
       }
-      // If record isn't visible in the fetch yet (rare race), it must be
-      // the newest in the week → length+1.
-      dealNum = _pos >= 0 ? _pos + 1 : weekDeals.length + 1;
     }
   } catch (e) { /* default to 1 */ }
 
