@@ -21749,15 +21749,17 @@ async function _autopopulateDeals26(record, car, icOverride) {
   if (_useIc && ic.vlad_expense_notes) expNotes.push(ic.vlad_expense_notes);
   var expenseNotes = expNotes.join('\n');
 
-  // 6. Calculate deal_num — scoped to the DEAL's calendar week (Sunday-start).
-  //    Anchored on record.created_at (the SALE date), not new Date(), so
-  //    deals approved days/weeks after the sale still land in their correct
-  //    week. Under approve-first, this matters: the deals table carries
-  //    the original sale date, but the review approve happens later.
-  //    If no deals26 rows exist for that week at this location, deal_num=1
-  //    (new week → triggers thick top border via _writeRowToSheet).
-  //    Otherwise max(this_week.deal_num)+1.
-  //    Must also be location-filtered so DeBary / DeLand counts don't mix.
+  // 6. Calculate deal_num — match the Deals tab. The Deals tab numbers all
+  //    deals in this location's Sunday-week chronologically (oldest=#1,
+  //    newest=#N) by counting `deals` rows. We use the SAME source of truth
+  //    here so the d26 sheet number matches what Vlad sees in the app.
+  //
+  //    Why not look at deals26 itself? Approve-late deals broke the old
+  //    max(deal_num)+1 lookup: a 4/18-sale row inserted on 4/23 leaks into
+  //    the next week's filter (filter was on the d26 row's created_at, not
+  //    the sale date), so the next 4/22-sale insert started counting from
+  //    that stale max instead of restarting at 1. Counting `deals` directly
+  //    by `deals.created_at` sidesteps the problem entirely.
   var _locForNum = record.location || 'DeBary';
   var dealNum = 1;
   try {
@@ -21769,15 +21771,20 @@ async function _autopopulateDeals26(record, car, icOverride) {
     var _weekStartIso = _wsDt.toISOString();
     var _weekEndDt = new Date(_wsDt.getTime() + 7 * 24 * 60 * 60 * 1000);
     var _weekEndIso = _weekEndDt.toISOString();
-    var recentD26 = await sbGet('deals26',
+    var weekDeals = await sbGet('deals',
       'location=eq.' + encodeURIComponent(_locForNum) +
       '&created_at=gte.' + encodeURIComponent(_weekStartIso) +
       '&created_at=lt.' + encodeURIComponent(_weekEndIso) +
-      '&order=deal_num.desc&limit=50&select=deal_num');
-    if (Array.isArray(recentD26) && recentD26.length > 0) {
-      dealNum = (parseInt(recentD26[0].deal_num) || 0) + 1;
+      '&order=created_at.asc&select=id,created_at&limit=200');
+    if (Array.isArray(weekDeals)) {
+      var _pos = -1;
+      for (var _i = 0; _i < weekDeals.length; _i++){
+        if (weekDeals[_i].id === record.id){ _pos = _i; break; }
+      }
+      // If record isn't visible in the fetch yet (rare race), it must be
+      // the newest in the week → length+1.
+      dealNum = _pos >= 0 ? _pos + 1 : weekDeals.length + 1;
     }
-    // else: no deals this calendar week yet → dealNum stays 1
   } catch (e) { /* default to 1 */ }
 
   // 7. Get sort_order — location-filtered row count + 1. MUST be filtered
