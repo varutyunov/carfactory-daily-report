@@ -1803,6 +1803,10 @@ body.light .cal-fab{background:#4488ff !important;}
     <div id="dc-result" style="display:none;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;"></div>
     <div id="dc-adjust" style="display:none;margin-top:14px;background:#111;border-radius:14px;padding:16px 14px;border:1px solid #1e1e1e;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#a78bfa;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #1e1e1e;">⚙ Payment Adjustment</div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:10px;color:#fb923c;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Interest Rate (APR %)</label>
+        <input id="dc-apr" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 13" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fb923c;font-size:18px;font-weight:700;padding:10px 12px;outline:none;font-family:inherit;box-sizing:border-box;" oninput="dcAdjustApr()"/>
+      </div>
       <div style="display:flex;gap:10px;">
         <div style="flex:1;">
           <label style="font-size:10px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Payment Amount</label>
@@ -10899,6 +10903,7 @@ function openDealCalc(){
   document.getElementById('dc-adjust').style.display='none';
   document.getElementById('dc-pay-amt').value='';
   document.getElementById('dc-pay-count').value='';
+  document.getElementById('dc-apr').value='';
   document.getElementById('dc-adjust-summary').innerHTML='';
   _dcAmtFin=0;
   document.getElementById('m-deal-calc').style.display='flex';
@@ -10957,7 +10962,15 @@ function dcUpdate(){
     var titleFee=78,regFee=20;
     var totalDue=taxSub+tax+titleFee+regFee;
     _dcAmtFin=totalDue-dp;
-    var biweekly=_dcAmtFin/13;
+    var aprEl=document.getElementById('dc-apr');
+    var apr=aprEl?parseFloat(aprEl.value)||0:0;
+    var r=apr/100;
+    var interest=_dcAmtFin*r*(13/26);
+    var totalRepay=_dcAmtFin+interest;
+    var biweekly=totalRepay/13;
+    var interestRows=apr>0?
+      _dcRow('Interest ('+apr+'% APR)',_dcFmt(interest),'#fb923c')+
+      _dcRow('Total Repayment',_dcFmt(totalRepay),'#fb923c',true):'';
     html=_dcHeader('Finance Deal','#fbbf24')+
       _dcRow('Sale Price',_dcFmt(sp))+
       _dcRow('Finance Fee',_dcFmt(financeFee))+
@@ -10973,7 +10986,8 @@ function dcUpdate(){
       _dcRow('Down Payment','−'+_dcFmt(dp),'#ff453a')+
       _dcDiv()+
       _dcRow('Amount Financed',_dcFmt(_dcAmtFin),'#a78bfa',true)+
-      _dcBig('Biweekly (13 payments)',_dcFmt(biweekly),'#fbbf24');
+      '<div id="dc-interest-rows">'+interestRows+'</div>'+
+      '<div id="dc-biweekly-box">'+_dcBig('Biweekly (13 payments)',_dcFmt(biweekly),'#fbbf24')+'</div>';
     // Populate adjustment fields with defaults
     document.getElementById('dc-pay-amt').value=biweekly.toFixed(2);
     document.getElementById('dc-pay-count').value='13';
@@ -11009,28 +11023,68 @@ function dcAdjustAmt(){
   if(_dcAmtFin<=0) return;
   var amt=parseFloat(document.getElementById('dc-pay-amt').value);
   if(!amt||amt<=0) return;
-  var count=Math.ceil(_dcAmtFin/amt);
+  var aprEl=document.getElementById('dc-apr');
+  var apr=aprEl?parseFloat(aprEl.value)||0:0;
+  var r=apr/100;
+  var count;
+  if(r>0){var denom=amt-_dcAmtFin*r/26;count=denom>0?Math.ceil(_dcAmtFin/denom):999;}
+  else{count=Math.ceil(_dcAmtFin/amt);}
   document.getElementById('dc-pay-count').value=count;
   document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(amt,count);
+  _dcUpdateInterestDisplay(count,amt);
 }
 // User changed # of Payments → recalculate Payment Amount
 function dcAdjustCount(){
   if(_dcAmtFin<=0) return;
   var count=parseInt(document.getElementById('dc-pay-count').value);
   if(!count||count<=0) return;
-  var amt=_dcAmtFin/count;
+  var aprEl=document.getElementById('dc-apr');
+  var apr=aprEl?parseFloat(aprEl.value)||0:0;
+  var r=apr/100;
+  var totalRepay=_dcAmtFin*(1+r*count/26);
+  var amt=totalRepay/count;
   document.getElementById('dc-pay-amt').value=amt.toFixed(2);
   document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(amt,count);
+  _dcUpdateInterestDisplay(count,amt);
+}
+// User changed APR → recalculate payment at current count
+function dcAdjustApr(){
+  if(_dcAmtFin<=0) return;
+  var count=parseInt(document.getElementById('dc-pay-count').value)||13;
+  var aprEl=document.getElementById('dc-apr');
+  var apr=aprEl?parseFloat(aprEl.value)||0:0;
+  var r=apr/100;
+  var totalRepay=_dcAmtFin*(1+r*count/26);
+  var amt=totalRepay/count;
+  document.getElementById('dc-pay-amt').value=amt.toFixed(2);
+  document.getElementById('dc-adjust-summary').innerHTML=_dcAdjustSummary(amt,count);
+  _dcUpdateInterestDisplay(count,amt);
 }
 // Summary display for adjusted payments
 function _dcAdjustSummary(amt,count){
   var total=amt*count;
-  var diff=total-_dcAmtFin;
+  var aprEl=document.getElementById('dc-apr');
+  var apr=aprEl?parseFloat(aprEl.value)||0:0;
+  var r=apr/100;
+  var totalRepay=_dcAmtFin>0?_dcAmtFin*(1+r*count/26):_dcAmtFin;
+  var diff=total-totalRepay;
   var overUnder=diff>0.01?'<span style="color:#ff453a;">+'+_dcFmt(diff)+' over</span>':diff<-0.01?'<span style="color:#30d158;">'+_dcFmt(Math.abs(diff))+' under</span>':'<span style="color:#30d158;">exact</span>';
   return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #1e1e1e;">' +
     '<span style="font-size:12px;color:#666;">'+count+' × '+_dcFmt(amt)+'</span>' +
     '<span style="font-size:12px;color:#888;">= '+_dcFmt(total)+' ('+overUnder+')</span>' +
   '</div>';
+}
+// Update interest rows and biweekly box in dc-result when adjustments change
+function _dcUpdateInterestDisplay(n,payment){
+  var aprEl=document.getElementById('dc-apr');
+  var apr=aprEl?parseFloat(aprEl.value)||0:0;
+  var r=apr/100;
+  var interest=_dcAmtFin*r*(n/26);
+  var totalRepay=_dcAmtFin+interest;
+  var irEl=document.getElementById('dc-interest-rows');
+  var bwEl=document.getElementById('dc-biweekly-box');
+  if(irEl){irEl.innerHTML=apr>0?_dcRow('Interest ('+apr+'% APR)',_dcFmt(interest),'#fb923c')+_dcRow('Total Repayment',_dcFmt(totalRepay),'#fb923c',true):'';}
+  if(bwEl){bwEl.innerHTML=_dcBig('Biweekly ('+n+' payments)',_dcFmt(payment),'#fbbf24');}
 }
 
 function dcOtdUpdate(){
@@ -17434,17 +17488,69 @@ function _backfillCancelReq(){
 }
 
 // ──────────────────────────────────────────────────────────────
-// CASH SALE BACKFILL — sweep all full-purchase deals, queue any
-// whose profit hasn't yet been posted to Profit26 Cash Sales.
-// Mirrors the new-deal flow: nothing auto-posts. Each candidate
-// becomes a cash_sale_pending review the user must approve.
-//
-// Skip rules:
-//   - Pending cash_sale_pending review already exists for this deal
-//   - Profit26 mirror for the deal's (location, month) already has a
-//     cash_sales line whose note/label contains the deal's car_desc
-//   - deals26 row not found, or owed<=0 (no profit / not finalized)
+// CASH SALE RECONCILER — sweep all full-purchase deals, reconcile
+// each one against Profit26 Cash Sales using Sheets as master.
+// Three outcomes per deal:
+//   • Not present in Profit26 → queue cash_sale_pending
+//   • Present and amount matches live owed → skip
+//   • Present but amount ≠ live owed → queue cash_sale_correction
+//     (one-tap rewrite of the formula term + matching note line)
+// Idempotent: re-running never queues duplicates because dedupe
+// covers ANY pending review tied to deal_id (not just one reason).
 // ──────────────────────────────────────────────────────────────
+
+// Build matching tokens for a deal: year (short + full), first model
+// word, lowercase lastname. Tries deal.vehicle_desc first, falls back
+// to parsing the deals26 car_desc shape ("15 Camaro blue 133k Velez").
+function _cashSaleTokens(deal, carDesc){
+  var custParts = String((deal && deal.customer_name) || '').trim().split(/\s+/);
+  var last = (custParts[custParts.length - 1] || '').toLowerCase();
+  var year = '', modelFirst = '';
+  var vd = String((deal && deal.vehicle_desc) || '').trim().split(/\s+/);
+  if (vd[0] && /^(19|20)\d{2}$/.test(vd[0])){
+    year = vd[0];
+    var modelTok = (vd.slice(2).join(' ') || vd[1] || '').toLowerCase();
+    modelFirst = (modelTok.split(/\s+/)[0] || '');
+  } else if (carDesc){
+    var cd = String(carDesc).trim().split(/\s+/);
+    if (cd[0] && /^\d{2}$/.test(cd[0])) year = '20' + cd[0];
+    if (cd[1]) modelFirst = cd[1].toLowerCase();
+  }
+  return {
+    yShort: year ? year.slice(-2) : '',
+    yFull: year || '',
+    model: modelFirst,
+    last: last
+  };
+}
+
+// Find an existing Profit26 cash_sales note line that matches this
+// deal's tokens. Token rule: lastname AND (yShort OR yFull) must appear
+// in the note line; if model is non-empty, it must appear too. Returns
+// {amount, desc} for the matching line, or null if not posted.
+function _findPostedNoteForTokens(mirror, tokens){
+  if (!tokens || !tokens.last || (!tokens.yShort && !tokens.yFull)) return null;
+  for (var mi = 0; mi < mirror.length; mi++){
+    var rowM = mirror[mi] || {};
+    var src = String(rowM.note || '');
+    var lines = src.split(/\r?\n/);
+    for (var li = 0; li < lines.length; li++){
+      var line = String(lines[li] || '').trim();
+      if (!line) continue;
+      var ll = line.toLowerCase();
+      if (ll.indexOf(tokens.last) < 0) continue;
+      var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
+                    (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
+      if (!hasYear) continue;
+      if (tokens.model && ll.indexOf(tokens.model) < 0) continue;
+      var m = line.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+      if (m){
+        return { amount: parseFloat(m[1]), desc: (m[2] || '').trim() };
+      }
+    }
+  }
+  return null;
+}
 async function runCashSaleBackfill(){
   if (_backfillRunning){
     if (confirm('Backfill already running. Cancel it?')) { _backfillCancel = true; }
@@ -17468,15 +17574,18 @@ async function runCashSaleBackfill(){
   }
   deals = (deals || []).filter(function(d){ return d && d.vin; });
 
+  // Bug B fix: skip any deal that already has a pending review tied to
+  // its deal_id, regardless of reason. Prevents Re-process Pending from
+  // breaking the dedupe (cash_sale_pending → multiple/ambiguous → re-queue).
   var alreadyQueued = {};
   try {
     var existing = await sbGet('payment_reviews',
-      'reason=eq.cash_sale_pending&status=eq.pending&select=deal_id&limit=2000');
+      'status=eq.pending&select=deal_id,reason&limit=2000');
     (existing || []).forEach(function(r){ if (r.deal_id) alreadyQueued[r.deal_id] = true; });
   } catch(_){}
 
   var total = deals.length;
-  var done = 0, queued = 0, alreadyPosted = 0, alreadyReview = 0, notReady = 0, errored = 0;
+  var done = 0, queued = 0, alreadyPosted = 0, alreadyReview = 0, notReady = 0, errored = 0, corrections = 0;
 
   var progressId = 'cashsale-backfill-progress';
   if (list){
@@ -17495,7 +17604,7 @@ async function runCashSaleBackfill(){
   var updProgress = function(){
     var t = document.getElementById('cashsale-progress-text');
     var b = document.getElementById('cashsale-progress-bar');
-    if (t) t.textContent = done + ' / ' + total + ' · queued ' + queued + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview + (notReady ? ' · not ready ' + notReady : '') + (errored ? ' · errors ' + errored : '');
+    if (t) t.textContent = done + ' / ' + total + ' · queued ' + queued + ' · corrections ' + corrections + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview + (notReady ? ' · not ready ' + notReady : '') + (errored ? ' · errors ' + errored : '');
     if (b) b.style.width = (total ? Math.round(done*100/total) : 0) + '%';
   };
 
@@ -17507,22 +17616,13 @@ async function runCashSaleBackfill(){
       var rows = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
+        '&row_type=eq.cash_sales' +
         '&select=note,label_note,label&limit=300');
       mirrorCache[key] = rows || [];
     } catch(_){
       mirrorCache[key] = [];
     }
     return mirrorCache[key];
-  }
-  function descAlreadyPosted(mirror, desc){
-    if (!desc) return false;
-    var descL = desc.toLowerCase();
-    for (var i = 0; i < mirror.length; i++){
-      var r = mirror[i];
-      var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
-      if (hay.indexOf(descL) !== -1) return true;
-    }
-    return false;
   }
 
   for (var i = 0; i < deals.length; i++){
@@ -17544,10 +17644,22 @@ async function runCashSaleBackfill(){
       var dt = d.created_at ? new Date(d.created_at) : new Date();
       var monthIdx = dt.getMonth();
       var mirror = await getMirror(loc, monthIdx);
-      if (descAlreadyPosted(mirror, d26.car_desc)) {
-        alreadyPosted++; updProgress(); continue;
-      }
 
+      // Bug A fix + reconciler: token-based posted detection. Three outcomes.
+      var tokens = _cashSaleTokens(d, d26.car_desc);
+      var posted = _findPostedNoteForTokens(mirror, tokens);
+      if (posted){
+        if (Math.abs((posted.amount || 0) - owed) < 0.01){
+          // Present and equal — Profit26 already matches Sheets master.
+          alreadyPosted++; updProgress(); continue;
+        }
+        // Present but wrong — queue a one-tap correction card.
+        await _queueCashSaleCorrectionReview(d, owed, posted, d26.car_desc);
+        corrections++;
+        updProgress();
+        continue;
+      }
+      // Not present — queue normal cash_sale_pending.
       await _queueCashSaleReview(d, null, owed, d26.car_desc);
       queued++;
       updProgress();
@@ -17560,8 +17672,8 @@ async function runCashSaleBackfill(){
 
   _backfillRunning = false;
   var finishMsg = _backfillCancel
-    ? ('Cancelled at ' + done + '/' + total + ' · queued ' + queued + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview)
-    : ('Done · ' + queued + ' queued · ' + alreadyPosted + ' already posted · ' + alreadyReview + ' in review' + (notReady ? ' · ' + notReady + ' not ready' : '') + (errored ? ' · ' + errored + ' errored' : ''));
+    ? ('Cancelled at ' + done + '/' + total + ' · queued ' + queued + ' · corrections ' + corrections + ' · already posted ' + alreadyPosted + ' · in review ' + alreadyReview)
+    : ('Done · ' + queued + ' queued · ' + corrections + ' corrections · ' + alreadyPosted + ' already posted · ' + alreadyReview + ' in review' + (notReady ? ' · ' + notReady + ' not ready' : '') + (errored ? ' · ' + errored + ' errored' : ''));
   alert(finishMsg);
   _backfillCancel = false;
   try { await _reviewLoad(); } catch(_){}
@@ -18524,6 +18636,44 @@ function _dealReviewPreview(dealRecord, car){
   return [year, model, color, miles, custLast].filter(Boolean).join(' ');
 }
 
+// Queue a Profit26 cash-sale CORRECTION review. The deal is already
+// posted to Profit26 but the amount doesn't match the live Deals26 owed
+// value (col F is master). Approving this card calls profit_update_entry
+// in Apps Script to rewrite the formula term + matching note line.
+async function _queueCashSaleCorrectionReview(dealRecord, expected, posted, carDesc){
+  try {
+    var row = {
+      payment_id: null,
+      deal_id: dealRecord.id || null,
+      customer_name: dealRecord.customer_name || '',
+      amount: expected,
+      vehicle_year: '',
+      vehicle_make: '',
+      vehicle_model: '',
+      vehicle_color: dealRecord.color || '',
+      vehicle_vin: dealRecord.vin || '',
+      location: dealRecord.location || 'DeBary',
+      payment_date: (dealRecord.created_at || new Date().toISOString()).slice(0, 10),
+      payment_method: 'cash',
+      note_line: carDesc || '',
+      reason: 'cash_sale_correction',
+      candidates: JSON.stringify([]),
+      snapshot: {
+        posted_amount: posted ? posted.amount : null,
+        posted_desc: posted ? posted.desc : '',
+        expected_amount: expected
+      },
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    var r = await sbPost('payment_reviews', row);
+    return (Array.isArray(r) && r.length) ? r[0].id : null;
+  } catch(e){
+    console.warn('Failed to queue cash sale correction review:', e);
+    return null;
+  }
+}
+
 // Queue a cash-sale Profit26 review AFTER the deal has been posted to
 // Deals26 and owed is known. Approving this card triggers
 // _appendCashSaleToProfit.
@@ -19086,8 +19236,8 @@ async function _reviewLoad(){
     // gets approved first — keeps Deals26 rows in sale order and the
     // week's deal_num sequence correct without user guesswork.
     _reviewData.sort(function(a, b){
-      var aDeal = a.reason === 'deal_pending' || a.reason === 'cash_sale_pending';
-      var bDeal = b.reason === 'deal_pending' || b.reason === 'cash_sale_pending';
+      var aDeal = a.reason === 'deal_pending' || a.reason === 'cash_sale_pending' || a.reason === 'cash_sale_correction';
+      var bDeal = b.reason === 'deal_pending' || b.reason === 'cash_sale_pending' || b.reason === 'cash_sale_correction';
       if (aDeal && !bDeal) return -1;
       if (!aDeal && bDeal) return 1;
       if (aDeal && bDeal){
@@ -19221,6 +19371,43 @@ function _reviewRender(){
   var html = '';
   for (var i = 0; i < _reviewData.length; i++){
     var r = _reviewData[i];
+
+    // ── Cash sale CORRECTION cards (Profit26 already has the deal but
+    //     amount differs from live Deals26 owed) ──
+    if (r.reason === 'cash_sale_correction'){
+      var snap = r.snapshot || {};
+      var postedAmt = parseFloat(snap.posted_amount);
+      var expectedAmt = parseFloat(r.amount) || 0;
+      var diff = (isFinite(postedAmt) ? expectedAmt - postedAmt : 0);
+      var diffSign = diff >= 0 ? '+' : '';
+      html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
+      html += '<div style="font-size:11px;color:#f97316;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Profit26 correction · cash sale</div>';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(r.note_line || r.customer_name || '') + '</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:2px;">' + _escHtml(r.customer_name || '') + ' · <span style="color:#f97316;">' + _escHtml(r.location || '') + '</span>';
+      if (r.vehicle_vin) html += ' · VIN ' + _escHtml(String(r.vehicle_vin).slice(-6));
+      html += '</div></div>';
+      html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#1f1206;border:1px solid #c2410c;">';
+      html += '<div style="font-size:10px;color:#fb923c;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Sheets master ≠ Profit26</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:13px;color:#ddd;padding:4px 0;border-bottom:1px solid #2a1a08;">';
+      html += '<span style="color:#888;">Posted in Profit26</span><span style="font-weight:700;">$' + (isFinite(postedAmt) ? postedAmt : '?') + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:13px;color:#ddd;padding:4px 0;border-bottom:1px solid #2a1a08;">';
+      html += '<span style="color:#888;">Live Deals26 owed</span><span style="font-weight:700;color:#4ade80;">$' + expectedAmt + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:13px;color:#ddd;padding:4px 0;">';
+      html += '<span style="color:#888;">Adjustment</span><span style="font-weight:700;color:#fb923c;">' + diffSign + '$' + Math.abs(Math.round(diff*100)/100) + '</span></div>';
+      if (snap.posted_desc){
+        html += '<div style="font-size:11px;color:#888;margin-top:8px;font-family:monospace;background:#000;border-radius:6px;padding:6px;">' + _escHtml((isFinite(postedAmt) ? postedAmt : '') + ' ' + snap.posted_desc) + '</div>';
+      }
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:10px;color:#f97316;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · rewrite Profit26</button>';
+      html += '</div>';
+      html += '</div>';
+      continue;
+    }
 
     // ── Deal upload / cash sale cards ──
     if (r.reason === 'deal_pending' || r.reason === 'cash_sale_pending'){
@@ -20118,6 +20305,73 @@ async function _reviewApprovePending(id){
       }
     } catch(e){
       alert('Deal approve failed: ' + (e.message || e));
+      await _reviewLoad();
+    }
+    return;
+  }
+
+  if (r.reason === 'cash_sale_correction'){
+    var snap = r.snapshot || {};
+    var oldAmt = parseFloat(snap.posted_amount);
+    var oldDesc = snap.posted_desc || '';
+    var newAmt = parseFloat(r.amount) || 0;
+    var newDesc = r.note_line || oldDesc || '';
+    if (!isFinite(oldAmt)) {
+      alert('Posted amount is missing on this review — can\'t correct safely. Tap Dismiss instead.');
+      return;
+    }
+    if (Math.abs(oldAmt - newAmt) < 0.01) {
+      alert('Posted amount already matches Sheets master. Tap Dismiss.');
+      return;
+    }
+    var diff = newAmt - oldAmt;
+    var sign = diff >= 0 ? '+' : '−';
+    if (!confirm('Rewrite Profit26 cash sale entry?\n\n  Posted: $' + oldAmt + (oldDesc ? ' · ' + oldDesc : '') + '\n  → New: $' + newAmt + (newDesc ? ' · ' + newDesc : '') + '\n  Change: ' + sign + '$' + Math.abs(Math.round(diff*100)/100))) return;
+    _removeReviewCard(id);
+    try {
+      var ctx3 = await _loadDealForReview(r.deal_id);
+      if (!ctx3.record){
+        alert('Deal row ' + r.deal_id + ' not found — restoring card.');
+        await _reviewLoad();
+        return;
+      }
+      var dt3 = ctx3.record.created_at ? new Date(ctx3.record.created_at) : new Date();
+      var monthIdx3 = dt3.getMonth();
+      var loc3 = r.location || ctx3.record.location || 'DeBary';
+      var resp3 = await fetch(_SHEETS_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'profit_update_entry',
+          location: loc3,
+          data: {
+            month_idx: monthIdx3, row_type: 'cash_sales',
+            old_amount: oldAmt, old_description: oldDesc,
+            new_amount: newAmt, new_description: newDesc
+          }
+        })
+      });
+      var data3 = null; try { data3 = await resp3.json(); } catch(_){}
+      if (!data3 || data3.ok === false){
+        alert('Profit26 correction failed: ' + ((data3 && data3.error) || 'unknown') + '\nReview restored.');
+        await _reviewLoad();
+        return;
+      }
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : ''
+      });
+      // Background re-sync so the Profit tab shows fresh values
+      try {
+        fetch(_SHEETS_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+          secret: _SHEETS_SECRET, action: 'sync_profit', location: loc3
+        })});
+      } catch(_){}
+      _showReviewToast('Profit26 corrected: $' + oldAmt + ' → $' + newAmt + '.', 4000);
+    } catch(e){
+      alert('Cash sale correction failed: ' + (e.message || e));
       await _reviewLoad();
     }
     return;
@@ -22308,23 +22562,23 @@ async function _appendCashSaleToProfit(opts) {
     if (!desc) return;
 
     // Idempotency — query the Supabase profit mirror for the month and
-    // bail if any item's note/label already contains this description.
-    // We match by substring because Apps Script stores the description as
-    // the cell note while the cell value is the amount.
+    // bail if a cash_sales note line already matches this deal's tokens
+    // (year + lastname, optional model). Token-based matching avoids
+    // false-negatives when notes are abbreviated (e.g. "1866 15 Camaro
+    // blue Velez" wouldn't match the longer car_desc "15 Camaro blue
+    // 133k Velez" via substring).
     try {
       var mirror = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
+        '&row_type=eq.cash_sales' +
         '&select=note,label_note,label,value&limit=200');
       if (Array.isArray(mirror)) {
-        var descL = desc.toLowerCase();
-        for (var mi = 0; mi < mirror.length; mi++) {
-          var r = mirror[mi];
-          var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
-          if (hay.indexOf(descL) !== -1) {
-            console.log('Profit Cash Sales skip (already posted): ' + desc + ' → ' + loc + ' month=' + monthIdx);
-            return;
-          }
+        var _idemTokens = _cashSaleTokens(record, opts.carDesc || desc);
+        var _alreadyPosted = _findPostedNoteForTokens(mirror, _idemTokens);
+        if (_alreadyPosted) {
+          console.log('Profit Cash Sales skip (already posted): ' + desc + ' → ' + loc + ' month=' + monthIdx + ' (matched $' + _alreadyPosted.amount + ')');
+          return;
         }
       }
     } catch (mirrorErr) {
