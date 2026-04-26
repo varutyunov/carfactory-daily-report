@@ -635,7 +635,11 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
     if (data.hasOwnProperty(cField)) {
       var cNum = letterToColumn(cLetter);
       var val = data[cField];
-      if (cField === 'gps_sold') val = val ? 'X' : '';
+      // gps_sold (col K, both lots) — Vlad asked to drop the X
+      // entirely; the red box on the cell already conveys the
+      // meaning. Always write blank so the cell shows just the
+      // background color.
+      if (cField === 'gps_sold') val = '';
       var cell = sheet.getRange(targetRow, cNum);
       // Column G (payments) in Deals26 — skip writing if zero, leave empty for manual entry
       if (config.table === 'deals26' && cField === 'payments' && (val === 0 || val === '0' || !val)) {
@@ -1045,6 +1049,11 @@ function syncFullReconcile() {
         for (var c2 = 0; c2 < colKeys2.length; c2++) {
           var cf = config.columns[colKeys2[c2]];
           if (cf === nameField) continue; // skip the name field itself
+          // gps_sold (col K) is display-only now — red box, no X.
+          // The cell is always written blank, so the read-back path
+          // would patch Supabase gps_sold=true → false on every cycle.
+          // Treat Supabase as authoritative: skip the compare.
+          if (cf === 'gps_sold') continue;
           var sheetVal = sRow[cf];
           var dbVal = dbRec[cf];
           // Compare numbers with tolerance, strings exact
