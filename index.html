@@ -19117,6 +19117,40 @@ async function _reviewLoad(){
               '&select=id,car_desc,sort_order,location&limit=1');
             existing = (exRows && exRows[0]) || null;
           } catch(e){}
+          // Fuzzy dedupe — year + make/model + last name match. Catches
+          // double-posts where the VIN differs (re-acquired car got a
+          // new inventory ID, typo created a second inventory record,
+          // etc.). Sienna double-posted on 2026-04-26 because the cost
+          // changed between the two posts so the existing-VIN check
+          // matched but the costs disagreed and the post went through.
+          var fuzzyDupes = [];
+          if (!existing && r.customer_name) {
+            try {
+              var _custParts = String(r.customer_name).trim().split(/\s+/);
+              var _lastName = (_custParts[_custParts.length - 1] || '').toLowerCase();
+              var _yShort = r.vehicle_year ? String(r.vehicle_year).slice(-2) : '';
+              var _yFull = r.vehicle_year ? String(r.vehicle_year) : '';
+              var _mk = String(r.vehicle_make || '').toLowerCase().trim();
+              var _md = String(r.vehicle_model || '').toLowerCase().trim();
+              if (_lastName.length >= 3 && (_yShort || _yFull) && (_mk || _md)) {
+                var fzRows = await sbGet('deals26',
+                  'location=eq.' + encodeURIComponent(r.location || '') +
+                  '&car_desc=ilike.' + encodeURIComponent('*' + _lastName + '*') +
+                  '&select=id,sort_order,car_desc,money,cost,sold_inv_vin&limit=20');
+                if (Array.isArray(fzRows)) {
+                  for (var fzi = 0; fzi < fzRows.length; fzi++) {
+                    var fz = fzRows[fzi];
+                    if (fz.sold_inv_vin && r.vehicle_vin && fz.sold_inv_vin === r.vehicle_vin) continue;
+                    var _cdL = String(fz.car_desc || '').toLowerCase();
+                    var _hasYear = (_yShort && _cdL.indexOf(_yShort) >= 0) || (_yFull && _cdL.indexOf(_yFull) >= 0);
+                    var _hasMake = _mk && _cdL.indexOf(_mk) >= 0;
+                    var _hasModel = _md && _cdL.indexOf(_md) >= 0;
+                    if (_hasYear && (_hasMake || _hasModel)) fuzzyDupes.push(fz);
+                  }
+                }
+              }
+            } catch(_){}
+          }
           var invRows = await sbGet('inventory',
             'vin=eq.' + encodeURIComponent(r.vehicle_vin) +
             '&select=id,name,color,miles&limit=1');
@@ -19163,9 +19197,9 @@ async function _reviewLoad(){
               if (String(ic.car_name).toLowerCase().indexOf(ys) === -1) conflict = 'year mismatch';
             }
           }
-          r._preview = { inv: inv, ic: ic, conflict: conflict, candidates: fallbackCandidates, existing: existing };
+          r._preview = { inv: inv, ic: ic, conflict: conflict, candidates: fallbackCandidates, existing: existing, fuzzyDupes: fuzzyDupes };
         } catch(e){
-          r._preview = { inv: null, ic: null, conflict: null, candidates: [], existing: null, error: String(e && e.message || e) };
+          r._preview = { inv: null, ic: null, conflict: null, candidates: [], existing: null, fuzzyDupes: [], error: String(e && e.message || e) };
         }
       }));
     }
@@ -19238,6 +19272,16 @@ function _reviewRender(){
           html += '<div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;font-weight:800;">⚠ Already in Deals26 — tap Dismiss</div>';
           html += '<div style="font-size:13px;color:#fff;margin-top:4px;">' + _escHtml(pv.existing.car_desc || '') + '</div>';
           html += '<div style="font-size:11px;color:#888;margin-top:2px;">row ' + (pv.existing.sort_order || '?') + ' · ' + _escHtml(pv.existing.location || '') + '</div>';
+          html += '</div>';
+        } else if (pv && pv.fuzzyDupes && pv.fuzzyDupes.length){
+          html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#2a1f05;border:1px solid #92400e;">';
+          html += '<div style="font-size:11px;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;font-weight:800;">⚠ Possible duplicate — same year/make/model + last name</div>';
+          for (var fdi = 0; fdi < pv.fuzzyDupes.length && fdi < 3; fdi++){
+            var fdRow = pv.fuzzyDupes[fdi];
+            html += '<div style="font-size:13px;color:#fff;margin-top:6px;">' + _escHtml(fdRow.car_desc || '') + '</div>';
+            html += '<div style="font-size:11px;color:#888;">row ' + (fdRow.sort_order || '?') + ' · cost $' + (parseFloat(fdRow.cost) || 0) + ' · money $' + (parseFloat(fdRow.money) || 0) + '</div>';
+          }
+          html += '<div style="font-size:11px;color:#888;margin-top:6px;">Approve will ask to confirm.</div>';
           html += '</div>';
         }
         html += '<div style="margin:0 12px 10px;padding:10px;border-radius:10px;background:#0a0a0a;border:1px solid #1a1a1a;">';
@@ -19998,6 +20042,20 @@ async function _reviewApprovePending(id){
     if (r._preview && r._preview.existing){
       alert('This deal is already in Deals26 (row ' + (r._preview.existing.sort_order || '?') + ', ' + (r._preview.existing.car_desc || '') + '). Approving would duplicate it. Tap Dismiss instead.');
       return;
+    }
+    // Soft duplicate guard — same year + make/model + last name in
+    // deals26 but a different VIN. Confirm before posting; the review
+    // stays pending if the user cancels.
+    if (r._preview && r._preview.fuzzyDupes && r._preview.fuzzyDupes.length){
+      var _dupeLines = r._preview.fuzzyDupes.slice(0, 3).map(function(fd){
+        return '  • row ' + (fd.sort_order || '?') + ' — ' + (fd.car_desc || '') + ' (cost $' + (parseFloat(fd.cost) || 0) + ', money $' + (parseFloat(fd.money) || 0) + ')';
+      }).join('\n');
+      var _proceed = confirm(
+        'Possible duplicate detected — same year/make/model + last name already in Deals26:\n\n' +
+        _dupeLines + '\n\n' +
+        'Post anyway? (Cancel = leave review pending so you can re-check.)'
+      );
+      if (!_proceed) return;
     }
     var confirmed = await _reviewApprovePreview({
       title: 'Post deal to Deals26?',
