@@ -5606,8 +5606,11 @@ async function syncLocation(loc){
         if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
-        // Update location to match this CSV
-        if(loc&&loc!==exist.location){
+        // Update location to match this CSV — but only INSTOCK rows are
+        // authoritative on location. REPO rows can appear in either lot's
+        // CSV without representing a real move (e.g. customer brought it
+        // back), so they shouldn't trigger relocates.
+        if(loc&&loc!==exist.location&&c.status==='INSTOCK'){
           var _oldLoc=exist.location||'DeBary';
           locationChanges.push({carId:exist.id,oldLoc:_oldLoc,newLoc:loc,name:exist.name||c.name});
           exist.location=loc;patch.location=loc;
@@ -5710,8 +5713,11 @@ async function syncNow(){
         if(c.miles!=null){exist.miles=c.miles;patch.miles=c.miles;saveCarMilesLocal(exist.id,c.miles);}
         // Update stock number if it changed (transfer case: same VIN, new stock number)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
-        // Update location to match merged CSV (DeLand wins in merge, so this is authoritative)
-        if(c.location&&c.location!==exist.location){
+        // Update location to match merged CSV — but only INSTOCK rows are
+        // authoritative. REPO rows can appear in the "wrong" lot's CSV
+        // (e.g. paperwork at DeLand for a car physically at DeBary), so
+        // they must not drive relocate reviews.
+        if(c.location&&c.location!==exist.location&&c.status==='INSTOCK'){
           var _oldLoc=exist.location||'DeBary';
           locationChanges.push({carId:exist.id,oldLoc:_oldLoc,newLoc:c.location,name:exist.name||c.name});
           exist.location=c.location;patch.location=c.location;
@@ -5823,7 +5829,7 @@ function parseCSV(csv,forceLocation){
     var location=forceLocation||(lot==='2'?'DeLand':'DeBary');
     var milesRaw=row['currentmiles']||row['miles']||row['mileage']||row['odometer']||'';
     var miles=milesRaw?parseInt(milesRaw.replace(/[^0-9]/g,''))||null:null;
-    cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,photo:null});
+    cars.push({id:Date.now()+Math.random(),name:[year,make,model].filter(Boolean).join(' ')||'Unknown',stock:stock,vin:vin,color:color,miles:miles,location:location,status:status||'INSTOCK',photo:null});
   }
   return cars;
 }
