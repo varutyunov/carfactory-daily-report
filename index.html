@@ -1069,6 +1069,7 @@ body.light .cal-fab{background:#4488ff !important;}
         <button onclick="processCarPayPaymentsUI();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#60a5fa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">▶ Process CarPay payments</button>
         <button onclick="runPaymentBackfill();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fbbf24;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">↑ Backfill scanned payments</button>
         <button onclick="runCashSaleBackfill();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#10b981;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">$ Backfill cash sales</button>
+        <button onclick="cleanUpStaleCashSales();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#f97316;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">🧹 Clean up stale cash sales</button>
         <button onclick="cpCustOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#a78bfa;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">👥 CarPay customers</button>
         <button onclick="auditViewOpen();_reviewGearToggle()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#94a3b8;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;border-radius:8px;">📋 Audit history</button>
       </div>
@@ -17485,6 +17486,136 @@ function _backfillCancelReq(){
     var t2 = document.getElementById('cashsale-progress-text');
     if (t2) t2.textContent = 'Cancelling…';
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// CLEAN UP STALE CASH SALES — sweep every pending review tied to a
+// deal_id (payment_id IS NULL — these were all originally
+// cash_sale_pending or deal_pending; Re-process Pending may have
+// flipped reason to multiple/ambiguous). Drop the ones whose deal is
+// already represented in Profit26 (token-matched). Used to clear the
+// backlog created by the old substring-only dedupe before v603.
+// Posts nothing, only dismisses.
+// ──────────────────────────────────────────────────────────────
+async function cleanUpStaleCashSales(){
+  if (_backfillRunning){
+    if (confirm('A backfill is already running. Cancel it?')) { _backfillCancel = true; }
+    return;
+  }
+  if (!confirm('Sweep every pending cash-sale review (any reason, any deal_id).\n\nAny review whose deal is already posted in Profit26 (matched by year+model+lastname token) will be dismissed.\n\nNothing posts. Only stale duplicates get cleared.\n\nContinue?')) return;
+
+  _backfillRunning = true;
+  _backfillCancel = false;
+  var list = document.getElementById('review-list');
+
+  var reviews;
+  try {
+    // payment_id IS NULL filters to reviews that originated from a
+    // deal (cash_sale_pending / deal_pending) — these are the only
+    // ones whose dedupe is the deal_id, not a payment match. We
+    // intentionally include 'multiple' / 'ambiguous' / 'no_match' here
+    // because Re-process Pending mutates the reason field.
+    reviews = await sbGet('payment_reviews',
+      'status=eq.pending&payment_id=is.null&deal_id=not.is.null&select=id,deal_id,reason,customer_name,vehicle_vin,location,note_line,created_at&limit=2000');
+  } catch(e){
+    alert('Failed to load reviews: ' + e.message);
+    _backfillRunning = false;
+    return;
+  }
+  reviews = (reviews || []).filter(function(rv){ return rv && rv.deal_id; });
+
+  var total = reviews.length;
+  var done = 0, dismissed = 0, kept = 0, errored = 0;
+
+  var progressId = 'cleanup-stale-progress';
+  if (list){
+    var prev = document.getElementById(progressId);
+    if (prev) prev.remove();
+    list.insertAdjacentHTML('afterbegin',
+      '<div id="' + progressId + '" style="background:#1f1206;border:1px solid #c2410c;border-radius:14px;padding:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="font-size:13px;color:#f97316;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Clean up stale cash sales</div>' +
+          '<button onclick="_backfillCancelReq()" style="background:none;border:1px solid #444;border-radius:8px;color:#ccc;padding:4px 10px;font-size:11px;cursor:pointer;">Cancel</button>' +
+        '</div>' +
+        '<div id="cleanup-progress-text" style="font-size:13px;color:#ddd;">Starting… (0 / ' + total + ')</div>' +
+        '<div style="margin-top:8px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="cleanup-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#f97316,#c2410c);transition:width .2s;"></div></div>' +
+      '</div>');
+  }
+  var updProgress = function(){
+    var t = document.getElementById('cleanup-progress-text');
+    var b = document.getElementById('cleanup-progress-bar');
+    if (t) t.textContent = done + ' / ' + total + ' · dismissed ' + dismissed + ' · kept ' + kept + (errored ? ' · errors ' + errored : '');
+    if (b) b.style.width = (total ? Math.round(done*100/total) : 0) + '%';
+  };
+
+  var mirrorCache = {};
+  async function getMirror(loc, monthIdx){
+    var key = loc + '|' + monthIdx;
+    if (mirrorCache[key]) return mirrorCache[key];
+    try {
+      var rows = await sbGet('profit',
+        'location=eq.' + encodeURIComponent(loc) +
+        '&month_idx=eq.' + monthIdx +
+        '&row_type=eq.cash_sales' +
+        '&select=note,label_note,label&limit=300');
+      mirrorCache[key] = rows || [];
+    } catch(_){
+      mirrorCache[key] = [];
+    }
+    return mirrorCache[key];
+  }
+
+  for (var i = 0; i < reviews.length; i++){
+    if (_backfillCancel) break;
+    var rv = reviews[i];
+    done++;
+    try {
+      var dealRows = await sbGet('deals',
+        'id=eq.' + rv.deal_id +
+        '&select=id,customer_name,vehicle_desc,vin,location,created_at,deal_type,color&limit=1');
+      var dealRec = (dealRows && dealRows[0]) || null;
+      if (!dealRec){ kept++; updProgress(); continue; }
+
+      var d26Rows = await sbGet('deals26',
+        'sold_inv_vin=eq.' + encodeURIComponent(dealRec.vin || '') +
+        '&select=car_desc,owed,location&limit=1');
+      var d26 = (d26Rows && d26Rows[0]) || null;
+      var carDesc = (d26 && d26.car_desc) || rv.note_line || '';
+
+      var loc = (d26 && d26.location) || dealRec.location || rv.location || 'DeBary';
+      var dt = dealRec.created_at ? new Date(dealRec.created_at) : new Date();
+      var monthIdx = dt.getMonth();
+      var mirror = await getMirror(loc, monthIdx);
+
+      var tokens = _cashSaleTokens(dealRec, carDesc);
+      var posted = _findPostedNoteForTokens(mirror, tokens);
+
+      if (posted){
+        // Already in Profit26 — dismiss the stale review.
+        await sbPatch('payment_reviews', rv.id, {
+          status: 'rejected',
+          resolved_at: new Date().toISOString(),
+          resolved_by: (me ? me.name : '') + ' (stale-cleanup)'
+        });
+        dismissed++;
+      } else {
+        kept++;
+      }
+      updProgress();
+    } catch(e){
+      errored++;
+      console.warn('Stale cleanup row failed review_id=' + rv.id, e);
+    }
+    await new Promise(function(r){ setTimeout(r, 30); });
+  }
+
+  _backfillRunning = false;
+  var finishMsg = _backfillCancel
+    ? ('Cancelled at ' + done + '/' + total + ' · dismissed ' + dismissed + ' · kept ' + kept)
+    : ('Done · ' + dismissed + ' dismissed · ' + kept + ' kept (not yet in Profit26)' + (errored ? ' · ' + errored + ' errored' : ''));
+  alert(finishMsg);
+  _backfillCancel = false;
+  try { await _reviewLoad(); } catch(_){}
 }
 
 // ──────────────────────────────────────────────────────────────
