@@ -19230,6 +19230,12 @@ function _reviewRender(){
       var icCost = parseFloat(icDraft.purchase_cost) || 0;
       var icExp  = (parseFloat(icDraft.joint_expenses)||0) + (parseFloat(icDraft.vlad_expenses)||0);
       var icLoc  = icDraft.location || r.location || 'DeBary';
+      // Re-derive car_name from live inventory at render time so cards
+      // queued before parseCSV improved inventory.name (trim fix) still
+      // get the better name (e.g. "11 BMW 535i ..." vs "11 5-Series ...").
+      var _liveCar = icDraft.car_id ? (S.inventory||[]).find(function(c){ return c.id === icDraft.car_id; }) : null;
+      var _liveName = _liveCar ? _icCarNameFromInv(_liveCar) : '';
+      var _icPrefill = _liveName || icDraft.car_name || r.note_line || '';
       html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
       html += '<div style="font-size:11px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">New inventory → ' + _escHtml(icLoc) + ' Sheet</div>';
@@ -19237,7 +19243,7 @@ function _reviewRender(){
       html += '</div>';
       html += '<div style="padding:0 12px 12px;">';
       html += '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Posts to sheet as</div>';
-      html += '<input id="rv-icname-' + r.id + '" type="text" value="' + _escHtml(icDraft.car_name || r.note_line || '') + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;padding:10px 12px;font-size:16px;font-weight:700;outline:none;"/>';
+      html += '<input id="rv-icname-' + r.id + '" type="text" value="' + _escHtml(_icPrefill) + '" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;padding:10px 12px;font-size:16px;font-weight:700;outline:none;"/>';
       html += '<div style="font-size:13px;color:#888;margin-top:8px;"><span style="color:#60a5fa;">' + _escHtml(icLoc) + '</span> · ' + _escHtml(icSrc) + ' · cost $' + icCost + (icExp ? ' · exp $' + icExp : '') + '</div>';
       html += '</div>';
       html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
@@ -22664,6 +22670,24 @@ function _normalizeIcKey(s) {
     .replace(/\s+/g, ' ');
 }
 
+// Build the canonical IC car_name from a live inventory row. Used at
+// review-card render time so a stale snapshot (queued before parseCSV
+// improved inventory.name with the trim fix) self-corrects.
+function _icCarNameFromInv(row) {
+  if (!row) return '';
+  var nameParts = (row.name || '').split(' ');
+  var fullYear = nameParts[0] || '';
+  var shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
+  var make = nameParts[1] || '';
+  var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : '';
+  var color = (row.color || '').toLowerCase();
+  var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
+  // Trim-style models like "535i" / "320i" / "C300" are ambiguous on
+  // their own — keep the make in the IC name.
+  var modelHasDigits = /\d/.test(model) && !/\s/.test(model);
+  return [shortYr, modelHasDigits ? make : '', model, color, milesK].filter(Boolean).join(' ');
+}
+
 async function _autoCreateInventoryCosts(insertedRows) {
   if (!Array.isArray(insertedRows) || !insertedRows.length) return;
 
@@ -22684,18 +22708,7 @@ async function _autoCreateInventoryCosts(insertedRows) {
     if (!row || !row.id) continue;
     if (existingCarIds.has(row.id)) continue;
 
-    var nameParts = (row.name || '').split(' ');
-    var fullYear = nameParts[0] || '';
-    var shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
-    var make = nameParts[1] || '';
-    var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : '';
-    var color = (row.color || '').toLowerCase();
-    var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
-    // Trim-style models like "535i" / "320i" / "C300" are ambiguous on
-    // their own — keep the make in the IC name so the sheet reads
-    // "11 BMW 535i ..." instead of "11 535i ...".
-    var modelHasDigits = /\d/.test(model) && !/\s/.test(model);
-    var carName = [shortYr, modelHasDigits ? make : '', model, color, milesK].filter(Boolean).join(' ');
+    var carName = _icCarNameFromInv(row);
 
     var loc = row.location || 'DeBary';
     var _nameKey = _normalizeIcKey(carName) + '||' + loc;
@@ -22943,7 +22956,13 @@ async function _executeInventoryAdd(icDraft) {
   if (existingNameKeys.has((icDraft.car_name || '').trim().toLowerCase() + '||' + loc)) {
     return { ok: false, error: 'name_already_exists' };
   }
-  var thisSort = totalRow ? totalRow.sort_order : (maxSO + 1);
+  // Total row is the anchor — without it we'd silently insert past the actual
+  // Sheet Total row (maxSO covers archived rows too, so the fallback puts new
+  // cars in the wrong place). Bail loudly instead of guessing.
+  if (!totalRow) {
+    return { ok: false, error: 'missing_total_row_' + loc };
+  }
+  var thisSort = totalRow.sort_order;
 
   var icRow = {
     car_name: icDraft.car_name,
@@ -25719,7 +25738,10 @@ function sheetsPush(tab, rowIndex, data, action, location){
   }).then(function(resp){
     if(!resp.ok) return { ok:false, error:'http_' + resp.status, action: action||'update', tab: tab, row_index: rowIndex };
     return resp.json().then(function(parsed){
-      if (!parsed || parsed.ok === false){
+      // AS error responses are { error: "..." } with no ok field — treat any
+      // truthy error as failure so callers don't fire audit / mark approved
+      // when the Sheet write actually didn't happen.
+      if (!parsed || parsed.ok === false || parsed.error){
         return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action: action||'update', tab: tab, row_index: rowIndex };
       }
       return parsed;
