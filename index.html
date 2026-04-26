@@ -22293,10 +22293,122 @@ async function _fillMissingTaxes() {
   _taxFillRunning = false;
 }
 
-// Run every 30 minutes
-setInterval(_fillMissingTaxes, 30 * 60 * 1000);
+// ══════════════════════════════════════════════════════════════
+// AUTO CASH-SALE SWEEP — catches cash deals whose taxes were
+// filled outside _fillMissingTaxes (e.g., by the Sheets reconciler
+// or manual edit), so the cash_sale_pending Profit26 review still
+// gets queued. Without this, any cash deal whose tax-fill path
+// bypasses _fillMissingTaxes never auto-posts.
+//
+// Idempotent — skips deals that are already queued, already posted,
+// or not yet ready (no deals26 row, owed≤0, taxes=0).
+// Lightweight: pulls only the most recent ~200 cash deals.
+// ══════════════════════════════════════════════════════════════
+var _cashSweepRunning = false;
+async function _sweepUnpostedCashSales(){
+  if (_cashSweepRunning) return;
+  _cashSweepRunning = true;
+  try {
+    var deals = await sbGet('deals',
+      'deal_type=eq.cash&select=id,customer_name,vehicle_desc,vin,location,created_at,deal_type,color&order=created_at.desc&limit=200');
+    deals = (deals || []).filter(function(d){ return d && d.vin; });
+    if (!deals.length) { _cashSweepRunning = false; return; }
+
+    // Existing pending cash_sale_pending reviews — skip these deals.
+    var alreadyQueued = {};
+    try {
+      var existing = await sbGet('payment_reviews',
+        'reason=eq.cash_sale_pending&status=eq.pending&select=deal_id&limit=2000');
+      (existing || []).forEach(function(r){ if (r.deal_id) alreadyQueued[r.deal_id] = true; });
+    } catch(_){}
+
+    // Pull deals26 rows for these VINs in one shot.
+    var vinList = deals.map(function(d){ return (d.vin || '').trim(); }).filter(Boolean);
+    if (!vinList.length) { _cashSweepRunning = false; return; }
+    var d26ByVin = {};
+    try {
+      var inList = '(' + vinList.map(function(v){ return '"' + v + '"'; }).join(',') + ')';
+      var d26Rows = await sbGet('deals26',
+        'sold_inv_vin=in.' + encodeURIComponent(inList) +
+        '&select=sold_inv_vin,car_desc,owed,taxes,location,sort_order&limit=500');
+      (d26Rows || []).forEach(function(r){
+        var v = (r.sold_inv_vin || '').trim();
+        if (v) d26ByVin[v] = r;
+      });
+    } catch(e){
+      console.warn('_sweepUnpostedCashSales: deals26 fetch failed', e);
+      _cashSweepRunning = false;
+      return;
+    }
+
+    // Profit26 mirror cache by (location, month_idx).
+    var mirrorCache = {};
+    async function getMirror(loc, monthIdx){
+      var key = loc + '|' + monthIdx;
+      if (mirrorCache[key]) return mirrorCache[key];
+      try {
+        var rows = await sbGet('profit',
+          'location=eq.' + encodeURIComponent(loc) +
+          '&month_idx=eq.' + monthIdx +
+          '&select=note,label_note,label&limit=300');
+        mirrorCache[key] = rows || [];
+      } catch(_){
+        mirrorCache[key] = [];
+      }
+      return mirrorCache[key];
+    }
+    function descAlreadyPosted(mirror, desc){
+      if (!desc) return false;
+      var descL = desc.toLowerCase();
+      for (var i = 0; i < mirror.length; i++){
+        var r = mirror[i];
+        var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
+        if (hay.indexOf(descL) !== -1) return true;
+      }
+      return false;
+    }
+
+    var queued = 0;
+    for (var i = 0; i < deals.length; i++){
+      var d = deals[i];
+      if (alreadyQueued[d.id]) continue;
+      var d26 = d26ByVin[(d.vin || '').trim()];
+      if (!d26 || !d26.car_desc) continue;
+      var taxes = parseFloat(d26.taxes);
+      var owed = parseFloat(d26.owed);
+      // Need taxes filled and positive owed before posting profit.
+      if (!isFinite(taxes) || taxes <= 0) continue;
+      if (!isFinite(owed) || owed <= 0) continue;
+
+      var loc = d26.location || d.location || 'DeBary';
+      var dt = d.created_at ? new Date(d.created_at) : new Date();
+      var monthIdx = dt.getMonth();
+      var mirror = await getMirror(loc, monthIdx);
+      if (descAlreadyPosted(mirror, d26.car_desc)) continue;
+
+      try {
+        await _queueCashSaleReview(d, null, owed, d26.car_desc);
+        queued++;
+      } catch(e){
+        console.warn('_sweepUnpostedCashSales: queue failed deal=' + d.id, e);
+      }
+    }
+    if (queued) console.log('_sweepUnpostedCashSales: queued ' + queued + ' cash-sale reviews');
+  } catch(e){
+    console.warn('_sweepUnpostedCashSales error:', e);
+  }
+  _cashSweepRunning = false;
+}
+
+// Run every 30 minutes — tax fill first, then sweep any cash deals
+// whose taxes got filled by other paths (Sheets reconciler, manual fix).
+setInterval(function(){
+  _fillMissingTaxes().then(function(){ return _sweepUnpostedCashSales(); });
+}, 30 * 60 * 1000);
 // Also run 30 seconds after page load
-setTimeout(_fillMissingTaxes, 30000);
+setTimeout(function(){
+  _fillMissingTaxes().then(function(){ return _sweepUnpostedCashSales(); });
+}, 30000);
 
 // ══════════════════════════════════════════════════════════════
 // AUTO-CREATE INVENTORY_COSTS FROM NEW INVENTORY CARS (CSV SYNC)
