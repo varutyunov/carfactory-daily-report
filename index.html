@@ -19202,6 +19202,48 @@ function _reviewRender(){
       continue;
     }
 
+    // ── Inventory create cards (CSV-detected new car or manual + ADD) ──
+    if (r.reason === 'inv_create_pending'){
+      var icDraft = (r.snapshot && r.snapshot.ic) || {};
+      var icSrc = icDraft.source === 'manual' ? 'Manual add' : 'CSV sync';
+      var icCost = parseFloat(icDraft.purchase_cost) || 0;
+      var icExp  = (parseFloat(icDraft.joint_expenses)||0) + (parseFloat(icDraft.vlad_expenses)||0);
+      var icLoc  = icDraft.location || r.location || 'DeBary';
+      html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
+      html += '<div style="font-size:11px;color:#60a5fa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">New inventory → ' + _escHtml(icLoc) + ' Sheet</div>';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(icDraft.car_name || r.note_line || '') + '</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:2px;"><span style="color:#60a5fa;">' + _escHtml(icLoc) + '</span> · ' + _escHtml(icSrc) + ' · cost $' + icCost + (icExp ? ' · exp $' + icExp : '') + '</div>';
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.35);border-radius:10px;color:#60a5fa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · add to Sheet</button>';
+      html += '</div>';
+      html += '</div>';
+      continue;
+    }
+
+    // ── Inventory relocate cards (lot move detected by CSV sync) ──
+    if (r.reason === 'inv_relocate_pending'){
+      var mv = (r.snapshot && r.snapshot.move) || {};
+      html += '<div id="rv-card-' + r.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:14px;overflow:hidden;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px 6px;">';
+      html += '<div style="font-size:11px;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Lot move → ' + _escHtml(mv.newLoc || '') + ' Sheet</div>';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;" title="Dismiss">✕</button>';
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<div style="font-size:17px;color:#fff;font-weight:700;">' + _escHtml(mv.car_name || r.note_line || '') + '</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:2px;"><span style="color:#a78bfa;">' + _escHtml(mv.oldLoc || '') + '</span> → <span style="color:#a78bfa;">' + _escHtml(mv.newLoc || '') + '</span> · cost $' + (parseFloat(mv.purchase_cost)||0) + ' preserved</div>';
+      html += '</div>';
+      html += '<div style="padding:0 12px 12px;">';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.35);border-radius:10px;color:#a78bfa;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · move row</button>';
+      html += '</div>';
+      html += '</div>';
+      continue;
+    }
+
     // ── Payment review cards ──
     var candidates = [];
     try { candidates = JSON.parse(r.candidates || '[]'); } catch(e){ candidates = []; }
@@ -19792,6 +19834,65 @@ function _reviewApprovePreview(opts){
 async function _reviewApprovePending(id){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
+
+  // ── Inventory create approve ──
+  if (r.reason === 'inv_create_pending'){
+    var icDraft = (r.snapshot && r.snapshot.ic) || null;
+    if (!icDraft || !icDraft.car_name){
+      alert('Review snapshot is missing — can\'t add to Sheet.');
+      return;
+    }
+    if (!confirm('Add "' + (icDraft.car_name || '') + '" to ' + (icDraft.location || 'DeBary') + ' Inventory Sheet?')) return;
+    _removeReviewCard(id);
+    try {
+      var addRes = await _executeInventoryAdd(icDraft);
+      if (!addRes || !addRes.ok){
+        alert('Add failed: ' + ((addRes && addRes.error) || 'unknown') + '\nReview restored.');
+        await _reviewLoad();
+        return;
+      }
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : ''
+      });
+      _showReviewToast('Added "' + icDraft.car_name + '" to ' + (icDraft.location || 'DeBary') + ' Sheet.', 3500);
+    } catch(e){
+      alert('Inv-create approve failed: ' + (e.message || e));
+      await _reviewLoad();
+    }
+    return;
+  }
+
+  // ── Inventory relocate approve ──
+  if (r.reason === 'inv_relocate_pending'){
+    var mv = (r.snapshot && r.snapshot.move) || null;
+    if (!mv || !mv.car_id || !mv.newLoc){
+      alert('Review snapshot is missing — can\'t move.');
+      return;
+    }
+    if (!confirm('Move "' + (mv.car_name || '') + '" from ' + (mv.oldLoc || '') + ' to ' + (mv.newLoc || '') + '?')) return;
+    _removeReviewCard(id);
+    try {
+      var mvRes = await _executeRelocate(mv);
+      if (!mvRes || !mvRes.ok){
+        alert('Move failed: ' + ((mvRes && mvRes.error) || 'unknown') + '\nReview restored.');
+        await _reviewLoad();
+        return;
+      }
+      await sbPatch('payment_reviews', id, {
+        status: 'approved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: me ? me.name : ''
+      });
+      _showReviewToast('Moved "' + (mv.car_name || '') + '" to ' + mv.newLoc + ' Sheet.', 3500);
+    } catch(e){
+      alert('Relocate approve failed: ' + (e.message || e));
+      await _reviewLoad();
+    }
+    return;
+  }
+
   if (!r.deal_id){
     alert('Missing deal_id on this review — can\'t post.');
     return;
@@ -22429,129 +22530,139 @@ setTimeout(function(){
 }, 30000);
 
 // ══════════════════════════════════════════════════════════════
+// QUEUE INVENTORY-CREATE REVIEW (manual + ADD and CSV-sync auto-add)
+// ══════════════════════════════════════════════════════════════
+// New cars don't go straight to Google Sheets anymore — they queue a
+// payment_reviews row with reason='inv_create_pending'. The user
+// reviews the proposed car_name + location formatting in the Review
+// queue. On approve: inventory_costs row is created in Supabase and
+// pushed to the appropriate Inventory sheet.
+async function _queueInventoryAddReview(icDraft, source) {
+  if (!icDraft || !icDraft.car_name) return null;
+  var loc = icDraft.location || 'DeBary';
+  // Dedupe: skip if the same car_id (or same car_name+location for
+  // manual unlinked adds) already has a pending review.
+  try {
+    var existingPending = await sbGet('payment_reviews',
+      'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot,location&limit=500');
+    if (Array.isArray(existingPending)){
+      for (var i = 0; i < existingPending.length; i++){
+        var er = existingPending[i];
+        var es = (er.snapshot && er.snapshot.ic) || {};
+        if (icDraft.car_id && es.car_id === icDraft.car_id) return er; // already queued
+        if (!icDraft.car_id &&
+            (es.car_name || '').trim().toLowerCase() === (icDraft.car_name || '').trim().toLowerCase() &&
+            (er.location || 'DeBary') === loc){
+          return er;
+        }
+      }
+    }
+  } catch(e){ /* non-fatal — better to queue twice than miss */ }
+
+  var reviewRow = {
+    reason: 'inv_create_pending',
+    status: 'pending',
+    location: loc,
+    note_line: icDraft.car_name,
+    customer_name: source === 'manual' ? 'Manual add' : 'CSV sync',
+    snapshot: { ic: {
+      car_name: icDraft.car_name,
+      car_id: icDraft.car_id || null,
+      purchase_cost: icDraft.purchase_cost || 0,
+      joint_expenses: icDraft.joint_expenses || 0,
+      vlad_expenses: icDraft.vlad_expenses || 0,
+      expense_notes: icDraft.expense_notes || '',
+      vlad_expense_notes: icDraft.vlad_expense_notes || '',
+      location: loc,
+      source: source || 'csv'
+    }}
+  };
+  try {
+    var created = await sbPost('payment_reviews', reviewRow);
+    var newRow = (Array.isArray(created) && created.length) ? created[0] : null;
+    try { _reviewRefreshBadge && _reviewRefreshBadge(); } catch(_){}
+    return newRow;
+  } catch(e){
+    console.warn('_queueInventoryAddReview failed:', e);
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // AUTO-CREATE INVENTORY_COSTS FROM NEW INVENTORY CARS (CSV SYNC)
 // ══════════════════════════════════════════════════════════════
+// Builds the canonical car_name from the inventory row and queues a
+// review for each new car. Approval in the Review queue is what
+// actually creates the inventory_costs row + pushes to the Sheet.
 async function _autoCreateInventoryCosts(insertedRows) {
   if (!Array.isArray(insertedRows) || !insertedRows.length) return;
 
-  // Get current sort_order — insert before the "Total" row
+  // Skip cars already represented in inventory_costs (linked by car_id)
+  // or in a name+location bucket (catches orphaned/unlinked rows).
   var allIc = [];
-  try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,sort_order&order=sort_order.asc&limit=500'); } catch(e) {}
+  try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location&limit=500'); } catch(e) {}
   var existingCarIds = new Set();
-  // Also track (car_name + location) so we don't recreate orphaned rows
-  // (e.g. when CSV sync replaces an inventory row with a fresh inventory.id
-  // but the inventory_costs entry for that car already exists unlinked).
   var existingNameKeys = new Set();
-  var totalRow = null;
   if (Array.isArray(allIc)) allIc.forEach(function(r) {
     if (r.car_id) existingCarIds.add(r.car_id);
     var _n = (r.car_name || '').trim().toLowerCase();
     if (_n && _n !== 'total') existingNameKeys.add(_n + '||' + (r.location || 'DeBary'));
-    if ((r.car_name || '').toLowerCase() === 'total') totalRow = r;
   });
-  var nextSort = totalRow ? totalRow.sort_order : (Array.isArray(allIc) ? allIc.length + 1 : 1);
 
   for (var i = 0; i < insertedRows.length; i++) {
     var row = insertedRows[i];
     if (!row || !row.id) continue;
-    // Skip if this car already has an inventory_costs row
     if (existingCarIds.has(row.id)) continue;
 
-    // Build short name: "05 Ranger white 185k"
     var nameParts = (row.name || '').split(' ');
     var fullYear = nameParts[0] || '';
     var shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
-    // Skip make (index 1), use model (index 2+)
     var model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : (nameParts[1] || '');
     var color = (row.color || '').toLowerCase();
     var milesK = row.miles ? Math.round(row.miles / 1000) + 'k' : '';
     var carName = [shortYr, model, color, milesK].filter(Boolean).join(' ');
 
-    // Dedupe: if a row already exists for this name+location (e.g. orphaned
-    // from a prior sync), skip rather than create a duplicate. The reconciler
-    // will relink / update it on the next run.
-    var _nameKey = carName.trim().toLowerCase() + '||' + (row.location || 'DeBary');
+    var loc = row.location || 'DeBary';
+    var _nameKey = carName.trim().toLowerCase() + '||' + loc;
     if (existingNameKeys.has(_nameKey)) {
-      console.log('_autoCreateInventoryCosts: skipping duplicate name "' + carName + '" for ' + (row.location || 'DeBary'));
+      console.log('_autoCreateInventoryCosts: skipping duplicate name "' + carName + '" for ' + loc);
       continue;
     }
     existingNameKeys.add(_nameKey);
 
-    var icRow = {
-      car_name: carName,
-      car_id: row.id,
-      purchase_cost: 0,
-      joint_expenses: 0,
-      vlad_expenses: 0,
-      expense_notes: '',
-      vlad_expense_notes: '',
-      location: row.location || 'DeBary',
-      sort_order: nextSort,
-      updated_at: new Date().toISOString()
-    };
-
     try {
-      var inserted = await sbPost('inventory_costs', icRow);
-      var newIcId = Array.isArray(inserted) && inserted.length ? inserted[0].id : null;
-      // AWAIT the sheet insert. Previously fire-and-forget — if it
-      // silently failed, the Supabase row was orphaned and the
-      // reconciler later deleted it, leaving the car with no ic row
-      // on the sheet for Vlad to fill cost into. That's the "cost
-      // keeps getting left out" bug. Now we wait and audit.
-      var sheetRes = await sheetsPush('Inventory', nextSort, icRow, 'insert', (row.location || 'DeBary'));
-      if (!sheetRes || sheetRes.ok === false){
-        // Sheet write failed. Roll back the Supabase insert to avoid
-        // a ghost row that the reconciler will delete anyway.
-        if (newIcId){
-          try { await sbDelete('inventory_costs', newIcId); } catch(_){}
-        }
-        try {
-          await _auditLog('ic_create_failed', 'inventory_costs', null, null, icRow,
-            { _failure: true, _error: (sheetRes && sheetRes.error) || 'unknown sheet error',
-              car_id: row.id, car_name: carName, location: row.location });
-        } catch(_){}
-        console.warn('_autoCreateInventoryCosts: sheet insert failed for ' + carName + ', rolled back Supabase row');
-        continue;
-      }
-      try {
-        await _auditLog('ic_create', 'inventory_costs', newIcId, null, icRow,
-          { car_id: row.id, car_name: carName, location: row.location });
-      } catch(_){}
-      // Bump Total row down
-      if (totalRow) {
-        totalRow.sort_order = nextSort + 1;
-        await sbPatch('inventory_costs', totalRow.id, { sort_order: totalRow.sort_order });
-      }
-      nextSort++;
-    } catch(e) {
-      console.warn('Auto inventory_costs insert failed for ' + carName + ':', e);
-      try { await _auditLog('ic_create_failed', 'inventory_costs', null, null, icRow,
-        { _failure: true, _error: e && e.message, car_id: row.id, car_name: carName, location: row.location }); } catch(_){}
+      await _queueInventoryAddReview({
+        car_name: carName,
+        car_id: row.id,
+        purchase_cost: 0,
+        joint_expenses: 0,
+        vlad_expenses: 0,
+        expense_notes: '',
+        vlad_expense_notes: '',
+        location: loc
+      }, 'csv');
+    } catch(e){
+      console.warn('Queue inv-create review failed for ' + carName + ':', e);
     }
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// RELOCATE INVENTORY_COSTS BETWEEN LOTS (DeBary ↔ DeLand)
+// RELOCATE INVENTORY_COSTS BETWEEN LOTS (DeBary ↔ DeLand) — REVIEW
 // ══════════════════════════════════════════════════════════════
-// When a car moves between lots (CSV import shows it at the new
-// location), the existing inventory_costs row needs to:
-//   1) Delete from the OLD lot's Inventory sheet
-//   2) Reappear at the NEW lot's Inventory sheet (above its Total row)
-//   3) Update inventory_costs.location + sort_order in Supabase
-//   4) Decrement old-lot sort_orders below the deleted row
-//   5) Bump new-lot Total row sort_order by 1
-//
-// All purchase_cost / expenses / notes are preserved — the cost
-// history follows the car to the new lot's books. Idempotent: if
-// the inventory_costs row is already at newLoc, skip.
+// Cars moving between lots no longer touch the Sheets immediately.
+// CSV-detected moves queue an `inv_relocate_pending` review showing
+// "15 Camry tan moving to Deland, post?" so the user approves the
+// move before the Sheet is rewritten. Approval calls _executeRelocate
+// which does the delete-from-old + insert-at-new + sort_order
+// reshuffle. Cost / expenses / notes are preserved end-to-end.
 //
 // Input: locationChanges = [{ carId, oldLoc, newLoc, name }]
 async function _relocateInventoryCosts(locationChanges) {
   if (!Array.isArray(locationChanges) || !locationChanges.length) return;
 
   var allIc = [];
-  try { allIc = await sbGet('inventory_costs', 'select=*&order=sort_order.asc&limit=500'); } catch(e) {
+  try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location,sort_order,purchase_cost,joint_expenses,vlad_expenses,expense_notes,vlad_expense_notes&limit=500'); } catch(e) {
     console.warn('_relocateInventoryCosts: inventory_costs fetch failed', e);
     return;
   }
@@ -22560,11 +22671,17 @@ async function _relocateInventoryCosts(locationChanges) {
   var byCarId = {};
   allIc.forEach(function(r){ if (r.car_id) byCarId[r.car_id] = r; });
 
-  // Build per-location index buckets — used both to find Total rows
-  // and to decrement sort_orders after delete.
-  function locBucket(loc){
-    return allIc.filter(function(r){ return (r.location || 'DeBary') === loc; });
-  }
+  // Existing pending relocate reviews — dedupe so a second CSV pull
+  // doesn't queue the same move twice.
+  var pendingByCarId = {};
+  try {
+    var pending = await sbGet('payment_reviews',
+      'reason=eq.inv_relocate_pending&status=eq.pending&select=id,snapshot&limit=500');
+    if (Array.isArray(pending)) pending.forEach(function(p){
+      var s = (p.snapshot && p.snapshot.move) || null;
+      if (s && s.car_id) pendingByCarId[s.car_id] = p;
+    });
+  } catch(_){}
 
   for (var i = 0; i < locationChanges.length; i++) {
     var ch = locationChanges[i];
@@ -22572,108 +22689,202 @@ async function _relocateInventoryCosts(locationChanges) {
     if (ch.oldLoc === ch.newLoc) continue;
 
     var ic = byCarId[ch.carId];
-    if (!ic) {
-      // No inventory_costs row yet — _autoCreateInventoryCosts will
-      // catch it on the next sync at the new location.
-      continue;
-    }
-    if ((ic.location || 'DeBary') === ch.newLoc) continue; // already moved
+    if (!ic) continue;                                          // no IC row yet
+    if ((ic.location || 'DeBary') === ch.newLoc) continue;      // already moved
+    if (pendingByCarId[ch.carId]) continue;                     // already queued
 
-    var snapshot = {
-      car_name: ic.car_name,
+    var moveSnapshot = {
+      ic_id: ic.id,
       car_id: ic.car_id,
+      car_name: ic.car_name,
+      oldLoc: ic.location || 'DeBary',
+      newLoc: ch.newLoc,
+      oldSortOrder: ic.sort_order,
       purchase_cost: ic.purchase_cost || 0,
       joint_expenses: ic.joint_expenses || 0,
       vlad_expenses: ic.vlad_expenses || 0,
       expense_notes: ic.expense_notes || '',
       vlad_expense_notes: ic.vlad_expense_notes || ''
     };
-    var oldSortOrder = ic.sort_order;
-    var oldLoc = ic.location || 'DeBary';
 
-    // 1) Delete from old sheet
+    var note = (ic.car_name || '') + ' moving to ' + ch.newLoc + ', post?';
+
     try {
-      var delRes = await sheetsPush('Inventory', oldSortOrder, { car_name: ic.car_name }, 'delete', oldLoc);
-      if (!delRes || delRes.ok === false) {
-        console.warn('_relocateInventoryCosts: old sheet delete failed for "' + ic.car_name + '" @ ' + oldLoc + ' so=' + oldSortOrder, delRes);
-        try { await _auditLog('ic_relocate_failed', 'inventory_costs', ic.id, ic, null,
-          { _failure: true, _error: (delRes && delRes.error) || 'old_delete_failed', car_id: ch.carId,
-            oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
-        continue;
-      }
+      await sbPost('payment_reviews', {
+        reason: 'inv_relocate_pending',
+        status: 'pending',
+        location: ch.newLoc,
+        note_line: note,
+        customer_name: 'Lot move',
+        snapshot: { move: moveSnapshot }
+      });
     } catch(e) {
-      console.warn('_relocateInventoryCosts: old sheet delete threw for ' + ic.car_name, e);
-      continue;
+      console.warn('Queue relocate review failed for ' + ic.car_name + ':', e);
     }
-
-    // 2) Compute new sort_order at newLoc — Total row's current sort_order
-    var newBucket = locBucket(ch.newLoc);
-    var newTotalRow = null;
-    var maxNewSO = 0;
-    newBucket.forEach(function(r){
-      if ((r.car_name || '').toLowerCase() === 'total') newTotalRow = r;
-      else if (r.sort_order > maxNewSO) maxNewSO = r.sort_order;
-    });
-    var newSortOrder = newTotalRow ? newTotalRow.sort_order : maxNewSO + 1;
-
-    // 3) Patch inventory_costs row to new location + sort_order
-    var patch = {
-      location: ch.newLoc,
-      sort_order: newSortOrder,
-      updated_at: new Date().toISOString()
-    };
-    try {
-      await sbPatch('inventory_costs', ic.id, patch);
-    } catch(e) {
-      console.warn('_relocateInventoryCosts: sbPatch failed for ' + ic.car_name, e);
-      continue;
-    }
-
-    // 4) Insert into new sheet (with full snapshot so cost/expenses/notes carry over)
-    try {
-      var insRes = await sheetsPush('Inventory',
-        newSortOrder,
-        Object.assign({}, snapshot, { location: ch.newLoc, sort_order: newSortOrder }),
-        'insert',
-        ch.newLoc);
-      if (!insRes || insRes.ok === false) {
-        console.warn('_relocateInventoryCosts: new sheet insert failed for ' + ic.car_name, insRes);
-        try { await _auditLog('ic_relocate_failed', 'inventory_costs', ic.id, ic, patch,
-          { _failure: true, _error: (insRes && insRes.error) || 'new_insert_failed', car_id: ch.carId,
-            oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
-        continue;
-      }
-    } catch(e) {
-      console.warn('_relocateInventoryCosts: new sheet insert threw for ' + ic.car_name, e);
-      continue;
-    }
-
-    // 5) Bump newLoc Total row sort_order
-    if (newTotalRow) {
-      newTotalRow.sort_order = newSortOrder + 1;
-      try { await sbPatch('inventory_costs', newTotalRow.id, { sort_order: newTotalRow.sort_order }); } catch(_){}
-    }
-
-    // 6) Decrement old-loc sort_orders below the deleted row
-    var oldShift = locBucket(oldLoc).filter(function(r){
-      return r.sort_order > oldSortOrder && r.id !== ic.id;
-    });
-    for (var j = 0; j < oldShift.length; j++) {
-      var olr = oldShift[j];
-      olr.sort_order--;
-      try { await sbPatch('inventory_costs', olr.id, { sort_order: olr.sort_order }); } catch(_){}
-    }
-
-    // Update local cache so subsequent iterations see the new state
-    ic.location = ch.newLoc;
-    ic.sort_order = newSortOrder;
-
-    try { await _auditLog('ic_relocate', 'inventory_costs', ic.id,
-      { location: oldLoc, sort_order: oldSortOrder },
-      patch,
-      { car_id: ch.carId, oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
-    console.log('Relocated inventory_costs: "' + ic.car_name + '" ' + oldLoc + '→' + ch.newLoc + ' so=' + oldSortOrder + '→' + newSortOrder);
   }
+  try { _reviewRefreshBadge && _reviewRefreshBadge(); } catch(_){}
+}
+
+// Actually perform the lot move — called from the Review approve
+// handler, NOT from CSV sync. Returns { ok: true } on success or
+// { ok: false, error: '...' } on failure.
+async function _executeRelocate(move) {
+  if (!move || !move.car_id) return { ok: false, error: 'no_move_payload' };
+
+  // Re-fetch the live ic row so we don't act on a stale snapshot
+  var liveIc = null;
+  try {
+    var rows = await sbGet('inventory_costs',
+      'car_id=eq.' + move.car_id + '&select=*&limit=1');
+    liveIc = (Array.isArray(rows) && rows[0]) || null;
+  } catch(e) { return { ok: false, error: 'ic_fetch_failed' }; }
+  if (!liveIc) return { ok: false, error: 'ic_not_found' };
+  if ((liveIc.location || 'DeBary') === move.newLoc) {
+    return { ok: true, alreadyMoved: true };
+  }
+
+  var oldLoc = liveIc.location || 'DeBary';
+  var oldSortOrder = liveIc.sort_order;
+
+  // 1) Delete from old sheet
+  try {
+    var delRes = await sheetsPush('Inventory', oldSortOrder, { car_name: liveIc.car_name }, 'delete', oldLoc);
+    if (!delRes || delRes.ok === false) {
+      return { ok: false, error: (delRes && delRes.error) || 'old_delete_failed' };
+    }
+  } catch(e) { return { ok: false, error: 'old_delete_threw' }; }
+
+  // 2) Compute new sort_order at newLoc — current Total row's sort_order
+  var allIc2 = [];
+  try { allIc2 = await sbGet('inventory_costs', 'select=id,car_name,location,sort_order&limit=500'); } catch(_){}
+  var newTotalRow = null, maxNewSO = 0;
+  (allIc2 || []).forEach(function(r){
+    if ((r.location || 'DeBary') !== move.newLoc) return;
+    if ((r.car_name || '').toLowerCase() === 'total') newTotalRow = r;
+    else if (r.sort_order > maxNewSO) maxNewSO = r.sort_order;
+  });
+  var newSortOrder = newTotalRow ? newTotalRow.sort_order : maxNewSO + 1;
+
+  // 3) Patch inventory_costs row to new location + sort_order
+  var patch = {
+    location: move.newLoc,
+    sort_order: newSortOrder,
+    updated_at: new Date().toISOString()
+  };
+  try { await sbPatch('inventory_costs', liveIc.id, patch); }
+  catch(e) { return { ok: false, error: 'sb_patch_failed' }; }
+
+  // 4) Insert into new sheet with full snapshot
+  var snapshot = {
+    car_name: liveIc.car_name,
+    car_id: liveIc.car_id,
+    purchase_cost: liveIc.purchase_cost || 0,
+    joint_expenses: liveIc.joint_expenses || 0,
+    vlad_expenses: liveIc.vlad_expenses || 0,
+    expense_notes: liveIc.expense_notes || '',
+    vlad_expense_notes: liveIc.vlad_expense_notes || '',
+    location: move.newLoc,
+    sort_order: newSortOrder
+  };
+  try {
+    var insRes = await sheetsPush('Inventory', newSortOrder, snapshot, 'insert', move.newLoc);
+    if (!insRes || insRes.ok === false) {
+      return { ok: false, error: (insRes && insRes.error) || 'new_insert_failed' };
+    }
+  } catch(e) { return { ok: false, error: 'new_insert_threw' }; }
+
+  // 5) Bump newLoc Total row sort_order
+  if (newTotalRow) {
+    try { await sbPatch('inventory_costs', newTotalRow.id, { sort_order: newSortOrder + 1 }); } catch(_){}
+  }
+
+  // 6) Decrement old-loc sort_orders below the deleted row
+  var oldShift = (allIc2 || []).filter(function(r){
+    return (r.location || 'DeBary') === oldLoc && r.sort_order > oldSortOrder && r.id !== liveIc.id;
+  });
+  for (var j = 0; j < oldShift.length; j++) {
+    var olr = oldShift[j];
+    try { await sbPatch('inventory_costs', olr.id, { sort_order: olr.sort_order - 1 }); } catch(_){}
+  }
+
+  try { await _auditLog('ic_relocate', 'inventory_costs', liveIc.id,
+    { location: oldLoc, sort_order: oldSortOrder },
+    patch,
+    { car_id: liveIc.car_id, oldLoc: oldLoc, newLoc: move.newLoc, name: liveIc.car_name }); } catch(_){}
+  return { ok: true };
+}
+
+// Approve handler for inv_create_pending — creates the IC row in
+// Supabase + pushes to the appropriate Inventory sheet. Returns
+// { ok, error? }. Total row is bumped on success.
+async function _executeInventoryAdd(icDraft) {
+  if (!icDraft || !icDraft.car_name) return { ok: false, error: 'missing_payload' };
+  var loc = icDraft.location || 'DeBary';
+
+  // Look up this lot's Total row to get the next sort_order
+  var allIc = [];
+  try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location,sort_order&limit=500'); } catch(e) {
+    return { ok: false, error: 'ic_fetch_failed' };
+  }
+  var totalRow = null, maxSO = 0;
+  var existingCarIds = new Set();
+  var existingNameKeys = new Set();
+  (allIc || []).forEach(function(r){
+    if (r.car_id) existingCarIds.add(r.car_id);
+    var rl = r.location || 'DeBary';
+    var rn = (r.car_name || '').trim().toLowerCase();
+    if (rn && rn !== 'total') existingNameKeys.add(rn + '||' + rl);
+    if (rl !== loc) return;
+    if (rn === 'total') totalRow = r;
+    else if (r.sort_order > maxSO) maxSO = r.sort_order;
+  });
+  // Dedupe at approve time too — if user already added it manually
+  if (icDraft.car_id && existingCarIds.has(icDraft.car_id)) {
+    return { ok: false, error: 'car_id_already_exists' };
+  }
+  if (existingNameKeys.has((icDraft.car_name || '').trim().toLowerCase() + '||' + loc)) {
+    return { ok: false, error: 'name_already_exists' };
+  }
+  var thisSort = totalRow ? totalRow.sort_order : (maxSO + 1);
+
+  var icRow = {
+    car_name: icDraft.car_name,
+    car_id: icDraft.car_id || null,
+    purchase_cost: icDraft.purchase_cost || 0,
+    joint_expenses: icDraft.joint_expenses || 0,
+    vlad_expenses: icDraft.vlad_expenses || 0,
+    expense_notes: icDraft.expense_notes || '',
+    vlad_expense_notes: icDraft.vlad_expense_notes || '',
+    location: loc,
+    sort_order: thisSort,
+    updated_at: new Date().toISOString()
+  };
+
+  var newIcId = null;
+  try {
+    var inserted = await sbPost('inventory_costs', icRow);
+    newIcId = (Array.isArray(inserted) && inserted.length) ? inserted[0].id : null;
+  } catch(e) { return { ok: false, error: 'sb_post_failed' }; }
+
+  try {
+    var sheetRes = await sheetsPush('Inventory', thisSort, icRow, 'insert', loc);
+    if (!sheetRes || sheetRes.ok === false){
+      if (newIcId){ try { await sbDelete('inventory_costs', newIcId); } catch(_){} }
+      return { ok: false, error: (sheetRes && sheetRes.error) || 'sheet_insert_failed' };
+    }
+  } catch(e) {
+    if (newIcId){ try { await sbDelete('inventory_costs', newIcId); } catch(_){} }
+    return { ok: false, error: 'sheet_insert_threw' };
+  }
+
+  if (totalRow) {
+    try { await sbPatch('inventory_costs', totalRow.id, { sort_order: thisSort + 1 }); } catch(_){}
+  }
+  try {
+    await _auditLog('ic_create', 'inventory_costs', newIcId, null, icRow,
+      { car_id: icDraft.car_id || null, car_name: icDraft.car_name, location: loc });
+  } catch(_){}
+  return { ok: true, ic_id: newIcId, sort_order: thisSort };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -26855,15 +27066,22 @@ async function invSheetsAddCar(){
     return;
   }
   try{
-    var newCar={car_name:trimmed,purchase_cost:0,joint_expenses:0,vlad_expenses:0,expense_notes:'',vlad_expense_notes:'',location:_isLoc};
-    var res=await sbPost('inventory_costs',newCar);
-    var costs=await sbGet('inventory_costs','order=sort_order.asc,id.asc&limit=500');
-    _isData=Array.isArray(costs)?costs:[];
-    // Push new row to Google Sheet
-    var newRow=res&&res[0]?res[0]:null;
-    if(newRow){
-      var so=newRow.sort_order||_isData.length;
-      sheetsPush('Inventory',so,newCar,'insert', _isLoc);
+    // Queue an inventory-create review instead of writing directly. Approval
+    // in the Review queue creates the inventory_costs row + pushes to Sheet.
+    var queued = await _queueInventoryAddReview({
+      car_name: trimmed,
+      car_id: null,
+      location: _isLoc,
+      purchase_cost: 0,
+      joint_expenses: 0,
+      vlad_expenses: 0,
+      expense_notes: '',
+      vlad_expense_notes: ''
+    }, 'manual');
+    if (queued && queued.id){
+      alert('"' + trimmed + '" queued for review. Approve in Review to add to ' + _isLoc + ' Sheet.');
+    } else {
+      alert('Failed to queue review.');
     }
     invSheetsRender();
   }catch(e){alert('Error: '+(e.message||e));}
