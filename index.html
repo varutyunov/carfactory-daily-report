@@ -5595,7 +5595,7 @@ async function syncLocation(loc){
       if(c.vin) existByVin[c.vin]=c;
     });
     var added=0,updated=0,removed=0;
-    var sbPatches=[];var toInsertSB=[];
+    var sbPatches=[];var toInsertSB=[];var locationChanges=[];
     imp.forEach(function(c){
       if(c.color){if(c.vin)colorMap[c.vin]=c.color;if(c.stock)colorMap[c.stock]=c.color;}
       // VIN match first (authoritative), then stock fallback
@@ -5607,7 +5607,11 @@ async function syncLocation(loc){
         // Update stock number if it changed (transfer case)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         // Update location to match this CSV
-        if(loc&&loc!==exist.location){exist.location=loc;patch.location=loc;}
+        if(loc&&loc!==exist.location){
+          var _oldLoc=exist.location||'DeBary';
+          locationChanges.push({carId:exist.id,oldLoc:_oldLoc,newLoc:loc,name:exist.name||c.name});
+          exist.location=loc;patch.location=loc;
+        }
         // Update name if it changed
         if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
@@ -5635,6 +5639,10 @@ async function syncLocation(loc){
     }
     if(sbPatches.length){
       await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
+    }
+    if(locationChanges.length){
+      try{ await _relocateInventoryCosts(locationChanges); }
+      catch(e){ console.warn('_relocateInventoryCosts failed:',e); }
     }
     // Only remove cars of THIS location that are no longer in its CSV — protect by VIN
     var activeIds=new Set((S.assignments||[]).filter(function(a){return !a.approved;}).map(function(a){return a.inventoryId;}));
@@ -5686,7 +5694,7 @@ async function syncNow(){
     var csvStocks=new Set(imp.map(function(c){return c.stock;}));
     var existByStock={};var existByVin={};
     S.inventory.forEach(function(c){if(c.stock)existByStock[c.stock]=c;if(c.vin)existByVin[c.vin]=c;});
-    var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[];
+    var added=0,updated=0,removed=0,sbPatches=[],toInsertSB=[],locationChanges=[];
     imp.forEach(function(c){
       var _fc=fixColor(c.color);
       if(_fc){if(c.vin)colorMap[c.vin]=_fc;if(c.stock)colorMap[c.stock]=_fc;}
@@ -5699,7 +5707,11 @@ async function syncNow(){
         // Update stock number if it changed (transfer case: same VIN, new stock number)
         if(c.stock&&c.stock!==exist.stock){exist.stock=c.stock;patch.stock=c.stock;}
         // Update location to match merged CSV (DeLand wins in merge, so this is authoritative)
-        if(c.location&&c.location!==exist.location){exist.location=c.location;patch.location=c.location;}
+        if(c.location&&c.location!==exist.location){
+          var _oldLoc=exist.location||'DeBary';
+          locationChanges.push({carId:exist.id,oldLoc:_oldLoc,newLoc:c.location,name:exist.name||c.name});
+          exist.location=c.location;patch.location=c.location;
+        }
         // Update name if it changed
         if(c.name&&c.name!==exist.name){exist.name=c.name;patch.name=c.name;}
         if(Object.keys(patch).length) sbPatches.push({id:exist.id,patch:patch});
@@ -5726,6 +5738,12 @@ async function syncNow(){
       }
     }
     if(sbPatches.length) await Promise.all(sbPatches.map(function(p){return sbPatch('inventory',p.id,p.patch).catch(function(){});}));
+    // After patches land, propagate location moves to inventory_costs +
+    // both Google Sheets (delete from old lot, insert at new lot).
+    if(locationChanges.length){
+      try{ await _relocateInventoryCosts(locationChanges); }
+      catch(e){ console.warn('_relocateInventoryCosts failed:',e); }
+    }
     // Remove cars no longer in either CSV — protect by stock number OR VIN
     // If DeLand CSV failed to load, don't remove DeLand cars (they'd be wiped by stale merge)
     var hasDeland=deland.length>0;
@@ -22510,6 +22528,151 @@ async function _autoCreateInventoryCosts(insertedRows) {
       try { await _auditLog('ic_create_failed', 'inventory_costs', null, null, icRow,
         { _failure: true, _error: e && e.message, car_id: row.id, car_name: carName, location: row.location }); } catch(_){}
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RELOCATE INVENTORY_COSTS BETWEEN LOTS (DeBary ↔ DeLand)
+// ══════════════════════════════════════════════════════════════
+// When a car moves between lots (CSV import shows it at the new
+// location), the existing inventory_costs row needs to:
+//   1) Delete from the OLD lot's Inventory sheet
+//   2) Reappear at the NEW lot's Inventory sheet (above its Total row)
+//   3) Update inventory_costs.location + sort_order in Supabase
+//   4) Decrement old-lot sort_orders below the deleted row
+//   5) Bump new-lot Total row sort_order by 1
+//
+// All purchase_cost / expenses / notes are preserved — the cost
+// history follows the car to the new lot's books. Idempotent: if
+// the inventory_costs row is already at newLoc, skip.
+//
+// Input: locationChanges = [{ carId, oldLoc, newLoc, name }]
+async function _relocateInventoryCosts(locationChanges) {
+  if (!Array.isArray(locationChanges) || !locationChanges.length) return;
+
+  var allIc = [];
+  try { allIc = await sbGet('inventory_costs', 'select=*&order=sort_order.asc&limit=500'); } catch(e) {
+    console.warn('_relocateInventoryCosts: inventory_costs fetch failed', e);
+    return;
+  }
+  if (!Array.isArray(allIc)) return;
+
+  var byCarId = {};
+  allIc.forEach(function(r){ if (r.car_id) byCarId[r.car_id] = r; });
+
+  // Build per-location index buckets — used both to find Total rows
+  // and to decrement sort_orders after delete.
+  function locBucket(loc){
+    return allIc.filter(function(r){ return (r.location || 'DeBary') === loc; });
+  }
+
+  for (var i = 0; i < locationChanges.length; i++) {
+    var ch = locationChanges[i];
+    if (!ch || !ch.carId || !ch.oldLoc || !ch.newLoc) continue;
+    if (ch.oldLoc === ch.newLoc) continue;
+
+    var ic = byCarId[ch.carId];
+    if (!ic) {
+      // No inventory_costs row yet — _autoCreateInventoryCosts will
+      // catch it on the next sync at the new location.
+      continue;
+    }
+    if ((ic.location || 'DeBary') === ch.newLoc) continue; // already moved
+
+    var snapshot = {
+      car_name: ic.car_name,
+      car_id: ic.car_id,
+      purchase_cost: ic.purchase_cost || 0,
+      joint_expenses: ic.joint_expenses || 0,
+      vlad_expenses: ic.vlad_expenses || 0,
+      expense_notes: ic.expense_notes || '',
+      vlad_expense_notes: ic.vlad_expense_notes || ''
+    };
+    var oldSortOrder = ic.sort_order;
+    var oldLoc = ic.location || 'DeBary';
+
+    // 1) Delete from old sheet
+    try {
+      var delRes = await sheetsPush('Inventory', oldSortOrder, { car_name: ic.car_name }, 'delete', oldLoc);
+      if (!delRes || delRes.ok === false) {
+        console.warn('_relocateInventoryCosts: old sheet delete failed for "' + ic.car_name + '" @ ' + oldLoc + ' so=' + oldSortOrder, delRes);
+        try { await _auditLog('ic_relocate_failed', 'inventory_costs', ic.id, ic, null,
+          { _failure: true, _error: (delRes && delRes.error) || 'old_delete_failed', car_id: ch.carId,
+            oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
+        continue;
+      }
+    } catch(e) {
+      console.warn('_relocateInventoryCosts: old sheet delete threw for ' + ic.car_name, e);
+      continue;
+    }
+
+    // 2) Compute new sort_order at newLoc — Total row's current sort_order
+    var newBucket = locBucket(ch.newLoc);
+    var newTotalRow = null;
+    var maxNewSO = 0;
+    newBucket.forEach(function(r){
+      if ((r.car_name || '').toLowerCase() === 'total') newTotalRow = r;
+      else if (r.sort_order > maxNewSO) maxNewSO = r.sort_order;
+    });
+    var newSortOrder = newTotalRow ? newTotalRow.sort_order : maxNewSO + 1;
+
+    // 3) Patch inventory_costs row to new location + sort_order
+    var patch = {
+      location: ch.newLoc,
+      sort_order: newSortOrder,
+      updated_at: new Date().toISOString()
+    };
+    try {
+      await sbPatch('inventory_costs', ic.id, patch);
+    } catch(e) {
+      console.warn('_relocateInventoryCosts: sbPatch failed for ' + ic.car_name, e);
+      continue;
+    }
+
+    // 4) Insert into new sheet (with full snapshot so cost/expenses/notes carry over)
+    try {
+      var insRes = await sheetsPush('Inventory',
+        newSortOrder,
+        Object.assign({}, snapshot, { location: ch.newLoc, sort_order: newSortOrder }),
+        'insert',
+        ch.newLoc);
+      if (!insRes || insRes.ok === false) {
+        console.warn('_relocateInventoryCosts: new sheet insert failed for ' + ic.car_name, insRes);
+        try { await _auditLog('ic_relocate_failed', 'inventory_costs', ic.id, ic, patch,
+          { _failure: true, _error: (insRes && insRes.error) || 'new_insert_failed', car_id: ch.carId,
+            oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
+        continue;
+      }
+    } catch(e) {
+      console.warn('_relocateInventoryCosts: new sheet insert threw for ' + ic.car_name, e);
+      continue;
+    }
+
+    // 5) Bump newLoc Total row sort_order
+    if (newTotalRow) {
+      newTotalRow.sort_order = newSortOrder + 1;
+      try { await sbPatch('inventory_costs', newTotalRow.id, { sort_order: newTotalRow.sort_order }); } catch(_){}
+    }
+
+    // 6) Decrement old-loc sort_orders below the deleted row
+    var oldShift = locBucket(oldLoc).filter(function(r){
+      return r.sort_order > oldSortOrder && r.id !== ic.id;
+    });
+    for (var j = 0; j < oldShift.length; j++) {
+      var olr = oldShift[j];
+      olr.sort_order--;
+      try { await sbPatch('inventory_costs', olr.id, { sort_order: olr.sort_order }); } catch(_){}
+    }
+
+    // Update local cache so subsequent iterations see the new state
+    ic.location = ch.newLoc;
+    ic.sort_order = newSortOrder;
+
+    try { await _auditLog('ic_relocate', 'inventory_costs', ic.id,
+      { location: oldLoc, sort_order: oldSortOrder },
+      patch,
+      { car_id: ch.carId, oldLoc: oldLoc, newLoc: ch.newLoc, name: ic.car_name }); } catch(_){}
+    console.log('Relocated inventory_costs: "' + ic.car_name + '" ' + oldLoc + '→' + ch.newLoc + ' so=' + oldSortOrder + '→' + newSortOrder);
   }
 }
 

@@ -345,6 +345,59 @@ function doPost(e) {
       });
     }
 
+    // ── DIAGNOSTIC: Inspect inventory row formatting ──────────
+    // Returns full per-cell format for the requested rows so we can
+    // study the existing pattern and match it on insert.
+    // Inputs: body.data.{ rows: [20,21,22], cols: 'F:K' }
+    if (action === 'inspect_inventory_row') {
+      var iisLocCfg = _getConfig(location);
+      var iisCfg = iisLocCfg['Inventory'];
+      var iisSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
+      var iisSheet = iisSs.getSheetByName('Inventory');
+      if (!iisSheet) return jsonResponse({ error: 'No Inventory tab in ' + location });
+      var iisRows = (body.data && body.data.rows) || [];
+      var iisColRange = (body.data && body.data.cols) || 'F:L';
+      var iisColParts = iisColRange.split(':');
+      var iisStartCol = letterToColumn(iisColParts[0]);
+      var iisEndCol = letterToColumn(iisColParts[1] || iisColParts[0]);
+      var iisOut = [];
+      for (var iii = 0; iii < iisRows.length; iii++) {
+        var iisR = iisRows[iii];
+        var iisRowOut = { row: iisR, cells: {} };
+        for (var iisC = iisStartCol; iisC <= iisEndCol; iisC++) {
+          var iisCell = iisSheet.getRange(iisR, iisC);
+          var iisLetter = columnToLetter(iisC);
+          iisRowOut.cells[iisLetter] = {
+            value: iisCell.getValue(),
+            displayValue: iisCell.getDisplayValue(),
+            formula: iisCell.getFormula() || '',
+            background: iisCell.getBackground(),
+            fontColor: iisCell.getFontColor(),
+            fontSize: iisCell.getFontSize(),
+            fontWeight: iisCell.getFontWeight(),
+            fontFamily: iisCell.getFontFamily(),
+            horizAlign: iisCell.getHorizontalAlignment(),
+            vertAlign: iisCell.getVerticalAlignment(),
+            numberFormat: iisCell.getNumberFormat(),
+            note: iisCell.getNote() || ''
+          };
+        }
+        iisOut.push(iisRowOut);
+      }
+      // Also return row height for context
+      var iisHeights = {};
+      for (var iih = 0; iih < iisRows.length; iih++) {
+        try { iisHeights[iisRows[iih]] = iisSheet.getRowHeight(iisRows[iih]); } catch(_){}
+      }
+      return jsonResponse({
+        ok: true, action: 'inspect_inventory_row',
+        location: location,
+        startRow: iisCfg && iisCfg.startRow,
+        rows: iisOut,
+        heights: iisHeights
+      });
+    }
+
     var locConfig = _getConfig(location);
     var config = locConfig[tabName];
     if (!config) {
@@ -730,6 +783,11 @@ function _writeRowToSheet(sheet, config, targetRow, data) {
     var rowRange = sheet.getRange(targetRow, minC, 1, maxC - minC + 1);
     rowRange.setBorder(true, null, null, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_THICK);
   }
+  // Inventory: enforce canonical per-column format so format-copy from
+  // the row above can't carry forward bold + wrong sizes.
+  if (config.table === 'inventory_costs') {
+    _normalizeInventoryRowFormat(sheet, targetRow, data.car_name || '');
+  }
 }
 
 // Apply car color as cell background on column B
@@ -740,7 +798,7 @@ function _applyCarColor(sheet, row, col, desc) {
     'grey':      '#999999',
     'gray':      '#999999',
     'silver':    '#c0c0c0',
-    'blue':      '#4a86c8',
+    'blue':      '#4a86e8',  // Sheets default cornflower blue (matches existing manual rows)
     'red':       '#cc0000',
     'green':     '#38761d',
     'gold':      '#bf9000',
@@ -755,10 +813,16 @@ function _applyCarColor(sheet, row, col, desc) {
     'champagne': '#f7e7ce',
     'nardo':     '#767b7e',
     'charcoal':  '#464646',
-    'bronze':    '#cd7f32'
+    'bronze':    '#cd7f32',
+    'pearl':     '#f3f1ec',
+    'cream':     '#fffdd0',
+    'copper':    '#b87333',
+    'navy':      '#0b3d91',
+    'teal':      '#008080',
+    'mocha':     '#967259'
   };
   // Light text for dark backgrounds
-  var DARK_COLORS = ['black','maroon','brown','burgundy','charcoal','green','red','purple','blue','nardo'];
+  var DARK_COLORS = ['black','maroon','brown','burgundy','charcoal','green','red','purple','blue','nardo','navy','teal','grey','gray','copper','mocha','silver'];
 
   var words = desc.toLowerCase().split(/\s+/);
   var bgColor = null;
@@ -771,10 +835,53 @@ function _applyCarColor(sheet, row, col, desc) {
     }
   }
   var cell = sheet.getRange(row, col);
+  // Always set a background — fall back to white when no color word matches.
+  // Otherwise the format-copy from the row above leaks the previous car's
+  // color into this cell ("grey Optima" inheriting an orange or gold bg).
   if (bgColor) {
     cell.setBackground(bgColor);
     cell.setFontColor(DARK_COLORS.indexOf(colorName) !== -1 ? '#ffffff' : '#000000');
+  } else {
+    cell.setBackground('#ffffff');
+    cell.setFontColor('#000000');
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// Canonical Inventory row format. Forces the per-column pattern
+// observed across the existing manual rows so script inserts
+// don't drag bold + wrong sizes forward via format-copy from
+// the row above.
+//   G (purchase_cost) : size 12, normal, center, $#,##0
+//   H (car_name)      : size 12, bold,   center, car-color bg
+//   I (joint_expenses): size 13, normal, center, $#,##0
+//   J (vlad_expenses) : size 10, normal, default align, $#,##0
+//   K (=G+I+J)        : size 12, normal, center, $#,##0
+// ────────────────────────────────────────────────────────────
+function _normalizeInventoryRowFormat(sheet, row, carName) {
+  // Per-column spec — fontSize + fontWeight + horizontalAlign + numberFormat.
+  // alignH: 'center' explicitly; null = leave default (general).
+  var spec = {
+    7:  { sz: 12, w: 'normal', alignH: 'center', fmt: '$#,##0' },                     // G
+    8:  { sz: 12, w: 'bold',   alignH: 'center', fmt: '0.###############' },          // H
+    9:  { sz: 13, w: 'normal', alignH: 'center', fmt: '$#,##0' },                     // I
+    10: { sz: 10, w: 'normal', alignH: null,     fmt: '$#,##0' },                     // J
+    11: { sz: 12, w: 'normal', alignH: 'center', fmt: '$#,##0' }                      // K
+  };
+  Object.keys(spec).forEach(function(col){
+    var s = spec[col];
+    var cell = sheet.getRange(row, parseInt(col));
+    cell.setFontSize(s.sz);
+    cell.setFontWeight(s.w);
+    cell.setFontFamily('Arial');
+    cell.setVerticalAlignment('bottom');
+    if (s.alignH) cell.setHorizontalAlignment(s.alignH);
+    cell.setNumberFormat(s.fmt);
+  });
+  // H gets the car-color box treatment (overrides any color leaked
+  // from a format-copy of the row above).
+  _applyCarColor(sheet, row, 8, String(carName || ''));
+  // K formula stays whatever was set by the insert handler (=G+I+J).
 }
 
 function doGet(e) {
