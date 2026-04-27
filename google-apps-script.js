@@ -1291,6 +1291,70 @@ function _getProfitLayout(location) {
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Profit26 note line fitter — keeps Payments / Cash Sales / Extras
+// note lines ≤ MAX_NOTE chars so they don't overflow the comment box
+// and force a manual edit. Used by profit_append_entry (pre-fit new
+// lines before write) and profit_reformat_notes (rewrite legacy
+// over-length lines in bulk).
+//
+// Strategy: drop color tokens → collapse middle to first+last token →
+// truncate last name. Preserves leading amount and trailing M/D date
+// (those are the data, not formatting).
+// ══════════════════════════════════════════════════════════════════════
+var _PROFIT_NOTE_MAX = 26;
+var _PROFIT_NOTE_COLORS = {'white':1,'black':1,'silver':1,'red':1,'blue':1,'gray':1,'grey':1,'green':1,'yellow':1,'gold':1,'orange':1,'purple':1,'tan':1,'brown':1,'beige':1,'pearl':1,'maroon':1,'teal':1,'navy':1,'bronze':1,'burgundy':1,'champagne':1,'charcoal':1,'copper':1,'cream':1,'ivory':1};
+function _fitProfitNoteLine(line) {
+  var trimmed = String(line || '').trim();
+  if (!trimmed) return line;
+  if (trimmed.length <= _PROFIT_NOTE_MAX) return trimmed;
+  var tokens = trimmed.split(/\s+/);
+  if (tokens.length === 0) return line;
+  // Compound lines (two payments mashed together) — leave for manual edit.
+  if (trimmed.length > 40) {
+    for (var ci = 3; ci < tokens.length - 1; ci++) {
+      if (/^\d{3,4}$/.test(tokens[ci])) return trimmed;
+    }
+  }
+  var amt = tokens[0];
+  var dateRe = /^\d{1,2}\/\d{1,2}$/;
+  var yearRe = /^\d{2}$|^(19|20)\d{2}$/;
+  var lastTok = tokens[tokens.length - 1];
+  var hasDate = dateRe.test(lastTok);
+  var date = hasDate ? lastTok : '';
+  var rest = hasDate ? tokens.slice(1, -1) : tokens.slice(1);
+  var year = '';
+  if (rest.length > 0 && yearRe.test(rest[0])) {
+    year = rest[0];
+    rest = rest.slice(1);
+  }
+  var middle = rest.filter(function(t) { return !_PROFIT_NOTE_COLORS[t.toLowerCase()]; });
+  var prefix = amt + (year ? ' ' + year : '');
+  var join = function(arr) {
+    var out = [prefix].concat(arr);
+    if (date) out.push(date);
+    return out.join(' ');
+  };
+  var result = join(middle);
+  if (result.length <= _PROFIT_NOTE_MAX) return result;
+  if (middle.length > 2) {
+    middle = [middle[0], middle[middle.length - 1]];
+    result = join(middle);
+    if (result.length <= _PROFIT_NOTE_MAX) return result;
+  }
+  if (middle.length >= 1) {
+    var prefixLen = prefix.length + 1 + (middle.length > 1 ? middle[0].length + 1 : 0);
+    var suffixLen = (date ? 1 + date.length : 0);
+    var avail = _PROFIT_NOTE_MAX - prefixLen - suffixLen;
+    if (avail >= 2) {
+      middle[middle.length - 1] = middle[middle.length - 1].slice(0, avail);
+    }
+    result = join(middle);
+  }
+  if (result.length > _PROFIT_NOTE_MAX) result = result.slice(0, _PROFIT_NOTE_MAX);
+  return result;
+}
+
 function columnToLetter(col) {
   var letter = '';
   while (col > 0) {
@@ -1489,8 +1553,12 @@ function _handleProfitAction(action, location, data) {
       newFormulaA = '=' + (amountA < 0 ? ('-' + String(Math.abs(amountA))) : String(amountA));
     }
 
-    // Build new note — append a new line
+    // Build new note — append a new line. Pre-fit through _fitProfitNoteLine
+    // so lines >26 chars get color/middle-token trimmed BEFORE write,
+    // preventing run-overs that previously required manual cell edits and
+    // broke downstream substring-based dedup.
     var noteEntryA = (amountA < 0 ? '-' + String(Math.abs(amountA)) : String(amountA)) + (descA ? ' ' + descA : '');
+    noteEntryA = _fitProfitNoteLine(noteEntryA);
     var newNoteA = existingNoteA ? (existingNoteA.replace(/\s+$/,'') + '\n' + noteEntryA) : noteEntryA;
 
     PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
@@ -1538,67 +1606,7 @@ function _handleProfitAction(action, location, data) {
       var cvv = String(sheet.getRange(sr2, P_START_COL).getValue()).trim();
       if (cvv === 'Jan' || cvv === 'January') { pStartRow = sr2; break; }
     }
-    var MAX_NOTE = 26;
-    var COLOR_WORDS = {'white':1,'black':1,'silver':1,'red':1,'blue':1,'gray':1,'grey':1,'green':1,'yellow':1,'gold':1,'orange':1,'purple':1,'tan':1,'brown':1,'beige':1,'pearl':1,'maroon':1,'teal':1,'navy':1,'bronze':1,'burgundy':1,'champagne':1,'charcoal':1,'copper':1,'cream':1,'ivory':1};
-    var fitNoteLine = function(line){
-      var trimmed = String(line).trim();
-      if (!trimmed) return line;
-      var tokens = trimmed.split(/\s+/);
-      if (tokens.length === 0) return line;
-      // Detect compound lines — two payments mashed into one note line
-      // (e.g. "220 16 RDX grey Hernandez 204 15 Lancer Davis"). Single
-      // payments are typically <35 chars. Very long lines with a later
-      // 3+ digit amount are almost certainly compound; leave them so
-      // user can edit by hand rather than mangling the data.
-      if (trimmed.length > 40) {
-        for (var ci = 3; ci < tokens.length - 1; ci++){
-          if (/^\d{3,4}$/.test(tokens[ci])) return line;
-        }
-      }
-      var amt = tokens[0];
-      var dateRe = /^\d{1,2}\/\d{1,2}$/;
-      var yearRe = /^\d{2}$|^(19|20)\d{2}$/;
-      var last = tokens[tokens.length - 1];
-      var hasDate = dateRe.test(last);
-      var date = hasDate ? last : '';
-      var rest = hasDate ? tokens.slice(1, -1) : tokens.slice(1);
-      // Year (2-digit or 4-digit) is part of the prefix — preserve it
-      // with the amount so the drop strategy doesn't swallow the model.
-      var year = '';
-      if (rest.length > 0 && yearRe.test(rest[0])){
-        year = rest[0];
-        rest = rest.slice(1);
-      }
-      // Step 1: drop known color tokens anywhere in rest
-      var middle = rest.filter(function(t){ return !COLOR_WORDS[t.toLowerCase()]; });
-      var prefix = amt + (year ? ' ' + year : '');
-      var join = function(arr){
-        var out = [prefix].concat(arr);
-        if (date) out.push(date);
-        return out.join(' ');
-      };
-      var result = join(middle);
-      if (result.length <= MAX_NOTE) return result;
-      // Step 2: keep only first and last middle tokens (collapse
-      // multi-word model / extra tokens).
-      if (middle.length > 2){
-        middle = [middle[0], middle[middle.length - 1]];
-        result = join(middle);
-        if (result.length <= MAX_NOTE) return result;
-      }
-      // Step 3: truncate the lastName (last token).
-      if (middle.length >= 1){
-        var prefixLen = prefix.length + 1 + (middle.length > 1 ? middle[0].length + 1 : 0);
-        var suffixLen = (date ? 1 + date.length : 0);
-        var avail = MAX_NOTE - prefixLen - suffixLen;
-        if (avail >= 2){
-          middle[middle.length - 1] = middle[middle.length - 1].slice(0, avail);
-        }
-        result = join(middle);
-      }
-      if (result.length > MAX_NOTE) result = result.slice(0, MAX_NOTE);
-      return result;
-    };
+    var MAX_NOTE = _PROFIT_NOTE_MAX;
 
     var totalCells = 0, cellsChanged = 0, linesTouched = 0, totalLines = 0;
     var samples = [];
@@ -1624,7 +1632,7 @@ function _handleProfitAction(action, location, data) {
           if (!trimmed) return l;
           totalLines++;
           if (trimmed.length <= MAX_NOTE) return l;
-          var fitted = fitNoteLine(trimmed);
+          var fitted = _fitProfitNoteLine(trimmed);
           if (fitted !== trimmed){
             changed = true;
             linesTouched++;
@@ -1811,6 +1819,7 @@ function _profitMutateEntry(sheet, data, mode, location) {
     if (noteMatchIdx >= 0) {
       var newNoteLine = (newAmount < 0 ? '-' + String(Math.abs(newAmount)) : String(newAmount)) +
         (newDesc ? ' ' + newDesc : '');
+      newNoteLine = _fitProfitNoteLine(newNoteLine);
       parsedLines[noteMatchIdx] = { raw: newNoteLine, amount: newAmount, desc: newDesc };
     }
   }
