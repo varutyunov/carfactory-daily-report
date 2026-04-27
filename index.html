@@ -19534,8 +19534,9 @@ function _reviewRender(){
         html += '<div style="font-size:11px;color:#888;margin-top:8px;font-family:monospace;background:#000;border-radius:6px;padding:6px;">' + _escHtml((isFinite(postedAmt) ? postedAmt : '') + ' ' + snap.posted_desc) + '</div>';
       }
       html += '</div>';
-      html += '<div style="padding:0 12px 12px;">';
-      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:10px;color:#f97316;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · rewrite Profit26</button>';
+      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
+      html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">✕ Decline</button>';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:10px;color:#f97316;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · rewrite Profit26</button>';
       html += '</div>';
       html += '</div>';
       continue;
@@ -19633,9 +19634,10 @@ function _reviewRender(){
         html += '</div>';
       }
 
-      // Approve button
-      html += '<div style="padding:0 12px 12px;">';
-      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="width:100%;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · post now</button>';
+      // Decline + Approve buttons
+      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
+      html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">✕ Decline</button>';
+      html += '<button onclick="_reviewApprovePending(' + r.id + ')" style="flex:2;background:' + tintBg + ';border:1px solid ' + tintBd + ';border-radius:10px;color:' + tint + ';padding:14px;font-size:15px;font-weight:800;cursor:pointer;">✓ Approve · post now</button>';
       html += '</div>';
       html += '</div>';
       continue;
@@ -19761,9 +19763,10 @@ function _reviewRender(){
       html += '<div style="border-top:1px solid #1a1a1a;padding:12px;font-size:12px;color:#555;">No candidates found.</div>';
     }
 
-    // Force post button
-    html += '<div style="border-top:1px solid #1a1a1a;padding:12px;">';
-    html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="width:100%;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#444;padding:10px;font-size:13px;font-weight:700;cursor:pointer;">Force post</button>';
+    // Decline + Force post buttons
+    html += '<div style="border-top:1px solid #1a1a1a;display:flex;gap:8px;padding:12px;">';
+    html += '<button onclick="_reviewDeclineQuiet(' + r.id + ')" style="flex:1;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);border-radius:10px;color:#ef4444;padding:10px;font-size:13px;font-weight:700;cursor:pointer;">✕ Decline</button>';
+    html += '<button onclick="_reviewManualOpen(' + r.id + ')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#444;padding:10px;font-size:13px;font-weight:700;cursor:pointer;">Force post</button>';
     html += '</div>';
 
     // Force post form (hidden)
