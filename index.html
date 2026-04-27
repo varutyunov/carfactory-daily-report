@@ -23008,11 +23008,12 @@ async function _sweepUnpostedCashSales(){
     deals = (deals || []).filter(function(d){ return d && d.vin; });
     if (!deals.length) { _cashSweepRunning = false; return; }
 
-    // Existing pending cash_sale_pending reviews — skip these deals.
+    // Skip any deal that already has a pending review (any reason) — keeps
+    // sweep idempotent against cash_sale_correction, multiple/ambiguous, etc.
     var alreadyQueued = {};
     try {
       var existing = await sbGet('payment_reviews',
-        'reason=eq.cash_sale_pending&status=eq.pending&select=deal_id&limit=2000');
+        'status=eq.pending&select=deal_id,reason&limit=2000');
       (existing || []).forEach(function(r){ if (r.deal_id) alreadyQueued[r.deal_id] = true; });
     } catch(_){}
 
@@ -23035,7 +23036,8 @@ async function _sweepUnpostedCashSales(){
       return;
     }
 
-    // Profit26 mirror cache by (location, month_idx).
+    // Profit26 Cash Sales mirror cache by (location, month_idx). Narrowed to
+    // label='Cash Sales' so sweep matches the manual backfill exactly.
     var mirrorCache = {};
     async function getMirror(loc, monthIdx){
       var key = loc + '|' + monthIdx;
@@ -23044,22 +23046,13 @@ async function _sweepUnpostedCashSales(){
         var rows = await sbGet('profit',
           'location=eq.' + encodeURIComponent(loc) +
           '&month_idx=eq.' + monthIdx +
-          '&select=note,label_note,label&limit=300');
+          '&label=eq.' + encodeURIComponent('Cash Sales') +
+          '&select=note,label_note,label&limit=10');
         mirrorCache[key] = rows || [];
       } catch(_){
         mirrorCache[key] = [];
       }
       return mirrorCache[key];
-    }
-    function descAlreadyPosted(mirror, desc){
-      if (!desc) return false;
-      var descL = desc.toLowerCase();
-      for (var i = 0; i < mirror.length; i++){
-        var r = mirror[i];
-        var hay = ((r.note || '') + ' ' + (r.label_note || '') + ' ' + (r.label || '')).toLowerCase();
-        if (hay.indexOf(descL) !== -1) return true;
-      }
-      return false;
     }
 
     var queued = 0;
@@ -23078,7 +23071,23 @@ async function _sweepUnpostedCashSales(){
       var dt = d.created_at ? new Date(d.created_at) : new Date();
       var monthIdx = dt.getMonth();
       var mirror = await getMirror(loc, monthIdx);
-      if (descAlreadyPosted(mirror, d26.car_desc)) continue;
+
+      // Token-based posted detection (last-name + year + model) — resilient
+      // to truncated/run-over note lines that broke the old substring check.
+      var tokens = _cashSaleTokens(d, d26.car_desc);
+      var posted = _findPostedNoteForTokens(mirror, tokens);
+      if (posted){
+        // Within $1 = posted correctly (whole-dollar rounding rule).
+        if (Math.abs((posted.amount || 0) - owed) < 1.00) continue;
+        // Posted but wrong amount — queue a one-tap correction card.
+        try {
+          await _queueCashSaleCorrectionReview(d, owed, posted, d26.car_desc);
+          queued++;
+        } catch(e){
+          console.warn('_sweepUnpostedCashSales: correction queue failed deal=' + d.id, e);
+        }
+        continue;
+      }
 
       try {
         await _queueCashSaleReview(d, null, owed, d26.car_desc);
