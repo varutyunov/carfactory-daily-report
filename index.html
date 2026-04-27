@@ -1076,6 +1076,15 @@ body.light .cal-fab{background:#4488ff !important;}
     </div>
   </div>
   <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
+    <!-- Sales / Payments tab toggle. Sales bucket: cash_sale_pending,
+         cash_sale_correction, deal_pending, inv_create_pending,
+         inv_relocate_pending. Payments bucket: everything else
+         (no_match, multiple, partial, possible_duplicate, approve_first,
+         no_vehicle, no_customer). -->
+    <div id="review-tabs" style="position:sticky;top:0;background:#000;border-bottom:1px solid #1a1a1a;padding:10px 12px;display:flex;gap:8px;z-index:10;">
+      <button id="rv-tab-sales" onclick="_reviewSetTab('sales')" style="flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">SALES <span id="rv-tab-sales-ct" style="opacity:.85;font-weight:700;"></span></button>
+      <button id="rv-tab-payments" onclick="_reviewSetTab('payments')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">PAYMENTS <span id="rv-tab-payments-ct" style="opacity:.85;font-weight:700;"></span></button>
+    </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
     </div>
@@ -19338,6 +19347,40 @@ async function _reviewRefreshBadge(){
   } catch(e){ /* silent */ }
 }
 
+// Review tab — Sales vs Payments split. Sales = deal/inventory lifecycle
+// reviews; Payments = scanned/CarPay payment matching reviews. State is
+// kept in localStorage so the user lands back on the tab they last used.
+var _SALES_REVIEW_REASONS = {
+  'cash_sale_pending': 1, 'cash_sale_correction': 1,
+  'deal_pending': 1,
+  'inv_create_pending': 1, 'inv_relocate_pending': 1
+};
+function _reviewIsSales(r){ return !!_SALES_REVIEW_REASONS[(r || {}).reason]; }
+var _reviewTab = 'sales';
+try { _reviewTab = localStorage.getItem('cf_review_tab') || 'sales'; } catch(_){}
+function _reviewSetTab(tab){
+  if (tab !== 'sales' && tab !== 'payments') return;
+  _reviewTab = tab;
+  try { localStorage.setItem('cf_review_tab', tab); } catch(_){}
+  if (typeof _reviewRender === 'function') _reviewRender();
+}
+function _reviewUpdateTabUI(){
+  var sCt = (_reviewData || []).filter(_reviewIsSales).length;
+  var pCt = (_reviewData || []).length - sCt;
+  var sCtEl = document.getElementById('rv-tab-sales-ct');
+  var pCtEl = document.getElementById('rv-tab-payments-ct');
+  if (sCtEl) sCtEl.textContent = sCt ? '· ' + sCt : '';
+  if (pCtEl) pCtEl.textContent = pCt ? '· ' + pCt : '';
+  var sBtn = document.getElementById('rv-tab-sales');
+  var pBtn = document.getElementById('rv-tab-payments');
+  var activeSales = 'flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var inactiveSales = 'flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var activePay = 'flex:1;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.45);border-radius:10px;color:#60a5fa;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var inactivePay = inactiveSales;
+  if (sBtn) sBtn.style.cssText = (_reviewTab === 'sales') ? activeSales : inactiveSales;
+  if (pBtn) pBtn.style.cssText = (_reviewTab === 'payments') ? activePay : inactivePay;
+}
+
 async function openReviewQueue(){
   var overlay = document.getElementById('review-overlay');
   if (overlay) overlay.style.display = 'flex';
@@ -19357,13 +19400,105 @@ function closeReviewQueue(){
   document.body.style.overflow = '';
 }
 
+// Re-check pending Sales cards against current Supabase + Profit26 state.
+// Marks any whose trigger condition no longer holds as 'auto_resolved' so
+// the queue stops accumulating ghost cards after the underlying issue is
+// fixed (manual Sheet edit, post landed via another path, etc.).
+//
+// Resolves:
+//   deal_pending           → deals26 row now exists for the VIN
+//   cash_sale_pending      → Profit26 Cash Sales line now matches tokens
+//                            within $1 of d26.owed
+//   cash_sale_correction   → Profit26 Cash Sales line now matches tokens
+//                            within $1 of d26.owed (i.e. user fixed it)
+//
+// Inventory cards (inv_create_pending / inv_relocate_pending) and Payments
+// cards are left alone for now — they have less reliable "is it done?"
+// signals and the review badge for those is small.
+async function _reviewAutoStale(reviewRows){
+  if (!Array.isArray(reviewRows) || !reviewRows.length) return [];
+  var staleIds = [];
+  var mirrorCache = {};
+  async function getMirror(loc, monthIdx){
+    var key = loc + '|' + monthIdx;
+    if (mirrorCache[key]) return mirrorCache[key];
+    try {
+      var rows = await sbGet('profit',
+        'location=eq.' + encodeURIComponent(loc) +
+        '&month_idx=eq.' + monthIdx +
+        '&label=eq.' + encodeURIComponent('Cash Sales') +
+        '&select=note&limit=10');
+      mirrorCache[key] = rows || [];
+    } catch(_){ mirrorCache[key] = []; }
+    return mirrorCache[key];
+  }
+  for (var i = 0; i < reviewRows.length; i++){
+    var r = reviewRows[i];
+    if (!r || !_reviewIsSales(r)) continue;
+    try {
+      if (r.reason === 'deal_pending'){
+        if (!r.vehicle_vin) continue;
+        var d26 = await sbGet('deals26',
+          'sold_inv_vin=eq.' + encodeURIComponent(r.vehicle_vin) +
+          '&select=id,car_desc&limit=1');
+        if (Array.isArray(d26) && d26[0] && d26[0].car_desc){
+          staleIds.push(r.id);
+        }
+        continue;
+      }
+      if (r.reason === 'cash_sale_pending' || r.reason === 'cash_sale_correction'){
+        if (!r.deal_id) continue;
+        var deal = await sbGet('deals',
+          'id=eq.' + r.deal_id +
+          '&select=customer_name,vehicle_desc,vin,location,created_at&limit=1');
+        var d = (deal || [])[0];
+        if (!d || !d.vin) continue;
+        var d26Rows = await sbGet('deals26',
+          'sold_inv_vin=eq.' + encodeURIComponent(d.vin) +
+          '&select=car_desc,owed&limit=1');
+        var d26row = (d26Rows || [])[0];
+        if (!d26row || !d26row.car_desc) continue;
+        var owed = parseFloat(d26row.owed);
+        if (!isFinite(owed) || owed <= 0) continue;
+        var loc = d.location || 'DeBary';
+        var dt = d.created_at ? new Date(d.created_at) : new Date();
+        var monthIdx = dt.getMonth();
+        var mirror = await getMirror(loc, monthIdx);
+        var tokens = _cashSaleTokens(d, d26row.car_desc);
+        var posted = _findPostedNoteForTokens(mirror, tokens);
+        if (posted && Math.abs((posted.amount || 0) - owed) < 1.00){
+          staleIds.push(r.id);
+        }
+      }
+    } catch(_){ /* skip; surfacing the card is safer than silencing */ }
+  }
+  if (staleIds.length){
+    for (var si = 0; si < staleIds.length; si++){
+      try { await sbPatch('payment_reviews', staleIds[si], { status: 'auto_resolved' }); } catch(_){}
+    }
+    console.log('_reviewAutoStale: cleared ' + staleIds.length + ' resolved cards');
+  }
+  return staleIds;
+}
+
 async function _reviewLoad(){
   var list = document.getElementById('review-list');
   var count = document.getElementById('review-count');
   if (list) list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>';
   try {
     var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=100');
-    _reviewData = Array.isArray(rows) ? rows : [];
+    rows = Array.isArray(rows) ? rows : [];
+    // Auto-resolve cards whose trigger condition no longer holds before
+    // we render. Drops the resolved IDs from the visible set.
+    try {
+      var staleIds = await _reviewAutoStale(rows);
+      if (staleIds && staleIds.length){
+        var staleSet = {};
+        staleIds.forEach(function(id){ staleSet[id] = true; });
+        rows = rows.filter(function(r){ return !staleSet[r.id]; });
+      }
+    } catch(_){ /* never block the queue */ }
+    _reviewData = rows;
     // Sort deal_pending cards by sale date ascending so the oldest deal
     // gets approved first — keeps Deals26 rows in sale order and the
     // week's deal_num sequence correct without user guesswork.
@@ -19496,13 +19631,24 @@ async function _reviewLoad(){
 function _reviewRender(){
   var list = document.getElementById('review-list');
   if (!list) return;
-  if (!_reviewData.length){
-    list.innerHTML = '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ All clear</div>';
+  _reviewUpdateTabUI();
+  // Filter to the active tab. _reviewData stays the full dataset so
+  // tab counts and toggling don't require a re-fetch.
+  var visible = (_reviewData || []).filter(function(rr){
+    return _reviewTab === 'sales' ? _reviewIsSales(rr) : !_reviewIsSales(rr);
+  });
+  if (!visible.length){
+    var otherCt = (_reviewData || []).length - visible.length;
+    var hint = otherCt > 0
+      ? '<div style="text-align:center;color:#666;padding:60px 0 8px;font-size:14px;">No ' + (_reviewTab === 'sales' ? 'sales' : 'payment') + ' reviews</div>' +
+        '<div style="text-align:center;color:#888;font-size:12px;">' + otherCt + ' in the other tab</div>'
+      : '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ All clear</div>';
+    list.innerHTML = hint;
     return;
   }
   var html = '';
-  for (var i = 0; i < _reviewData.length; i++){
-    var r = _reviewData[i];
+  for (var i = 0; i < visible.length; i++){
+    var r = visible[i];
 
     // ── Cash sale CORRECTION cards (Profit26 already has the deal but
     //     amount differs from live Deals26 owed) ──
