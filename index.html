@@ -20500,7 +20500,7 @@ async function _reviewManualPost(id){
   // In that mode we allow a blank row and skip the Deals tab write entirely.
   var profitOnly = (pmMode === 'yes' && (!row || row < 2));
   if (!profitOnly && (!row || row < 2)){
-    alert('Row must be a valid row number (2+).\n\nTip: if you only want to post to Profit26 (no Deals26 col G entry), switch the Profit26 toggle to "Force post" and leave Row # blank.');
+    alert('Row must be a valid row number (2+).');
     return;
   }
   if (!label){ alert('Label cannot be empty.'); return; }
