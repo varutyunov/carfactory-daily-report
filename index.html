@@ -17894,21 +17894,23 @@ async function cfVoidPostingBySource(source, source_id, source_sub, reason){
   return cfVoidPosting(existing.id, reason);
 }
 
-// Backfill the ledger from existing Profit26 notes. For each note line in
-// the Supabase profit mirror, attempt to link to a deal (cash_sales) or
-// payment (payments) by tokens. Unlinked lines become source='manual' so
-// the row count still represents the sheet. Idempotent — re-running after
-// new posts only adds the missing rows.
+// Backfill the ledger from existing Profit26 notes. Iterates deals and
+// payments (the authoritative sources), uses the production token matcher
+// to find each one's posted line, and writes the ledger row keyed to
+// source_id. Lines no source explains become source='manual' so the row
+// count still represents the sheet. Idempotent.
 //
 // Run from the browser console:
 //   await _cfBackfillProfitPostings();
+//   await _cfBackfillProfitPostings({ dryRun: true });
 //
-// Returns a summary { scanned, linked_deal, linked_payment, manual, skipped }.
+// Returns { scanned, linked_deal, linked_payment, manual, skipped, errors, dups }.
 async function _cfBackfillProfitPostings(opts){
   opts = opts || {};
   var dryRun = !!opts.dryRun;
   console.log('[backfill] start' + (dryRun ? ' (DRY RUN)' : ''));
-  var summary = { scanned: 0, linked_deal: 0, linked_payment: 0, manual: 0, skipped: 0, errors: 0 };
+  var summary = { scanned: 0, linked_deal: 0, linked_payment: 0, manual: 0, skipped: 0, errors: 0, dups: 0 };
+
   var profitRows;
   try {
     profitRows = await sbGet('profit', 'select=location,month_idx,label,note&limit=2000');
@@ -17917,87 +17919,146 @@ async function _cfBackfillProfitPostings(opts){
     return summary;
   }
   if (!Array.isArray(profitRows)) return summary;
-  // Pre-load deals + payments for the months we'll touch.
-  var dealsByVin = {}, paymentsById = {};
-  try {
-    var dealRows = await sbGet('deals',
-      'deal_type=eq.cash&select=id,customer_name,vin,location,total_collected,created_at,color&limit=4000');
-    (dealRows || []).forEach(function(d){ if (d.vin) dealsByVin[d.vin] = d; });
-  } catch(_){}
 
+  // Index every parseable note line for in-memory matching.
   var labelToType = { 'Cash Sales': 'cash_sales', 'Payments': 'payments', 'Extras': 'extras' };
-
+  var allLines = [];
   for (var pi = 0; pi < profitRows.length; pi++){
     var pr = profitRows[pi];
     var rt = labelToType[pr.label];
     if (!rt) continue;
-    var note = String(pr.note || '');
-    if (!note.trim()) continue;
-    var lines = note.split(/\r?\n/);
-    for (var li = 0; li < lines.length; li++){
-      var line = String(lines[li] || '').trim();
-      if (!line) continue;
-      summary.scanned++;
-      // Parse leading amount (e.g. "1597 99 Camaro red Garcia 5/12")
-      var m = line.match(/^(-?\d+(?:\.\d+)?)\s+(.*)$/);
-      if (!m){ summary.skipped++; continue; }
-      var amt = parseFloat(m[1]);
-      var desc = m[2];
-      if (!isFinite(amt)){ summary.skipped++; continue; }
-      // Try to link to a deal (cash_sales) by year+model+color+last on the desc.
-      var matchedDeal = null;
-      if (rt === 'cash_sales'){
-        for (var vin in dealsByVin){
-          var d = dealsByVin[vin];
-          if (d.location !== pr.location) continue;
-          var owed = parseFloat(d.total_collected) || 0;
-          // Use loose tokens — we don't have d26.owed handy here so amount alone is the gate.
-          // Skip if amount is more than $50 off the deal's total (proxy).
-          if (Math.abs(owed - amt) > Math.max(owed * 0.5, 50)) continue;
-          // Match name: last token of customer in desc?
-          var lastT = (String(d.customer_name||'').trim().split(/\s+/).pop() || '').toLowerCase();
-          if (lastT && lastT.length >= 3 && desc.toLowerCase().indexOf(lastT) >= 0){
-            matchedDeal = d;
-            break;
-          }
-        }
-      }
-      // Skip if a posting already exists for this source.
-      if (matchedDeal){
-        var existing = await cfFindPosting('deal', matchedDeal.id, null);
-        if (existing){ summary.skipped++; continue; }
-        if (!dryRun){
-          try {
-            await cfWritePosting({
-              source: 'deal', source_id: matchedDeal.id,
-              location: pr.location, month_idx: pr.month_idx, row_type: rt,
-              amount: amt, description: desc, vin: matchedDeal.vin,
-              context: { backfilled: true, customer: matchedDeal.customer_name }
-            });
-            summary.linked_deal++;
-          } catch(e){ summary.errors++; }
-        } else {
-          summary.linked_deal++;
-        }
-        continue;
-      }
-      // Fallback: insert as manual. Use a stable source_sub so re-runs are idempotent.
-      var sub = pr.location + ':' + pr.month_idx + ':' + rt + ':' + amt + ':' + desc.toLowerCase().replace(/\s+/g,' ').trim();
-      var existManual = await cfFindPosting('manual', 0, sub);
-      if (existManual){ summary.skipped++; continue; }
-      if (!dryRun){
-        try {
-          await cfWritePosting({
-            source: 'manual', source_id: 0, source_sub: sub,
-            location: pr.location, month_idx: pr.month_idx, row_type: rt,
-            amount: amt, description: desc,
-            context: { backfilled: true }
-          });
-          summary.manual++;
-        } catch(e){ summary.errors++; }
-      } else {
+    var nlines = String(pr.note || '').split(/\r?\n/);
+    for (var li = 0; li < nlines.length; li++){
+      var ln = String(nlines[li] || '').trim();
+      if (!ln) continue;
+      var lm = ln.match(/^(-?\d+(?:\.\d+)?)\s+(.*)$/);
+      if (!lm){ summary.skipped++; continue; }
+      var lAmt = parseFloat(lm[1]);
+      if (!isFinite(lAmt)){ summary.skipped++; continue; }
+      allLines.push({
+        loc: pr.location, month: pr.month_idx, row_type: rt,
+        line: ln, amt: lAmt, desc: lm[2], used: false
+      });
+    }
+  }
+  summary.scanned = allLines.length;
+
+  // ─── Cash sale pass ──────────────────────────────────────────────────
+  var dealRows = [];
+  try {
+    dealRows = await sbGet('deals',
+      'deal_type=eq.cash&select=id,customer_name,vehicle_desc,vin,location,total_collected,created_at&order=created_at.asc&limit=4000');
+  } catch(_){}
+  for (var di = 0; di < (dealRows || []).length; di++){
+    var d = dealRows[di];
+    var tokens = _cashSaleTokens(d, '');
+    if (!tokens || !tokens.last || (!tokens.yShort && !tokens.yFull)) continue;
+    // Find the first unused cash_sales line in this location whose tokens match.
+    var hit = null;
+    for (var ai = 0; ai < allLines.length; ai++){
+      var L = allLines[ai];
+      if (L.used) continue;
+      if (L.row_type !== 'cash_sales') continue;
+      if (L.loc !== d.location) continue;
+      var ll = L.line.toLowerCase();
+      if (ll.indexOf(tokens.last) < 0) continue;
+      var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
+                    (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
+      if (!hasYear) continue;
+      if (tokens.model && ll.indexOf(tokens.model) < 0) continue;
+      hit = L; break;
+    }
+    if (!hit) continue;
+    var existD = await cfFindPosting('deal', d.id, null);
+    if (existD){ summary.dups++; hit.used = true; continue; }
+    if (!dryRun){
+      try {
+        await cfWritePosting({
+          source: 'deal', source_id: d.id,
+          location: hit.loc, month_idx: hit.month, row_type: 'cash_sales',
+          amount: hit.amt, description: hit.desc, vin: d.vin || null,
+          context: { backfilled: true, customer: d.customer_name, created_at: d.created_at }
+        });
+        summary.linked_deal++;
+        hit.used = true;
+      } catch(e){ summary.errors++; console.warn('[backfill] deal write failed:', d.id, e); }
+    } else {
+      summary.linked_deal++;
+      hit.used = true;
+    }
+  }
+
+  // ─── Payment pass ────────────────────────────────────────────────────
+  var paymentRows = [];
+  try {
+    paymentRows = await sbGet('payments',
+      'select=id,customer_name,amount,payment_date,vehicle_year,vehicle_model,vehicle_color,vehicle_vin,location&order=created_at.asc&limit=10000');
+  } catch(_){}
+  for (var pyi = 0; pyi < (paymentRows || []).length; pyi++){
+    var p = paymentRows[pyi];
+    var pieces = _paymentFormatPieces(p);
+    if (!pieces.lastName) continue;
+    var pAmt = parseFloat(String(p.amount||'').replace(/[^0-9.\-]/g,'')) || 0;
+    var pAmtRound = Math.round(pAmt);
+    if (!pAmtRound) continue;
+    var pLoc = p.location || 'DeBary';
+    var pLast = pieces.lastName.toLowerCase();
+    var pModel = String(pieces.model || '').split(/\s+/)[0].toLowerCase();
+    var pYear = pieces.year || '';
+    var pHit = null;
+    for (var bi = 0; bi < allLines.length; bi++){
+      var Lp = allLines[bi];
+      if (Lp.used) continue;
+      if (Lp.row_type !== 'payments') continue;
+      if (Lp.loc !== pLoc) continue;
+      if (Math.abs(Lp.amt - pAmtRound) > 1) continue;
+      var llp = Lp.line.toLowerCase();
+      if (llp.indexOf(pLast) < 0) continue;
+      // Model is good identity but the fitter can drop it; require if present.
+      if (pModel && pModel.length >= 3 && llp.indexOf(pModel) < 0) continue;
+      // Year nice-to-have but the fitter drops it before model. Don't require.
+      pHit = Lp; break;
+    }
+    if (!pHit) continue;
+    var existP = await cfFindPosting('payment', p.id, null);
+    if (existP){ summary.dups++; pHit.used = true; continue; }
+    if (!dryRun){
+      try {
+        await cfWritePosting({
+          source: 'payment', source_id: p.id,
+          location: pHit.loc, month_idx: pHit.month, row_type: 'payments',
+          amount: pHit.amt, description: pHit.desc, vin: p.vehicle_vin || null,
+          context: { backfilled: true, customer: p.customer_name, payment_date: p.payment_date }
+        });
+        summary.linked_payment++;
+        pHit.used = true;
+      } catch(e){ summary.errors++; console.warn('[backfill] payment write failed:', p.id, e); }
+    } else {
+      summary.linked_payment++;
+      pHit.used = true;
+    }
+  }
+
+  // ─── Manual pass (everything not yet attributed) ─────────────────────
+  for (var ml = 0; ml < allLines.length; ml++){
+    var M = allLines[ml];
+    if (M.used) continue;
+    var sub = M.loc + ':' + M.month + ':' + M.row_type + ':' + M.amt + ':' +
+              M.desc.toLowerCase().replace(/\s+/g,' ').trim();
+    var existM = await cfFindPosting('manual', 0, sub);
+    if (existM){ summary.dups++; continue; }
+    if (!dryRun){
+      try {
+        await cfWritePosting({
+          source: 'manual', source_id: 0, source_sub: sub,
+          location: M.loc, month_idx: M.month, row_type: M.row_type,
+          amount: M.amt, description: M.desc,
+          context: { backfilled: true }
+        });
         summary.manual++;
-      }
+      } catch(e){ summary.errors++; }
+    } else {
+      summary.manual++;
     }
   }
   console.log('[backfill] summary', summary);
