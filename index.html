@@ -19400,33 +19400,40 @@ function closeReviewQueue(){
   document.body.style.overflow = '';
 }
 
-// Re-check pending Sales cards against current Supabase + Profit26 state.
+// Re-check pending review cards against current Supabase + Profit26 state.
 // Marks any whose trigger condition no longer holds as 'auto_resolved' so
 // the queue stops accumulating ghost cards after the underlying issue is
 // fixed (manual Sheet edit, post landed via another path, etc.).
 //
-// Resolves:
+// Resolves (Sales bucket):
 //   deal_pending           → deals26 row now exists for the VIN
 //   cash_sale_pending      → Profit26 Cash Sales line now matches tokens
 //                            within $1 of d26.owed
 //   cash_sale_correction   → Profit26 Cash Sales line now matches tokens
 //                            within $1 of d26.owed (i.e. user fixed it)
 //
-// Inventory cards (inv_create_pending / inv_relocate_pending) and Payments
-// cards are left alone for now — they have less reliable "is it done?"
-// signals and the review badge for those is small.
+// Resolves (Payments bucket):
+//   multiple / no_match / partial / possible_duplicate / approve_first
+//   / no_vehicle / no_customer → Profit26 Cash Sales OR Payments line
+//   matches the review's lastname + year + model tokens AND amount
+//   within $1. Catches the case where a payment got posted via another
+//   path (manual entry, sweep, prior approval) but the review never
+//   cleared.
+//
+// Inventory cards (inv_create_pending / inv_relocate_pending) are
+// left alone — those have weaker "is it done?" signals.
 async function _reviewAutoStale(reviewRows){
   if (!Array.isArray(reviewRows) || !reviewRows.length) return [];
   var staleIds = [];
   var mirrorCache = {};
-  async function getMirror(loc, monthIdx){
-    var key = loc + '|' + monthIdx;
+  async function getMirror(loc, monthIdx, label){
+    var key = loc + '|' + monthIdx + '|' + label;
     if (mirrorCache[key]) return mirrorCache[key];
     try {
       var rows = await sbGet('profit',
         'location=eq.' + encodeURIComponent(loc) +
         '&month_idx=eq.' + monthIdx +
-        '&label=eq.' + encodeURIComponent('Cash Sales') +
+        '&label=eq.' + encodeURIComponent(label) +
         '&select=note&limit=10');
       mirrorCache[key] = rows || [];
     } catch(_){ mirrorCache[key] = []; }
@@ -19434,7 +19441,7 @@ async function _reviewAutoStale(reviewRows){
   }
   for (var i = 0; i < reviewRows.length; i++){
     var r = reviewRows[i];
-    if (!r || !_reviewIsSales(r)) continue;
+    if (!r) continue;
     try {
       if (r.reason === 'deal_pending'){
         if (!r.vehicle_vin) continue;
@@ -19463,12 +19470,42 @@ async function _reviewAutoStale(reviewRows){
         var loc = d.location || 'DeBary';
         var dt = d.created_at ? new Date(d.created_at) : new Date();
         var monthIdx = dt.getMonth();
-        var mirror = await getMirror(loc, monthIdx);
+        var mirror = await getMirror(loc, monthIdx, 'Cash Sales');
         var tokens = _cashSaleTokens(d, d26row.car_desc);
         var posted = _findPostedNoteForTokens(mirror, tokens);
         if (posted && Math.abs((posted.amount || 0) - owed) < 1.00){
           staleIds.push(r.id);
         }
+        continue;
+      }
+      // Payments bucket — check if the payment is already posted in
+      // either Profit26 Payments OR Cash Sales (cash deals land in
+      // Cash Sales, not Payments) within $1 of the review's amount.
+      if (!_reviewIsSales(r)){
+        var amt = parseFloat(r.amount);
+        if (!isFinite(amt) || amt <= 0) continue;
+        var custParts = String(r.customer_name || '').trim().split(/\s+/);
+        var lastP = (custParts[custParts.length - 1] || '').toLowerCase();
+        var yShortP = r.vehicle_year ? String(r.vehicle_year).slice(-2) : '';
+        var yFullP = r.vehicle_year ? String(r.vehicle_year) : '';
+        var modelP = String(r.vehicle_model || '').toLowerCase().split(/\s+/)[0] || '';
+        if (lastP.length < 3 || (!yShortP && !yFullP)) continue;
+        var pTokens = { last: lastP, yShort: yShortP, yFull: yFullP, model: modelP };
+        var locP = r.location || 'DeBary';
+        var dtP = r.payment_date ? new Date(r.payment_date) : (r.created_at ? new Date(r.created_at) : new Date());
+        if (isNaN(dtP.getTime())) continue;
+        var mIdxP = dtP.getMonth();
+        var labels = ['Cash Sales', 'Payments'];
+        var matched = null;
+        for (var lbi = 0; lbi < labels.length; lbi++){
+          var mirP = await getMirror(locP, mIdxP, labels[lbi]);
+          var postedP = _findPostedNoteForTokens(mirP, pTokens);
+          if (postedP && Math.abs((postedP.amount || 0) - amt) < 1.00){
+            matched = { label: labels[lbi], posted: postedP };
+            break;
+          }
+        }
+        if (matched) staleIds.push(r.id);
       }
     } catch(_){ /* skip; surfacing the card is safer than silencing */ }
   }
