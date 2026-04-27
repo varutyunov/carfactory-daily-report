@@ -17691,6 +17691,65 @@ function _findPostedNoteForTokens(mirror, tokens){
   }
   return null;
 }
+
+// Loose Profit26 match: amount-within-tolerance + year + model + color
+// all present in the line. Used for cash deals where dealers often skip
+// the customer last name on the post line, and for catching multi-deal
+// lines where two sales got mashed together (the regex walks every
+// numeric token in the line, not just the leading one).
+//
+// Color list is the set used by the formatter; year accepts either YY or
+// YYYY substring; model match is case-insensitive substring (first word
+// of the vehicle's model name is enough).
+var _CF_COLOR_WORDS = ['white','black','silver','grey','gray','red','blue','green','yellow','orange','purple','brown','tan','gold','maroon','beige'];
+function _extractColorFromCarDesc(carDesc){
+  var toks = String(carDesc || '').trim().toLowerCase().split(/\s+/);
+  for (var i = 0; i < toks.length; i++){
+    if (_CF_COLOR_WORDS.indexOf(toks[i]) >= 0) return toks[i];
+  }
+  return '';
+}
+function _findCashSaleMatchLoose(mirror, opts){
+  if (!opts) return null;
+  var amount = parseFloat(opts.amount);
+  if (!isFinite(amount) || amount <= 0) return null;
+  var tol = isFinite(opts.tolerance) ? opts.tolerance : 1.00;
+  var yShort = opts.yShort || (opts.year ? String(opts.year).slice(-2) : '');
+  var yFull = opts.yFull || (opts.year ? String(opts.year) : '');
+  var model = String(opts.model || '').toLowerCase();
+  var color = String(opts.color || '').toLowerCase();
+  if (!model || !color || (!yShort && !yFull)) return null;
+  // Color synonyms: dealers freely interchange a few common variants on
+  // post lines (gray↔grey, maroon↔burgundy). Match against any synonym.
+  var colorSynonyms = { gray: ['gray','grey'], grey: ['gray','grey'], maroon: ['maroon','burgundy'], burgundy: ['maroon','burgundy'] };
+  var colorVariants = colorSynonyms[color] || [color];
+  for (var mi = 0; mi < (mirror||[]).length; mi++){
+    var src = String((mirror[mi] || {}).note || '');
+    var lines = src.split(/\r?\n/);
+    for (var li = 0; li < lines.length; li++){
+      var line = String(lines[li] || '');
+      var lnLow = line.toLowerCase();
+      if (lnLow.indexOf(model) < 0) continue;
+      var hasColor = false;
+      for (var ci = 0; ci < colorVariants.length; ci++){
+        if (lnLow.indexOf(colorVariants[ci]) >= 0){ hasColor = true; break; }
+      }
+      if (!hasColor) continue;
+      var hasYear = (yShort && lnLow.indexOf(yShort) >= 0) ||
+                    (yFull && lnLow.indexOf(yFull) >= 0);
+      if (!hasYear) continue;
+      var nums = line.match(/-?\d+(?:\.\d+)?/g) || [];
+      for (var ni = 0; ni < nums.length; ni++){
+        var nv = parseFloat(nums[ni]);
+        if (isFinite(nv) && Math.abs(nv - amount) < tol){
+          return { amount: nv, line: line.trim() };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function runCashSaleBackfill(){
   if (_backfillRunning){
     if (confirm('Backfill already running. Cancel it?')) { _backfillCancel = true; }
@@ -19457,7 +19516,7 @@ async function _reviewAutoStale(reviewRows){
         if (!r.deal_id) continue;
         var deal = await sbGet('deals',
           'id=eq.' + r.deal_id +
-          '&select=customer_name,vehicle_desc,vin,location,created_at&limit=1');
+          '&select=customer_name,vehicle_desc,vin,location,created_at,color&limit=1');
         var d = (deal || [])[0];
         if (!d || !d.vin) continue;
         var d26Rows = await sbGet('deals26',
@@ -19472,38 +19531,64 @@ async function _reviewAutoStale(reviewRows){
         var monthIdx = dt.getMonth();
         var mirror = await getMirror(loc, monthIdx, 'Cash Sales');
         var tokens = _cashSaleTokens(d, d26row.car_desc);
-        var posted = _findPostedNoteForTokens(mirror, tokens);
-        if (posted && Math.abs((posted.amount || 0) - owed) < 1.00){
+        // Cash deals: dealers often skip customer last name on the post,
+        // so use the loose matcher (amount + year + model + color). Color
+        // comes from deals.color or, failing that, from car_desc.
+        var saleColor = String(d.color || '').toLowerCase().split(/\s+/)[0] ||
+                        _extractColorFromCarDesc(d26row.car_desc);
+        var posted = _findCashSaleMatchLoose(mirror, {
+          amount: owed,
+          yShort: tokens.yShort, yFull: tokens.yFull,
+          model: tokens.model, color: saleColor
+        });
+        if (posted){
           staleIds.push(r.id);
         }
         continue;
       }
-      // Payments bucket — check if the payment is already posted in
-      // either Profit26 Payments OR Cash Sales (cash deals land in
-      // Cash Sales, not Payments) within $1 of the review's amount.
+      // Payments bucket — payment may already be posted to Profit26
+      // Payments OR Cash Sales (cash deals land in Cash Sales). Match on
+      // amount-within-$1 + year + model + color via the loose matcher.
       if (!_reviewIsSales(r)){
         var amt = parseFloat(r.amount);
         if (!isFinite(amt) || amt <= 0) continue;
-        var custParts = String(r.customer_name || '').trim().split(/\s+/);
-        var lastP = (custParts[custParts.length - 1] || '').toLowerCase();
         var yShortP = r.vehicle_year ? String(r.vehicle_year).slice(-2) : '';
         var yFullP = r.vehicle_year ? String(r.vehicle_year) : '';
         var modelP = String(r.vehicle_model || '').toLowerCase().split(/\s+/)[0] || '';
-        if (lastP.length < 3 || (!yShortP && !yFullP)) continue;
-        var pTokens = { last: lastP, yShort: yShortP, yFull: yFullP, model: modelP };
+        var colorP = '';
+        // Enrich missing year/model/color from deals26.car_desc.
+        if (((!yShortP && !yFullP) || !modelP || !colorP) && r.vehicle_vin){
+          try {
+            var d26P = await sbGet('deals26',
+              'sold_inv_vin=eq.' + encodeURIComponent(r.vehicle_vin) +
+              '&select=car_desc&limit=1');
+            var carDescP = (d26P || [])[0] && (d26P[0].car_desc || '');
+            if (carDescP){
+              var dtoks = String(carDescP).trim().split(/\s+/);
+              var dy = dtoks[0] || '';
+              if (!yFullP && /^\d{2,4}$/.test(dy)){
+                yShortP = dy.slice(-2);
+                yFullP = dy.length === 2 ? ('20' + dy) : dy;
+              }
+              if (!modelP && dtoks[1]) modelP = dtoks[1].toLowerCase();
+              if (!colorP) colorP = _extractColorFromCarDesc(carDescP);
+            }
+          } catch(_){}
+        }
+        if (!modelP || !colorP || (!yShortP && !yFullP)) continue;
         var locP = r.location || 'DeBary';
         var dtP = r.payment_date ? new Date(r.payment_date) : (r.created_at ? new Date(r.created_at) : new Date());
         if (isNaN(dtP.getTime())) continue;
         var mIdxP = dtP.getMonth();
         var labels = ['Cash Sales', 'Payments'];
         var matched = null;
-        for (var lbi = 0; lbi < labels.length; lbi++){
+        for (var lbi = 0; lbi < labels.length && !matched; lbi++){
           var mirP = await getMirror(locP, mIdxP, labels[lbi]);
-          var postedP = _findPostedNoteForTokens(mirP, pTokens);
-          if (postedP && Math.abs((postedP.amount || 0) - amt) < 1.00){
-            matched = { label: labels[lbi], posted: postedP };
-            break;
-          }
+          var hit = _findCashSaleMatchLoose(mirP, {
+            amount: amt, yShort: yShortP, yFull: yFullP,
+            model: modelP, color: colorP
+          });
+          if (hit) matched = { label: labels[lbi], amount: hit.amount, line: hit.line };
         }
         if (matched) staleIds.push(r.id);
       }
