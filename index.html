@@ -20389,6 +20389,15 @@ function _reviewRender(){
     html += '</select>';
     html += '<input id="rv-mrow-' + r.id + '" type="number" placeholder="Row #" inputmode="numeric" style="width:90px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:9px;font-size:14px;outline:none;"/>';
     html += '</div>';
+    // Profit26 toggle: Auto | Force post | Skip
+    html += '<div style="margin-bottom:8px;">';
+    html += '<div style="font-size:10px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Profit26</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button type="button" id="rv-mpm-auto-' + r.id + '" onclick="_reviewManualProfitMode(' + r.id + ',\'auto\')" style="flex:1;padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #1d4ed8;background:#1d4ed8;color:#fff;">Auto</button>';
+    html += '<button type="button" id="rv-mpm-yes-' + r.id + '" onclick="_reviewManualProfitMode(' + r.id + ',\'yes\')" style="flex:1;padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Force post</button>';
+    html += '<button type="button" id="rv-mpm-no-' + r.id + '" onclick="_reviewManualProfitMode(' + r.id + ',\'no\')" style="flex:1;padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #333;background:transparent;color:#888;">Skip</button>';
+    html += '</div>';
+    html += '</div>';
     // Label — single line, Enter blocked
     html += '<input id="rv-mlabel-' + r.id + '" type="text" placeholder="Label" value="' + _escHtml(r.note_line || '') + '" maxlength="40" style="width:100%;box-sizing:border-box;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px;font-size:14px;outline:none;margin-bottom:6px;" onkeydown="if(event.key===\'Enter\')event.preventDefault()"/>';
     html += '<div style="font-size:11px;color:#444;margin-bottom:8px;">$' + (parseFloat(r.amount)||0) + ' · ' + _manualDateTag(r.payment_date) + ' auto-applied</div>';
