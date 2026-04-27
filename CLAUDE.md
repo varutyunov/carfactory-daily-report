@@ -338,7 +338,9 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Vehicle fields:** When "Trade-In" selected, expands year/make/model/color/miles inputs
 - **Stored in JSON:** `{method:'trade_in', amount, trade_year, trade_make, trade_model, trade_color, trade_miles}`
 - **Display:** Purple badge (`#a855f7`), vehicle details shown in deal detail view
-- **Auto-creates inventory:** `_createTradeInCar()` creates `inventory` + `inventory_costs` rows (short name + "trade" suffix, linked via `car_id`, inserts before Total row)
+- **Auto-creates inventory:** `_createTradeInCar()` creates the `inventory` row, then delegates IC + Google Sheet insert + Total bump to `_executeInventoryAdd` (the canonical reviewed-add path). That path filters Total lookup by location, awaits the Sheet push, and rolls back the IC row on failure. `_createTradeInCar` also dedupes by `car_name + location` and rolls back the inventory row if `_executeInventoryAdd` fails so we never orphan a car in DB without a Sheet row.
+- **Fires on BOTH submit and edit:** Deal SUBMIT (`dealUpload` flow) and deal EDIT (`dealEditSave`) both call `_createTradeInCar` for any trade_in payment that wasn't in the original payments. Edit-side dedup keys on `year|make|model|color|miles` against the pre-edit `d.payments` snapshot.
+- **Never put trade-ins through the `inv_create_pending` review queue.** Trade-ins are part of a deal that Vlad already approved by submitting/editing the deal — they create the inventory row directly via `_executeInventoryAdd` (which is the same code that powers approved reviews). Confirmed standing rule from 2026-04-26 ("we had it happen with the RAV4 and the other charger").
 
 ### Deals26 Auto-Populate (from deal upload)
 - **On deal submit:** `_autopopulateDeals26(record, car)` creates deals26 row with: car_desc (inventory_costs.car_name + customer last name), cost, expenses, money (total_collected), dealer_fee=$399, deal_num (auto-incremented), gps_sold, sold_inv_vin
@@ -382,6 +384,11 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Features deployed:** Car color coding on column B, currency formatting ($#,##0), week separator borders (deal_num=1), column F formula (copies from row above), column G skip when payments=0 (leaves whatever's there — do NOT `clearContent` globally, it wiped data once), delete-action name verification (refuses + offers ±20-row scan), reconciler with normalized keys + compound keys for Deals26 + DB dupe healing, error logging on all Supabase calls
 
 ## Recent Work (April 2026)
+
+### Completed — April 26-27, 2026 (Riel close-out + trade-in fixes)
+- **`_createTradeInCar` location-filter + sheet-await fix:** the Total-row lookup was unfiltered by location, so DeBary trades could grab DeLand's Total. Sheet push was fire-and-forget. Rewritten to delegate IC + Sheet insert to `_executeInventoryAdd` (filters by location, awaits the Sheet push, rolls back on failure). Dedup added by `car_name + location`. Inventory row rolls back on Sheet failure so no orphan vehicles.
+- **Deal-edit save now fires `_createTradeInCar`:** previously only deal SUBMIT created trade-in inventory; editing a deal to add a trade_in payment just persisted JSON. `dealEditSave` snapshots the pre-edit trade-ins and calls `_createTradeInCar` for any trade_in not present in the original.
+- **`pending-sales-sync.yml` rebase-and-retry:** workflow lost races to `version.yml` (both fire on push to main), leaving root `PendingSales*.csv` stale and blocking `tax-fill.py`. Now retries up to 5 times with `git fetch + rebase` between pushes.
 
 ### Completed
 - **Sheets tab restored** from git history (~700 lines) with both Inventory and Deals26 sub-tabs

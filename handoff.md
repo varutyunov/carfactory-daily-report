@@ -10,6 +10,91 @@ The only exception: the Stage-2 deal_link path in `_appendCarPayPaymentToDeals26
 
 ---
 
+# Day 7 (2026-04-26 → 27) — Riel close-out + trade-in inventory fixes
+
+## Context
+Closing the Emmanuel Riel Accord deal exposed three holes in the
+auto-pipeline that had been hiding because Vlad had been working around
+them manually. Closing him out forced each one to surface.
+
+## What broke (and was fixed)
+
+### 1. `_createTradeInCar` had no location filter on Total lookup
+**Bug:** When a trade-in was added on a deal, the function scanned
+`inventory_costs` for the row whose `car_name === 'Total'` without
+filtering by `location`. There are TWO Total rows — one per lot — so a
+DeBary trade could grab DeLand's Total (whichever sort_order came last
+in the unfiltered list). That meant:
+- The new IC row got the wrong `sort_order`.
+- The wrong location's Total got bumped, drifting both lots' DB
+  positioning.
+- The Sheet write itself happened to be okay (AS-side `insert` finds
+  Total in the actual sheet by scanning column H), but the DB ↔ Sheet
+  alignment was junk afterwards.
+
+It also fired `sheetsPush` without `await`, so a Sheet failure was
+silent and left an orphan IC row in DB with no Sheet counterpart.
+
+**Fix (commit 348dbe5, sw v608):** `_createTradeInCar` now:
+- Dedupes by `car_name + location` against existing IC rows so
+  re-editing the same deal doesn't double-create.
+- Creates the inventory car, then delegates IC + Sheet write to
+  `_executeInventoryAdd` (the canonical reviewed path — already filters
+  by location, awaits the Sheet push, rolls back on failure).
+- Rolls back the inventory car if `_executeInventoryAdd` fails so we
+  never orphan a vehicle row.
+
+### 2. Deal-edit save never fired `_createTradeInCar`
+**Bug:** `_createTradeInCar` was only called from the deal SUBMIT path
+(around line 22225). When Vlad fixed Riel's deal by editing it to add a
+`trade_in` payment, the save path at `dealEditSave` only persisted the
+JSON to `deals.payments` — no inventory + IC was created.
+
+**Fix (commit 26cb60d):** `dealEditSave` now snapshots the original
+trade-ins at the top of the function (keyed on
+`year|make|model|color|miles`), and after `sbPatch('deals',…)` succeeds,
+loops over `newPayments` and calls `_createTradeInCar(payment, d)` for
+each `trade_in` whose key wasn't in the original. The dedup inside
+`_createTradeInCar` (by name+location) is the second safety net.
+
+### 3. `pending-sales-sync.yml` lost races to `version.yml`
+**Bug:** Both workflows fire on push to main. `version.yml` updates
+`version.json` and pushes; `pending-sales-sync.yml` was failing the push
+with non-fast-forward. Result: dealer CSVs landed in
+`Pending Sales/**` but root `PendingSalesDebary.csv` /
+`PendingSalesDeland.csv` weren't promoted, so `tax-fill.py` (which reads
+the root files) couldn't backfill taxes. Riel's row sat at $0 tax + 0
+owed for an hour.
+
+**Fix (commit 26cb60d):** added a 5-attempt rebase-and-retry loop after
+the auto-commit in `pending-sales-sync.yml`. On rejection, the workflow
+fetches origin, rebases, and re-pushes. Backoff is `attempt * 5s`. If
+all 5 attempts fail, the workflow exits with code 1.
+
+## Riel data state after manual close-out
+- `deals.id=64` Honda Accord 2013, total_collected $7,154 (cash + $1,600
+  trade-in)
+- `deals26` row 226 (DeLand sort 226 — actually DeBary): tax $426.19,
+  owed $888.81 (filled by local tax-fill.py run)
+- `inventory.id=1671` 2014 Dodge Charger grey 132,118mi DeBary
+- `inventory_costs.id=257` "14 Charger grey 132k trade" $1,600
+  sort_order 95 DeBary
+- DeBary Sheet Inventory row 114 shows the 14 Charger
+- DeBary Profit26 April Cash Sales: $13,273.29 (Riel $7,154 entry posted
+  via `profit_append_entry` direct call — wrap fields inside `data`
+  envelope, not at top level)
+
+## Pipeline gaps still open (deferred)
+- **No Encore scraper.** Pending Sales export is still manual — the
+  dealer software exports a CSV, then Vlad has to drop it into
+  `Pending Sales/<Loc>/` for the workflow to promote it. CarPay and
+  Passtime have scrapers; Encore does not. Without one, every deal
+  closing has a window where taxes can't backfill until the manual drop
+  happens. Scaffolding it follows the same Node-via-workflow-dispatch
+  pattern as the CarPay scrapers.
+
+---
+
 # Day 6 (2026-04-25 → 26) — Inventory Add/Move review flow + CSV promotion pipeline
 
 ## Context
