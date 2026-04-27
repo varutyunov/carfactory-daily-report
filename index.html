@@ -26081,6 +26081,17 @@ async function dealEditSave(id){
     var notesEl=document.getElementById('de-notes-'+id);
     if(notesEl&&notesEl.value!==(d.notes||'')) patch.notes=notesEl.value;
     // Payments
+    // Snapshot existing trade-ins so we can detect newly-added ones after save
+    var origTradeKeys={};
+    try{
+      var origPays=typeof d.payments==='string'?JSON.parse(d.payments||'[]'):(d.payments||[]);
+      origPays.forEach(function(op){
+        if(op&&op.method==='trade_in'){
+          var k=[(op.trade_year||''),(op.trade_make||''),(op.trade_model||''),(op.trade_color||''),(op.trade_miles||'')].join('|').toLowerCase();
+          origTradeKeys[k]=true;
+        }
+      });
+    }catch(e){}
     var amtEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-amt');
     var methodEls=document.querySelectorAll('#de-payments-'+id+' .de-pmt-method');
     var tradeFields=document.querySelectorAll('#de-payments-'+id+' .de-trade-fields');
@@ -26195,6 +26206,16 @@ async function dealEditSave(id){
       await sbPatch('deals',id,patch);
       // Update local data
       Object.keys(patch).forEach(function(k){d[k]=patch[k];});
+    }
+    // Auto-create inventory rows for any newly-added trade-ins (matches deal-submit flow)
+    for(var nti=0;nti<newPayments.length;nti++){
+      var np=newPayments[nti];
+      if(np.method==='trade_in'){
+        var nk=[(np.trade_year||''),(np.trade_make||''),(np.trade_model||''),(np.trade_color||''),(np.trade_miles||'')].join('|').toLowerCase();
+        if(!origTradeKeys[nk]){
+          try{ await _createTradeInCar(np,d); }catch(e){ console.warn('Trade-in car creation (edit) failed:',e); }
+        }
+      }
     }
     // Sync net deal adjustment to match the posted cash amount
     if(_payDealRows.length){

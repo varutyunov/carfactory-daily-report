@@ -62,9 +62,23 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Auto: promote newest Pending Sales CSV to repo root"
-            # Push back to BOTH branches so master never drifts behind main.
-            # (The local dual-refspec only applies to Vlad's machine, not this runner.)
-            git push origin HEAD:main HEAD:master
+            # Rebase-and-retry to survive races with version.yml (fires on
+            # every push to main) and other concurrent workflows. Without
+            # this, a parallel push wins and we get rejected non-fast-forward.
+            for attempt in 1 2 3 4 5; do
+              if git push origin HEAD:main HEAD:master; then
+                echo "Push succeeded on attempt $attempt"
+                break
+              fi
+              echo "Push rejected — pulling --rebase and retrying (attempt $attempt)"
+              git fetch origin
+              git rebase origin/main || git rebase --abort
+              if [ "$attempt" = "5" ]; then
+                echo "Push failed after 5 attempts" >&2
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
           else
             echo "No CSV changes to commit."
           fi
