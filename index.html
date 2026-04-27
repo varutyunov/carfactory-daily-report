@@ -17718,11 +17718,18 @@ function _findCashSaleMatchLoose(mirror, opts){
   var yFull = opts.yFull || (opts.year ? String(opts.year) : '');
   var model = String(opts.model || '').toLowerCase();
   var color = String(opts.color || '').toLowerCase();
-  if (!model || !color || (!yShort && !yFull)) return null;
+  var last = String(opts.last || '').toLowerCase();
+  if (!model || (!yShort && !yFull)) return null;
+  // Identity tail: at least ONE of color or last-name must be in the
+  // line. The fitter strips color when notes overflow the 26-char cell
+  // limit, so we can't require color outright; conversely, dealers
+  // often skip the last name on cash deals. Either alone is enough
+  // alongside amount + year + model.
+  if (!color && !last) return null;
   // Color synonyms: dealers freely interchange a few common variants on
   // post lines (gray↔grey, maroon↔burgundy). Match against any synonym.
   var colorSynonyms = { gray: ['gray','grey'], grey: ['gray','grey'], maroon: ['maroon','burgundy'], burgundy: ['maroon','burgundy'] };
-  var colorVariants = colorSynonyms[color] || [color];
+  var colorVariants = color ? (colorSynonyms[color] || [color]) : [];
   for (var mi = 0; mi < (mirror||[]).length; mi++){
     var src = String((mirror[mi] || {}).note || '');
     var lines = src.split(/\r?\n/);
@@ -17734,7 +17741,8 @@ function _findCashSaleMatchLoose(mirror, opts){
       for (var ci = 0; ci < colorVariants.length; ci++){
         if (lnLow.indexOf(colorVariants[ci]) >= 0){ hasColor = true; break; }
       }
-      if (!hasColor) continue;
+      var hasLast = !!(last && lnLow.indexOf(last) >= 0);
+      if (!hasColor && !hasLast) continue;
       var hasYear = (yShort && lnLow.indexOf(yShort) >= 0) ||
                     (yFull && lnLow.indexOf(yFull) >= 0);
       if (!hasYear) continue;
@@ -19539,7 +19547,7 @@ async function _reviewAutoStale(reviewRows){
         var posted = _findCashSaleMatchLoose(mirror, {
           amount: owed,
           yShort: tokens.yShort, yFull: tokens.yFull,
-          model: tokens.model, color: saleColor
+          model: tokens.model, color: saleColor, last: tokens.last
         });
         if (posted){
           staleIds.push(r.id);
@@ -19556,6 +19564,9 @@ async function _reviewAutoStale(reviewRows){
         var yFullP = r.vehicle_year ? String(r.vehicle_year) : '';
         var modelP = String(r.vehicle_model || '').toLowerCase().split(/\s+/)[0] || '';
         var colorP = '';
+        var custPartsP = String(r.customer_name || '').trim().split(/\s+/);
+        var lastP = (custPartsP[custPartsP.length - 1] || '').toLowerCase();
+        if (lastP.length < 3) lastP = '';
         // Enrich missing year/model/color from deals26.car_desc.
         if (((!yShortP && !yFullP) || !modelP || !colorP) && r.vehicle_vin){
           try {
@@ -19575,7 +19586,8 @@ async function _reviewAutoStale(reviewRows){
             }
           } catch(_){}
         }
-        if (!modelP || !colorP || (!yShortP && !yFullP)) continue;
+        if (!modelP || (!yShortP && !yFullP)) continue;
+        if (!colorP && !lastP) continue;
         var locP = r.location || 'DeBary';
         var dtP = r.payment_date ? new Date(r.payment_date) : (r.created_at ? new Date(r.created_at) : new Date());
         if (isNaN(dtP.getTime())) continue;
@@ -19586,7 +19598,7 @@ async function _reviewAutoStale(reviewRows){
           var mirP = await getMirror(locP, mIdxP, labels[lbi]);
           var hit = _findCashSaleMatchLoose(mirP, {
             amount: amt, yShort: yShortP, yFull: yFullP,
-            model: modelP, color: colorP
+            model: modelP, color: colorP, last: lastP
           });
           if (hit) matched = { label: labels[lbi], amount: hit.amount, line: hit.line };
         }
