@@ -1328,14 +1328,21 @@ function _fitProfitNoteLine(line) {
     year = rest[0];
     rest = rest.slice(1);
   }
-  var middle = rest.filter(function(t) { return !_PROFIT_NOTE_COLORS[t.toLowerCase()]; });
   var prefix = amt + (year ? ' ' + year : '');
   var join = function(arr) {
     var out = [prefix].concat(arr);
     if (date) out.push(date);
     return out.join(' ');
   };
+  // Precedence: drop mileage (e.g., '195k') before color so the color
+  // stays available as an identity tail token for matchers. Auto-stale
+  // matches on color OR last name; last name often missing on cash deals.
+  var _mileageRe = /^\d{2,4}k$/i;
+  var middle = rest.filter(function(t){ return !_mileageRe.test(t); });
   var result = join(middle);
+  if (result.length <= _PROFIT_NOTE_MAX) return result;
+  middle = middle.filter(function(t){ return !_PROFIT_NOTE_COLORS[t.toLowerCase()]; });
+  result = join(middle);
   if (result.length <= _PROFIT_NOTE_MAX) return result;
   if (middle.length > 2) {
     middle = [middle[0], middle[middle.length - 1]];

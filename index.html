@@ -17758,6 +17758,252 @@ function _findCashSaleMatchLoose(mirror, opts){
   return null;
 }
 
+// ─── profit_postings ledger ──────────────────────────────────────────
+// Structured replacement for freeform-text matching. Every Profit26
+// post should also write a row keyed on (source, source_id, source_sub).
+// See scripts/profit-postings-deploy.md for setup.
+//
+// These helpers fail soft: if the table doesn't exist or any call errors
+// out, we log and return null/false so the legacy text-matching path
+// continues to work.
+
+// Look up an existing live posting by source identity. Returns the row
+// or null.
+async function cfFindPosting(source, source_id, source_sub){
+  if (!source || source_id === undefined || source_id === null) return null;
+  try {
+    var qs = 'source=eq.' + encodeURIComponent(source) +
+             '&source_id=eq.' + encodeURIComponent(source_id) +
+             '&voided_at=is.null' +
+             '&select=*&limit=1';
+    if (source_sub){
+      qs += '&source_sub=eq.' + encodeURIComponent(source_sub);
+    } else {
+      qs += '&source_sub=is.null';
+    }
+    var rows = await sbGet('profit_postings', qs);
+    return (Array.isArray(rows) && rows[0]) || null;
+  } catch(e){
+    console.warn('cfFindPosting error:', e);
+    return null;
+  }
+}
+
+// Lookup live postings in a (location, month_idx, row_type) bucket.
+async function cfListPostings(location, month_idx, row_type){
+  if (!location || month_idx === undefined || !row_type) return [];
+  try {
+    var rows = await sbGet('profit_postings',
+      'location=eq.' + encodeURIComponent(location) +
+      '&month_idx=eq.' + month_idx +
+      '&row_type=eq.' + encodeURIComponent(row_type) +
+      '&voided_at=is.null' +
+      '&select=*&limit=200');
+    return Array.isArray(rows) ? rows : [];
+  } catch(e){
+    console.warn('cfListPostings error:', e);
+    return [];
+  }
+}
+
+// Insert (or no-op upsert) a posting row. Should be called AFTER the
+// Apps Script profit_append_entry succeeded — this is the ledger's
+// record of what just landed in the sheet.
+//
+// Args:
+//   source        — 'deal' | 'payment' | 'cash_payout' | 'manual'
+//   source_id     — id in originating table (number or null for manual)
+//   source_sub    — optional discriminator string
+//   location      — 'DeBary' | 'DeLand'
+//   month_idx     — 0..11
+//   row_type      — 'cash_sales' | 'payments' | 'extras'
+//   amount        — number (whole dollars typical, decimals allowed)
+//   description   — note line as it appears (without amount prefix)
+//   vin           — optional, for fast lookups
+//   context       — optional object, stored as jsonb
+//
+// Returns the new row, or null on error.
+async function cfWritePosting(opts){
+  if (!opts || !opts.source || !opts.location || !opts.row_type) return null;
+  var monthIdx = parseInt(opts.month_idx, 10);
+  if (!isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11) return null;
+  var amount = parseFloat(opts.amount);
+  if (!isFinite(amount)) return null;
+  try {
+    // Idempotency: if a live row exists with same source key, don't double-post.
+    if (opts.source_id !== null && opts.source_id !== undefined){
+      var existing = await cfFindPosting(opts.source, opts.source_id, opts.source_sub);
+      if (existing){
+        // Update amount/description/location if changed (e.g. payment edited)
+        var patch = {};
+        if (Math.abs((parseFloat(existing.amount)||0) - amount) > 0.005) patch.amount = amount;
+        if (existing.description !== opts.description) patch.description = opts.description;
+        if (existing.location !== opts.location) patch.location = opts.location;
+        if (existing.month_idx !== monthIdx) patch.month_idx = monthIdx;
+        if (existing.row_type !== opts.row_type) patch.row_type = opts.row_type;
+        if (opts.context && Object.keys(opts.context).length){
+          patch.context = Object.assign({}, existing.context || {}, opts.context);
+        }
+        if (Object.keys(patch).length){
+          try { await sbPatch('profit_postings', existing.id, patch); }
+          catch(e){ console.warn('cfWritePosting patch error:', e); }
+        }
+        return Object.assign({}, existing, patch);
+      }
+    }
+    var row = {
+      location: opts.location,
+      month_idx: monthIdx,
+      row_type: opts.row_type,
+      source: opts.source,
+      source_id: (opts.source_id === undefined ? null : opts.source_id),
+      source_sub: opts.source_sub || null,
+      amount: amount,
+      description: String(opts.description || ''),
+      vin: opts.vin || null,
+      context: opts.context || {}
+    };
+    var inserted = await sbPost('profit_postings', row);
+    return (Array.isArray(inserted) && inserted[0]) || inserted || null;
+  } catch(e){
+    console.warn('cfWritePosting error:', e);
+    return null;
+  }
+}
+
+// Mark a posting as voided. Called AFTER Apps Script profit_remove_entry
+// succeeded (or when we know the sheet line is gone).
+async function cfVoidPosting(posting_id, reason){
+  if (!posting_id) return false;
+  try {
+    await sbPatch('profit_postings', posting_id, {
+      voided_at: new Date().toISOString(),
+      voided_reason: String(reason || 'voided')
+    });
+    return true;
+  } catch(e){
+    console.warn('cfVoidPosting error:', e);
+    return false;
+  }
+}
+
+// Convenience: void by source identity.
+async function cfVoidPostingBySource(source, source_id, source_sub, reason){
+  var existing = await cfFindPosting(source, source_id, source_sub);
+  if (!existing) return false;
+  return cfVoidPosting(existing.id, reason);
+}
+
+// Backfill the ledger from existing Profit26 notes. For each note line in
+// the Supabase profit mirror, attempt to link to a deal (cash_sales) or
+// payment (payments) by tokens. Unlinked lines become source='manual' so
+// the row count still represents the sheet. Idempotent — re-running after
+// new posts only adds the missing rows.
+//
+// Run from the browser console:
+//   await _cfBackfillProfitPostings();
+//
+// Returns a summary { scanned, linked_deal, linked_payment, manual, skipped }.
+async function _cfBackfillProfitPostings(opts){
+  opts = opts || {};
+  var dryRun = !!opts.dryRun;
+  console.log('[backfill] start' + (dryRun ? ' (DRY RUN)' : ''));
+  var summary = { scanned: 0, linked_deal: 0, linked_payment: 0, manual: 0, skipped: 0, errors: 0 };
+  var profitRows;
+  try {
+    profitRows = await sbGet('profit', 'select=location,month_idx,label,note&limit=2000');
+  } catch(e){
+    console.warn('[backfill] failed to load profit mirror:', e);
+    return summary;
+  }
+  if (!Array.isArray(profitRows)) return summary;
+  // Pre-load deals + payments for the months we'll touch.
+  var dealsByVin = {}, paymentsById = {};
+  try {
+    var dealRows = await sbGet('deals',
+      'deal_type=eq.cash&select=id,customer_name,vin,location,total_collected,created_at,color&limit=4000');
+    (dealRows || []).forEach(function(d){ if (d.vin) dealsByVin[d.vin] = d; });
+  } catch(_){}
+
+  var labelToType = { 'Cash Sales': 'cash_sales', 'Payments': 'payments', 'Extras': 'extras' };
+
+  for (var pi = 0; pi < profitRows.length; pi++){
+    var pr = profitRows[pi];
+    var rt = labelToType[pr.label];
+    if (!rt) continue;
+    var note = String(pr.note || '');
+    if (!note.trim()) continue;
+    var lines = note.split(/\r?\n/);
+    for (var li = 0; li < lines.length; li++){
+      var line = String(lines[li] || '').trim();
+      if (!line) continue;
+      summary.scanned++;
+      // Parse leading amount (e.g. "1597 99 Camaro red Garcia 5/12")
+      var m = line.match(/^(-?\d+(?:\.\d+)?)\s+(.*)$/);
+      if (!m){ summary.skipped++; continue; }
+      var amt = parseFloat(m[1]);
+      var desc = m[2];
+      if (!isFinite(amt)){ summary.skipped++; continue; }
+      // Try to link to a deal (cash_sales) by year+model+color+last on the desc.
+      var matchedDeal = null;
+      if (rt === 'cash_sales'){
+        for (var vin in dealsByVin){
+          var d = dealsByVin[vin];
+          if (d.location !== pr.location) continue;
+          var owed = parseFloat(d.total_collected) || 0;
+          // Use loose tokens — we don't have d26.owed handy here so amount alone is the gate.
+          // Skip if amount is more than $50 off the deal's total (proxy).
+          if (Math.abs(owed - amt) > Math.max(owed * 0.5, 50)) continue;
+          // Match name: last token of customer in desc?
+          var lastT = (String(d.customer_name||'').trim().split(/\s+/).pop() || '').toLowerCase();
+          if (lastT && lastT.length >= 3 && desc.toLowerCase().indexOf(lastT) >= 0){
+            matchedDeal = d;
+            break;
+          }
+        }
+      }
+      // Skip if a posting already exists for this source.
+      if (matchedDeal){
+        var existing = await cfFindPosting('deal', matchedDeal.id, null);
+        if (existing){ summary.skipped++; continue; }
+        if (!dryRun){
+          try {
+            await cfWritePosting({
+              source: 'deal', source_id: matchedDeal.id,
+              location: pr.location, month_idx: pr.month_idx, row_type: rt,
+              amount: amt, description: desc, vin: matchedDeal.vin,
+              context: { backfilled: true, customer: matchedDeal.customer_name }
+            });
+            summary.linked_deal++;
+          } catch(e){ summary.errors++; }
+        } else {
+          summary.linked_deal++;
+        }
+        continue;
+      }
+      // Fallback: insert as manual. Use a stable source_sub so re-runs are idempotent.
+      var sub = pr.location + ':' + pr.month_idx + ':' + rt + ':' + amt + ':' + desc.toLowerCase().replace(/\s+/g,' ').trim();
+      var existManual = await cfFindPosting('manual', 0, sub);
+      if (existManual){ summary.skipped++; continue; }
+      if (!dryRun){
+        try {
+          await cfWritePosting({
+            source: 'manual', source_id: 0, source_sub: sub,
+            location: pr.location, month_idx: pr.month_idx, row_type: rt,
+            amount: amt, description: desc,
+            context: { backfilled: true }
+          });
+          summary.manual++;
+        } catch(e){ summary.errors++; }
+      } else {
+        summary.manual++;
+      }
+    }
+  }
+  console.log('[backfill] summary', summary);
+  return summary;
+}
+
 async function runCashSaleBackfill(){
   if (_backfillRunning){
     if (confirm('Backfill already running. Cancel it?')) { _backfillCancel = true; }
@@ -19537,6 +19783,17 @@ async function _reviewAutoStale(reviewRows){
         var loc = d.location || 'DeBary';
         var dt = d.created_at ? new Date(d.created_at) : new Date();
         var monthIdx = dt.getMonth();
+        // Ledger-first: a live posting keyed on this deal id is the
+        // authoritative "already posted" signal. Falls through to the
+        // loose text matcher on miss so legacy posts still resolve.
+        try {
+          var ledgerHit = await cfFindPosting('deal', r.deal_id, null);
+          if (ledgerHit && ledgerHit.row_type === 'cash_sales' &&
+              Math.abs((parseFloat(ledgerHit.amount) || 0) - owed) < 1.00){
+            staleIds.push(r.id);
+            continue;
+          }
+        } catch(_){}
         var mirror = await getMirror(loc, monthIdx, 'Cash Sales');
         var tokens = _cashSaleTokens(d, d26row.car_desc);
         // Cash deals: dealers often skip customer last name on the post,
@@ -19560,6 +19817,14 @@ async function _reviewAutoStale(reviewRows){
       if (!_reviewIsSales(r)){
         var amt = parseFloat(r.amount);
         if (!isFinite(amt) || amt <= 0) continue;
+        // Ledger-first: if a live posting exists for this payment id,
+        // mark stale immediately. Skips the loose-matcher fallback.
+        if (r.payment_id){
+          try {
+            var pHit = await cfFindPosting('payment', r.payment_id, null);
+            if (pHit){ staleIds.push(r.id); continue; }
+          } catch(_){}
+        }
         var yShortP = r.vehicle_year ? String(r.vehicle_year).slice(-2) : '';
         var yFullP = r.vehicle_year ? String(r.vehicle_year) : '';
         var modelP = String(r.vehicle_model || '').toLowerCase().split(/\s+/)[0] || '';
@@ -20773,6 +21038,22 @@ async function _reviewApprovePending(id){
         await _reviewLoad();
         return;
       }
+      // Ledger: keep the structured record in sync with the corrected sheet.
+      try {
+        if (r.deal_id){
+          await cfWritePosting({
+            source: 'deal',
+            source_id: r.deal_id,
+            location: loc3,
+            month_idx: monthIdx3,
+            row_type: 'cash_sales',
+            amount: newAmt,
+            description: newDesc,
+            vin: ctx3.record.vin || null,
+            context: { corrected_from: oldAmt, corrected_at: new Date().toISOString() }
+          });
+        }
+      } catch(_){}
       await sbPatch('payment_reviews', id, {
         status: 'approved',
         resolved_at: new Date().toISOString(),
@@ -21625,6 +21906,22 @@ async function _appendPaymentToProfit(payload, amountOverride){
         { amount: amtRounded, raw_amount: amt, description: desc, new_value: data.new_value },
         _auditCtx);
     } catch(_){}
+    // Ledger: structured record of this post for future idempotency lookups.
+    try {
+      if (payload.id){
+        await cfWritePosting({
+          source: 'payment',
+          source_id: payload.id,
+          location: loc,
+          month_idx: monthIdx,
+          row_type: 'payments',
+          amount: amtRounded,
+          description: desc,
+          vin: payload.vehicle_vin || null,
+          context: { customer: payload.customer_name, payment_date: payload.payment_date }
+        });
+      }
+    } catch(_){}
     // Background: keep the Supabase profit mirror fresh for the next Profit tab load
     try{
       fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
@@ -21675,6 +21972,22 @@ async function _updatePaymentInProfit(oldPayload, newPayload){
     })});
     var data=null;try{data=await resp.json();}catch(e){}
     if(!data||data.ok===false){console.warn('Profit Payments update failed:',data);return;}
+    // Ledger: keep the structured record in sync with the sheet update.
+    try {
+      if (newPayload.id || oldPayload.id){
+        await cfWritePosting({
+          source: 'payment',
+          source_id: newPayload.id || oldPayload.id,
+          location: loc,
+          month_idx: monthIdx,
+          row_type: 'payments',
+          amount: newAmtRounded,
+          description: newDesc,
+          vin: newPayload.vehicle_vin || oldPayload.vehicle_vin || null,
+          context: { customer: newPayload.customer_name, payment_date: newPayload.payment_date, edited: true }
+        });
+      }
+    } catch(_){}
     try{fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});}catch(e){}
   }catch(e){console.warn('Profit Payments update error:',e);}
 }
@@ -21696,6 +22009,10 @@ async function _removePaymentFromProfit(payload){
     })});
     var data=null;try{data=await resp.json();}catch(e){}
     if(!data||data.ok===false){console.warn('Profit Payments remove failed:',data);return;}
+    // Ledger: void the structured posting record so it stops counting as live.
+    try {
+      if (payload.id) await cfVoidPostingBySource('payment', payload.id, null, 'payment removed');
+    } catch(_){}
     try{fetch(_SHEETS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:_SHEETS_SECRET,action:'sync_profit',location:loc})});}catch(e){}
   }catch(e){console.warn('Profit Payments remove error:',e);}
 }
@@ -22796,14 +23113,35 @@ async function _autopopulateDeals26(record, car, icOverride) {
       if (psResp.ok) {
         var psCsv = await psResp.text();
         var psLines = psCsv.trim().split('\n');
-        var psHdr = psLines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+        // Proper CSV parser: respects double-quoted fields containing commas.
+        // Naive split(',') breaks on cells like '"ENCARNATION, EMMANUEL RIEL"'
+        // and shifts every subsequent column off by one — which silently
+        // copied wrong taxes onto random VINs.
+        var _parseCsvLine = function(s){
+          var out = [], cur = '', q = false;
+          for (var i = 0; i < s.length; i++){
+            var ch = s.charAt(i);
+            if (q){
+              if (ch === '"' && s.charAt(i+1) === '"'){ cur += '"'; i++; }
+              else if (ch === '"'){ q = false; }
+              else cur += ch;
+            } else {
+              if (ch === '"') q = true;
+              else if (ch === ','){ out.push(cur); cur = ''; }
+              else cur += ch;
+            }
+          }
+          out.push(cur);
+          return out.map(function(v){ return v.trim(); });
+        };
+        var psHdr = _parseCsvLine(psLines[0]).map(function(h){ return h.toLowerCase(); });
         var vinIdx = psHdr.indexOf('vin');
         var taxIdx = psHdr.indexOf('salestax');
         var tagIdx = psHdr.indexOf('tagfee');
         var titleIdx = psHdr.indexOf('titlefee');
         if (vinIdx >= 0 && taxIdx >= 0) {
           for (var pi = 1; pi < psLines.length; pi++) {
-            var psVals = psLines[pi].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+            var psVals = _parseCsvLine(psLines[pi]);
             var psVin = (psVals[vinIdx] || '').trim();
             if (psVin && vin.indexOf(psVin) === 0) {
               var st = parseFloat(psVals[taxIdx]) || 0;
@@ -23028,6 +23366,24 @@ async function _appendCashSaleToProfit(opts) {
       return;
     }
     console.log('Profit Cash Sales +$' + amountRounded + ' (raw $' + amount + ') ' + desc + ' → ' + loc + ' month=' + monthIdx);
+    // Ledger: structured record keyed on the originating deal id so future
+    // auto-stale / dedupe checks can resolve this post by id, not by
+    // freeform-text matching.
+    try {
+      if (record && record.id){
+        await cfWritePosting({
+          source: 'deal',
+          source_id: record.id,
+          location: loc,
+          month_idx: monthIdx,
+          row_type: 'cash_sales',
+          amount: amountRounded,
+          description: desc,
+          vin: record.vin || null,
+          context: { customer: record.customer_name, created_at: record.created_at }
+        });
+      }
+    } catch(_){}
     // Background re-sync so next Profit tab load shows fresh data
     try {
       fetch(_SHEETS_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
@@ -23179,12 +23535,31 @@ async function _fillMissingTaxes() {
     function _parseTaxCsv(csvText) {
       var map = {};
       var lines = csvText.trim().split('\n');
-      var hdr = lines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').toLowerCase(); });
+      // Quoted-aware CSV row parser (cells like "ENCARNATION, EMMANUEL RIEL"
+      // would otherwise shift every column right and corrupt the VIN→tax map).
+      var _row = function(s){
+        var out = [], cur = '', q = false;
+        for (var i = 0; i < s.length; i++){
+          var ch = s.charAt(i);
+          if (q){
+            if (ch === '"' && s.charAt(i+1) === '"'){ cur += '"'; i++; }
+            else if (ch === '"'){ q = false; }
+            else cur += ch;
+          } else {
+            if (ch === '"') q = true;
+            else if (ch === ','){ out.push(cur); cur = ''; }
+            else cur += ch;
+          }
+        }
+        out.push(cur);
+        return out.map(function(v){ return v.trim(); });
+      };
+      var hdr = _row(lines[0]).map(function(h){ return h.toLowerCase(); });
       var vinIdx = hdr.indexOf('vin'), taxIdx = hdr.indexOf('salestax');
       var tagIdx = hdr.indexOf('tagfee'), titleIdx = hdr.indexOf('titlefee');
       if (vinIdx < 0 || taxIdx < 0) return map;
       for (var i = 1; i < lines.length; i++) {
-        var vals = lines[i].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
+        var vals = _row(lines[i]);
         var pVin = (vals[vinIdx] || '').trim();
         if (!pVin) continue;
         var st = parseFloat(vals[taxIdx]) || 0;
@@ -25610,6 +25985,21 @@ async function _prPostNetToExtras(){
       alert('Post failed: '+(data&&data.error?data.error:'unknown error'));
       return;
     }
+    // Ledger: record the extras post keyed on (location, period range) so
+    // we can detect duplicates and reconcile later.
+    try {
+      await cfWritePosting({
+        source: 'manual',
+        source_id: 0,
+        source_sub: 'payroll:' + loc + ':' + dfRange,
+        location: loc,
+        month_idx: monthIdx,
+        row_type: 'extras',
+        amount: Math.round(net),
+        description: dfTag,
+        context: { period_start: _prDateKey(ps), period_end: _prDateKey(pe), revenue: revenue, payroll: totalPayroll }
+      });
+    } catch(_){}
     alert('Posted '+signDisplay+absAmt.toLocaleString()+' to '+monthName+' Extras.');
     // Background: trigger sync_profit so Supabase mirror catches up.
     try{
