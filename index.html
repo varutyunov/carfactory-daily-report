@@ -23551,44 +23551,44 @@ async function _createTradeInCar(payment, dealRecord) {
   var rawMiles = (payment.trade_miles || '').toString().replace(/[^0-9]/g, '');
   var milesNum = parseInt(rawMiles) || null;
   var tradeValue = parseFloat(payment.amount) || 0;
+  var loc = dealRecord.location || 'DeBary';
 
   if (!yr && !make && !model) return; // no vehicle info
 
-  // 1. Build inventory name: "2005 Ford Ranger"
-  var invName = [yr, make, model].filter(Boolean).join(' ');
+  // Build inventory_costs car_name first so we can dedup against existing rows
+  var shortYr = yr.length === 4 ? yr.slice(2) : yr;
+  var milesK = milesNum ? Math.round(milesNum / 1000) + 'k' : '';
+  var carName = [shortYr, model, color.toLowerCase(), milesK, 'trade'].filter(Boolean).join(' ');
 
-  // 2. Insert into inventory table
+  // Dedup: if an IC with this name already exists at this location, skip — the
+  // trade was already created (e.g. user editing the same deal twice).
+  try {
+    var existing = await sbGet('inventory_costs',
+      'car_name=eq.' + encodeURIComponent(carName) +
+      '&location=eq.' + encodeURIComponent(loc) +
+      '&select=id&limit=1');
+    if (Array.isArray(existing) && existing.length) return;
+  } catch(_) {}
+
+  // 1. Insert into inventory table
+  var invName = [yr, make, model].filter(Boolean).join(' ');
   var invRow = {
     name: invName,
     stock: '',
     vin: '',
     color: color.toLowerCase(),
     miles: milesNum,
-    location: dealRecord.location || 'DeBary',
+    location: loc,
     photo: null
   };
   var invRes = await sbPost('inventory', invRow);
   var newInvId = (invRes && invRes[0]) ? invRes[0].id : null;
   if (!newInvId) return;
 
-  // 3. Build inventory_costs car_name: "05 Ranger white 185k trade"
-  var shortYr = yr.length === 4 ? yr.slice(2) : yr;
-  var milesK = milesNum ? Math.round(milesNum / 1000) + 'k' : '';
-  var carName = [shortYr, model, color.toLowerCase(), milesK, 'trade'].filter(Boolean).join(' ');
-
-  // 4. Get next sort_order — insert before the "Total" row
-  var sortOrder = 1;
-  var totalIcRow = null;
-  try {
-    var allIc = await sbGet('inventory_costs', 'select=id,car_name,sort_order&order=sort_order.asc&limit=500');
-    if (Array.isArray(allIc)) {
-      allIc.forEach(function(r) { if ((r.car_name || '').toLowerCase() === 'total') totalIcRow = r; });
-      sortOrder = totalIcRow ? totalIcRow.sort_order : allIc.length + 1;
-    }
-  } catch (e) {}
-
-  // 5. Insert into inventory_costs, linked to the inventory car
-  var icRow = {
+  // 2. Delegate IC creation + Sheet insert + Total bump to the canonical
+  //    inventory-add path, which filters Total lookup by location, dedupes,
+  //    awaits the Sheet push, and rolls back on failure.
+  var icDraft = {
     car_name: carName,
     car_id: newInvId,
     purchase_cost: tradeValue,
@@ -23596,20 +23596,22 @@ async function _createTradeInCar(payment, dealRecord) {
     vlad_expenses: 0,
     expense_notes: '',
     vlad_expense_notes: '',
-    location: dealRecord.location || 'DeBary',
-    sort_order: sortOrder,
-    updated_at: new Date().toISOString()
+    location: loc
   };
-  await sbPost('inventory_costs', icRow);
+  var addRes = null;
+  try {
+    addRes = await _executeInventoryAdd(icDraft);
+  } catch(e) { addRes = { ok: false, error: 'execute_threw' }; }
 
-  // 6. Push to Google Sheet and bump Total row down
-  sheetsPush('Inventory', sortOrder, icRow, 'insert', (dealRecord.location || 'DeBary'));
-  if (totalIcRow) {
-    totalIcRow.sort_order = sortOrder + 1;
-    await sbPatch('inventory_costs', totalIcRow.id, { sort_order: totalIcRow.sort_order });
+  // If the IC + Sheet write failed, roll back the inventory car so we don't
+  // orphan a vehicle row in DB without a corresponding Sheet row.
+  if (!addRes || addRes.ok === false) {
+    try { await sbDelete('inventory', newInvId); } catch(_) {}
+    console.warn('Trade-in Sheet insert failed:', addRes && addRes.error);
+    return;
   }
 
-  // 7. Refresh local inventory
+  // 3. Refresh local inventory cache
   if (Array.isArray(S.inventory) && invRes && invRes[0]) {
     S.inventory.push(invRes[0]);
   }
