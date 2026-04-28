@@ -19973,7 +19973,7 @@ async function _reviewLoad(){
   var count = document.getElementById('review-count');
   if (list) list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>';
   try {
-    var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=100');
+    var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=500');
     rows = Array.isArray(rows) ? rows : [];
     // Auto-resolve cards whose trigger condition no longer holds before
     // we render. Drops the resolved IDs from the visible set.
@@ -20498,12 +20498,41 @@ async function _rvForceScan(){
       return (n && n !== 'total') ? n + '||' + (r.location||'DeBary') : null;
     }).filter(Boolean));
 
-    // 4. Fetch pending reviews — skip already-queued
+    // 4. Fetch ALL pending inv_create_pending reviews (need created_at for dup sort)
     var pendingReviews = [];
-    try { pendingReviews = await sbGet('payment_reviews', 'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot&limit=500'); } catch(_){}
+    try { pendingReviews = await sbGet('payment_reviews', 'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot,location,created_at&limit=500'); } catch(_){}
+
+    // 4b. Cleanup: auto-resolve stale reviews (car already in IC) and duplicates.
+    // Sort newest-first so we keep the most recent when deduplicating.
+    if (res) res.textContent = 'Cleaning up stale/duplicate reviews...';
+    var staleFixed = 0, dupFixed = 0;
+    var seenCleanKeys = new Set();
+    var sortedPending = (pendingReviews||[]).slice().sort(function(a,b){
+      return (b.created_at||'').localeCompare(a.created_at||'');
+    });
+    var keptPendingReviews = [];
+    for (var pi = 0; pi < sortedPending.length; pi++){
+      var pr = sortedPending[pi];
+      var ic = (pr.snapshot && pr.snapshot.ic) || {};
+      var prCarId = ic.car_id;
+      var prName = _normalizeIcKey(ic.car_name);
+      var prLoc = pr.location || ic.location || 'DeBary';
+      var prKey = prName + '||' + prLoc;
+      var isStale = (prCarId && icCarIds.has(prCarId)) ||
+                    (prName && prName !== 'total' && icNameKeys.has(prKey));
+      var isDup = !isStale && prName && seenCleanKeys.has(prKey);
+      if (isStale || isDup){
+        try { await sbPatch('payment_reviews', pr.id, {status:'auto_resolved'}); if(isStale) staleFixed++; else dupFixed++; } catch(_){}
+      } else {
+        if (prName) seenCleanKeys.add(prKey);
+        keptPendingReviews.push(pr);
+      }
+    }
+
+    // Build pending lookup sets from the kept (non-stale, non-dup) reviews
     var pendingCarIds = new Set();
     var pendingNameKeys = new Set();
-    (pendingReviews||[]).forEach(function(r){
+    keptPendingReviews.forEach(function(r){
       var ic = (r.snapshot && r.snapshot.ic) || {};
       if (ic.car_id) pendingCarIds.add(ic.car_id);
       var n = _normalizeIcKey(ic.car_name);
@@ -20538,11 +20567,13 @@ async function _rvForceScan(){
     }
 
     var msg = csvCars.length + ' in master · ' + skippedPosted + ' already posted · ' + queued + ' queued';
-    if (skippedPending) msg += ' · ' + skippedPending + ' already pending';
-    if (notInDb.length) msg += ' · ' + notInDb.length + ' not in Supabase (need Sync Inventory first): ' + notInDb.slice(0,5).join(', ');
+    if (skippedPending) msg += ' · ' + skippedPending + ' pending';
+    if (staleFixed) msg += ' · ' + staleFixed + ' stale removed';
+    if (dupFixed) msg += ' · ' + dupFixed + ' dupes removed';
+    if (notInDb.length) msg += ' · ' + notInDb.length + ' not in Supabase: ' + notInDb.slice(0,5).join(', ');
     if (failed) msg += ' · ' + failed + ' errors';
     if (res) res.textContent = msg;
-    if (queued > 0) await _reviewLoad();
+    if (queued > 0 || staleFixed > 0 || dupFixed > 0) await _reviewLoad();
   } catch(e){
     if (res) res.textContent = 'Scan failed: ' + e.message;
   } finally {
