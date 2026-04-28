@@ -1214,13 +1214,13 @@ body.light .cal-fab{background:#4488ff !important;}
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Upload deal documents, buyer's order, etc.</div>
       <div id="deal-photo-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"></div>
       <div style="display:flex;gap:10px;">
-        <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
+        <label style="flex:1;display:block;position:relative;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">
           📷 Take Photo
-          <input type="file" accept="image/*" onchange="dealPhotosAdded(this)" style="display:none;"/>
+          <input type="file" accept="image/*" capture="environment" onchange="dealPhotosAdded(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>
         </label>
-        <label style="flex:1;display:block;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;">
+        <label style="flex:1;display:block;position:relative;padding:16px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:15px;font-weight:600;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">
           📁 Upload
-          <input type="file" accept="image/*" multiple onchange="dealPhotosAdded(this)" style="display:none;"/>
+          <input type="file" accept="image/*" multiple onchange="dealPhotosAdded(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>
         </label>
       </div>
       <button onclick="dealSubmit()" style="width:100%;margin-top:16px;padding:16px;background:#166534;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">Submit Deal</button>
@@ -26642,8 +26642,12 @@ function openDealDetail(id) {
       html += '</div>';
     });
     html += '</div>';
-    html += '<label style="display:block;width:100%;padding:12px;background:rgba(96,165,250,.08);border:1px dashed rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;text-align:center;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;">';
-    html += '<input type="file" accept="image/*" multiple onchange="dealEditAddPhotos('+d.id+',this.files)" style="display:none;"/> + Add Photos';
+    // iOS Safari does not reliably open the file picker when the input is
+    // display:none inside a <label>. Use a visible 1px input absolutely
+    // positioned, opacity:0, so taps land on the real input element.
+    html += '<label style="display:block;position:relative;width:100%;padding:12px;background:rgba(96,165,250,.08);border:1px dashed rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;text-align:center;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">';
+    html += '<input type="file" accept="image/*" multiple onchange="dealEditAddPhotos('+d.id+',this.files)" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>';
+    html += '+ Add Photos';
     html += '</label>';
     html += '<div id="de-photo-status-'+d.id+'" style="font-size:12px;color:#555;margin-top:6px;"></div>';
     html += '</div>';
