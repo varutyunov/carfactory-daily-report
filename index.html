@@ -26999,23 +26999,68 @@ async function dealEditAddPhotos(id,files){
   if(!files||!files.length)return;
   var status=document.getElementById('de-photo-status-'+id);
   var grid=document.getElementById('de-photos-'+id);
+  // iOS HEIC files don't render as <img>, so convert non-JPEG/PNG/WebP
+  // to JPEG via canvas before upload. Also normalises file extension so
+  // the stored object is something every browser can display later.
+  async function _normalizeFile(file){
+    var t = (file.type || '').toLowerCase();
+    if (t === 'image/jpeg' || t === 'image/png' || t === 'image/webp') return file;
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onload = function(){
+        var c = document.createElement('canvas');
+        var max = 2400;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function(b){
+          if (!b) { resolve(file); return; }
+          resolve(new File([b], (file.name||'photo').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.9);
+      };
+      img.onerror = function(){ resolve(file); };
+      img.src = URL.createObjectURL(file);
+    });
+  }
   for(var i=0;i<files.length;i++){
     var f=files[i];
     if(status) status.textContent='Uploading '+(i+1)+' of '+files.length+'...';
     try{
-      var ext=f.name.split('.').pop().toLowerCase()||'jpg';
+      f = await _normalizeFile(f);
+      var ext=(f.name.split('.').pop()||'jpg').toLowerCase();
+      // Force jpg if ext is unrecognized — Supabase content-type is set from MIME, this is just the stored filename
+      if (!/^(jpg|jpeg|png|webp|gif|heic|heif)$/.test(ext)) ext = 'jpg';
       var path='deals/'+Date.now()+'_'+Math.random().toString(36).substr(2,6)+'.'+ext;
       var url=await sbUpload(path,f);
       _dealEditNewPhotoUrls.push(url);
-      // Add to grid visually
-      var newIdx=grid.children.length;
-      var div=document.createElement('div');
-      div.style.cssText='position:relative;background:#111;border-radius:10px;overflow:hidden;';
-      div.id='de-photo-wrap-'+id+'-new-'+newIdx;
-      div.innerHTML='<img src="'+url+'" style="width:100%;height:90px;object-fit:cover;"/>'
-        +'<button onclick="this.parentElement.remove();_dealEditNewPhotoUrls=_dealEditNewPhotoUrls.filter(function(u){return u!==\''+url.replace(/'/g,"\\'")+'\';})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;color:#ef4444;font-size:16px;width:24px;height:24px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>';
-      grid.appendChild(div);
+      // Build the new tile via DOM — innerHTML with a long signed URL was
+      // sometimes producing unrenderable parses. Storing the URL on a
+      // data-url attribute keeps the X-button handler simple too.
+      var wrap=document.createElement('div');
+      wrap.style.cssText='position:relative;background:#111;border-radius:10px;overflow:hidden;';
+      wrap.setAttribute('data-url', url);
+      wrap.id='de-photo-wrap-'+id+'-new-'+Date.now()+'-'+i;
+      var imgEl=document.createElement('img');
+      imgEl.src = url;
+      imgEl.style.cssText = 'width:100%;height:90px;object-fit:cover;display:block;';
+      imgEl.onerror = function(){ this.style.background = '#1a0000'; this.alt = 'Failed to load'; };
+      var rmBtn=document.createElement('button');
+      rmBtn.type='button';
+      rmBtn.textContent='×';
+      rmBtn.style.cssText='position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;color:#ef4444;font-size:16px;width:24px;height:24px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+      rmBtn.addEventListener('click', function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        var w = ev.currentTarget.parentElement;
+        var u = w.getAttribute('data-url');
+        if (u) _dealEditNewPhotoUrls = _dealEditNewPhotoUrls.filter(function(x){ return x !== u; });
+        w.remove();
+      });
+      wrap.appendChild(imgEl);
+      wrap.appendChild(rmBtn);
+      grid.appendChild(wrap);
     }catch(e){
+      console.warn('dealEditAddPhotos: upload failed', e);
       if(status) status.textContent='Error uploading: '+(e.message||e);
     }
   }
