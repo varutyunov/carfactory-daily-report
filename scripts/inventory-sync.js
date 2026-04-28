@@ -81,8 +81,20 @@ function buildCarName(car) {
 // Mirrors client-side _normalizeIcKey
 function normalizeIcKey(s) {
   return (s || '').toString().trim().toLowerCase()
+    .replace(/\s+\d+$/, '')
     .replace(/\bgrey\b/g, 'gray')
+    .replace(/\bnardo\b/g, 'gray')
+    .replace(/\bcharcoal\b/g, 'gray')
+    .replace(/\bsmokey?\b/g, 'gray')
+    .replace(/\banthracite\b/g, 'gray')
     .replace(/\baluminium\b/g, 'aluminum')
+    .replace(/\bchampagne\b/g, 'beige')
+    .replace(/\bcream\b/g, 'beige')
+    .replace(/\bpearl\b/g, 'white')
+    .replace(/\boff.white\b/g, 'white')
+    .replace(/\bburgundy\b/g, 'red')
+    .replace(/\bmaroon\b/g, 'red')
+    .replace(/\bnavy\b/g, 'blue')
     .replace(/\s+/g, ' ');
 }
 
