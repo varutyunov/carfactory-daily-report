@@ -19158,6 +19158,17 @@ async function _queueDealReview(dealRecord, car){
   }
 }
 
+// Extract the actual surname from a full name, skipping suffix tokens
+// like Jr / Sr / II / III / IV / 2nd / 3rd. "Kenneth John Goodman jr"
+// → "Goodman" (not "jr"). Without this, row labels and payment notes
+// end up tagged with "jr" which fails the surname check on payments.
+function _extractSurname(fullName){
+  var parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  var SUFFIX = /^(jr|sr|ii|iii|iv|v|vi|2nd|3rd|4th|jr\.|sr\.)$/i;
+  while (parts.length > 1 && SUFFIX.test(parts[parts.length - 1])) parts.pop();
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
 // Short preview string for the review card header. Uses the existing
 // note-line format rules (lowercase lastname, M/D, ≤30 chars) but
 // swaps in the deal's vehicle_desc info directly.
@@ -19167,7 +19178,7 @@ function _dealReviewPreview(dealRecord, car){
   var model = vdTokens.slice(2).join(' ') || vdTokens[1] || '';
   var color = String(dealRecord.color || '').toLowerCase();
   var miles = (car && car.miles) ? (Math.round(parseFloat(car.miles) / 1000) + 'k') : '';
-  var custLast = String(dealRecord.customer_name || '').trim().split(/\s+/).pop().toLowerCase();
+  var custLast = _extractSurname(dealRecord.customer_name).toLowerCase();
   return [year, model, color, miles, custLast].filter(Boolean).join(' ');
 }
 
@@ -23212,8 +23223,8 @@ async function _autopopulateDeals26(record, car, icOverride) {
   // the deal / inventory data, and surface a warning.
   var carDescWarning = null;
   var carDesc;
-  var custParts = (record.customer_name || '').trim().split(/\s+/);
-  var custLast = custParts.length > 0 ? custParts[custParts.length - 1] : '';
+  // Use _extractSurname so "Kenneth Goodman jr" → "Goodman", not "jr".
+  var custLast = _extractSurname(record.customer_name);
   // Normalize to Title Case for consistency with the rest of the column.
   // Preserves intentionally mixed-case names (McDonald, Van Der Berg).
   // Handles hyphenated names like "GARCIA-MARTINEZ" → "Garcia-Martinez".
