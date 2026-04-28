@@ -20108,7 +20108,7 @@ function _reviewRender(){
   });
   // Inventory tab always gets a scan button at the top
   var invScanBar = _reviewTab === 'inventory'
-    ? '<div style="margin-bottom:12px;"><button onclick="_rvForceScan()" id="rv-scan-btn" style="width:100%;padding:11px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;">⟳ Scan for new cars (90 days)</button><div id="rv-scan-result" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div></div>'
+    ? '<div style="margin-bottom:12px;"><button onclick="_rvForceScan()" id="rv-scan-btn" style="width:100%;padding:11px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;">⟳ Scan for new cars</button><div id="rv-scan-result" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div></div>'
     : '';
   if (!visible.length){
     var otherCt = (_reviewData || []).length - visible.length;
@@ -20431,9 +20431,9 @@ function _reviewRender(){
   list.innerHTML = html;
 }
 
-// Force-scan inventory for cars missing a review. 90-day window.
-// Unlike the auto-scan, this re-queues cars even if they have a prior
-// rejected review (user explicitly requesting re-check).
+// Compare CSV master files against inventory_costs (= posted to Sheet).
+// Cars in the CSV that have no inventory_costs row → queue for review.
+// This is the authoritative check: master has 94 cars, most are posted.
 async function _rvForceScan(){
   var btn = document.getElementById('rv-scan-btn');
   var res = document.getElementById('rv-scan-result');
@@ -20441,75 +20441,81 @@ async function _rvForceScan(){
   if (btn) btn.textContent = '⟳ Scanning...';
   if (res) res.textContent = '';
   try {
-    var cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    var recent = await sbGet('inventory',
-      'created_at=gte.' + cutoff + '&select=id,name,vin,stock,location,color,miles,created_at&order=created_at.desc&limit=500');
-    if (!Array.isArray(recent) || !recent.length){
-      if (res) res.textContent = 'No inventory rows found in the last 90 days.';
-      return;
+    // 1. Fetch both CSV master files
+    var DEBARY_URL = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+    var DELAND_URL = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
+    var csvCars = [];
+    if (res) res.textContent = 'Fetching master CSVs...';
+    for (var _u = 0; _u < 2; _u++){
+      try {
+        var _r = await fetch((_u===0 ? (S.syncUrl||DEBARY_URL) : DELAND_URL) + '?t=' + Date.now());
+        if (_r.ok){
+          var _loc = _u===0 ? 'DeBary' : 'DeLand';
+          var _parsed = parseCSV(await _r.text(), _loc);
+          _parsed.forEach(function(c){ csvCars.push(c); });
+        }
+      } catch(_){}
     }
-    // Fetch cost from CSVs
-    var costByVin = {}, costByStock = {};
-    try {
-      var DEBARY_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
-      var DELAND_URL='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
-      for (var _u = 0; _u < 2; _u++){
-        try {
-          var _r = await fetch((_u===0?S.syncUrl||DEBARY_URL:DELAND_URL)+'?t='+Date.now());
-          if (_r.ok){ var _parsed=parseCSV(await _r.text(),_u===0?'DeBary':'DeLand'); _parsed.forEach(function(c){if(c.vin&&c.cost)costByVin[c.vin]=c.cost;if(c.stock&&c.cost)costByStock[c.stock]=c.cost;}); }
-        } catch(_){}
-      }
-    } catch(_){}
-    recent.forEach(function(row){ row.cost=(row.vin&&costByVin[row.vin])||(row.stock&&costByStock[row.stock])||0; });
-    // Fetch existing inventory_costs — skip cars already tracked
-    var allIc = [];
-    try { allIc = await sbGet('inventory_costs','select=id,car_id,car_name,location&limit=500'); } catch(_){}
-    var icCarIds = new Set((allIc||[]).filter(function(r){return r.car_id;}).map(function(r){return r.car_id;}));
-    var icNameKeys = new Set((allIc||[]).map(function(r){var n=_normalizeIcKey(r.car_name);return(n&&n!=='total')?n+'||'+(r.location||'DeBary'):null;}).filter(Boolean));
-    // Fetch only PENDING reviews for dedupe — skip rejected to allow re-queue
-    var pendingReviews = [];
-    try { pendingReviews = await sbGet('payment_reviews','reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot,location&limit=1000'); } catch(_){}
-    var pendingCarIds = new Set();
-    var pendingNameKeys = new Set();
-    (pendingReviews||[]).forEach(function(r){
-      var ic=(r.snapshot&&r.snapshot.ic)||{};
-      if(ic.car_id) pendingCarIds.add(ic.car_id);
-      var n=_normalizeIcKey(ic.car_name); if(n) pendingNameKeys.add(n+'||'+(r.location||'DeBary'));
+    if (!csvCars.length){ if (res) res.textContent = 'Could not load CSV files.'; return; }
+
+    // 2. Fetch Supabase inventory to get IDs for each VIN/stock
+    if (res) res.textContent = 'Loading inventory...';
+    var allInv = S.inventory || [];
+    var invByVin = {}, invByStock = {};
+    allInv.forEach(function(c){
+      if (c.vin) invByVin[c.vin] = c;
+      if (c.stock) invByStock[c.stock] = c;
     });
-    var skippedIc=0, skippedPending=0, queued=0, failed=0;
-    for (var i = 0; i < recent.length; i++){
-      var row = recent[i];
-      if (!row || !row.id) continue;
-      if (icCarIds.has(row.id)){ skippedIc++; continue; }
-      var carName = _icCarNameFromInv(row);
+
+    // 3. Fetch all inventory_costs — these are the "posted" cars
+    if (res) res.textContent = 'Loading posted cars...';
+    var allIc = [];
+    try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location&limit=1000'); } catch(_){}
+    var icCarIds = new Set((allIc||[]).filter(function(r){ return r.car_id; }).map(function(r){ return r.car_id; }));
+
+    // 4. Fetch pending reviews (dedupe only against pending, not rejected)
+    var pendingReviews = [];
+    try { pendingReviews = await sbGet('payment_reviews', 'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot&limit=500'); } catch(_){}
+    var pendingCarIds = new Set();
+    (pendingReviews||[]).forEach(function(r){
+      var ic = (r.snapshot && r.snapshot.ic) || {};
+      if (ic.car_id) pendingCarIds.add(ic.car_id);
+    });
+
+    // 5. For each CSV car: look up its Supabase ID, check if posted
+    var skippedPosted = 0, skippedPending = 0, skippedNoId = 0, queued = 0, failed = 0;
+    for (var i = 0; i < csvCars.length; i++){
+      var c = csvCars[i];
+      var inv = (c.vin && invByVin[c.vin]) || (c.stock && invByStock[c.stock]);
+      if (!inv){ skippedNoId++; continue; } // not in Supabase yet
+      if (icCarIds.has(inv.id)){ skippedPosted++; continue; } // already in sheet
+      if (pendingCarIds.has(inv.id)){ skippedPending++; continue; } // already queued
+      var carName = _icCarNameFromInv(inv);
       if (!carName) continue;
-      var loc = row.location || 'DeBary';
-      var nameKey = _normalizeIcKey(carName) + '||' + loc;
-      if (icNameKeys.has(nameKey)){ skippedIc++; continue; }
-      if (pendingCarIds.has(row.id) || pendingNameKeys.has(nameKey)){ skippedPending++; continue; }
-      // Insert review directly (bypasses rejected-dedupe)
+      var loc = inv.location || 'DeBary';
       try {
         var reviewRow = {
           reason: 'inv_create_pending', status: 'pending', location: loc,
           note_line: carName, customer_name: 'CSV sync',
-          snapshot: { ic: { car_name: carName, car_id: row.id,
-            purchase_cost: row.cost||0, joint_expenses:0, vlad_expenses:0,
+          snapshot: { ic: { car_name: carName, car_id: inv.id,
+            purchase_cost: c.cost||0, joint_expenses:0, vlad_expenses:0,
             expense_notes:'', vlad_expense_notes:'', location: loc, source:'csv' }}
         };
         await sbPost('payment_reviews', reviewRow);
         queued++;
       } catch(e){ failed++; }
     }
-    var msg = 'Found ' + recent.length + ' cars · ' + queued + ' queued';
-    if (skippedIc) msg += ' · ' + skippedIc + ' already in Inventory sheet';
+
+    var msg = csvCars.length + ' in master · ' + skippedPosted + ' already posted · ' + queued + ' queued for review';
     if (skippedPending) msg += ' · ' + skippedPending + ' already pending';
+    if (skippedNoId) msg += ' · ' + skippedNoId + ' not yet synced';
     if (failed) msg += ' · ' + failed + ' errors';
     if (res) res.textContent = msg;
     if (queued > 0) await _reviewLoad();
   } catch(e){
     if (res) res.textContent = 'Scan failed: ' + e.message;
   } finally {
-    if (btn){ btn.disabled = false; btn.textContent = '⟳ Scan for new cars (90 days)'; }
+    if (btn){ btn.disabled = false; btn.textContent = '⟳ Scan for new cars'; }
   }
 }
 
