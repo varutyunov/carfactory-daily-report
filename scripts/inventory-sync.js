@@ -50,17 +50,125 @@ function parseCsv(csvPath, forceLocation) {
     }
 
     const miles = parseInt(r['currentmiles']) || null;
+    const cost = parseFloat(r['askingprice'] || r['purchaseprice'] || r['cost'] || '') || 0;
     cars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
       stock: r['stockno'] || '',
       vin: r['vin'],
       location,
       color,
-      miles
+      miles,
+      cost  // carried forward for review snapshot; NOT written to inventory table
     });
   }
   console.log(`[${csvPath}] INSTOCK:`, cars.length);
   return cars;
+}
+
+// Mirrors client-side _icCarNameFromInv
+function buildCarName(car) {
+  const nameParts = (car.name || '').split(' ');
+  const fullYear = nameParts[0] || '';
+  const shortYr = fullYear.length === 4 ? fullYear.slice(2) : fullYear;
+  const make = nameParts[1] || '';
+  const model = nameParts.length > 2 ? nameParts.slice(2).join(' ') : '';
+  const color = (car.color || '').toLowerCase();
+  const milesK = car.miles ? Math.round(car.miles / 1000) + 'k' : '';
+  const modelHasDigits = /\d/.test(model) && !/\s/.test(model);
+  return [shortYr, modelHasDigits ? make : '', model, color, milesK].filter(Boolean).join(' ');
+}
+
+// Mirrors client-side _normalizeIcKey
+function normalizeIcKey(s) {
+  return (s || '').toString().trim().toLowerCase()
+    .replace(/\bgrey\b/g, 'gray')
+    .replace(/\baluminium\b/g, 'aluminum')
+    .replace(/\s+/g, ' ');
+}
+
+// Queue inv_create_pending reviews for newly inserted cars.
+// Mirrors client-side _autoCreateInventoryCosts + _queueInventoryAddReview.
+async function queueInventoryReviews(insertedCars, csvCostByVin) {
+  if (!insertedCars.length) return;
+
+  // Fetch existing inventory_costs to skip already-tracked cars
+  let allIc = [];
+  try { allIc = await sbGetAll('inventory_costs', 'id,car_id,car_name,location'); } catch(e) {
+    console.warn('queueInventoryReviews: could not fetch inventory_costs:', e.message);
+  }
+  const existingCarIds = new Set(allIc.filter(r => r.car_id).map(r => r.car_id));
+  const existingNameKeys = new Set(
+    allIc.map(r => {
+      const n = normalizeIcKey(r.car_name);
+      return (n && n !== 'total') ? n + '||' + (r.location || 'DeBary') : null;
+    }).filter(Boolean)
+  );
+
+  // Fetch existing pending/rejected inv_create_pending reviews to dedupe
+  let existingReviews = [];
+  try {
+    const url = `${SB_URL}/rest/v1/payment_reviews?reason=eq.inv_create_pending&status=in.(pending,rejected)&select=id,snapshot,location&limit=1000`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (res.ok) existingReviews = await res.json();
+  } catch(e) {
+    console.warn('queueInventoryReviews: could not fetch existing reviews:', e.message);
+  }
+  const reviewedCarIds = new Set();
+  const reviewedNameKeys = new Set();
+  existingReviews.forEach(r => {
+    const ic = (r.snapshot && r.snapshot.ic) || {};
+    if (ic.car_id) reviewedCarIds.add(ic.car_id);
+    const n = normalizeIcKey(ic.car_name);
+    if (n) reviewedNameKeys.add(n + '||' + (r.location || 'DeBary'));
+  });
+
+  let queued = 0;
+  for (const car of insertedCars) {
+    if (!car.id) continue;
+    if (existingCarIds.has(car.id)) continue;
+    if (reviewedCarIds.has(car.id)) continue;
+
+    const carName = buildCarName(car);
+    if (!carName) continue;
+
+    const loc = car.location || 'DeBary';
+    const nameKey = normalizeIcKey(carName) + '||' + loc;
+    if (existingNameKeys.has(nameKey)) continue;
+    if (reviewedNameKeys.has(nameKey)) continue;
+
+    const cost = (car.vin && csvCostByVin[car.vin]) || car.cost || 0;
+
+    const reviewRow = {
+      reason: 'inv_create_pending',
+      status: 'pending',
+      location: loc,
+      note_line: carName,
+      customer_name: 'CSV sync',
+      snapshot: { ic: {
+        car_name: carName,
+        car_id: car.id,
+        purchase_cost: cost,
+        joint_expenses: 0,
+        vlad_expenses: 0,
+        expense_notes: '',
+        vlad_expense_notes: '',
+        location: loc,
+        source: 'csv'
+      }}
+    };
+
+    try {
+      const res = await fetch(SB_URL + '/rest/v1/payment_reviews', {
+        method: 'POST', headers: HEADERS, body: JSON.stringify(reviewRow)
+      });
+      if (res.ok) { queued++; }
+      else { console.error('Failed to queue review for', carName, ':', await res.text()); }
+    } catch(e) {
+      console.error('Queue review error for', carName, ':', e.message);
+    }
+  }
+
+  console.log('Queued inv_create_pending reviews:', queued);
 }
 
 async function main() {
@@ -79,6 +187,10 @@ async function main() {
   });
   const allCsvVins = new Set(csvCars.map(c => c.vin));
 
+  // Cost lookup by VIN (for review snapshots)
+  const csvCostByVin = {};
+  csvCars.forEach(c => { if (c.vin && c.cost) csvCostByVin[c.vin] = c.cost; });
+
   console.log('Total INSTOCK (both lots):', csvCars.length);
 
   // Get ALL existing vehicles from Supabase (include re_acquired so we can
@@ -96,24 +208,34 @@ async function main() {
   const toInsert = csvCars.filter(c => !existingByVin.has(c.vin));
 
   let added = 0;
+  const insertedWithIds = []; // collect full rows (with Supabase IDs) for review queuing
   if (toInsert.length > 0) {
     console.log('New cars to add:', toInsert.length);
     for (const car of toInsert) {
+      // Don't write cost to inventory table (no such column) — strip it first
+      const { cost: _cost, ...carRow } = car;
       const res = await fetch(SB_URL + '/rest/v1/inventory', {
-        method: 'POST', headers: HEADERS, body: JSON.stringify([car])
+        method: 'POST', headers: HEADERS, body: JSON.stringify([carRow])
       });
-      if (res.ok) { added += (await res.json()).length; }
-      else {
+      if (res.ok) {
+        const rows = await res.json();
+        added += rows.length;
+        // Attach cost back so queueInventoryReviews can use it
+        rows.forEach(r => insertedWithIds.push({ ...r, cost: _cost || 0 }));
+      } else {
         const errText = await res.text();
         // Stock unique constraint conflict — insert without stock, then patch stock on
         if (errText.includes('inventory_stock_key')) {
           console.log('Stock conflict for', car.vin, '- inserting with VIN-based stock');
-          const carAlt = { ...car, stock: car.vin.slice(-8) };
+          const carAlt = { ...carRow, stock: car.vin.slice(-8) };
           const res2 = await fetch(SB_URL + '/rest/v1/inventory', {
             method: 'POST', headers: HEADERS, body: JSON.stringify([carAlt])
           });
-          if (res2.ok) { added += (await res2.json()).length; }
-          else { console.error('Insert (alt stock) error:', await res2.text()); }
+          if (res2.ok) {
+            const rows2 = await res2.json();
+            added += rows2.length;
+            rows2.forEach(r => insertedWithIds.push({ ...r, cost: _cost || 0 }));
+          } else { console.error('Insert (alt stock) error:', await res2.text()); }
         } else {
           console.error('Insert error for', car.vin, ':', errText);
         }
@@ -182,5 +304,12 @@ async function main() {
 
   console.log('=== SYNC COMPLETE ===');
   console.log('Added:', added, '| Updated:', updated, '| Removed:', removed, '| Total now:', existing.length + added - removed);
+
+  // --- QUEUE inv_create_pending REVIEWS for newly inserted cars ---
+  if (insertedWithIds.length > 0) {
+    console.log('Queuing inventory reviews for', insertedWithIds.length, 'new car(s)...');
+    try { await queueInventoryReviews(insertedWithIds, csvCostByVin); }
+    catch(e) { console.warn('queueInventoryReviews failed (non-fatal):', e.message); }
+  }
 }
 main().catch(e => { console.error(e); process.exit(1); });
