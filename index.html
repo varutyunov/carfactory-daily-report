@@ -12977,9 +12977,17 @@ function depLoadCarList() {
 
 function depFilterCars(q) {
   if(!q) { depRenderCarList(_depAllCars); return; }
-  var ql = q.toLowerCase();
+  // Split query into tokens; require ALL tokens to match somewhere in the
+  // car's joined fields (in any order). Lets "2000 civic", "yellow civic",
+  // and "civic 2000" all find the same car.
+  var tokens = q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) { depRenderCarList(_depAllCars); return; }
   var filtered = _depAllCars.filter(function(c){
-    return [c.name,c.stock,c.vin,c.color,c.location].join(' ').toLowerCase().indexOf(ql) !== -1;
+    var hay = [c.name, c.stock, c.vin, c.color, c.location].join(' ').toLowerCase();
+    for (var i = 0; i < tokens.length; i++) {
+      if (hay.indexOf(tokens[i]) === -1) return false;
+    }
+    return true;
   });
   depRenderCarList(filtered);
 }
