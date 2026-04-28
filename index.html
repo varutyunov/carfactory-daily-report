@@ -20488,19 +20488,26 @@ async function _rvForceScan(){
       if (c.stock) invByStock[c.stock.trim()] = c;
     });
 
-    // 3. Fetch all inventory_costs — posted cars
+    // 3. Fetch all inventory_costs — posted cars (match by car_id OR name+location)
     if (res) res.textContent = 'Checking posted cars...';
     var allIc = [];
-    try { allIc = await sbGet('inventory_costs', 'select=id,car_id&limit=1000'); } catch(_){}
+    try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location&limit=1000'); } catch(_){}
     var icCarIds = new Set((allIc||[]).filter(function(r){ return r.car_id; }).map(function(r){ return r.car_id; }));
+    var icNameKeys = new Set((allIc||[]).map(function(r){
+      var n = _normalizeIcKey(r.car_name);
+      return (n && n !== 'total') ? n + '||' + (r.location||'DeBary') : null;
+    }).filter(Boolean));
 
     // 4. Fetch pending reviews — skip already-queued
     var pendingReviews = [];
     try { pendingReviews = await sbGet('payment_reviews', 'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot&limit=500'); } catch(_){}
     var pendingCarIds = new Set();
+    var pendingNameKeys = new Set();
     (pendingReviews||[]).forEach(function(r){
       var ic = (r.snapshot && r.snapshot.ic) || {};
       if (ic.car_id) pendingCarIds.add(ic.car_id);
+      var n = _normalizeIcKey(ic.car_name);
+      if (n) pendingNameKeys.add(n + '||' + (r.location||ic.location||'DeBary'));
     });
 
     // 5. Compare — collect diagnostics
@@ -20512,10 +20519,12 @@ async function _rvForceScan(){
       var inv = (csvVin && invByVin[csvVin]) || (csvStock && invByStock[csvStock]);
       if (!inv){ notInDb.push(c.stock || c.vin || '?'); continue; }
       if (icCarIds.has(inv.id)){ skippedPosted++; continue; }
-      if (pendingCarIds.has(inv.id)){ skippedPending++; continue; }
       var carName = _icCarNameFromInv(inv);
-      if (!carName) continue;
       var loc = inv.location || 'DeBary';
+      var nameKey = _normalizeIcKey(carName) + '||' + loc;
+      if (icNameKeys.has(nameKey)){ skippedPosted++; continue; }
+      if (pendingCarIds.has(inv.id) || pendingNameKeys.has(nameKey)){ skippedPending++; continue; }
+      if (!carName) continue;
       try {
         await sbPost('payment_reviews', {
           reason: 'inv_create_pending', status: 'pending', location: loc,
