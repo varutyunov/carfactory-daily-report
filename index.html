@@ -20433,7 +20433,6 @@ function _reviewRender(){
 
 // Compare CSV master files against inventory_costs (= posted to Sheet).
 // Cars in the CSV that have no inventory_costs row → queue for review.
-// This is the authoritative check: master has 94 cars, most are posted.
 async function _rvForceScan(){
   var btn = document.getElementById('rv-scan-btn');
   var res = document.getElementById('rv-scan-result');
@@ -20450,30 +20449,32 @@ async function _rvForceScan(){
       try {
         var _r = await fetch((_u===0 ? (S.syncUrl||DEBARY_URL) : DELAND_URL) + '?t=' + Date.now());
         if (_r.ok){
-          var _loc = _u===0 ? 'DeBary' : 'DeLand';
-          var _parsed = parseCSV(await _r.text(), _loc);
+          var _parsed = parseCSV(await _r.text(), _u===0 ? 'DeBary' : 'DeLand');
           _parsed.forEach(function(c){ csvCars.push(c); });
         }
       } catch(_){}
     }
     if (!csvCars.length){ if (res) res.textContent = 'Could not load CSV files.'; return; }
 
-    // 2. Fetch Supabase inventory to get IDs for each VIN/stock
-    if (res) res.textContent = 'Loading inventory...';
-    var allInv = S.inventory || [];
+    // 2. Fetch inventory FRESH from Supabase (not stale S.inventory)
+    if (res) res.textContent = 'Loading ' + csvCars.length + ' CSV cars vs Supabase...';
+    var allInv = [];
+    try { allInv = await sbGet('inventory', 'select=id,vin,stock,name,location,color,miles&limit=1000'); } catch(e){
+      if (res) res.textContent = 'Failed to load inventory: ' + e.message; return;
+    }
     var invByVin = {}, invByStock = {};
-    allInv.forEach(function(c){
-      if (c.vin) invByVin[c.vin] = c;
-      if (c.stock) invByStock[c.stock] = c;
+    (allInv||[]).forEach(function(c){
+      if (c.vin) invByVin[c.vin.trim().toUpperCase()] = c;
+      if (c.stock) invByStock[c.stock.trim()] = c;
     });
 
-    // 3. Fetch all inventory_costs — these are the "posted" cars
-    if (res) res.textContent = 'Loading posted cars...';
+    // 3. Fetch all inventory_costs — posted cars
+    if (res) res.textContent = 'Checking posted cars...';
     var allIc = [];
-    try { allIc = await sbGet('inventory_costs', 'select=id,car_id,car_name,location&limit=1000'); } catch(_){}
+    try { allIc = await sbGet('inventory_costs', 'select=id,car_id&limit=1000'); } catch(_){}
     var icCarIds = new Set((allIc||[]).filter(function(r){ return r.car_id; }).map(function(r){ return r.car_id; }));
 
-    // 4. Fetch pending reviews (dedupe only against pending, not rejected)
+    // 4. Fetch pending reviews — skip already-queued
     var pendingReviews = [];
     try { pendingReviews = await sbGet('payment_reviews', 'reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot&limit=500'); } catch(_){}
     var pendingCarIds = new Set();
@@ -20482,33 +20483,34 @@ async function _rvForceScan(){
       if (ic.car_id) pendingCarIds.add(ic.car_id);
     });
 
-    // 5. For each CSV car: look up its Supabase ID, check if posted
-    var skippedPosted = 0, skippedPending = 0, skippedNoId = 0, queued = 0, failed = 0;
+    // 5. Compare — collect diagnostics
+    var skippedPosted = 0, skippedPending = 0, notInDb = [], queued = 0, failed = 0;
     for (var i = 0; i < csvCars.length; i++){
       var c = csvCars[i];
-      var inv = (c.vin && invByVin[c.vin]) || (c.stock && invByStock[c.stock]);
-      if (!inv){ skippedNoId++; continue; } // not in Supabase yet
-      if (icCarIds.has(inv.id)){ skippedPosted++; continue; } // already in sheet
-      if (pendingCarIds.has(inv.id)){ skippedPending++; continue; } // already queued
+      var csvVin = (c.vin||'').trim().toUpperCase();
+      var csvStock = (c.stock||'').trim();
+      var inv = (csvVin && invByVin[csvVin]) || (csvStock && invByStock[csvStock]);
+      if (!inv){ notInDb.push(c.stock || c.vin || '?'); continue; }
+      if (icCarIds.has(inv.id)){ skippedPosted++; continue; }
+      if (pendingCarIds.has(inv.id)){ skippedPending++; continue; }
       var carName = _icCarNameFromInv(inv);
       if (!carName) continue;
       var loc = inv.location || 'DeBary';
       try {
-        var reviewRow = {
+        await sbPost('payment_reviews', {
           reason: 'inv_create_pending', status: 'pending', location: loc,
           note_line: carName, customer_name: 'CSV sync',
           snapshot: { ic: { car_name: carName, car_id: inv.id,
             purchase_cost: c.cost||0, joint_expenses:0, vlad_expenses:0,
             expense_notes:'', vlad_expense_notes:'', location: loc, source:'csv' }}
-        };
-        await sbPost('payment_reviews', reviewRow);
+        });
         queued++;
-      } catch(e){ failed++; }
+      } catch(e){ failed++; console.warn('Queue failed for', carName, e); }
     }
 
-    var msg = csvCars.length + ' in master · ' + skippedPosted + ' already posted · ' + queued + ' queued for review';
+    var msg = csvCars.length + ' in master · ' + skippedPosted + ' already posted · ' + queued + ' queued';
     if (skippedPending) msg += ' · ' + skippedPending + ' already pending';
-    if (skippedNoId) msg += ' · ' + skippedNoId + ' not yet synced';
+    if (notInDb.length) msg += ' · ' + notInDb.length + ' not in Supabase (need Sync Inventory first): ' + notInDb.slice(0,5).join(', ');
     if (failed) msg += ' · ' + failed + ' errors';
     if (res) res.textContent = msg;
     if (queued > 0) await _reviewLoad();
