@@ -5806,6 +5806,26 @@ async function syncNow(){
     stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
     tmEl.textContent='Last synced: '+new Date(S.lastSync).toLocaleString();
     renderInv();
+    // Reconcile: if any CSV cars are still missing from S.inventory (GitHub
+    // Actions pre-inserted them so our POST hit a unique-VIN conflict and
+    // was silently dropped), fetch those rows from Supabase now.
+    try{
+      var _invVins={};S.inventory.forEach(function(c){if(c.vin)_invVins[c.vin]=true;if(c.stock)_invVins[c.stock]=true;});
+      var _missing=imp.filter(function(c){return c.vin&&!_invVins[c.vin];});
+      if(_missing.length){
+        var _vins=_missing.map(function(c){return c.vin;}).filter(Boolean);
+        var _fetched=await sbGet('inventory','vin=in.('+_vins.join(',')+')'+'&select=id,name,stock,vin,color,miles,location,photo,work&limit=200');
+        if(Array.isArray(_fetched)&&_fetched.length){
+          _fetched.forEach(function(row){
+            S.inventory.push({id:row.id,name:row.name,stock:row.stock,vin:row.vin||'',color:fixColor(row.color||''),miles:row.miles||null,location:row.location,photo:row.photo||null,work:row.work||{}});
+          });
+          added+=_fetched.length;
+          sv();renderInv();
+          stEl.textContent='Synced! '+added+' added, '+removed+' removed, '+updated+' updated.';
+          try{ await _autoCreateInventoryCosts(_fetched); }catch(e){}
+        }
+      }
+    }catch(e){ console.warn('Reconcile fetch failed:',e); }
     // Catch any recent inventory rows added by the server-side cron
     // (GitHub Actions inventory-sync.js) that this client never saw as
     // "just inserted" — queue inv_create_pending reviews for them.
