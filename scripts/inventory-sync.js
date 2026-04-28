@@ -264,7 +264,11 @@ async function main() {
     const patch = {};
     if (c.name && c.name !== ex.name) patch.name = c.name;
     if (c.color && c.color !== ex.color) patch.color = c.color;
-    if (c.location && c.location !== ex.location) patch.location = c.location;
+    // Location is intentionally NOT auto-updated. Back-office CSVs sometimes
+    // misclassify lotno (e.g. a DeBary car flagged lotno=2 → DeLand), and
+    // overwriting on every sync clobbers manual lot fixes made in the app.
+    // Location is set only on initial insert; cars that genuinely move
+    // between lots need a manual update in the app.
     if (c.stock && c.stock !== ex.stock) patch.stock = c.stock;
     if (c.miles && c.miles !== ex.miles) patch.miles = c.miles;
     // If a re_acquired car shows up in the CSV again, the back-office has
