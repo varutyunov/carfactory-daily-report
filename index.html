@@ -19973,7 +19973,7 @@ async function _reviewLoad(){
   var count = document.getElementById('review-count');
   if (list) list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>';
   try {
-    var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=500');
+    var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=300');
     rows = Array.isArray(rows) ? rows : [];
     // Auto-resolve cards whose trigger condition no longer holds before
     // we render. Drops the resolved IDs from the visible set.
