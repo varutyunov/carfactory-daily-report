@@ -20479,7 +20479,7 @@ async function _rvForceScan(){
     // 2. Fetch inventory FRESH from Supabase (not stale S.inventory)
     if (res) res.textContent = 'Loading ' + csvCars.length + ' CSV cars vs Supabase...';
     var allInv = [];
-    try { allInv = await sbGet('inventory', 'select=id,vin,stock,name,location,color,miles&limit=1000'); } catch(e){
+    try { allInv = await sbGet('inventory', 'select=id,vin,stock,name,location,color,miles,created_at&limit=1000'); } catch(e){
       if (res) res.textContent = 'Failed to load inventory: ' + e.message; return;
     }
     var invByVin = {}, invByStock = {};
@@ -20487,6 +20487,16 @@ async function _rvForceScan(){
       if (c.vin) invByVin[c.vin.trim().toUpperCase()] = c;
       if (c.stock) invByStock[c.stock.trim()] = c;
     });
+    // Only flag cars added to inventory in the last 7 days as "new". Older
+    // cars without IC entries are pre-existing inventory the user chose
+    // not to post — don't keep re-queuing them.
+    var SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    var recentCutoff = Date.now() - SEVEN_DAYS_MS;
+    function _isRecentlyAdded(invRow){
+      if (!invRow || !invRow.created_at) return false;
+      var t = Date.parse(invRow.created_at);
+      return !isNaN(t) && t >= recentCutoff;
+    }
 
     // 3. Fetch all inventory_costs — posted cars (match by car_id OR name+location)
     if (res) res.textContent = 'Checking posted cars...';
@@ -20540,7 +20550,7 @@ async function _rvForceScan(){
     });
 
     // 5. Compare — collect diagnostics
-    var skippedPosted = 0, skippedPending = 0, notInDb = [], queued = 0, failed = 0;
+    var skippedPosted = 0, skippedPending = 0, skippedOld = 0, notInDb = [], queued = 0, failed = 0;
     for (var i = 0; i < csvCars.length; i++){
       var c = csvCars[i];
       var csvVin = (c.vin||'').trim().toUpperCase();
@@ -20553,6 +20563,9 @@ async function _rvForceScan(){
       var nameKey = _normalizeIcKey(carName) + '||' + loc;
       if (icNameKeys.has(nameKey)){ skippedPosted++; continue; }
       if (pendingCarIds.has(inv.id) || pendingNameKeys.has(nameKey)){ skippedPending++; continue; }
+      // Only flag recently-added cars. Old cars without IC entries are
+      // pre-existing inventory the user opted not to post.
+      if (!_isRecentlyAdded(inv)){ skippedOld++; continue; }
       if (!carName) continue;
       try {
         await sbPost('payment_reviews', {
@@ -20568,6 +20581,7 @@ async function _rvForceScan(){
 
     var msg = csvCars.length + ' in master · ' + skippedPosted + ' already posted · ' + queued + ' queued';
     if (skippedPending) msg += ' · ' + skippedPending + ' pending';
+    if (skippedOld) msg += ' · ' + skippedOld + ' old (untracked, >7 days)';
     if (staleFixed) msg += ' · ' + staleFixed + ' stale removed';
     if (dupFixed) msg += ' · ' + dupFixed + ' dupes removed';
     if (notInDb.length) msg += ' · ' + notInDb.length + ' not in Supabase: ' + notInDb.slice(0,5).join(', ');
