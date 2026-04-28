@@ -20572,12 +20572,16 @@ async function _rvForceScan(){
     if (dupFixed) msg += ' · ' + dupFixed + ' dupes removed';
     if (notInDb.length) msg += ' · ' + notInDb.length + ' not in Supabase: ' + notInDb.slice(0,5).join(', ');
     if (failed) msg += ' · ' + failed + ' errors';
-    if (res) res.textContent = msg;
     if (queued > 0 || staleFixed > 0 || dupFixed > 0) await _reviewLoad();
+    // _reviewLoad() re-renders the DOM so re-find the result div
+    var resEl = document.getElementById('rv-scan-result') || res;
+    if (resEl) resEl.textContent = msg;
   } catch(e){
-    if (res) res.textContent = 'Scan failed: ' + e.message;
+    var resEl2 = document.getElementById('rv-scan-result') || res;
+    if (resEl2) resEl2.textContent = 'Scan failed: ' + e.message;
   } finally {
-    if (btn){ btn.disabled = false; btn.textContent = '⟳ Scan for new cars'; }
+    var btnEl = document.getElementById('rv-scan-btn') || btn;
+    if (btnEl){ btnEl.disabled = false; btnEl.textContent = '⟳ Scan for new cars'; }
   }
 }
 
