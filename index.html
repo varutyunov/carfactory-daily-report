@@ -1076,14 +1076,14 @@ body.light .cal-fab{background:#4488ff !important;}
     </div>
   </div>
   <div id="review-body" style="padding-top:54px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
-    <!-- Sales / Payments tab toggle. Sales bucket: cash_sale_pending,
-         cash_sale_correction, deal_pending, inv_create_pending,
-         inv_relocate_pending. Payments bucket: everything else
-         (no_match, multiple, partial, possible_duplicate, approve_first,
-         no_vehicle, no_customer). -->
-    <div id="review-tabs" style="position:sticky;top:0;background:#000;border-bottom:1px solid #1a1a1a;padding:10px 12px;display:flex;gap:8px;z-index:10;">
-      <button id="rv-tab-sales" onclick="_reviewSetTab('sales')" style="flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">SALES <span id="rv-tab-sales-ct" style="opacity:.85;font-weight:700;"></span></button>
-      <button id="rv-tab-payments" onclick="_reviewSetTab('payments')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">PAYMENTS <span id="rv-tab-payments-ct" style="opacity:.85;font-weight:700;"></span></button>
+    <!-- Sales / Payments / Inventory tab toggle.
+         Sales: cash_sale_pending, cash_sale_correction, deal_pending.
+         Inventory: inv_create_pending, inv_relocate_pending.
+         Payments: everything else. -->
+    <div id="review-tabs" style="position:sticky;top:0;background:#000;border-bottom:1px solid #1a1a1a;padding:10px 12px;display:flex;gap:6px;z-index:10;">
+      <button id="rv-tab-sales" onclick="_reviewSetTab('sales')" style="flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">SALES <span id="rv-tab-sales-ct" style="opacity:.85;font-weight:700;"></span></button>
+      <button id="rv-tab-inventory" onclick="_reviewSetTab('inventory')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">INVENTORY <span id="rv-tab-inventory-ct" style="opacity:.85;font-weight:700;"></span></button>
+      <button id="rv-tab-payments" onclick="_reviewSetTab('payments')" style="flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">PAYMENTS <span id="rv-tab-payments-ct" style="opacity:.85;font-weight:700;"></span></button>
     </div>
     <div id="review-list" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       <div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>
@@ -19725,34 +19725,41 @@ async function _reviewRefreshBadge(){
 // reviews; Payments = scanned/CarPay payment matching reviews. State is
 // kept in localStorage so the user lands back on the tab they last used.
 var _SALES_REVIEW_REASONS = {
-  'cash_sale_pending': 1, 'cash_sale_correction': 1,
-  'deal_pending': 1,
+  'cash_sale_pending': 1, 'cash_sale_correction': 1, 'deal_pending': 1
+};
+var _INV_REVIEW_REASONS = {
   'inv_create_pending': 1, 'inv_relocate_pending': 1
 };
 function _reviewIsSales(r){ return !!_SALES_REVIEW_REASONS[(r || {}).reason]; }
+function _reviewIsInventory(r){ return !!_INV_REVIEW_REASONS[(r || {}).reason]; }
 var _reviewTab = 'sales';
 try { _reviewTab = localStorage.getItem('cf_review_tab') || 'sales'; } catch(_){}
 function _reviewSetTab(tab){
-  if (tab !== 'sales' && tab !== 'payments') return;
+  if (tab !== 'sales' && tab !== 'payments' && tab !== 'inventory') return;
   _reviewTab = tab;
   try { localStorage.setItem('cf_review_tab', tab); } catch(_){}
   if (typeof _reviewRender === 'function') _reviewRender();
 }
 function _reviewUpdateTabUI(){
   var sCt = (_reviewData || []).filter(_reviewIsSales).length;
-  var pCt = (_reviewData || []).length - sCt;
+  var iCt = (_reviewData || []).filter(_reviewIsInventory).length;
+  var pCt = (_reviewData || []).length - sCt - iCt;
   var sCtEl = document.getElementById('rv-tab-sales-ct');
+  var iCtEl = document.getElementById('rv-tab-inventory-ct');
   var pCtEl = document.getElementById('rv-tab-payments-ct');
   if (sCtEl) sCtEl.textContent = sCt ? '· ' + sCt : '';
+  if (iCtEl) iCtEl.textContent = iCt ? '· ' + iCt : '';
   if (pCtEl) pCtEl.textContent = pCt ? '· ' + pCt : '';
   var sBtn = document.getElementById('rv-tab-sales');
+  var iBtn = document.getElementById('rv-tab-inventory');
   var pBtn = document.getElementById('rv-tab-payments');
-  var activeSales = 'flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
-  var inactiveSales = 'flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
-  var activePay = 'flex:1;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.45);border-radius:10px;color:#60a5fa;padding:10px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
-  var inactivePay = inactiveSales;
-  if (sBtn) sBtn.style.cssText = (_reviewTab === 'sales') ? activeSales : inactiveSales;
-  if (pBtn) pBtn.style.cssText = (_reviewTab === 'payments') ? activePay : inactivePay;
+  var inactive = 'flex:1;background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var activeSales = 'flex:1;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.45);border-radius:10px;color:#f97316;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var activeInv   = 'flex:1;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);border-radius:10px;color:#4ade80;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  var activePay   = 'flex:1;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.45);border-radius:10px;color:#60a5fa;padding:10px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;';
+  if (sBtn) sBtn.style.cssText = (_reviewTab === 'sales')     ? activeSales : inactive;
+  if (iBtn) iBtn.style.cssText = (_reviewTab === 'inventory') ? activeInv   : inactive;
+  if (pBtn) pBtn.style.cssText = (_reviewTab === 'payments')  ? activePay   : inactive;
 }
 
 async function openReviewQueue(){
@@ -20095,13 +20102,16 @@ function _reviewRender(){
   // Filter to the active tab. _reviewData stays the full dataset so
   // tab counts and toggling don't require a re-fetch.
   var visible = (_reviewData || []).filter(function(rr){
-    return _reviewTab === 'sales' ? _reviewIsSales(rr) : !_reviewIsSales(rr);
+    if (_reviewTab === 'sales')     return _reviewIsSales(rr);
+    if (_reviewTab === 'inventory') return _reviewIsInventory(rr);
+    return !_reviewIsSales(rr) && !_reviewIsInventory(rr);
   });
   if (!visible.length){
     var otherCt = (_reviewData || []).length - visible.length;
+    var tabLabel = _reviewTab === 'sales' ? 'sales' : _reviewTab === 'inventory' ? 'inventory' : 'payment';
     var hint = otherCt > 0
-      ? '<div style="text-align:center;color:#666;padding:60px 0 8px;font-size:14px;">No ' + (_reviewTab === 'sales' ? 'sales' : 'payment') + ' reviews</div>' +
-        '<div style="text-align:center;color:#888;font-size:12px;">' + otherCt + ' in the other tab</div>'
+      ? '<div style="text-align:center;color:#666;padding:60px 0 8px;font-size:14px;">No ' + tabLabel + ' reviews</div>' +
+        '<div style="text-align:center;color:#888;font-size:12px;">' + otherCt + ' in other tabs</div>'
       : '<div style="text-align:center;color:#4ade80;padding:60px 0;font-size:15px;">✓ All clear</div>';
     list.innerHTML = hint;
     return;
