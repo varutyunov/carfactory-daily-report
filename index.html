@@ -12960,14 +12960,18 @@ var _depAllCars = [];
 
 function depLoadCarList() {
   var inv = (typeof S !== 'undefined' && S && S.inventory) ? S.inventory : [];
-  var isOwner = (typeof me !== 'undefined' && me && me.role === 'owner');
-  if(isOwner) {
-    _depAllCars = inv.slice(); // owner sees ALL inventory
-  } else {
-    var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
-    _depAllCars = inv.filter(function(c){ return (c.location||'DeBary') === myEmpLoc; });
-  }
-  console.log('depLoadCarList: inventory total=' + inv.length + ', showing=' + _depAllCars.length);
+  // Show ALL inventory across both lots — back-office CSVs sometimes
+  // misclassify cars (e.g. a DeBary repo flagged lotno=2 as DeLand), so
+  // a strict location filter hid real cars from staff trying to take a
+  // deposit. Sort the user's own lot first so it's still convenient.
+  var myEmpLoc = (typeof me !== 'undefined' && me && me.location) ? me.location : 'DeBary';
+  _depAllCars = inv.slice().sort(function(a, b){
+    var aMine = (a.location||'DeBary') === myEmpLoc ? 0 : 1;
+    var bMine = (b.location||'DeBary') === myEmpLoc ? 0 : 1;
+    if (aMine !== bMine) return aMine - bMine;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  console.log('depLoadCarList: inventory total=' + inv.length + ', showing=' + _depAllCars.length + ' (all lots)');
   depRenderCarList(_depAllCars);
 }
 
