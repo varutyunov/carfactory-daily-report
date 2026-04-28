@@ -19214,6 +19214,11 @@ async function _queueCashSaleCorrectionReview(dealRecord, expected, posted, carD
 // _appendCashSaleToProfit.
 async function _queueCashSaleReview(dealRecord, car, owed, carDesc){
   try {
+    // Voided deals are explicitly excluded — user said do-not-post.
+    if (dealRecord && dealRecord.voided_at){
+      console.log('_queueCashSaleReview: skipping voided deal', dealRecord.id);
+      return null;
+    }
     var row = {
       payment_id: null,
       deal_id: dealRecord.id || null,
@@ -23910,8 +23915,10 @@ async function _sweepUnpostedCashSales(){
   if (_cashSweepRunning) return;
   _cashSweepRunning = true;
   try {
+    // Filter out voided deals — user marked these as "do not post". Without
+    // this, manually-deleted Profit26 entries get re-queued every sweep.
     var deals = await sbGet('deals',
-      'deal_type=eq.cash&select=id,customer_name,vehicle_desc,vin,location,created_at,deal_type,color&order=created_at.desc&limit=200');
+      'deal_type=eq.cash&voided_at=is.null&select=id,customer_name,vehicle_desc,vin,location,created_at,deal_type,color&order=created_at.desc&limit=200');
     deals = (deals || []).filter(function(d){ return d && d.vin; });
     if (!deals.length) { _cashSweepRunning = false; return; }
 
