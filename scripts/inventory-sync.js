@@ -50,7 +50,8 @@ function parseCsv(csvPath, forceLocation) {
     }
 
     const miles = parseInt(r['currentmiles']) || null;
-    const cost = parseFloat(r['askingprice'] || r['purchaseprice'] || r['cost'] || '') || 0;
+    // Prefer totalcost (base + buyer's/auction fee) so IC col G reflects what was actually paid.
+    const cost = parseFloat(r['totalcost'] || r['netcost'] || r['cost'] || r['askingprice'] || r['purchaseprice'] || '') || 0;
     cars.push({
       name: [r['year'], r['make'], r['model']].filter(Boolean).join(' '),
       stock: r['stockno'] || '',
