@@ -12975,19 +12975,27 @@ function depLoadCarList() {
   depRenderCarList(_depAllCars);
 }
 
+// App-wide AND-token vehicle/customer search helper. Splits the query
+// into whitespace-separated tokens; every token must appear somewhere
+// in the joined `fields`. Order doesn't matter — "2000 civic", "yellow
+// civic", "civic 2000" all match a 2000 Honda Civic yellow. Use this
+// instead of single-substring matching everywhere a search input
+// filters a list (vehicles, deals, deposits, customers).
+function _matchAllTokens(query, fields) {
+  if (!query) return true;
+  var tokens = String(query).toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  var hay = (fields || []).map(function(f){ return String(f == null ? '' : f); }).join(' ').toLowerCase();
+  for (var i = 0; i < tokens.length; i++) {
+    if (hay.indexOf(tokens[i]) === -1) return false;
+  }
+  return true;
+}
+
 function depFilterCars(q) {
   if(!q) { depRenderCarList(_depAllCars); return; }
-  // Split query into tokens; require ALL tokens to match somewhere in the
-  // car's joined fields (in any order). Lets "2000 civic", "yellow civic",
-  // and "civic 2000" all find the same car.
-  var tokens = q.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length) { depRenderCarList(_depAllCars); return; }
   var filtered = _depAllCars.filter(function(c){
-    var hay = [c.name, c.stock, c.vin, c.color, c.location].join(' ').toLowerCase();
-    for (var i = 0; i < tokens.length; i++) {
-      if (hay.indexOf(tokens[i]) === -1) return false;
-    }
-    return true;
+    return _matchAllTokens(q, [c.name, c.stock, c.vin, c.color, c.location]);
   });
   depRenderCarList(filtered);
 }
@@ -16722,13 +16730,13 @@ function payVehicleSearchClose(){
   if(o) o.style.display='none';
 }
 function payVehicleFilter(){
-  var q=(document.getElementById('pay-veh-search-input').value||'').toLowerCase();
+  var q=(document.getElementById('pay-veh-search-input').value||'').trim();
   var list=document.getElementById('pay-veh-search-list');
   var cars=(window._payVehList||[]);
   var deals=(window._payDealList||[]);
   if(q){
-    cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
-    deals=deals.filter(function(d){return (d.vehicle_desc||'').toLowerCase().indexOf(q)!==-1||(d.customer_name||'').toLowerCase().indexOf(q)!==-1||(d.stock||'').toLowerCase().indexOf(q)!==-1||(d.vin||'').toLowerCase().indexOf(q)!==-1;});
+    cars=cars.filter(function(c){ return _matchAllTokens(q, [c.name, c.stock, c.vin, c.color, c.location]); });
+    deals=deals.filter(function(d){ return _matchAllTokens(q, [d.vehicle_desc, d.customer_name, d.stock, d.vin]); });
   }
   var html='';
   // Past Deals section (first — more relevant)
@@ -28446,10 +28454,10 @@ function d26LinkClose(){
   _d26LinkIdx=-1;
 }
 function d26LinkFilter(){
-  var q=(document.getElementById('d26-link-search').value||'').toLowerCase();
+  var q=(document.getElementById('d26-link-search').value||'').trim();
   var list=document.getElementById('d26-link-list');
   var cars=(_d26LinkInv||[]);
-  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
+  if(q) cars=cars.filter(function(c){ return _matchAllTokens(q, [c.name, c.stock, c.vin, c.color, c.location]); });
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
   cars.forEach(function(car){
@@ -28983,10 +28991,10 @@ function isLinkClose(){
   _isLinkIdx=-1;
 }
 function isLinkFilter(){
-  var q=(document.getElementById('is-link-search').value||'').toLowerCase();
+  var q=(document.getElementById('is-link-search').value||'').trim();
   var list=document.getElementById('is-link-list');
   var cars=(_isInv||[]);
-  if(q) cars=cars.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)!==-1||(c.stock||'').toLowerCase().indexOf(q)!==-1||(c.vin||'').toLowerCase().indexOf(q)!==-1;});
+  if(q) cars=cars.filter(function(c){ return _matchAllTokens(q, [c.name, c.stock, c.vin, c.color, c.location]); });
   if(!cars.length){list.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:13px;">No cars found.</div>';return;}
   var html='';
   cars.forEach(function(car){
