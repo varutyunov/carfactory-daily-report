@@ -10,7 +10,10 @@
 // Required env (set in Supabase dashboard → Edge Functions → auth-login → Secrets):
 //   SUPABASE_URL              auto-populated by Supabase
 //   SUPABASE_SERVICE_ROLE_KEY auto-populated by Supabase
-//   SUPABASE_JWT_SECRET       set manually from Project Settings → API → JWT Secret
+//   CF_JWT_SECRET             set manually via `supabase secrets set` —
+//                             must NOT start with SUPABASE_ (CLI rejects).
+//                             Value = the legacy HS256 JWT secret from
+//                             Settings → API → JWT Settings.
 //
 // JWT lifetime: 7 days. PWA detects 401 from any Supabase call → kicks to login.
 
@@ -19,7 +22,7 @@ import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET") ?? "";
+const JWT_SECRET = Deno.env.get("CF_JWT_SECRET") ?? "";
 
 const OWNERS = new Set(["vlad", "tommy"]); // hardcoded list mirrors index.html
 

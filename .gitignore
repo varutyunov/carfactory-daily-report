@@ -34,3 +34,4 @@ backup-to-drive.log
 scripts/.env
 scripts/.env.local
 scripts/__pycache__/
+supabase/.temp/

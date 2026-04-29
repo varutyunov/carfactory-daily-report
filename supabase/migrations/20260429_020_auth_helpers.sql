@@ -1,61 +1,49 @@
--- Phase 1b: Auth helper RPC for the auth-login edge function.
+-- Phase 1b: Auth helper RPCs for the auth-login edge function.
 --
--- Defines a SECURITY DEFINER function that verifies a username + plaintext pin
--- against the bcrypt pin_hash, returning the employee row (no pin/hash) on
--- success, NULL on failure.
+-- Defines four SECURITY DEFINER functions:
+--   verify_employee_pin(username, pin) → row or empty
+--   hash_employee_pin(pin) → bcrypt hash
+--   create_employee(name, username, pin, role, location) → owner-gated
+--   update_employee_pin(employee_id, new_pin) → owner-or-self
 --
--- The edge function calls this RPC instead of fetching the row + comparing in
--- JS. Keeps bcrypt verification entirely server-side and avoids shipping a
--- bcrypt JS library into the edge function.
+-- pgcrypto's crypt() + gen_salt() live in the `extensions` schema in
+-- Supabase, so search_path includes both `public` and `extensions`.
+-- employees.id is bigint (not integer), so signatures use bigint.
 --
--- SECURITY DEFINER means it runs with the function owner's privileges (postgres),
--- so it bypasses RLS — it can read pin_hash even after employees has RLS on.
--- We restrict who can call it via REVOKE/GRANT below.
+-- All functions are SECURITY DEFINER and bypass RLS. service_role and
+-- authenticated callers are gated explicitly by the function bodies
+-- (is_owner JWT claim) and by REVOKE/GRANT below.
 
-CREATE OR REPLACE FUNCTION public.verify_employee_pin(
-    p_username text,
-    p_pin text
-)
-RETURNS TABLE (
-    id integer,
-    name text,
-    username text,
-    role text,
-    location text
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+-- ─── verify_employee_pin ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.verify_employee_pin(text, text);
+
+CREATE OR REPLACE FUNCTION public.verify_employee_pin(p_username text, p_pin text)
+RETURNS TABLE (id bigint, name text, username text, role text, location text)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
 AS $$
 BEGIN
-    -- Constant-time comparison via crypt(): if pin matches, returns the same
-    -- hash that was stored; comparing to pin_hash gives true only on match.
-    RETURN QUERY
-    SELECT e.id, e.name, e.username, e.role, e.location
-      FROM public.employees e
-     WHERE lower(e.username) = lower(p_username)
-       AND e.pin_hash IS NOT NULL
-       AND e.pin_hash = crypt(p_pin, e.pin_hash);
+  RETURN QUERY
+  SELECT e.id, e.name, e.username, e.role, e.location
+    FROM public.employees e
+   WHERE lower(e.username) = lower(p_username)
+     AND e.pin_hash IS NOT NULL
+     AND e.pin_hash = crypt(p_pin, e.pin_hash);
 END;
 $$;
 
--- Lock down who can call it. Only service_role (used by the edge function)
--- and authenticated users (for re-auth flows) need access. anon should NOT
--- be able to brute-force this.
 REVOKE ALL ON FUNCTION public.verify_employee_pin(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.verify_employee_pin(text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.verify_employee_pin(text, text) TO service_role;
 
--- A second helper: hash a new pin (used when adding employees or rotating pins).
--- Also security-definer + service-role only.
+-- ─── hash_employee_pin ────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.hash_employee_pin(p_pin text)
 RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
 AS $$
 BEGIN
-    RETURN crypt(p_pin, gen_salt('bf', 10));
+  RETURN crypt(p_pin, gen_salt('bf', 10));
 END;
 $$;
 
@@ -63,32 +51,21 @@ REVOKE ALL ON FUNCTION public.hash_employee_pin(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.hash_employee_pin(text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.hash_employee_pin(text) TO service_role;
 
--- create_employee: owners only. Hashes the pin server-side and inserts.
--- Authenticated users with is_owner=true in their JWT can call this from
--- the PWA's "Add Employee" flow.
+-- ─── create_employee (owners only) ────────────────────────────────────
+DROP FUNCTION IF EXISTS public.create_employee(text, text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.create_employee(
-    p_name text,
-    p_username text,
-    p_pin text,
-    p_role text DEFAULT 'employee',
-    p_location text DEFAULT NULL
+  p_name text, p_username text, p_pin text,
+  p_role text DEFAULT 'employee', p_location text DEFAULT NULL
 )
-RETURNS TABLE (
-    id integer,
-    name text,
-    username text,
-    role text,
-    location text
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+RETURNS TABLE (id bigint, name text, username text, role text, location text)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_is_owner boolean := false;
-  v_id integer;
+  v_id bigint;
 BEGIN
-  -- Authorize: must be an owner (JWT is_owner claim).
   v_is_owner := COALESCE((auth.jwt() ->> 'is_owner')::boolean, false);
   IF NOT v_is_owner THEN
     RAISE EXCEPTION 'Only owners can create employees';
@@ -99,7 +76,6 @@ BEGIN
   IF p_username IS NULL OR length(trim(p_username)) < 1 THEN
     RAISE EXCEPTION 'Username required';
   END IF;
-  -- Reject duplicate usernames (case-insensitive).
   IF EXISTS(SELECT 1 FROM public.employees e WHERE lower(e.username) = lower(p_username)) THEN
     RAISE EXCEPTION 'Username already exists';
   END IF;
@@ -117,23 +93,21 @@ REVOKE ALL ON FUNCTION public.create_employee(text, text, text, text, text) FROM
 REVOKE ALL ON FUNCTION public.create_employee(text, text, text, text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.create_employee(text, text, text, text, text) TO authenticated, service_role;
 
--- update_employee_pin: owners can rotate any employee's PIN. The employee
--- themselves can rotate their own (matches the JWT sub claim).
-CREATE OR REPLACE FUNCTION public.update_employee_pin(
-    p_employee_id integer,
-    p_new_pin text
-)
+-- ─── update_employee_pin (owner or self) ──────────────────────────────
+DROP FUNCTION IF EXISTS public.update_employee_pin(integer, text);
+DROP FUNCTION IF EXISTS public.update_employee_pin(bigint, text);
+
+CREATE OR REPLACE FUNCTION public.update_employee_pin(p_employee_id bigint, p_new_pin text)
 RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_is_owner boolean := false;
-  v_caller_id integer;
+  v_caller_id bigint;
 BEGIN
   v_is_owner := COALESCE((auth.jwt() ->> 'is_owner')::boolean, false);
-  v_caller_id := NULLIF(auth.jwt() ->> 'sub', '')::integer;
+  v_caller_id := NULLIF(auth.jwt() ->> 'sub', '')::bigint;
   IF NOT v_is_owner AND v_caller_id IS DISTINCT FROM p_employee_id THEN
     RAISE EXCEPTION 'Not authorized to change this PIN';
   END IF;
@@ -147,6 +121,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.update_employee_pin(integer, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.update_employee_pin(integer, text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.update_employee_pin(integer, text) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.update_employee_pin(bigint, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_employee_pin(bigint, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.update_employee_pin(bigint, text) TO authenticated, service_role;

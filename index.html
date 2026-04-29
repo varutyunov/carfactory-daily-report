@@ -6110,7 +6110,7 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // ───────────────────────────────────────────────────────────────────────────
 
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
-var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=null;var _keepSwReload=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);// cf_work_cal is excluded from wipe (cf_work_ prefix) — no restore needed
+var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=null;var _keepSwReload=localStorage.getItem('_swReload');var _keepJwt=localStorage.getItem('cf_jwt');var _keepCfUser=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepJwt)localStorage.setItem('cf_jwt',_keepJwt);if(_keepCfUser)localStorage.setItem('cf_user',_keepCfUser);// cf_work_cal is excluded from wipe (cf_work_ prefix) — no restore needed. cf_jwt + cf_user preserved so RLS calls don't have a window of empty results.
 try{S.calendarEvents=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');}catch(e){}if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
 // Always pre-fill credentials if saved
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
@@ -6124,12 +6124,15 @@ if(_savedSession){
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
       localStorage.setItem('cf_saved_pin', _savedPin||'');
-      // Refresh the auth JWT in the background if missing/expired so RLS
-      // calls keep working. Uses the saved username + pin we already have
-      // in localStorage (Phase 6 will replace this with refresh tokens).
-      if(!_cfJwt() && _savedUser && _savedPin){
-        _acquireAuthJwt(_savedUser, _savedPin);
-      }
+      // Refresh the auth JWT BEFORE the initial sync. The cf_jwt key is
+      // wiped on every page load by the localStorage purge above, so every
+      // restored session starts without a JWT — and post-RLS, an anon-only
+      // sbGet returns empty arrays. We must await the JWT before sync runs.
+      // Uses the saved username + pin (Phase 6 will replace this with
+      // refresh tokens stored separately from the wipe-zone).
+      var _jwtReady = (!_cfJwt() && _savedUser && _savedPin)
+        ? _acquireAuthJwt(_savedUser, _savedPin).catch(function(e){ console.warn('[auth] auto-login JWT acquire failed:', e && e.message); return null; })
+        : Promise.resolve(null);
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
@@ -6140,13 +6143,16 @@ if(_savedSession){
       // Show UI immediately
       if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm2=me.name.toLowerCase();var _hasCarPay2=['vlad'].includes(_nm2);var _hasTools2=['vlad','tommy'].includes(_nm2);if(_hasCarPay2){_swipePages=[0,1,2];}else if(_hasTools2){_swipePages=[0,2];}else{_swipePages=[0];}var _dots2=document.getElementById('swipe-dots');if(_dots2){if(_swipePages.length>1){_dots2.style.display='flex';_dots2.innerHTML='';for(var _di2=0;_di2<_swipePages.length;_di2++){var _dot2=document.createElement('span');_dot2.className='swipe-dot'+(_di2===0?' active':'');_dots2.appendChild(_dot2);}}else{_dots2.style.display='none';}}initSwipe();setSwipePage(0);}
       else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');}
-      // Sync in background
-      syncFromSupabase().then(()=>{
+      // Sync in background — but only AFTER the JWT is in place, otherwise
+      // every sbGet under RLS returns [] and the UI looks empty.
+      _jwtReady.then(function(){
+        return syncFromSupabase();
+      }).then(function(){
         fetchNotifications();
         if(me.role==='manager'){updateTabBadges();updateHomeBadges();}
         else{goEmpHome();}
         setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 5000);
-      });
+      }).catch(function(e){ console.error('[auth] post-login sync failed:', e); });
     }
   }catch(e){}
 }
