@@ -365,5 +365,98 @@ async function main() {
     try { await queueInventoryReviews(insertedWithIds, csvCostByVin); }
     catch(e) { console.warn('queueInventoryReviews failed (non-fatal):', e.message); }
   }
+
+  // --- BACKFILL $0 COSTS from latest CSV ---
+  // Race condition: dealer system pushes new inventory + cost as separate
+  // events. If our cron grabs the CSV between them, the totalcost field
+  // is empty and the queued review (or already-approved ic row) ends up
+  // with $0. This sweep, run on EVERY cron, fills in any $0 values that
+  // now have a real cost in the CSV. Idempotent: only updates when the
+  // CSV cost > 0 and the current value is 0 or missing.
+  try { await backfillZeroCosts(csvCostByVin, csvCars); }
+  catch(e) { console.warn('backfillZeroCosts failed (non-fatal):', e.message); }
 }
+
+async function backfillZeroCosts(csvCostByVin, csvCars) {
+  // Build VIN/stock lookup
+  const csvByStock = {};
+  csvCars.forEach(c => { if (c.stock && c.cost) csvByStock[c.stock] = c.cost; });
+
+  // 1. Update zero-cost inv_create_pending reviews that are still pending
+  let revsFixed = 0;
+  try {
+    const url = `${SB_URL}/rest/v1/payment_reviews?reason=eq.inv_create_pending&status=eq.pending&select=id,snapshot,location&limit=1000`;
+    const res = await fetch(url, { headers: HEADERS });
+    const reviews = res.ok ? await res.json() : [];
+    // Cross-reference each review's car_id back to inventory.vin to look up cost
+    const carIds = reviews.map(r => (r.snapshot && r.snapshot.ic && r.snapshot.ic.car_id)).filter(Boolean);
+    let invByCarId = {};
+    if (carIds.length) {
+      const inIds = `(${[...new Set(carIds)].join(',')})`;
+      const invRes = await fetch(`${SB_URL}/rest/v1/inventory?id=in.${inIds}&select=id,vin,stock`, { headers: HEADERS });
+      if (invRes.ok) {
+        const rows = await invRes.json();
+        rows.forEach(r => { invByCarId[r.id] = r; });
+      }
+    }
+    for (const rev of reviews) {
+      const ic = (rev.snapshot && rev.snapshot.ic) || {};
+      const currentCost = parseFloat(ic.purchase_cost) || 0;
+      if (currentCost > 0) continue;
+      const inv = invByCarId[ic.car_id];
+      const csvCost = (inv && inv.vin && csvCostByVin[inv.vin])
+                   || (inv && inv.stock && csvByStock[inv.stock])
+                   || 0;
+      if (csvCost > 0) {
+        const newSnap = { ...rev.snapshot, ic: { ...ic, purchase_cost: csvCost } };
+        const patchRes = await fetch(`${SB_URL}/rest/v1/payment_reviews?id=eq.${rev.id}`, {
+          method: 'PATCH', headers: HEADERS, body: JSON.stringify({ snapshot: newSnap })
+        });
+        if (patchRes.ok) {
+          console.log(`  backfilled review id=${rev.id} (${ic.car_name}): $0 → $${csvCost}`);
+          revsFixed++;
+        }
+      }
+    }
+  } catch(e) { console.warn('backfill: review pass failed:', e.message); }
+
+  // 2. Update zero-cost inventory_costs rows directly (for already-approved
+  //    ones that locked in $0 before this fix existed).
+  let icFixed = 0;
+  try {
+    const icUrl = `${SB_URL}/rest/v1/inventory_costs?or=(purchase_cost.eq.0,purchase_cost.is.null)&car_id=not.is.null&select=id,car_id,car_name,purchase_cost,location&limit=1000`;
+    const icRes = await fetch(icUrl, { headers: HEADERS });
+    const ics = icRes.ok ? await icRes.json() : [];
+    const carIds = ics.map(r => r.car_id).filter(Boolean);
+    let invByCarId = {};
+    if (carIds.length) {
+      const inIds = `(${[...new Set(carIds)].join(',')})`;
+      const invRes = await fetch(`${SB_URL}/rest/v1/inventory?id=in.${inIds}&select=id,vin,stock`, { headers: HEADERS });
+      if (invRes.ok) {
+        const rows = await invRes.json();
+        rows.forEach(r => { invByCarId[r.id] = r; });
+      }
+    }
+    for (const r of ics) {
+      const inv = invByCarId[r.car_id];
+      const csvCost = (inv && inv.vin && csvCostByVin[inv.vin])
+                   || (inv && inv.stock && csvByStock[inv.stock])
+                   || 0;
+      if (csvCost > 0) {
+        const patchRes = await fetch(`${SB_URL}/rest/v1/inventory_costs?id=eq.${r.id}`, {
+          method: 'PATCH', headers: HEADERS, body: JSON.stringify({ purchase_cost: csvCost })
+        });
+        if (patchRes.ok) {
+          console.log(`  backfilled ic id=${r.id} (${r.car_name}): $0 → $${csvCost}`);
+          icFixed++;
+        }
+      }
+    }
+  } catch(e) { console.warn('backfill: ic pass failed:', e.message); }
+
+  if (revsFixed || icFixed) {
+    console.log(`Cost backfill: ${revsFixed} pending review(s), ${icFixed} ic row(s).`);
+  }
+}
+
 main().catch(e => { console.error(e); process.exit(1); });
