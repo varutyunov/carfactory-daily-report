@@ -21806,7 +21806,11 @@ async function _reviewApprove(id, candidateIdx){
       body: JSON.stringify({
         secret: _SHEETS_SECRET,
         action: 'deals26_append_payment_direct',
-        location: r.location,
+        // Use candidate's lot (where the deal lives) — NOT r.location
+        // (where the payment was logged). Cross-lot bug: Carr's $2270
+        // app-paid at DeBary, deal is at DeLand. Using r.location wrote
+        // to DeBary col G of a totally different car.
+        location: aliasLoc,
         data: {
           tab: aliasTab, row: aliasRow,
           amount: parseFloat(r.amount) || 0,
@@ -22344,7 +22348,11 @@ async function _runCascadeApproval(originalId, aliasVin, aliasCust, aliasModel, 
           body: JSON.stringify({
             secret: _SHEETS_SECRET,
             action: 'deals26_append_payment_direct',
-            location: m.location,
+            // Write to the deal's lot (aliasLoc), not the cascading
+            // payment's lot (m.location). Cross-lot bug: cascade was
+            // writing to the lot where the duplicate payment was logged
+            // instead of the deal's actual lot.
+            location: aliasLoc,
             data: {
               tab: aliasTab, row: aliasRow,
               amount: parseFloat(m.amount) || 0,
