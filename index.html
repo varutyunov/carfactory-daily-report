@@ -2862,7 +2862,7 @@ async function syncFromSupabase(showUI){
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');var _keepSwR2=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);if(_keepSwR2)localStorage.setItem('_swReload',_keepSwR2);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -6046,11 +6046,14 @@ if('serviceWorker' in navigator){
         if(nw.state==='installed'&&navigator.serviceWorker.controller) nw.postMessage('SKIP_WAITING');
       });
     });
-    // Reload when new SW takes control — throttle to prevent reload loops
-    // Uses localStorage timestamp so the guard persists across page loads
+    // Reload when new SW takes control — throttle to prevent reload loops.
+    // The throttle uses localStorage so it survives the reload itself.
+    // Both wipe sites (page-load + syncFromSupabase) preserve _swReload.
+    // Bumped to 30s on Day 10 after rapid back-to-back deploys caused
+    // a refresh loop on Vlad's device — 8s wasn't enough headroom.
     function _swSafeReload(){
       var last=parseInt(localStorage.getItem('_swReload')||'0');
-      if(Date.now()-last<8000) return; // already reloaded within last 8s — skip
+      if(Date.now()-last<30000) return;
       localStorage.setItem('_swReload',String(Date.now()));
       window.location.reload();
     }
