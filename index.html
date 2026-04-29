@@ -2336,7 +2336,6 @@ function _cfJwt(){
     var payload=JSON.parse(atob((parts[1]+pad).replace(/-/g,'+').replace(/_/g,'/')));
     if(payload.exp && payload.exp*1000 < Date.now()){
       console.warn('[auth] JWT expired, clearing');
-      try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'cleared_expired', t:Date.now(), exp: payload.exp, now: Date.now()/1000})); }catch(e){}
       localStorage.removeItem('cf_jwt');
       return null;
     }
@@ -2380,8 +2379,7 @@ Object.defineProperty(window, 'SB_HEADERS', {
 var _onAuthExpired = null;
 async function _sbHandleResponse(r){
   if(r.status===401 && _cfJwt()){
-    console.warn('[auth] Supabase 401 — JWT rejected, clearing', r.url);
-    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'cleared_401', t:Date.now(), url: r.url})); }catch(e){}
+    console.warn('[auth] Supabase 401 — JWT rejected, clearing');
     localStorage.removeItem('cf_jwt');
     try{ if(typeof _onAuthExpired==='function') _onAuthExpired(); }catch(e){}
   }
@@ -2864,7 +2862,7 @@ async function syncFromSupabase(showUI){
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -2919,30 +2917,22 @@ async function loginWithFaceId(){
 // the app still works during rollout. Once RLS is fully enabled, lack of
 // JWT will cause Supabase calls to 401, which surfaces as auto-logout.
 async function _acquireAuthJwt(username, pin){
-  // Diagnostic: write a marker to a wipe-surviving key so we can confirm
-  // the function was actually invoked even when console isn't accessible
-  // (iOS PWA, etc.). The cf_work_ prefix bypasses the page-load wipe.
-  try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'enter', t:Date.now(), u: username, p_len: (pin||'').length})); }catch(e){}
   try{
     var resp=await fetch(SB_URL+'/functions/v1/auth-login',{
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
       body:JSON.stringify({username:username, pin:pin})
     });
-    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'fetch_ok', t:Date.now(), status: resp.status})); }catch(e){}
     var data=await resp.json().catch(function(){return null;});
     if(!resp.ok || !data || !data.token){
-      try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'no_token', t:Date.now(), status: resp.status, has_data: !!data, error: data && data.error})); }catch(e){}
       console.warn('[auth] auth-login failed:', resp.status, data && data.error);
       return null;
     }
     localStorage.setItem('cf_jwt', data.token);
     if(data.user) localStorage.setItem('cf_user', JSON.stringify(data.user));
-    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'jwt_set', t:Date.now(), token_len: data.token.length})); }catch(e){}
     console.log('[auth] JWT acquired, expires', new Date((data.expires_at||0)*1000).toISOString());
     return data;
   }catch(err){
-    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'caught_err', t:Date.now(), msg: (err && err.message) || String(err)})); }catch(e){}
     console.warn('[auth] auth-login network error:', err && err.message);
     return null;
   }
