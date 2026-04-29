@@ -20,6 +20,7 @@ Usage:
 """
 
 import json
+import os
 import ssl
 import sys
 import time
@@ -27,10 +28,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _sb_config import SB_URL as SUPABASE_URL, SB_KEY as SUPABASE_KEY  # noqa: E402
+
 SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec'
 SHEETS_SECRET = 'cf-sync-2026'
-SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co'
-SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo'
 
 PAY_NOTE_MAX = 26
 THROTTLE_MS = 150

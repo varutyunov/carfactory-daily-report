@@ -2317,7 +2317,74 @@ function _swapPx(id,url){
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
-const SB_HEADERS = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation'};
+
+// ── JWT-aware headers ────────────────────────────────────────────────────
+// After login, the auth-login edge function returns a 7-day JWT signed with
+// the project's JWT secret. We store it in localStorage as cf_jwt and attach
+// it as the Authorization Bearer for every Supabase REST/Storage call.
+// `apikey` stays as the project anon key (Supabase requires it as the
+// project-level identifier alongside the user JWT). Pre-login or after
+// expiry, we fall back to anon-only — that still works for tables without
+// RLS and for the auth-login function itself.
+function _cfJwt(){
+  try{
+    var t=localStorage.getItem('cf_jwt');
+    if(!t) return null;
+    var parts=t.split('.');
+    if(parts.length!==3) return null;
+    var pad='='.repeat((4 - (parts[1].length % 4)) % 4);
+    var payload=JSON.parse(atob((parts[1]+pad).replace(/-/g,'+').replace(/_/g,'/')));
+    if(payload.exp && payload.exp*1000 < Date.now()){
+      console.warn('[auth] JWT expired, clearing');
+      localStorage.removeItem('cf_jwt');
+      return null;
+    }
+    return t;
+  }catch(e){ return null; }
+}
+function _cfJwtClaims(){
+  try{
+    var t=localStorage.getItem('cf_jwt');
+    if(!t) return null;
+    var parts=t.split('.');
+    if(parts.length!==3) return null;
+    var pad='='.repeat((4 - (parts[1].length % 4)) % 4);
+    return JSON.parse(atob((parts[1]+pad).replace(/-/g,'+').replace(/_/g,'/')));
+  }catch(e){ return null; }
+}
+function _sbHeaders(extras){
+  var jwt=_cfJwt();
+  var h={
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + (jwt || SB_KEY),
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+  if(extras){
+    for(var k in extras){
+      if(extras[k]===null) delete h[k]; else h[k]=extras[k];
+    }
+  }
+  return h;
+}
+// Legacy shim: existing code reads `SB_HEADERS` as an object. Convert to a
+// getter so each access returns fresh headers (with current JWT state).
+Object.defineProperty(window, 'SB_HEADERS', {
+  configurable: true,
+  get: function(){ return _sbHeaders(); }
+});
+
+// Hook called when Supabase rejects a JWT (401) so the UI can react. Set
+// later in the file once the login screen helpers are defined.
+var _onAuthExpired = null;
+async function _sbHandleResponse(r){
+  if(r.status===401 && _cfJwt()){
+    console.warn('[auth] Supabase 401 — JWT rejected, clearing');
+    localStorage.removeItem('cf_jwt');
+    try{ if(typeof _onAuthExpired==='function') _onAuthExpired(); }catch(e){}
+  }
+  if(!r.ok) throw new Error(await r.text());
+}
 
 /* ── OneSignal Push Notifications ── */
 const OS_APP_ID = 'ff6238d8-1a7b-4415-a589-229cd4059233';
@@ -2433,31 +2500,31 @@ async function sendPushNotification(targetNames, title, body){
   try{
     await fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:_sbHeaders({'Prefer':null}),
       body:JSON.stringify({target_names:targetNames, title:title, body:body})
     });
   }catch(e){ console.log('Push failed:',e); }
 }
 
 async function sbGet(table, params='') {
-  const hdrs = Object.assign({}, SB_HEADERS, {'Cache-Control':'no-cache','Pragma':'no-cache'});
+  const hdrs = _sbHeaders({'Cache-Control':'no-cache','Pragma':'no-cache'});
   const r = await fetch(SB_URL+'/rest/v1/'+table+'?'+params, {headers:hdrs, cache:'no-store'});
-  if(!r.ok) throw new Error(await r.text());
+  await _sbHandleResponse(r);
   return r.json();
 }
 async function sbPost(table, body) {
-  const r = await fetch(SB_URL+'/rest/v1/'+table, {method:'POST',headers:SB_HEADERS,body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
+  const r = await fetch(SB_URL+'/rest/v1/'+table, {method:'POST',headers:_sbHeaders(),body:JSON.stringify(body)});
+  await _sbHandleResponse(r);
   return r.json();
 }
 async function sbPatch(table, id, body) {
-  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'PATCH',headers:SB_HEADERS,body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'PATCH',headers:_sbHeaders(),body:JSON.stringify(body)});
+  await _sbHandleResponse(r);
   return r.json();
 }
 async function sbDelete(table, id) {
-  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'DELETE',headers:SB_HEADERS});
-  if(!r.ok) throw new Error(await r.text());
+  const r = await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id, {method:'DELETE',headers:_sbHeaders()});
+  await _sbHandleResponse(r);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2535,7 +2602,7 @@ async function sbSignUrl(storagePath){
   try{
     var r=await fetch(SB_URL+'/storage/v1/object/sign/car-photos/'+storagePath,{
       method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+      headers:_sbHeaders({'Prefer':null}),
       body:JSON.stringify({expiresIn:604800})
     });
     if(!r.ok) return '';
@@ -2597,7 +2664,7 @@ async function _signInventoryPhotos(){
 async function sbUpload(path, file){
   const r=await fetch(SB_URL+'/storage/v1/object/car-photos/'+path,{
     method:'POST',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type,'x-upsert':'true'},
+    headers:_sbHeaders({'Content-Type':file.type,'x-upsert':'true','Prefer':null}),
     body:file
   });
   if(!r.ok) throw new Error(await r.text());
@@ -2607,7 +2674,7 @@ async function sbUpload(path, file){
 async function sbDeleteFile(path){
   await fetch(SB_URL+'/storage/v1/object/car-photos/'+path,{
     method:'DELETE',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    headers:_sbHeaders({'Content-Type':null,'Prefer':null})
   });
 }
 async function loadCarPhotos(carId, category){
@@ -2761,7 +2828,7 @@ async function syncFromSupabase(showUI){
         return all;
       }
       const [emps, inv, asgn, calEvRaw, cpCusts, cpPays] = await Promise.all([
-        sbGet('employees', 'order=name&limit=2000'),
+        sbGet('employees', 'select=id,name,username,role,location&order=name&limit=2000'),
         sbGet('inventory', 'order=name&limit=2000&select=*'),
         sbGet('assignments', 'select=*&order=assigned_at.desc&limit=2000'),
         sbGet('calendar_events', 'order=event_date.asc&limit=2000').catch(()=>[]),
@@ -2842,17 +2909,59 @@ async function loginWithFaceId(){
     }
   }catch(e){}
 }
+// Hit the auth-login edge function to exchange (username, pin) for a 7-day
+// JWT signed with the project's JWT secret. Stored in localStorage as
+// cf_jwt and attached to every Supabase REST/Storage call by _sbHeaders().
+// Best-effort: if the edge function is unreachable (e.g. not yet deployed
+// or transient error), we log and keep the user on the anon-key path so
+// the app still works during rollout. Once RLS is fully enabled, lack of
+// JWT will cause Supabase calls to 401, which surfaces as auto-logout.
+async function _acquireAuthJwt(username, pin){
+  try{
+    var resp=await fetch(SB_URL+'/functions/v1/auth-login',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({username:username, pin:pin})
+    });
+    var data=await resp.json().catch(function(){return null;});
+    if(!resp.ok || !data || !data.token){
+      console.warn('[auth] auth-login failed:', resp.status, data && data.error);
+      return null;
+    }
+    localStorage.setItem('cf_jwt', data.token);
+    if(data.user) localStorage.setItem('cf_user', JSON.stringify(data.user));
+    console.log('[auth] JWT acquired, expires', new Date((data.expires_at||0)*1000).toISOString());
+    return data;
+  }catch(err){
+    console.warn('[auth] auth-login network error:', err && err.message);
+    return null;
+  }
+}
 async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value.trim();
-  // First try local cache, then sync
   showLoading('Signing in...');
-  try {
-    const emps = await sbGet('employees','select=*');
-    S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
-  } catch(e){}
+  // Primary auth path: edge function verifies the PIN server-side (via the
+  // verify_employee_pin RPC + bcrypt) and returns a 7-day JWT. This is the
+  // only path that survives once RLS locks down the pin/pin_hash columns.
+  let e = null;
+  const authResult = await _acquireAuthJwt(u, p);
+  if(authResult && authResult.user){
+    const au = authResult.user;
+    e = { id: au.id, name: au.name, username: au.username, role: au.role, location: au.location };
+  }
+  // Legacy fallback for the brief transition window before the edge function
+  // is deployed: fetch employees + local match. This path breaks the moment
+  // RLS is enabled on `employees`; that's intentional — by then everyone
+  // logs in via the edge function. Remove in Phase 6.
+  if(!e){
+    try {
+      const emps = await sbGet('employees','select=id,name,username,pin,role,location');
+      S.employees = emps.map(x=>({id:x.id,name:x.name,username:x.username,pin:x.pin,role:x.role,location:x.location}));
+      e = S.employees.find(x=>x.username.toLowerCase()===u && x.pin===p);
+    } catch(err){ console.warn('[auth] legacy fallback failed:', err && err.message); }
+  }
   hideLoading();
-  const e=S.employees.find(x=>x.username.toLowerCase()===u&&x.pin===p);
   if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
   me=e;
   // Save session for auto-login if remember-me is checked
@@ -2897,7 +3006,26 @@ function doSync(){
   // Full page reload — guarantees fresh HTML + fresh Supabase data
   setTimeout(function(){ window.location.reload(); }, 800);
 }
-function doLogout(){me=null;localStorage.removeItem('cf_session');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display='none';closeAIChat();document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+function doLogout(){me=null;localStorage.removeItem('cf_session');localStorage.removeItem('cf_jwt');localStorage.removeItem('cf_user');var tb=document.querySelector('.tb');if(tb)tb.style.display='';var bb=document.getElementById('mgr-back-bar');if(bb)bb.style.display='none';var aiBrainBtn=document.getElementById('ai-brain-btn');if(aiBrainBtn)aiBrainBtn.style.display='none';closeAIChat();document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lu').value='';document.getElementById('lp').value='';document.getElementById('lerr').textContent='';document.getElementById('mtabs').style.display='none';}
+// Wire the 401-from-Supabase auth-expired hook (defined earlier near
+// _sbHeaders). When the JWT is rejected mid-session, surface a soft
+// kick to the login screen with a banner. Avoid hard reload so the
+// user can re-enter their PIN without losing context.
+_onAuthExpired = function(){
+  try{
+    if(!me) return; // already logged out
+    me=null;
+    localStorage.removeItem('cf_session');
+    var loginEl=document.getElementById('login');
+    var appEl=document.getElementById('app');
+    if(appEl) appEl.style.display='none';
+    if(loginEl) loginEl.style.display='flex';
+    var lerr=document.getElementById('lerr');
+    if(lerr) lerr.textContent='Session expired — please log in again';
+    var savedUser=localStorage.getItem('cf_saved_user');
+    if(savedUser){ var lu=document.getElementById('lu'); if(lu) lu.value=savedUser; }
+  }catch(e){ console.error('[auth] _onAuthExpired:', e); }
+};
 // ── THEME TOGGLE ──
 function toggleTheme(){
   document.body.classList.toggle('light');
@@ -5550,11 +5678,22 @@ async function addEmp(){
   if(!n||!u||!p)return;
   showLoading('Adding employee...');
   try{
-    const rows=await sbPost('employees',{name:n,username:u,pin:p,role:r,location:l});
-    const row=rows[0];
-    S.employees.push({id:row.id,name:row.name,username:row.username,pin:row.pin,role:row.role,location:row.location});
-    sv();
-  }catch(e){alert('Error: '+e.message);}
+    // Call create_employee RPC — hashes the pin server-side and gates on
+    // the is_owner JWT claim. The PWA never sends the plaintext pin to
+    // the public REST endpoint after RLS lockdown.
+    const resp = await fetch(SB_URL+'/rest/v1/rpc/create_employee', {
+      method: 'POST',
+      headers: _sbHeaders(),
+      body: JSON.stringify({p_name:n, p_username:u, p_pin:p, p_role:r, p_location:l})
+    });
+    if(!resp.ok){ throw new Error(await resp.text()); }
+    const rows = await resp.json();
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if(row && row.id){
+      S.employees.push({id:row.id,name:row.name,username:row.username,role:row.role,location:row.location});
+      sv();
+    }
+  }catch(e){alert('Error: '+(e.message||e));}
   hideLoading();
   closeM('m-add-emp');
   ['ne-n','ne-u','ne-p'].forEach(id=>document.getElementById(id).value='');
@@ -5985,6 +6124,12 @@ if(_savedSession){
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
       localStorage.setItem('cf_saved_pin', _savedPin||'');
+      // Refresh the auth JWT in the background if missing/expired so RLS
+      // calls keep working. Uses the saved username + pin we already have
+      // in localStorage (Phase 6 will replace this with refresh tokens).
+      if(!_cfJwt() && _savedUser && _savedPin){
+        _acquireAuthJwt(_savedUser, _savedPin);
+      }
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
@@ -14235,7 +14380,7 @@ async function esignSendSMS(){
   try{
     var signingUrl=document.getElementById('esign-link').value;
     var customerName=document.getElementById('esign-customer-label').textContent;
-    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({method:'sms',to:'+'+phone,signing_url:signingUrl,customer_name:customerName,token:_esignToken})});
+    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:_sbHeaders({'Prefer':null}),body:JSON.stringify({method:'sms',to:'+'+phone,signing_url:signingUrl,customer_name:customerName,token:_esignToken})});
     var data=await resp.json();
     if(!resp.ok)throw new Error(data.error||'SMS send failed');
     if(_esignRecordId)await sbPatch('esign_requests',_esignRecordId,{customer_contact:'+'+phone,delivery_method:'sms'});
@@ -14254,7 +14399,7 @@ async function esignSendEmail(){
     var signingUrl=document.getElementById('esign-link').value;
     var customerName=document.getElementById('esign-customer-label').textContent;
     var docLabel=document.getElementById('esign-doc-label').textContent;
-    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({method:'email',to:email,signing_url:signingUrl,customer_name:customerName,doc_type:docLabel,token:_esignToken})});
+    var resp=await fetch('https://hphlouzqlimainczuqyc.supabase.co/functions/v1/send-esign',{method:'POST',headers:_sbHeaders({'Prefer':null}),body:JSON.stringify({method:'email',to:email,signing_url:signingUrl,customer_name:customerName,doc_type:docLabel,token:_esignToken})});
     var data=await resp.json();
     if(!resp.ok)throw new Error(data.error||'Email send failed');
     if(_esignRecordId)await sbPatch('esign_requests',_esignRecordId,{customer_contact:email,delivery_method:'email'});

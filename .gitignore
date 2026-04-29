@@ -27,3 +27,10 @@ temp_form.png
 
 # Daily backup-to-drive runtime log (regenerated each run)
 backup-to-drive.log
+
+# Supabase service-role secrets — NEVER commit. See setup-security.md.
+.env
+.env.local
+scripts/.env
+scripts/.env.local
+scripts/__pycache__/

@@ -22,8 +22,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-SUPABASE = 'https://hphlouzqlimainczuqyc.supabase.co/rest/v1'
-KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo'
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _sb_config import SB_URL, SB_KEY as KEY  # noqa: E402
+
+SUPABASE = f'{SB_URL}/rest/v1'
 CTX = ssl.create_default_context()
 DRY = '--dry-run' in sys.argv
 

@@ -471,3 +471,89 @@ Not built yet. Captured here so they don't get lost.
   Stackdriver.
 
 (Will keep extending as we work through the audit list.)
+
+---
+
+## Security model — JWT + RLS (Day 9, 2026-04-29)
+
+After this migration, the Supabase anon key alone gets ZERO data access.
+Every authenticated employee carries a 7-day JWT issued by the `auth-login`
+edge function. RLS on every public table requires that JWT.
+
+### Auth flow
+
+1. PWA login screen takes `username + pin`.
+2. `_acquireAuthJwt(username, pin)` POSTs to `/functions/v1/auth-login`.
+3. Edge function calls `verify_employee_pin(p_username, p_pin)` RPC
+   (SECURITY DEFINER, bcrypt comparison via pgcrypto `crypt()`).
+4. On match, edge function signs a JWT with the project JWT secret
+   carrying claims:
+   - `aud: 'authenticated'`, `role: 'authenticated'` (PostgREST DB role)
+   - `sub`: employee id (string)
+   - `exp`: now + 7 days
+   - `app_role`: `'employee'` or `'manager'`
+   - `is_owner`: true for vlad/tommy
+   - `username`, `name`, `emp_location`
+5. PWA stores the JWT in `cf_jwt` localStorage. `_sbHeaders()` attaches it
+   as `Authorization: Bearer <jwt>` (apikey stays as the project anon key,
+   which Supabase always requires alongside the user JWT).
+6. On 401 from any Supabase call, `_sbHandleResponse` clears `cf_jwt` and
+   `_onAuthExpired()` soft-kicks the user back to the login screen with
+   "Session expired — please log in again".
+
+### RLS policies
+
+Default for every public table (28+ tables):
+```
+CREATE POLICY authenticated_all ON public.<table>
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+Special cases:
+- `employees`: SELECT for authenticated, but **column grants exclude `pin`
+  and `pin_hash`** so they're never returned. INSERT/UPDATE/DELETE only
+  for owners (`(auth.jwt()->>'is_owner')::boolean = true`).
+- `audit_log`: append-only — SELECT + INSERT for authenticated, no UPDATE
+  / DELETE.
+- Storage `car-photos` bucket: authenticated only.
+
+### Backend script auth
+
+Python scripts in `scripts/` import `_sb_config` which loads
+`SUPABASE_SERVICE_KEY` from env (`scripts/.env` or shell). Service-role
+bypasses RLS — required for audit/reconcile/backfill scripts.
+
+The Google Apps Script reads `SUPABASE_SERVICE_KEY` from
+`PropertiesService.getScriptProperties()`. Falls back to anon during
+transition.
+
+### Adding a new table
+
+1. Add the table normally.
+2. Write a migration: `ALTER TABLE public.<name> ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY authenticated_all ON public.<name> FOR ALL TO authenticated
+   USING (true) WITH CHECK (true);`
+3. Apply via Supabase SQL editor or `supabase db push`.
+
+### Where things live
+
+- `supabase/functions/auth-login/index.ts` — edge function
+- `supabase/migrations/20260429_010_employees_pin_hash.sql` — pin_hash backfill
+- `supabase/migrations/20260429_020_auth_helpers.sql` — RPCs (verify_employee_pin, hash_employee_pin, create_employee, update_employee_pin)
+- `supabase/migrations/20260429_030_enable_rls.sql` — RLS rollout
+- `index.html` — `_cfJwt`, `_sbHeaders`, `_acquireAuthJwt`, `_onAuthExpired`, updated `doLogin`/`doLogout`/`addEmp`
+- `scripts/_sb_config.py` — service-role loader for Python scripts
+- `setup-security.md` — runbook for the deploy steps
+
+### Rollback (worst-case)
+
+If the live app breaks for users post-RLS, fastest recovery is to disable
+RLS on every public table (anon key works again immediately):
+```sql
+DO $$ DECLARE r record; BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP
+    EXECUTE format('ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY', r.tablename);
+  END LOOP;
+END $$;
+```
+Then diagnose what broke per-table.

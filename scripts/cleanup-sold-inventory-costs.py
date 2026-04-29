@@ -26,16 +26,14 @@ Run:
 """
 
 import json
+import os
 import sys
 import time
 import urllib.request
 import urllib.error
 
-SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co'
-SUPABASE_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs'
-                'InJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJp'
-                'YXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5'
-                'VImN7rJk9MCLRdkyv0INmuFwAVo')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _sb_config import SB_URL as SUPABASE_URL, SB_KEY as SUPABASE_KEY  # noqa: E402
 SHEETS_URL = ('https://script.google.com/macros/s/'
               'AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6Wc'
               'wwPh453Xb-luQ/exec')

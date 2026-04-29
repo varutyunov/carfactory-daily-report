@@ -22,8 +22,19 @@ var SPREADSHEET_IDS = {
 var SPREADSHEET_ID = SPREADSHEET_IDS['DeBary'];
 
 // Supabase config
+// After Phase 4 RLS rollout, the anon key gets ZERO access to tables. This
+// script needs the service-role key (bypasses RLS). Set it once in the
+// Apps Script editor: Project Settings → Script Properties → add
+// SUPABASE_SERVICE_KEY = <service-role JWT from Supabase dashboard>.
+// Falls back to the hardcoded anon key during the transition.
 var SUPABASE_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
-var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
+var SUPABASE_KEY = (function(){
+  try {
+    var sp = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_KEY');
+    if (sp) return sp;
+  } catch(e) {}
+  return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
+})();
 
 // Tab config per location — maps sheet tab names to Supabase tables + column layouts
 var LOCATION_CONFIGS = {

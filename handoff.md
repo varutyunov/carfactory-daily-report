@@ -2019,3 +2019,158 @@ Pick the top 3 with Vlad and queue them for Day 9.
 - Per-card spot-checks of the 35 Review queue items will likely
   surface 1–2 edge cases the matcher / fix logic doesn't yet handle.
   Capture those tomorrow as new bugs.
+
+---
+
+# Day 9 (2026-04-29) — Real auth: JWT + RLS migration
+
+Triggered by the 6:35am Supabase email warning: **"Table publicly
+accessible"**. RLS off on every public table → anyone with the URL +
+DevTools could read/write/delete everything via the anon key shipped in
+index.html. Vlad: "I want real security. As long as we don't break the
+app, let's fix this issue the real way. Option B."
+
+## What landed (all phases built locally; not yet deployed)
+
+### Phase 1 — pin_hash column + verify RPC
+- `supabase/migrations/20260429_010_employees_pin_hash.sql` adds a
+  `pin_hash text` column on `employees`, enables `pgcrypto`, backfills
+  bcrypt hashes from existing plaintext `pin` (kept as rollback safety).
+- `supabase/migrations/20260429_020_auth_helpers.sql` defines four
+  SECURITY DEFINER RPCs:
+  - `verify_employee_pin(username, pin)` — bcrypt comparison via
+    `crypt()`. Used by the auth-login edge function. service_role only.
+  - `hash_employee_pin(pin)` — utility for new pins. service_role only.
+  - `create_employee(name, username, pin, role, location)` — owners
+    only (checks `is_owner` JWT claim). authenticated callable.
+  - `update_employee_pin(id, new_pin)` — owners or self. authenticated
+    callable.
+
+### Phase 2 — auth-login edge function
+- `supabase/functions/auth-login/index.ts` — Deno + djwt v3.0.2.
+- Receives `{username, pin}`, calls `verify_employee_pin` via service
+  role, signs a 7-day HS256 JWT with `SUPABASE_JWT_SECRET`, returns
+  `{token, expires_at, user}`.
+- JWT claims: `aud=authenticated`, `role=authenticated`, `sub=<id>`,
+  `exp`, `app_role`, `is_owner`, `username`, `name`, `emp_location`.
+- 250ms uniform delay on auth failures to mute timing attacks.
+
+### Phase 3 — index.html JWT integration
+- Replaced `SB_HEADERS` constant with a getter delegating to a new
+  `_sbHeaders(extras)` function. JWT-aware: when `cf_jwt` localStorage
+  is present and not expired, attaches it as `Authorization: Bearer`;
+  otherwise falls back to anon key. apikey is always the project anon
+  (Supabase requires both).
+- New helpers: `_cfJwt()`, `_cfJwtClaims()`, `_sbHandleResponse()`,
+  `_onAuthExpired()`. The 401-detector clears the JWT and soft-kicks
+  to the login screen with "Session expired — please log in again".
+- All 4 helpers (`sbGet/sbPost/sbPatch/sbDelete`) updated to use
+  `_sbHeaders()` per request and call `_sbHandleResponse()`.
+- All 4 inline header sites (sbSignUrl, sbUpload, sbDeleteFile,
+  sendPushNotification) plus 2 send-esign sites updated to
+  `_sbHeaders({...})`. Total 8 sites converted.
+- `doLogin()` restructured: edge function is now the PRIMARY auth path
+  (returns JWT + user). Legacy `select=*,pin,...` + local match is the
+  fallback for the brief window before the edge function is deployed.
+  Once RLS hits, the legacy path dies (pin column unreadable) and only
+  the edge function path works.
+- `doLogout()` clears `cf_jwt` + `cf_user`.
+- Auto-login (cf_session restore) also kicks off `_acquireAuthJwt`
+  using the saved username + PIN if no JWT is present.
+- `addEmp()` (Add Employee, owner-only) switched from
+  `sbPost('employees', {pin: plaintext})` to the `create_employee` RPC,
+  which hashes the pin server-side.
+- `S.employees` resync queries dropped `pin` from select (just
+  id/name/username/role/location).
+
+### Phase 4 — RLS for all 28+ tables
+- `supabase/migrations/20260429_030_enable_rls.sql`:
+  - DO block enables RLS on every `relkind='r'` table in public schema.
+  - Default policy: `authenticated_all` for `FOR ALL TO authenticated
+    USING (true) WITH CHECK (true)` — same trust as today's anon, but
+    requires a real JWT.
+  - **employees**: SELECT for authenticated; INSERT/UPDATE/DELETE only
+    when `is_owner=true`. Column grants on `(id, name, username, role,
+    location)` only — `pin` and `pin_hash` are never returned to a
+    client request.
+  - **audit_log**: append-only — SELECT + INSERT for authenticated, no
+    UPDATE/DELETE.
+  - **storage.objects**: car-photos bucket SELECT/INSERT/UPDATE/DELETE
+    restricted to authenticated.
+
+### Phase 5 — Service-role for Python + Apps Script
+- `scripts/_sb_config.py` — shared loader. Tries env vars in this
+  order: `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `SUPABASE_ANON_KEY`, `SUPABASE_KEY`. Loads `.env` from repo root or
+  scripts/ dir if present. Warns when running on anon (will fail
+  post-RLS).
+- All 9 Python scripts updated to import from `_sb_config`:
+  audit_april_profit.py, reconcile_payments.py, backfill-payments.py,
+  cleanup-sold-inventory-costs.py, audit-profit26.py, audit-row-drift.py,
+  carpay-process.py, populate-customers.py, tax-fill.py.
+- `scripts/.env.example` template + `.gitignore` entries for `.env`,
+  `.env.local`, `scripts/.env`, `scripts/.env.local`.
+- Google Apps Script: `SUPABASE_KEY` now reads from
+  `PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_KEY')`,
+  falling back to the hardcoded anon key.
+
+### Phase 6 — Runbook (`setup-security.md`)
+Step-by-step deploy script: each phase has the exact dashboard clicks
+or CLI commands, plus a rollback. The two human steps are:
+
+1. **Pull two secrets from Supabase dashboard** (Settings → API):
+   - JWT Secret (revealed under "JWT Settings")
+   - service_role key (revealed under "Project API keys")
+
+2. **Run them in three places**:
+   - JWT secret → `supabase secrets set SUPABASE_JWT_SECRET=...`
+     (edge function env var)
+   - service_role → `scripts/.env` (`SUPABASE_SERVICE_KEY=...`)
+   - service_role → Apps Script → Project Settings → Script Properties
+
+The runbook also covers: Phase 1/4 SQL run via Studio's SQL Editor,
+Phase 2 deploy via `supabase functions deploy auth-login`, Phase 3
+push to GitHub Pages (already on disk), Phase 4 verification queries,
+Phase 5 smoke-test, Phase 6 cleanup (drop plaintext pin column,
+remove cf_saved_pin localStorage, etc.).
+
+## Verification done locally
+
+- Node VM-compiled all 3 inline `<script>` blocks of index.html — no
+  syntax errors.
+- All 9 Python scripts: `ast.parse` OK.
+- Protected-features `validate-features.sh` — all checks pass.
+- Preview server (port 8099) eval-tested:
+  - `_cfJwt()` decoder works on a sample JWT; auto-clears expired.
+  - `_sbHeaders()` returns JWT auth when `cf_jwt` present, anon
+    fallback when cleared. apikey always anon.
+  - Wrong-PIN doLogin → "Invalid username or PIN", no state change.
+  - Real-PIN doLogin (Vlad/Master1792 via legacy fallback path
+    pre-edge-deploy) → me.name="Vlad", session stored, app visible,
+    login hidden. JWT NOT stored (correct — edge function not
+    deployed yet, gracefully fell through).
+  - `doLogout()` clears cf_jwt + cf_user + cf_session.
+  - `_onAuthExpired()` clears session, hides app, shows login with
+    expired message.
+
+## What Vlad needs to do
+
+Open `setup-security.md` and run through Phase 0 → Phase 6 in order.
+Estimated total time: **45 min** (15 min for Phase 0+1+2, 10 min
+deploy, 10 min Phase 4 SQL + verification, 10 min Phase 5+5b).
+
+The two secrets (JWT secret + service-role key) are dashboard-only —
+I cannot pull them. Everything else is automated or has explicit
+commands.
+
+## Risk + rollback
+
+If the live app breaks at any point, fastest recovery is the
+disable-all-RLS DO block in `setup-security.md` Phase 4 rollback
+section. Anon key path is restored immediately. Diagnose, fix policy,
+re-enable per table.
+
+## Tomorrow
+
+Resume the 35-card Review queue walkthrough + formatting work after
+the security rollout is stable for a day.

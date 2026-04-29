@@ -32,13 +32,8 @@ from collections import defaultdict
 from datetime import datetime
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co'
-SB_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs'
-          'InJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYX'
-          'QiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN'
-          '7rJk9MCLRdkyv0INmuFwAVo')
-SB_HDR = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _sb_config import SB_URL, SB_KEY, SB_HDR  # noqa: E402  (path setup above)
 
 GAS_URL = ('https://script.google.com/macros/s/'
            'AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec')

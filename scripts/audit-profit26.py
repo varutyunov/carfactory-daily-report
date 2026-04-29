@@ -19,15 +19,18 @@ Use --fix to apply the corrections.
 """
 
 import json
+import os
 import ssl
 import sys
 import time
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _sb_config import SB_URL, SB_KEY as KEY  # noqa: E402
+
 GS = 'https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec'
 SECRET = 'cf-sync-2026'
-SUPABASE = 'https://hphlouzqlimainczuqyc.supabase.co/rest/v1'
-KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo'
+SUPABASE = f'{SB_URL}/rest/v1'
 CTX = ssl.create_default_context()
 FIX = '--fix' in sys.argv
 
