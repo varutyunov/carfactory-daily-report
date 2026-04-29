@@ -160,8 +160,20 @@ def parse_payment_notes(notes, year=None):
 
 # ── Step 1: Load SoldInventory CSVs ─────────────────────────────────────────
 print('Loading SoldInventory CSVs…')
-inv_by_last  = defaultdict(list)  # LAST → list of inventory rows
-inv_by_stock = {}                  # stockno (str) → inventory row
+inv_by_last       = defaultdict(list)  # LAST → list of inventory rows
+inv_by_stock      = {}                  # stockno (str) → inventory row
+inv_by_full_name  = defaultdict(list)  # FULL_LOOKUPNAME → list of inventory rows
+
+def _parse_saledate(s):
+    """Parse SoldInventory saledate like '5/20/2025 12:00:00 AM' → 'YYYY-MM-DD'.
+    Returns '9999-12-31' on parse failure so unparseable saledates sort last."""
+    if not s:
+        return '9999-12-31'
+    try:
+        dt = datetime.strptime(str(s).split(' ')[0], '%m/%d/%Y')
+        return dt.strftime('%Y-%m-%d')
+    except Exception:
+        return '9999-12-31'
 
 for loc, fname in [('DeBary', 'SoldInventoryDeBary.csv'),
                    ('DeLand', 'SoldInventoryDeLand.csv')]:
@@ -175,11 +187,17 @@ for loc, fname in [('DeBary', 'SoldInventoryDeBary.csv'),
             if not name:
                 continue
             row['_loc'] = loc
+            row['_saledate_iso'] = _parse_saledate(row.get('saledate', ''))
             last = name.split(',')[0].strip().upper()
             inv_by_last[last].append(row)
+            inv_by_full_name[name.upper()].append(row)
             stockno = str(row.get('stockno', '')).strip()
             if stockno:
                 inv_by_stock[stockno] = row
+
+# Sort each name's inventory list by saledate (oldest first).
+for fn in inv_by_full_name:
+    inv_by_full_name[fn].sort(key=lambda r: r['_saledate_iso'])
 
 print(f'  {sum(len(v) for v in inv_by_last.values())} inventory records, '
       f'{len(inv_by_last)} unique last names, '
@@ -297,6 +315,60 @@ print(f'  {len(pay_totals)} unique names with payments, '
 print(f'  Automation-touched accounts (≥1 txn on/after {CUTOFF_DATE}): '
       f'{len(acc_has_post_cutoff)} by account, {len(name_has_post_cutoff)} by name')
 
+# ── Saledate-chronology pairing index ──────────────────────────────────────
+# For customers with multiple deals (e.g. Sinclair Brittany has 4 cars under
+# the same full lookupname), pair the i-th oldest CSV account to the i-th
+# oldest SoldInventory record. Each car gets its own custaccountno when sold,
+# so they sort the same chronologically.
+#
+# Index: name_acct_pairing[full_name] = list of (acct, first_txn_date),
+#                                       sorted by first_txn_date ascending.
+name_acct_pairing = defaultdict(list)
+for name, accts in name_to_accts.items():
+    pairs = []
+    for acct in accts:
+        if not acc_txns.get(acct):
+            continue
+        first_date = min(t['date'] for t in acc_txns[acct])
+        pairs.append((acct, first_date))
+    pairs.sort(key=lambda x: x[1])
+    name_acct_pairing[name] = pairs
+
+def acct_for_inv_record(inv_row):
+    """Given a SoldInventory row, return the chronologically-paired
+    custaccountno (or None if can't determine).
+
+    Logic: for the customer's full name, find this record's position in
+    saledate-sorted list. Look up the same position in the customer's
+    accts sorted by first txn date.
+
+    Conservative: only return an acct when the inventory count and
+    account count match exactly (otherwise positional pairing isn't
+    reliable). Single-record customers always pair to their single acct.
+    """
+    full_name = inv_row.get('lookupname', '').strip().upper()
+    if not full_name:
+        return None
+    inv_list = inv_by_full_name.get(full_name, [])
+    if not inv_list:
+        return None
+    accts = name_acct_pairing.get(full_name, [])
+    # Only pair when counts match — otherwise positional indexing is unsafe.
+    if len(inv_list) != len(accts):
+        return None
+    # Find this row's index in the saledate-sorted list
+    try:
+        idx = next(i for i, r in enumerate(inv_list)
+                   if r.get('vin') == inv_row.get('vin')
+                   and r.get('stockno') == inv_row.get('stockno'))
+    except StopIteration:
+        return None
+    return accts[idx][0]   # acct id
+
+# Stats
+multi_deal_customers = sum(1 for k, v in inv_by_full_name.items() if len(v) > 1)
+print(f'  Saledate pairing: {multi_deal_customers} customers with multiple SoldInventory records')
+
 # ── Step 3: Load all 6 Deals sheet tabs ──────────────────────────────────────
 print('Loading Deals sheets from Apps Script…')
 all_deals = []  # list of {tab, location, row_data}
@@ -389,6 +461,17 @@ for deal in all_deals:
         if len(with_payments) == 1:
             inv_hits = with_payments  # uniquely resolved via stockno
 
+    # Saledate-chronology fallback: if still multiple, narrow to one whose
+    # paired custaccountno is automation-touched (post-cutoff active).
+    if len(inv_hits) > 1:
+        active_via_pairing = []
+        for h in inv_hits:
+            paired_acct = acct_for_inv_record(h)
+            if paired_acct and paired_acct in acc_has_post_cutoff:
+                active_via_pairing.append(h)
+        if len(active_via_pairing) == 1:
+            inv_hits = active_via_pairing
+
     if not inv_hits:
         # No SoldInventory record at all. Check if CSV has payments by last name anyway.
         csv_name_hit = next((k for k in pay_totals if k.split(',')[0].strip() == last), None)
@@ -455,23 +538,27 @@ for deal in all_deals:
         continue
 
     # Pick the right CSV account for THIS car. A customer may have multiple
-    # custaccountno's (paid off one car, bought another). Filter to accounts with
-    # ≥1 post-cutoff payment — that's the one automation has been writing to.
+    # custaccountno's (paid off one car, bought another). Use saledate-chronology
+    # pairing first, then fall back to active-acct filter.
+    chosen_acct = acct_for_inv_record(inv_row)
     accts_for_name = name_to_accts.get(csv_name, set())
     active_accts   = {a for a in accts_for_name if a in acc_has_post_cutoff}
-    chosen_acct    = None
-    if len(active_accts) == 1:
+
+    if chosen_acct and chosen_acct in acc_has_post_cutoff:
+        # Saledate pairing identified the active account
+        csv_total = round(acc_totals[chosen_acct], 2)
+        csv_txns  = sorted(acc_txns[chosen_acct], key=lambda x: x['date'])
+    elif len(active_accts) == 1:
         chosen_acct = next(iter(active_accts))
         csv_total   = round(acc_totals[chosen_acct], 2)
         csv_txns    = sorted(acc_txns[chosen_acct], key=lambda x: x['date'])
     elif len(active_accts) > 1:
-        # Same name with multiple currently-active accounts. Can't pick safely —
-        # flag as ambiguous so it can be resolved by a human.
+        # Saledate pairing couldn't pick one AND multiple are active — ambiguous
         results['ambiguous'].append({
             'car_desc': car_desc, 'tab': tab, 'location': loc,
             'sheet_row': sheet_row, 'sheet_total': round(sheet_total, 2),
             'csv_name': csv_name,
-            'note': 'Multiple post-cutoff accounts under same name',
+            'note': 'Multiple post-cutoff accounts under same name; saledate pairing inconclusive',
             'candidate_accts': [
                 {'acct': a, 'total': round(acc_totals[a], 2),
                  'first_date': min(t['date'] for t in acc_txns[a]) if acc_txns[a] else '',
@@ -483,8 +570,7 @@ for deal in all_deals:
         stats['ambiguous'] += 1
         continue
     else:
-        # Name flagged as post-cutoff but no specific active account found
-        # (defensive — shouldn't happen). Fall back to the name-based total.
+        # Defensive — fall back to name-based total
         csv_total = round(pay_totals.get(csv_name, 0.0), 2)
         csv_txns  = sorted(pay_by_name.get(csv_name, []), key=lambda x: x['date'])
 

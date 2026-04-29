@@ -318,16 +318,42 @@ print(f'  Total Profit26 lines parsed: {len(profit_april)} '
 # ── Step 4: Helpers for matching ────────────────────────────────────────────
 def find_deal_by_profit_line(p):
     """Given a parsed Profit26 line, return matching deal(s).
-       Strategy: search deals_by_last by last_name; if multiple hits, narrow
-       by year prefix or model name from car_words."""
+
+    Strategy:
+      1. Search deals_by_last by last_name (also tries truncation prefix
+         matches against deal car_desc last words to handle 26-char truncation).
+      2. If multiple hits, narrow by car words (year prefix + model tokens).
+      3. If still multiple, prefer F > 0 (active in profit) over F ≤ 0 (closed).
+      4. If still multiple, prefer same-lot deals.
+    """
     last = p['last_name']
     if not last:
         return []
-    hits = deals_by_last.get(last, [])
+
+    # Direct hit by last name
+    hits = list(deals_by_last.get(last, []))
+
+    # Truncation tolerance: also include deals whose last_name STARTS WITH
+    # the profit line's last_name (e.g. p.last_name='WHITTE' should match
+    # deal whose last_name is 'WHITTED'). Reverse case: profit line has full
+    # 'WHITTED' but deal_last got truncated — match if profit starts with it.
+    if not hits:
+        for deal_last, deal_list in deals_by_last.items():
+            if deal_last.startswith(last) or last.startswith(deal_last):
+                hits.extend(deal_list)
+
+    # Also try matching last as a FIRST NAME embedded in car_desc
+    # (e.g. profit line 'emery' matches deal '03 Silverado tan 318k Ethan'
+    # only if the deal's tab also has 'emery' somewhere). For now: skip —
+    # this is handled by surname-bypass when posting, and by inv lookup
+    # in deal_for_account.
+
     if len(hits) <= 1:
         return hits
-    # Narrow by car words: look for any of car_words in the deal's car_desc.
-    car_words_upper = [w.upper() for w in p['car_words'] if not w.isdigit() or len(w) > 2]
+
+    # Narrow by car words (year prefix + 3+ char model tokens).
+    car_words_upper = [w.upper() for w in p['car_words']
+                       if not w.isdigit() or len(w) > 2]
     narrowed = []
     for h in hits:
         cd_up = h['car_desc'].upper()
@@ -337,39 +363,118 @@ def find_deal_by_profit_line(p):
     if narrowed:
         narrowed.sort(key=lambda x: -x[0])
         top = narrowed[0][0]
-        best = [h for c, h in narrowed if c == top]
-        return best
-    return hits  # could not narrow
+        hits = [h for c, h in narrowed if c == top]
+
+    if len(hits) <= 1:
+        return hits
+
+    # Prefer in-profit deals
+    in_profit = [h for h in hits if (h.get('owed') or 0) > 0]
+    if len(in_profit) == 1:
+        return in_profit
+
+    # Prefer same lot
+    same_lot = [h for h in hits if h.get('location') == p.get('lot')]
+    if len(same_lot) == 1:
+        return same_lot
+
+    return hits
 
 def find_csv_match_for_profit(p, deal):
     """Find CSV transaction(s) matching a Profit26 line for a specific deal.
-       Looks for accounts under the deal's customer name with matching amount + date."""
+
+    Layered match strategies (best→worst):
+      single        — one CSV txn, exact amount match
+      single_4pct   — one CSV txn × 1.04 ≈ Profit amount (4% CC processing fee)
+      pair          — sum of same-day same-account PAYMENT + LATEFEE
+      pair_4pct     — same pair × 1.04
+      threshold_overflow — entry amount = (CSV total - threshold needed to close
+                          deal's pre-payment F=0). Only valid when deal F > 0
+                          AND there's a corresponding col G entry that absorbed
+                          the threshold portion.
+    """
     last = p['last_name']
+    target_amt = p['amount']
+    target_date = p.get('date','')
     candidates = []
+
+    # Find accounts whose customer name's last-name matches.
+    relevant_accts = []
     for name, accts in name_to_accts.items():
-        if name.split(',')[0].strip().upper() != last:
-            continue
-        for acct in accts:
-            for t in acc_txns[acct]:
-                if not t['date'].startswith('2026-04'):
-                    continue
-                # Amount can be split (PAYMENT + LATEFEE same day). Match either single
-                # txn or sum of two same-day txns.
-                if abs(t['amount'] - p['amount']) <= AMOUNT_TOL:
-                    if days_apart(t['date'], p['date']) <= DATE_TOL_DAYS:
-                        candidates.append({'acct': acct, 'txn': t, 'kind': 'single'})
-        # Try sum of same-day pairs
+        # CSV format: 'LASTNAME, FIRSTNAMES'. Last-name is part before comma.
+        csv_last = name.split(',')[0].strip().upper()
+        # Match if exact, or if Profit's last_name is a TRUNCATION-prefix of csv_last
+        # (handles 26-char limit truncation: 'whitted' → 'whitte').
+        if csv_last == last or (last and csv_last.startswith(last)):
+            relevant_accts.extend((name, a) for a in accts)
+
+    for name, acct in relevant_accts:
+        # Same-account txns only — never sum across customers.
+        acct_txns_all = acc_txns.get(acct, [])
+        # 1. Single-txn matches (exact + 4% CC fee)
+        for t in acct_txns_all:
+            if not t['date'].startswith('2026-04'):
+                continue
+            if days_apart(t['date'], target_date) > DATE_TOL_DAYS:
+                continue
+            if abs(t['amount'] - target_amt) <= AMOUNT_TOL:
+                candidates.append({'acct': acct, 'name': name, 'txn': t, 'kind': 'single'})
+            elif abs(t['amount']*1.04 - target_amt) <= AMOUNT_TOL:
+                candidates.append({'acct': acct, 'name': name, 'txn': t, 'kind': 'single_4pct'})
+
+        # 2. Same-day same-account pair sums (PAYMENT + LATEFEE)
         same_day = defaultdict(list)
-        for t in acc_txns[acct]:
+        for t in acct_txns_all:
             if t['date'].startswith('2026-04'):
                 same_day[t['date']].append(t)
         for d, txns in same_day.items():
             if len(txns) < 2:
                 continue
+            if days_apart(d, target_date) > DATE_TOL_DAYS:
+                continue
             total = round(sum(t['amount'] for t in txns), 2)
-            if abs(total - p['amount']) <= AMOUNT_TOL and days_apart(d, p['date']) <= DATE_TOL_DAYS:
-                candidates.append({'acct': acct, 'txn': {'date': d, 'amount': total},
+            if abs(total - target_amt) <= AMOUNT_TOL:
+                candidates.append({'acct': acct, 'name': name,
+                                   'txn': {'date': d, 'amount': total},
                                    'kind': 'pair', 'parts': txns})
+            elif abs(total*1.04 - target_amt) <= AMOUNT_TOL:
+                candidates.append({'acct': acct, 'name': name,
+                                   'txn': {'date': d, 'amount': total},
+                                   'kind': 'pair_4pct', 'parts': txns})
+
+    # 3. Threshold-overflow check — only meaningful if deal F > 0 currently.
+    # When a payment crosses F from negative to positive, the overflow portion
+    # goes to Profit26. Profit entry amount = csv_amount - threshold_needed.
+    # Threshold needed = -F_pre_payment (i.e., how much was owed at the time).
+    # We don't have historical F per-payment, but we can DETECT the overflow:
+    # for each CSV April txn, if (csv_amount - profit_entry_amount) is a small
+    # positive number AND the deal's col G has a same-date note for ≈
+    # csv_amount, treat as threshold-overflow.
+    if (deal.get('owed') or 0) > 0:
+        col_g_notes = parse_col_g_notes(deal.get('payment_notes',''))
+        for name, acct in relevant_accts:
+            for t in acc_txns.get(acct, []):
+                if not t['date'].startswith('2026-04'):
+                    continue
+                if days_apart(t['date'], target_date) > DATE_TOL_DAYS:
+                    continue
+                # Threshold portion = csv_amt - target_amt (positive value)
+                threshold = round(t['amount'] - target_amt, 2)
+                if threshold <= 0 or threshold > t['amount']:
+                    continue
+                # Look for a col G note with amount ≈ csv_amount (full backup)
+                # OR ≈ threshold (split). Both indicate threshold-crossing.
+                for note in col_g_notes:
+                    if days_apart(note['date'], t['date']) > DATE_TOL_DAYS:
+                        continue
+                    if abs(note['amount'] - t['amount']) <= AMOUNT_TOL or \
+                       abs(note['amount'] - threshold) <= AMOUNT_TOL:
+                        candidates.append({'acct': acct, 'name': name,
+                                           'txn': t, 'kind': 'threshold_overflow',
+                                           'threshold': threshold,
+                                           'col_g_match': note})
+                        break
+
     return candidates
 
 # ── Step 5: FORWARD pass — audit every April Profit26 entry ─────────────────
@@ -380,6 +485,8 @@ print('='*70)
 
 forward_results = {
     'ok':                 [],   # matched CSV, deal in profit, right lot
+    'threshold_overflow': [],   # matched as overflow from a threshold-crossing payment
+    'cc_fee_4pct':        [],   # matched with 4% CC processing fee
     'wrong_lot':          [],   # matched but in opposite lot
     'wrong_deal':         [],   # deal F ≤ 0 (post should have gone to col G)
     'phantom':            [],   # no CSV match
@@ -422,20 +529,38 @@ for p in profit_april_dated:
     deal = deals_match[0]
     csv_matches = find_csv_match_for_profit(p, deal)
 
+    # Find the best-quality match (in priority order)
+    match_priority = ['single', 'pair', 'threshold_overflow', 'single_4pct', 'pair_4pct']
+    best_match = None
+    if csv_matches:
+        for kind in match_priority:
+            for m in csv_matches:
+                if m['kind'] == kind:
+                    best_match = m; break
+            if best_match: break
+
     entry = {**p,
              'deal_tab': deal['tab'],
              'deal_loc': deal['location'],
              'deal_car_desc': deal['car_desc'],
              'deal_F': deal['owed'],
              'csv_matches': len(csv_matches),
+             'best_match_kind': best_match['kind'] if best_match else None,
              'csv_match_sample': csv_matches[:1] if csv_matches else []}
 
-    # Categorize
+    # Categorize — priority order matters
     if is_dup and k not in processed:
         forward_results['duplicate'].append({**entry, 'duplicate_count': seen_keys[k]})
         processed.add(k)
     elif not csv_matches:
         forward_results['phantom'].append(entry)
+    elif best_match['kind'] == 'threshold_overflow':
+        # Threshold-overflow is a VALID placement when deal is in profit; the
+        # entry IS in the right lot's Profit26 because that's the rule.
+        forward_results['threshold_overflow'].append(entry)
+    elif best_match['kind'] in ('single_4pct', 'pair_4pct'):
+        # CC fee version — also valid, just note it
+        forward_results['cc_fee_4pct'].append(entry)
     elif deal['owed'] <= 0:
         forward_results['wrong_deal'].append(entry)
     elif deal['location'] != p['lot']:
@@ -626,14 +751,16 @@ print('='*70)
 print()
 print('FORWARD pass — every April Profit26 line:')
 fr = forward_results
-print(f'  ok                : {len(fr["ok"])}')
-print(f'  wrong_lot         : {len(fr["wrong_lot"])}  ← cross-lot routing bug')
-print(f'  wrong_deal (F≤0)  : {len(fr["wrong_deal"])}  ← post made on a deal not in profit')
-print(f'  phantom (no CSV)  : {len(fr["phantom"])}  ← no matching CSV transaction')
-print(f'  duplicate         : {len(fr["duplicate"])}  ← same line appears multiple times')
-print(f'  no_deal           : {len(fr["no_deal"])}  ← last name not in any Deals tab')
-print(f'  ambiguous_deal    : {len(fr["ambiguous_deal"])}  ← multiple Deals matches')
-print(f'  unparseable       : {len(fr["unparseable"])}')
+print(f'  ok                  : {len(fr["ok"])}  ← exact CSV + correct deal/lot')
+print(f'  threshold_overflow  : {len(fr["threshold_overflow"])}  ← valid: overflow when payment crossed F=0')
+print(f'  cc_fee_4pct         : {len(fr["cc_fee_4pct"])}  ← valid: amount = CSV × 1.04 (CC fee)')
+print(f'  wrong_lot           : {len(fr["wrong_lot"])}  ← cross-lot routing bug')
+print(f'  wrong_deal (F≤0)    : {len(fr["wrong_deal"])}  ← post made on a deal not in profit')
+print(f'  phantom (no CSV)    : {len(fr["phantom"])}  ← no matching CSV transaction')
+print(f'  duplicate           : {len(fr["duplicate"])}  ← same line appears multiple times')
+print(f'  no_deal             : {len(fr["no_deal"])}  ← last name not in any Deals tab')
+print(f'  ambiguous_deal      : {len(fr["ambiguous_deal"])}  ← multiple Deals matches')
+print(f'  unparseable         : {len(fr["unparseable"])}')
 
 print()
 print('INVERSE pass — every April CSV transaction:')

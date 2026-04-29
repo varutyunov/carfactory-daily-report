@@ -369,6 +369,61 @@ function doPost(e) {
       });
     }
 
+    // ── ACTION: CORRECT_PAYMENTS — overwrite col G with a new total + note ──
+    // Used by the CSV-reconciliation Review fix flow to set a row's payment
+    // total to the authoritative CSV amount and replace the note with the
+    // CSV transaction breakdown.
+    //
+    // Inputs: body.data.{ tab, row, new_total, new_notes, expected_car_desc }
+    //   tab              — 'Deals26' | 'Deals25' | 'Deals24'
+    //   row              — sheet row number (1-based)
+    //   new_total        — the correct total (sets col G formula to =new_total)
+    //   new_notes        — full replacement note string (CSV breakdown)
+    //   expected_car_desc — safety: refuse if col B doesn't match (drift guard)
+    //
+    // NOTE: this handler is positioned BEFORE the generic tab-config lookup
+    // at line 425, because it reads `tab` from body.data (not body.tab).
+    // If it were placed after, that lookup would return "Unknown tab:
+    // undefined" and never reach this handler.
+    if (action === 'correct_payments') {
+      try {
+        var cpData = body.data || {};
+        var cpTab   = String(cpData.tab || 'Deals26');
+        var cpRow   = parseInt(cpData.row);
+        var cpTotal = parseFloat(cpData.new_total);
+        var cpNotes = String(cpData.new_notes || '');
+        var cpExp   = cpData.expected_car_desc ? String(cpData.expected_car_desc).trim().toLowerCase() : null;
+
+        if (!cpTab || !cpRow || cpRow < 2 || isNaN(cpTotal) || cpTotal < 0) {
+          return jsonResponse({ ok: false, error: 'invalid_params_correct_payments' });
+        }
+        if (cpTab !== 'Deals26' && cpTab !== 'Deals25' && cpTab !== 'Deals24') {
+          return jsonResponse({ ok: false, error: 'invalid_tab_correct_payments' });
+        }
+        var cpSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
+        var cpSheet = cpSs.getSheetByName(cpTab);
+        if (!cpSheet) return jsonResponse({ ok: false, error: 'no_sheet_correct_payments' });
+
+        var cpDescVal = String(cpSheet.getRange(cpRow, 2).getValue() || '').trim();
+        if (!cpDescVal) return jsonResponse({ ok: false, error: 'empty_row_correct_payments', row: cpRow });
+        if (cpExp && cpDescVal.toLowerCase() !== cpExp) {
+          return jsonResponse({ ok: false, error: 'row_drift_correct_payments', expected: cpExp, actual: cpDescVal.toLowerCase() });
+        }
+
+        var cpGCell = cpSheet.getRange(cpRow, 7);
+        PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+        cpGCell.setFormula(cpTotal > 0 ? '=' + cpTotal : '');
+        cpGCell.setNumberFormat('$#,##0');
+        cpGCell.setNote(cpNotes);
+        SpreadsheetApp.flush();
+
+        var cpFOwed = parseFloat(cpSheet.getRange(cpRow, 6).getValue()) || 0;
+        return jsonResponse({ ok: true, action: 'correct_payments', tab: cpTab, row: cpRow, new_total: cpTotal, owed: cpFOwed });
+      } catch(err) {
+        return jsonResponse({ ok: false, error: 'exception_correct_payments', message: err.message });
+      }
+    }
+
     // ── DIAGNOSTIC: Inspect inventory row formatting ──────────
     // Returns full per-cell format for the requested rows so we can
     // study the existing pattern and match it on insert.
@@ -518,56 +573,6 @@ function doPost(e) {
       _writeRowToSheet(sheet, config, insertRow, data);
       SpreadsheetApp.flush();
       return jsonResponse({ ok: true, action: 'insert', row: insertRow });
-    }
-
-    // ── ACTION: CORRECT_PAYMENTS — overwrite col G with a new total + note ──
-    // Used by the CSV-reconciliation Review fix flow to set a row's payment
-    // total to the authoritative CSV amount and replace the note with the
-    // CSV transaction breakdown.
-    //
-    // Inputs: body.data.{ tab, row, new_total, new_notes, expected_car_desc }
-    //   tab              — 'Deals26' | 'Deals25' | 'Deals24'
-    //   row              — sheet row number (1-based)
-    //   new_total        — the correct total (sets col G formula to =new_total)
-    //   new_notes        — full replacement note string (CSV breakdown)
-    //   expected_car_desc — safety: refuse if col B doesn't match (drift guard)
-    if (action === 'correct_payments') {
-      try {
-        var cpData = body.data || {};
-        var cpTab   = String(cpData.tab || 'Deals26');
-        var cpRow   = parseInt(cpData.row);
-        var cpTotal = parseFloat(cpData.new_total);
-        var cpNotes = String(cpData.new_notes || '');
-        var cpExp   = cpData.expected_car_desc ? String(cpData.expected_car_desc).trim().toLowerCase() : null;
-
-        if (!cpTab || !cpRow || cpRow < 2 || isNaN(cpTotal) || cpTotal < 0) {
-          return jsonResponse({ ok: false, error: 'invalid_params_correct_payments' });
-        }
-        if (cpTab !== 'Deals26' && cpTab !== 'Deals25' && cpTab !== 'Deals24') {
-          return jsonResponse({ ok: false, error: 'invalid_tab_correct_payments' });
-        }
-        var cpSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
-        var cpSheet = cpSs.getSheetByName(cpTab);
-        if (!cpSheet) return jsonResponse({ ok: false, error: 'no_sheet_correct_payments' });
-
-        var cpDescVal = String(cpSheet.getRange(cpRow, 2).getValue() || '').trim();
-        if (!cpDescVal) return jsonResponse({ ok: false, error: 'empty_row_correct_payments', row: cpRow });
-        if (cpExp && cpDescVal.toLowerCase() !== cpExp) {
-          return jsonResponse({ ok: false, error: 'row_drift_correct_payments', expected: cpExp, actual: cpDescVal.toLowerCase() });
-        }
-
-        var cpGCell = cpSheet.getRange(cpRow, 7);
-        PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
-        cpGCell.setFormula(cpTotal > 0 ? '=' + cpTotal : '');
-        cpGCell.setNumberFormat('$#,##0');
-        cpGCell.setNote(cpNotes);
-        SpreadsheetApp.flush();
-
-        var cpFOwed = parseFloat(cpSheet.getRange(cpRow, 6).getValue()) || 0;
-        return jsonResponse({ ok: true, action: 'correct_payments', tab: cpTab, row: cpRow, new_total: cpTotal, owed: cpFOwed });
-      } catch(err) {
-        return jsonResponse({ ok: false, error: 'exception_correct_payments', message: err.message });
-      }
     }
 
     // ── ACTION: DELETE — remove row entirely (no orphan formatting) ─

@@ -106,7 +106,7 @@ will not have any post-cutoff CSV activity.
 | `profit_remove_entry` | month_idx, row_type, amount, description | Remove one matching entry |
 | `profit_update_entry` | month_idx, row_type, old_amount/desc, new_amount/desc | Edit one entry |
 | `deals26_append_payment_direct` | tab, row, amount, note_line, expected_car_desc | Append to col G formula + note |
-| `correct_payments` | tab, row, new_total, new_notes, expected_car_desc | Replace col G total + notes. **BUGGY**: dispatcher's outer tab-config check runs before this action, so it fails with "Unknown tab: undefined" unless `body.tab` is also passed. Use `deals26_set_row_g` instead. |
+| `correct_payments` | tab, row, new_total, new_notes, expected_car_desc | Replace col G total + notes. **Fixed 2026-04-28 (v79)** — handler moved before the dispatcher's tab-config check, so `body.data.tab` works without needing `body.tab`. Note: sets formula to flat `=<total>`, so still use `deals26_set_row_g` when you need a breakdown formula. |
 | `deals26_set_row_g` | tab, row, payments_formula, payment_notes | Atomic set of col G formula + notes. Use for surgical fixes (rebuild a row's formula, replace notes). The right tool for "convert flat $800 to `=500+300` with dated notes". |
 
 ## 9. Standing rules (from earlier)

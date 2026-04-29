@@ -17236,29 +17236,43 @@ async function _upsertCustomerDealLink(payload, target){
 }
 
 async function _findDealAlias(payload){
+  // Returns the matched alias row including its `location` field. Callers
+  // MUST use the alias's `location` (= the deal's actual lot) for any
+  // subsequent col G or Profit26 post — not payload.location, which is
+  // where the payment came in (can differ from the deal's lot when the
+  // customer pays at the opposite lot).
   try {
     var vin = (payload.vehicle_vin || '').trim().toUpperCase();
     var loc = payload.location || 'DeBary';
-    // VIN is the most reliable key. Try it first.
+    // VIN is the most reliable key. Try it first. Look across BOTH lots
+    // since a customer can have a deal on one lot and pay at the other.
     if (vin){
       var byVin = await sbGet('payment_deal_aliases',
         'vin=eq.' + encodeURIComponent(vin) +
-        '&location=eq.' + encodeURIComponent(loc) +
-        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
+        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
       if (byVin && byVin.length) return byVin[0];
     }
-    // Fall back to last-name + model + location. Try every candidate
-    // surname (supports two-last-name names like "Borroto Garcia").
+    // Fall back to last-name + model. Try every candidate surname
+    // (supports two-last-name names like "Borroto Garcia"). Restrict by
+    // the payment's location FIRST (most common case), then fall back to
+    // any-location for cross-lot pay-here-deal-there cases.
     var custNames = _paymentLastNames(payload.customer_name);
     var modelL = (payload.vehicle_model || '').toLowerCase().trim();
     if (custNames.length && modelL){
       var inList = '(' + custNames.map(function(n){ return '"' + n + '"'; }).join(',') + ')';
-      var byCust = await sbGet('payment_deal_aliases',
+      // Same-lot first
+      var bySameLot = await sbGet('payment_deal_aliases',
         'customer_name_lower=in.' + encodeURIComponent(inList) +
         '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
         '&location=eq.' + encodeURIComponent(loc) +
-        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc');
-      if (byCust && byCust.length) return byCust[0];
+        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+      if (bySameLot && bySameLot.length) return bySameLot[0];
+      // Cross-lot fallback
+      var byAnyLot = await sbGet('payment_deal_aliases',
+        'customer_name_lower=in.' + encodeURIComponent(inList) +
+        '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
+        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+      if (byAnyLot && byAnyLot.length) return byAnyLot[0];
     }
   } catch(e){ /* silent — fallback to matcher */ }
   return null;
@@ -17313,14 +17327,24 @@ async function _appendPaymentToDeals26(payload){
     // Check for a learned alias first — user previously approved a
     // specific (tab,row) for this VIN / customer+model. If found, write
     // directly to it and skip the fuzzy matcher.
+    //
+    // IMPORTANT (Bug fix #1, 2026-04-28): The alias's `location` is the
+    // DEAL's lot, which can differ from the payment's lot (`loc`) when
+    // the customer pays at the opposite lot from where their deal sits
+    // (e.g. Carrasquillo Oscar — DeBary deal, payments through DeBary
+    // CSV but historical alias was learned with deal's location). Always
+    // use `alias.location` for both the col G write and the Profit26
+    // propagation. Previously we used `loc` (payment lot) for both,
+    // which routed posts to the wrong lot for cross-lot customers.
     var alias = await _findDealAlias(payload);
     if (alias){
+      var aliasLoc = alias.location || loc;
       var dResp = await fetch(_SHEETS_URL, {
         method:'POST', headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
-          location: loc,
+          location: aliasLoc,
           data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine }
         })
       });
@@ -17330,10 +17354,10 @@ async function _appendPaymentToDeals26(payload){
         var dPosted = false;
         var dProfitCap = _computeProfitCap(amt, dOwed);
         if (dProfitCap > 0){
-          try { await _appendPaymentToProfit(payload, dProfitCap); dPosted = true; } catch(ep){ console.warn(ep); }
+          try { await _appendPaymentToProfit(payload, dProfitCap, aliasLoc); dPosted = true; } catch(ep){ console.warn(ep); }
         }
-        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row + ' · profitCap=$' + dProfitCap);
-        return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:alias.target_row, via_alias:true };
+        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row + ' [' + aliasLoc + '] · profitCap=$' + dProfitCap);
+        return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:alias.target_row, location:aliasLoc, via_alias:true };
       }
       // Alias direct-write failed — fall through to the normal matcher
       console.warn('Alias direct-write failed, falling back to matcher:', dData);
@@ -18758,18 +18782,32 @@ async function _patchCarPayPostingsForReview(reviewId, targetTab, targetRow, car
 }
 
 // Find a prior successful posting for this CarPay account+location.
-// Returns {target_tab, target_row, car_desc} or null. Future CarPay
-// payments for the same account auto-match to that target without
-// hitting the slow matcher or prompting Review.
+// Returns {target_tab, target_row, car_desc, location} or null. Future
+// CarPay payments for the same account auto-match to that target
+// without hitting the slow matcher or prompting Review.
+//
+// Note: searches the location passed in FIRST (most common), then
+// falls back to any-location. Returns the row's `location` so callers
+// can route the post to the deal's lot, not the payment's lot
+// (cross-lot pay-here-deal-there cases).
 async function _findCarPayAccountAlias(account, location){
   if (!account) return null;
   try {
     var loc = String(location || '').trim();
+    // Same-lot first
+    if (loc){
+      var rowsSame = await sbGet('carpay_payment_postings',
+        'account=eq.' + encodeURIComponent(account) +
+        '&location=eq.' + encodeURIComponent(loc) +
+        '&target_tab=not.is.null&target_row=not.is.null' +
+        '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+      if (Array.isArray(rowsSame) && rowsSame.length) return rowsSame[0];
+    }
+    // Any-location fallback
     var rows = await sbGet('carpay_payment_postings',
       'account=eq.' + encodeURIComponent(account) +
-      (loc ? '&location=eq.' + encodeURIComponent(loc) : '') +
       '&target_tab=not.is.null&target_row=not.is.null' +
-      '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc');
+      '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
     if (Array.isArray(rows) && rows.length) return rows[0];
   } catch(e){ console.warn('carpay account alias lookup failed:', e); }
   return null;
@@ -18909,14 +18947,20 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           })
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(_){}
-        // v65: drift / surname mismatch → disable stale link + queue review
+        // v65: drift / surname mismatch → disable stale link AND fall through
+        // to the rest of this function (account-alias short-circuit /
+        // approve-first queue / matcher) instead of queuing an empty
+        // payment_reviews card the user can't act on.
+        //
+        // Bug fix #2 (2026-04-28): previously this path called
+        // _carpayQueueReview with empty candidates and returned. The
+        // resulting card had nothing to approve. Falling through ensures
+        // the payment hits paths that produce real candidates.
         if (data2 && data2.ok === false && (data2.error === 'row_drift' || data2.error === 'surname_mismatch' || data2.error === 'empty_row')){
           try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
-          var driftRid = await _carpayQueueReview(stage2Payload, 'row_drift', []);
-          await _carpayRecordPosting(cp, stage2Payload, { status: 'review', review_id: driftRid });
-          console.warn('CarPay v65 guard tripped, stale link ' + lk2.id + ' deactivated:', data2);
-          return { status: 'review' };
-        }
+          console.warn('CarPay v65 guard tripped, stale link ' + lk2.id + ' deactivated; falling through:', data2);
+          // intentional fall-through (no return)
+        } else
         if (data2 && data2.ok !== false){
           if (data2.status === 'already_posted'){
             await _carpayRecordPosting(cp, stage2Payload, {
@@ -18975,9 +19019,15 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
   // If a previous payment for this CarPay account was posted (via
   // auto-match, Review approve, or Manual assign), reuse that target
   // without running the matcher. Idempotent via Apps Script check_dup.
+  //
+  // Bug fix #1 (2026-04-28): use accountAlias.location (the deal's
+  // lot from the prior posting) instead of aliasPayload.location (the
+  // payment's lot). For cross-lot pay-here-deal-there customers these
+  // differ — using the payment lot routed posts to the wrong Profit26.
   var accountAlias = await _findCarPayAccountAlias(cp.account, cpLoc);
   if (accountAlias && accountAlias.target_tab && accountAlias.target_row){
     var aliasPayload = _carpayPaymentToPayload(cp, cust);
+    var accAliasLoc = accountAlias.location || aliasPayload.location;
     if (aliasPayload.amount > 0){
       try {
         var aliasResp = await fetch(_SHEETS_URL, {
@@ -18985,7 +19035,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           body: JSON.stringify({
             secret: _SHEETS_SECRET,
             action: 'deals26_append_payment_direct',
-            location: aliasPayload.location,
+            location: accAliasLoc,
             data: {
               tab: accountAlias.target_tab,
               row: accountAlias.target_row,
@@ -19009,7 +19059,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           if (aliasData.status === 'possible_duplicate'){
             // Alias says this is the row, but col G has same-day
             // same-amount — route to Review so user can decide.
-            var pdCands = [{ tab: accountAlias.target_tab, row: accountAlias.target_row, car_desc: accountAlias.car_desc, location: aliasPayload.location, has_last: true, has_car: true }];
+            var pdCands = [{ tab: accountAlias.target_tab, row: accountAlias.target_row, car_desc: accountAlias.car_desc, location: accAliasLoc, has_last: true, has_car: true }];
             var rid = await _carpayQueueReview(aliasPayload, 'possible_duplicate', pdCands);
             await _carpayRecordPosting(cp, aliasPayload, { status: 'review', review_id: rid });
             return { status: 'review' };
@@ -19018,7 +19068,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           var aliasOwed = parseFloat(aliasData.owed) || 0;
           var aliasProfitCap = _computeProfitCap(parseFloat(aliasPayload.amount) || 0, aliasOwed);
           if (aliasProfitCap > 0){
-            try { await _appendPaymentToProfit(aliasPayload, aliasProfitCap); } catch(ep){ console.warn(ep); }
+            try { await _appendPaymentToProfit(aliasPayload, aliasProfitCap, accAliasLoc); } catch(ep){ console.warn(ep); }
           }
           await _carpayRecordPosting(cp, aliasPayload, {
             status: 'posted',
@@ -19527,32 +19577,21 @@ async function _appendPaymentToDeals26Checked(payload){
       });
       var dData = null; try { dData = await dResp.json(); } catch(e){}
       // v65: rows drifted or surname isn't on the target row. Deactivate
-      // the stale link + queue Review so the user can re-link.
+      // the stale link and FALL THROUGH to the rest of this function
+      // (approve-first queue / alias short-circuit / matcher) so the
+      // payment doesn't dead-end on an empty-candidates review card.
+      //
+      // Bug fix #2 (2026-04-28): previously this path inserted a
+      // payment_reviews row with reason='row_drift' and candidates='[]'.
+      // The empty card was unactionable in the Review UI — the user
+      // couldn't pick a candidate because there were none. Falling
+      // through ensures the payment hits the standard approve-first /
+      // alias / matcher pipeline, which produces real candidates.
       if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch' || dData.error === 'empty_row')){
         try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
-        try {
-          await sbPost('payment_reviews', {
-            payment_id: payload.id || null,
-            customer_name: payload.customer_name || '',
-            amount: amt,
-            vehicle_year: payload.vehicle_year || '',
-            vehicle_make: payload.vehicle_make || '',
-            vehicle_model: payload.vehicle_model || '',
-            vehicle_color: payload.vehicle_color || '',
-            vehicle_vin: payload.vehicle_vin || '',
-            location: lk.location || loc,
-            payment_date: payload.payment_date || null,
-            payment_method: payload.payment_method || '',
-            note_line: noteLine,
-            reason: 'row_drift',
-            candidates: JSON.stringify([]),
-            status: 'pending',
-            created_at: new Date().toISOString()
-          });
-        } catch(_){}
-        console.warn('Resolver post blocked by v65 guard, stale link ' + lk.id + ' deactivated:', dData);
-        return { queued: true };
-      }
+        console.warn('Resolver post blocked by v65 guard, stale link ' + lk.id + ' deactivated; falling through to matcher:', dData);
+        // intentional fall-through (no return)
+      } else
       if (dData && dData.ok !== false){
         if (dData.status === 'already_posted') return { skipped: true };
         if (dData.status === 'possible_duplicate'){
@@ -19643,14 +19682,20 @@ async function _appendPaymentToDeals26Checked(payload){
   // Alias short-circuit: if the user previously approved a match for
   // this VIN / customer+model, write directly to the remembered row
   // (still with dup-check so re-runs are safe).
+  //
+  // Bug fix #1 (2026-04-28): use `alias.location` (the deal's lot) for
+  // both the col G write and the Profit26 propagation. Previously used
+  // `loc` (payment lot), which routed cross-lot customers' posts to the
+  // wrong lot.
   var alias = await _findDealAlias(payload);
   if (alias){
+    var aliasLoc2 = alias.location || loc;
     var dResp = await fetch(_SHEETS_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify({
         secret: _SHEETS_SECRET,
         action: 'deals26_append_payment_direct',
-        location: loc,
+        location: aliasLoc2,
         data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine, check_dup: true }
       })
     });
@@ -19668,10 +19713,10 @@ async function _appendPaymentToDeals26Checked(payload){
             vehicle_model: payload.vehicle_model || '',
             vehicle_color: payload.vehicle_color || '',
             vehicle_vin: payload.vehicle_vin || '',
-            location: loc, payment_date: payload.payment_date || null,
+            location: aliasLoc2, payment_date: payload.payment_date || null,
             payment_method: payload.payment_method || '',
             note_line: noteLine, reason: 'possible_duplicate',
-            candidates: JSON.stringify([{ tab: alias.target_tab, row: alias.target_row, car_desc: alias.car_desc }]),
+            candidates: JSON.stringify([{ tab: alias.target_tab, row: alias.target_row, car_desc: alias.car_desc, location: aliasLoc2 }]),
             status: 'pending', created_at: new Date().toISOString()
           });
         } catch(e){}
@@ -19682,10 +19727,9 @@ async function _appendPaymentToDeals26Checked(payload){
       var dOwed = parseFloat(dData.owed) || 0;
       var dProfitCap = _computeProfitCap(amt, dOwed);
       if (dProfitCap > 0){
-        var pfPayload = Object.assign({}, payload, { location: dData.location || payload.location });
-        try { await _appendPaymentToProfit(pfPayload, dProfitCap); } catch(e){}
+        try { await _appendPaymentToProfit(payload, dProfitCap, aliasLoc2); } catch(e){}
       }
-      return { posted: true };
+      return { posted: true, location: aliasLoc2 };
     }
     // Alias direct write failed — fall through to the normal matcher
     console.warn('Alias direct-write failed in backfill, falling back to matcher');
@@ -22145,7 +22189,11 @@ function _computeProfitCap(paymentAmt, owedAfter){
   return after;
 }
 
-async function _appendPaymentToProfit(payload, amountOverride){
+async function _appendPaymentToProfit(payload, amountOverride, dealLocation){
+  // dealLocation: optional explicit lot for the Profit26 post. Use this when
+  // the customer's payment came in at one lot but the matched deal is on the
+  // other lot (e.g. Justin Garcia 96 Honda Legend — DeBary deal, DeLand
+  // paperwork). Defaults to payload.location for back-compat.
   try{
     if(!payload) return;
     // Don't propagate Deal or Deposit auto-posts (they flow through separate paths)
@@ -22154,12 +22202,13 @@ async function _appendPaymentToProfit(payload, amountOverride){
       customer: payload.customer_name, vin: payload.vehicle_vin,
       location: payload.location, payment_date: payload.payment_date,
       full_amount: payload.amount,
-      override_amount: amountOverride !== undefined ? amountOverride : null
+      override_amount: amountOverride !== undefined ? amountOverride : null,
+      deal_location: dealLocation || null
     };
     // Month from payment_date; fall back to today
     var d = payload.payment_date ? new Date(payload.payment_date+'T12:00:00') : new Date();
     var monthIdx = d.getMonth();
-    var loc = payload.location || (me ? me.location : 'DeBary');
+    var loc = dealLocation || payload.location || (me ? me.location : 'DeBary');
     // Caller can override the amount with the profit-capped portion.
     // Without override we fall back to the payload's raw amount (legacy
     // callers that don't know col F).

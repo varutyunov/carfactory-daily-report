@@ -1618,3 +1618,82 @@ impossible without `find_rows` (Deals25 DeBary still times out on
    anything immediate).
 6. Investigate the $3,421 unexplained DeBary Profit26 drop noted
    mid-session (Vlad said "I know what happened" — confirm).
+
+---
+
+# Day 8 (continued — evening) — Follow-up fixes shipped
+
+After audit walkthrough completion, tackled the remaining items:
+
+## What landed
+
+### 1. `correct_payments` dispatcher bug — FIXED (v79)
+Moved the handler in `google-apps-script.js` from line 534 to before
+the tab-config check (around line 370). Now reads `body.data.tab`
+directly without needing `body.tab` outer. Tested with a no-op call
+on Ozuna row 115 — works. Note: still sets formula to flat
+`=<total>`, so use `deals26_set_row_g` for breakdown formulas.
+
+### 2. `audit_april_profit.py` matcher improvements
+- Added `threshold_overflow` and `cc_fee_4pct` result buckets.
+- Within-account pair-sum (was bug: summed across all accts under same
+  surname).
+- Truncation tolerance for surname (handles `whitted` ↔ `whitte`).
+- 4% CC fee tolerance on amount comparison.
+- Threshold-overflow detection: when entry amount = (CSV − threshold)
+  and col G has a same-day note, classify as valid overflow not
+  phantom.
+- Result: phantoms dropped 27 → 17.
+
+### 3. `reconcile_payments.py` saledate-chronology pairing
+Added `inv_by_full_name` (sorted by saledate) and `name_acct_pairing`
+(sorted by first txn date). New helper `acct_for_inv_record(inv_row)`
+returns the chronologically-paired custaccountno when counts match.
+Used in two places: (a) narrowing when multiple inv_hits, (b) picking
+the active acct for the chosen deal. Conservative: only pairs when
+`len(inv_list) == len(accts)`.
+
+### 4. **Bug #1 — wrong-lot routing — FIXED in `index.html`**
+Root cause: payment processing paths used `payload.location` (where
+the customer paid) for the col G + Profit26 post lot, but the deal's
+actual lot can differ when the customer pays at the opposite lot
+(Carrasquillo style).
+
+Fixes:
+- `_findDealAlias` now SELECTs and returns `location`.
+- `_findCarPayAccountAlias` now returns `location` (also same-lot-
+  first / cross-lot fallback).
+- 3 alias direct-write call sites updated to use `alias.location`
+  (or `accountAlias.location`) for both the Apps Script call and the
+  Profit26 post.
+- `_appendPaymentToProfit` accepts a new `dealLocation` parameter
+  (overrides `payload.location` when provided).
+
+### 5. **Bug #2 — stale-alias re-queue dead-end — FIXED in `index.html`**
+Root cause: when `deals26_append_payment_direct` returned
+`row_drift` / `surname_mismatch` / `empty_row` (v65/v66 guards), the
+code deactivated the stale `deal_links` row AND queued a Review with
+`reason='row_drift'`, `candidates='[]'`. The resulting card had
+nothing to approve, so the payment dead-ended.
+
+Fix: removed the empty-Review queue. Now drift errors deactivate the
+stale link AND fall through to the rest of the function (approve-
+first queue / alias short-circuit / matcher) so the payment hits the
+standard pipeline that produces real candidates. Two paths fixed:
+the Stage-2 resolver path and the CarPay variant.
+
+## Deferred (not done this session)
+
+- **Bug #3 (wrong car description)**: speculative; would require
+  Apps Script changes to rewrite the note's year/model from the
+  matched row's `car_desc` instead of from `payload.vehicle_*`. No
+  confirmed bad case in current data.
+- **Review UI for `csv_reconciliation`**: significant new feature.
+  Cards would show CSV breakdown table, sheet notes, diff, and
+  Dismiss / Fix / Investigate buttons. For when Vlad has time to
+  drive the design.
+- **Deals25 DeBary `read_all` timeout**: workaround via `find_rows`
+  + `read_row` works fine for surgical lookups. Bulk read still
+  fails. Diagnostic effort needed (chunked read?).
+- **$3,421 DeBary Profit26 drop**: awaits Vlad's confirmation of
+  what they "knew happened" mid-session.
