@@ -740,12 +740,19 @@ for acct, txns in acc_april_txns.items():
         details = []
         for d, day_txns in sorted(same_day.items()):
             day_total = round(sum(t['amount'] for t in day_txns), 2)
-            matches = [c for c in col_g_entries
-                       if abs(c['amount'] - day_total) <= AMOUNT_TOL
-                       and days_apart(c['date'], d) <= DATE_TOL_DAYS]
+            # Match exact OR amount × 1.04 (4% CC processing fee added by user).
+            # Without 4% tolerance, customers like Hassanin (whose col G entries
+            # are CSV_amount × 1.04) get falsely flagged as missing_from_col_g.
+            def _matches(c, target):
+                if days_apart(c['date'], d) > DATE_TOL_DAYS: return False
+                return (abs(c['amount'] - target) <= AMOUNT_TOL
+                        or abs(c['amount'] - target * 1.04) <= AMOUNT_TOL)
+            matches = [c for c in col_g_entries if _matches(c, day_total)]
             singles = [c for c in col_g_entries
-                       if any(abs(c['amount'] - t['amount']) <= AMOUNT_TOL for t in day_txns)
-                       and days_apart(c['date'], d) <= DATE_TOL_DAYS]
+                       if days_apart(c['date'], d) <= DATE_TOL_DAYS
+                       and any(abs(c['amount'] - t['amount']) <= AMOUNT_TOL
+                               or abs(c['amount'] - t['amount'] * 1.04) <= AMOUNT_TOL
+                               for t in day_txns)]
             if matches or singles:
                 details.append({'date': d, 'total': day_total, 'found': 'col_g',
                                 'lines': [c['line'] for c in (matches or singles)]})

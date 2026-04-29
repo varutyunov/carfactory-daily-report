@@ -22413,10 +22413,20 @@ async function _csvReconAppendToColG(reviewId, r, snap){
   Object.keys(byDay).forEach(function(d){
     var amt = Math.round(byDay[d].total * 100) / 100;
     var dateTag = (parseInt(d.split('-')[1])) + '/' + parseInt(d.split('-')[2]);
+    // Bug-fix dedup: also accept lines whose amount is amt × 1.04 (4% CC
+    // processing fee). Without this, Apply Fix would create duplicates on
+    // accounts where Vlad logs cards-paid amounts as base + 4% fee.
     var found = noteLines.some(function(ln){
       var m = /^([\d.]+)\s.*\s(\d{1,2}\/\d{1,2})\s*$/.exec(ln);
       if (!m) return false;
-      return Math.abs(parseFloat(m[1]) - amt) < 0.5 && m[2] === dateTag;
+      var lineAmt = parseFloat(m[1]);
+      if (m[2] !== dateTag) return false;
+      // Match exact, +4% CC fee, or other small fee within $1
+      if (Math.abs(lineAmt - amt) < 0.5) return true;
+      if (Math.abs(lineAmt - amt * 1.04) < 0.5) return true;
+      // Within $1 (small registration / late fee variation)
+      if (lineAmt > amt && lineAmt - amt < 1.0) return true;
+      return false;
     });
     if (!found) missingDays.push({ date: d, dateTag: dateTag, amount: amt });
   });
