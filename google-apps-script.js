@@ -2395,7 +2395,12 @@ function _handleDeals26AppendPayment(location, data) {
           ok: true,
           action: 'deals26_append_payment',
           status: 'already_posted',
-          location: location,
+          // Bug fix: return useLoc (deal's actual sheet) not location
+          // (input/payment lot). Caller uses this to route the Profit26
+          // post; if we return the input lot, cross-lot customers
+          // (DeBary deal but DeLand payment, or vice versa) get the
+          // post routed to the wrong lot.
+          location: useLoc,
           tab: usedTab,
           row: result.row,
           car_desc: result.car_desc
@@ -2415,11 +2420,12 @@ function _handleDeals26AppendPayment(location, data) {
             ok: true,
             action: 'deals26_append_payment',
             status: 'possible_duplicate',
-            location: location,
+            // Same fix as above — return deal's lot (useLoc), not input.
+            location: useLoc,
             tab: usedTab,
             row: result.row,
             car_desc: result.car_desc,
-            candidates: [{ row: result.row, car_desc: result.car_desc, tab: usedTab }]
+            candidates: [{ row: result.row, car_desc: result.car_desc, tab: usedTab, location: useLoc }]
           });
         }
       }
