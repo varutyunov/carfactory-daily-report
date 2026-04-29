@@ -2917,22 +2917,30 @@ async function loginWithFaceId(){
 // the app still works during rollout. Once RLS is fully enabled, lack of
 // JWT will cause Supabase calls to 401, which surfaces as auto-logout.
 async function _acquireAuthJwt(username, pin){
+  // Diagnostic: write a marker to a wipe-surviving key so we can confirm
+  // the function was actually invoked even when console isn't accessible
+  // (iOS PWA, etc.). The cf_work_ prefix bypasses the page-load wipe.
+  try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'enter', t:Date.now(), u: username, p_len: (pin||'').length})); }catch(e){}
   try{
     var resp=await fetch(SB_URL+'/functions/v1/auth-login',{
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
       body:JSON.stringify({username:username, pin:pin})
     });
+    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'fetch_ok', t:Date.now(), status: resp.status})); }catch(e){}
     var data=await resp.json().catch(function(){return null;});
     if(!resp.ok || !data || !data.token){
+      try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'no_token', t:Date.now(), status: resp.status, has_data: !!data, error: data && data.error})); }catch(e){}
       console.warn('[auth] auth-login failed:', resp.status, data && data.error);
       return null;
     }
     localStorage.setItem('cf_jwt', data.token);
     if(data.user) localStorage.setItem('cf_user', JSON.stringify(data.user));
+    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'jwt_set', t:Date.now(), token_len: data.token.length})); }catch(e){}
     console.log('[auth] JWT acquired, expires', new Date((data.expires_at||0)*1000).toISOString());
     return data;
   }catch(err){
+    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'caught_err', t:Date.now(), msg: (err && err.message) || String(err)})); }catch(e){}
     console.warn('[auth] auth-login network error:', err && err.message);
     return null;
   }
