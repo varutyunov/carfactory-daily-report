@@ -22,3 +22,13 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      # Re-validate pending payment_reviews against current sheet state.
+      # Auto-resolves any whose underlying issue is gone (post landed via
+      # another path, phantom line removed, wrong-lot fixed). Keeps the
+      # queue from accumulating ghost cards. Non-fatal on errors —
+      # surfacing one stale card is safer than skipping the inventory pass.
+      - run: python scripts/review_revalidate.py --apply
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_KEY }}
+        continue-on-error: true
