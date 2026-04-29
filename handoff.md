@@ -1682,12 +1682,36 @@ first queue / alias short-circuit / matcher) so the payment hits the
 standard pipeline that produces real candidates. Two paths fixed:
 the Stage-2 resolver path and the CarPay variant.
 
+## Bug #3 — wrong car description on alias post — FIXED
+
+Root cause: when posting via a learned alias (`payment_deal_aliases`,
+`carpay_payment_postings`, or `deal_links`), the note line's middle
+section (year/model/color) came from `payload.vehicle_*` — built from
+`carpay_customers.vehicle` or receipt OCR. If the customer's vehicle
+metadata was updated for a NEW deal but the alias still pointed at
+their OLD deal row, the post would say the new car's name on the old
+car's row. Drift guard catches surname mismatches but accepts surname
+matches, so silent mis-posts were possible.
+
+Fix: added `_paymentNoteLineFromDeal(amount, carDesc, paymentDate)`
+helper that parses the matched row's car_desc into year/model/color/
+last_name pieces and builds the note line from those. Year is taken
+from the leading 2-digit token, last name from the final word, color
+from a known-color set, and remaining tokens form the model (with
+mileage and "trade"/"rbt"/"2"/"3" annotations stripped).
+
+Updated 4 alias direct-write call sites to use the helper instead of
+`_paymentNoteLine(amt, payload)`:
+- `_appendPaymentToDeals26` alias path (line ~17402)
+- `_appendPaymentToDeals26Checked` resolver path (line ~19642)
+- `_appendPaymentToDeals26Checked` alias backfill path (line ~19771)
+- CarPay account-alias path (line ~19102)
+
+Falls back to the payload-based note when the alias doesn't have a
+car_desc (defensive).
+
 ## Deferred (not done this session)
 
-- **Bug #3 (wrong car description)**: speculative; would require
-  Apps Script changes to rewrite the note's year/model from the
-  matched row's `car_desc` instead of from `payload.vehicle_*`. No
-  confirmed bad case in current data.
 - **Review UI for `csv_reconciliation`**: significant new feature.
   Cards would show CSV breakdown table, sheet notes, diff, and
   Dismiss / Fix / Investigate buttons. For when Vlad has time to

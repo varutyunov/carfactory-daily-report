@@ -17068,6 +17068,69 @@ function _paymentNoteLine(amount, payload){
   return _paymentNoteLineFit(amtStr, _paymentFormatPieces(payload));
 }
 
+// Bug fix #3 (2026-04-28): when posting via a learned alias / deal_link,
+// the note's middle section (year/model/color) should come from the
+// MATCHED row's car_desc, not from `payload.vehicle_*`. Reason: the
+// payload's vehicle fields are built from `carpay_customers.vehicle` (or
+// receipt OCR), which can be stale if the customer bought a NEW car but
+// `payment_deal_aliases` still points at their OLDER deal row. The drift
+// guard catches row mismatches but accepts surname-only matches, so
+// "14 Fiesta tyrell 4/19" could land on a "07 Cobalt SS Tyrell" row
+// silently. Generating from the row's car_desc keeps the post text
+// consistent with the row it lands on.
+//
+// car_desc format examples:
+//   "07 Cobalt SS blue 246k Tyrell"
+//   "14 Fiesta ST black 171k trade Tyrell"
+//   "16 Fit silver 219k Hanscom"
+//   "03 Silverado tan 318k Ethan"   ← uses first name as identifier
+function _parseCarDesc(carDesc){
+  var s = String(carDesc || '').trim();
+  if (!s) return { year: '', model: '', color: '', lastName: '' };
+  var tokens = s.split(/\s+/);
+  if (!tokens.length) return { year: '', model: '', color: '', lastName: '' };
+  // Year: first token if it looks like one (2-digit or 4-digit)
+  var yearTok = tokens[0];
+  var year = '';
+  if (/^\d{2}$/.test(yearTok)) { year = yearTok; tokens.shift(); }
+  else if (/^\d{4}$/.test(yearTok)) { year = yearTok.slice(2); tokens.shift(); }
+  else if (/^\d{4}$/.test(yearTok) && parseInt(yearTok) >= 1990) { year = yearTok.slice(2); tokens.shift(); }
+  // Last name: final token
+  var lastName = (tokens[tokens.length - 1] || '').toLowerCase();
+  if (tokens.length > 1) tokens.pop();
+  // Color: scan remaining tokens for a known color
+  var COLORS = {white:1,black:1,silver:1,red:1,blue:1,gray:1,grey:1,green:1,yellow:1,
+                gold:1,orange:1,purple:1,tan:1,brown:1,beige:1,pearl:1,maroon:1,
+                teal:1,navy:1,bronze:1,burgundy:1,champagne:1,charcoal:1,copper:1,cream:1,ivory:1};
+  var color = '';
+  var modelToks = [];
+  for (var i = 0; i < tokens.length; i++){
+    var t = tokens[i];
+    if (!color && COLORS[t.toLowerCase()]) { color = t.toLowerCase(); continue; }
+    // Skip mileage tokens like "246k", "180k", "300000"
+    if (/^\d+k?$/i.test(t)) continue;
+    // Skip "trade" / "rbt" annotations
+    if (/^(trade|rbt|2|3)$/i.test(t)) continue;
+    modelToks.push(t);
+  }
+  return { year: year, model: modelToks.join(' '), color: color, lastName: lastName };
+}
+
+function _paymentNoteLineFromDeal(amount, carDesc, paymentDate){
+  var amt = parseFloat(amount);
+  if(!isFinite(amt)) amt = 0;
+  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var pieces = _parseCarDesc(carDesc);
+  // Date string from paymentDate (YYYY-MM-DD) → "M/D"
+  var dateStr = '';
+  try {
+    var d = paymentDate ? new Date(paymentDate + 'T12:00:00') : new Date();
+    if (!isNaN(d.getTime())) dateStr = (d.getMonth() + 1) + '/' + d.getDate();
+  } catch(e){}
+  pieces.dateStr = dateStr;
+  return _paymentNoteLineFit(amtStr, pieces);
+}
+
 // Build the Profit26 description (same rule but WITHOUT the amount —
 // Apps Script's profit_append_entry prepends the amount itself).
 // Delegates to the same amount-aware builder so the resulting cell note
@@ -17339,13 +17402,20 @@ async function _appendPaymentToDeals26(payload){
     var alias = await _findDealAlias(payload);
     if (alias){
       var aliasLoc = alias.location || loc;
+      // Bug fix #3: build noteLine from the matched row's car_desc, not from
+      // payload.vehicle_* (which can be stale if the customer's vehicle
+      // metadata was updated to a NEW car but this alias still points at
+      // the OLD row).
+      var aliasNoteLine = alias.car_desc
+        ? _paymentNoteLineFromDeal(amt, alias.car_desc, payload.payment_date)
+        : noteLine;
       var dResp = await fetch(_SHEETS_URL, {
         method:'POST', headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
           location: aliasLoc,
-          data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine }
+          data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: aliasNoteLine }
         })
       });
       var dData = null; try { dData = await dResp.json(); } catch(e){}
@@ -18930,6 +19000,11 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
       var stage2 = await _resolveCustomerDealLink(stage2Payload);
       if (stage2 && stage2.link){
         var lk2 = stage2.link;
+        // Bug fix #3: build noteLine from lk2.car_desc (matched row), not
+        // from stage2Payload.vehicle_* (potentially stale).
+        var stage2NoteLine = lk2.car_desc
+          ? _paymentNoteLineFromDeal(stage2Payload.amount, lk2.car_desc, stage2Payload.payment_date)
+          : _paymentNoteLine(stage2Payload.amount, stage2Payload);
         var resp2 = await fetch(_SHEETS_URL, {
           method:'POST', headers:{'Content-Type':'text/plain'},
           body: JSON.stringify({
@@ -18939,7 +19014,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
             data: {
               tab: lk2.target_tab, row: lk2.target_row,
               amount: stage2Payload.amount,
-              note_line: _paymentNoteLine(stage2Payload.amount, stage2Payload),
+              note_line: stage2NoteLine,
               last_names: _paymentLastNames(stage2Payload.customer_name),
               check_dup: true,
               expected_car_desc: lk2.car_desc || null  // v65 drift guard
@@ -19028,6 +19103,12 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
   if (accountAlias && accountAlias.target_tab && accountAlias.target_row){
     var aliasPayload = _carpayPaymentToPayload(cp, cust);
     var accAliasLoc = accountAlias.location || aliasPayload.location;
+    // Bug fix #3: build noteLine from accountAlias.car_desc, not from
+    // payload.vehicle_* (which can be stale if customer's CarPay vehicle
+    // was updated to a NEW car after this alias was learned).
+    var accAliasNote = accountAlias.car_desc
+      ? _paymentNoteLineFromDeal(aliasPayload.amount, accountAlias.car_desc, aliasPayload.payment_date)
+      : _paymentNoteLine(aliasPayload.amount, aliasPayload);
     if (aliasPayload.amount > 0){
       try {
         var aliasResp = await fetch(_SHEETS_URL, {
@@ -19040,7 +19121,7 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
               tab: accountAlias.target_tab,
               row: accountAlias.target_row,
               amount: aliasPayload.amount,
-              note_line: _paymentNoteLine(aliasPayload.amount, aliasPayload),
+              note_line: accAliasNote,
               check_dup: true
             }
           })
@@ -19560,6 +19641,11 @@ async function _appendPaymentToDeals26Checked(payload){
     var resolved = await _resolveCustomerDealLink(payload);
     if (resolved && resolved.link){
       var lk = resolved.link;
+      // Bug fix #3: build noteLine from lk.car_desc (matched row), not
+      // payload.vehicle_* (potentially stale).
+      var lkNoteLine = lk.car_desc
+        ? _paymentNoteLineFromDeal(amt, lk.car_desc, payload.payment_date)
+        : noteLine;
       var dResp = await fetch(_SHEETS_URL, {
         method: 'POST', headers: {'Content-Type':'text/plain'},
         body: JSON.stringify({
@@ -19568,7 +19654,7 @@ async function _appendPaymentToDeals26Checked(payload){
           location: lk.location || loc,
           data: {
             tab: lk.target_tab, row: lk.target_row,
-            amount: amt, note_line: noteLine,
+            amount: amt, note_line: lkNoteLine,
             last_names: _paymentLastNames(payload.customer_name),
             check_dup: true,
             expected_car_desc: lk.car_desc || null  // v65 drift guard
@@ -19690,13 +19776,17 @@ async function _appendPaymentToDeals26Checked(payload){
   var alias = await _findDealAlias(payload);
   if (alias){
     var aliasLoc2 = alias.location || loc;
+    // Bug fix #3: build noteLine from alias.car_desc, not payload.vehicle_*
+    var aliasNoteLine2 = alias.car_desc
+      ? _paymentNoteLineFromDeal(amt, alias.car_desc, payload.payment_date)
+      : noteLine;
     var dResp = await fetch(_SHEETS_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify({
         secret: _SHEETS_SECRET,
         action: 'deals26_append_payment_direct',
         location: aliasLoc2,
-        data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: noteLine, check_dup: true }
+        data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: aliasNoteLine2, check_dup: true }
       })
     });
     var dData = null; try { dData = await dResp.json(); } catch(e){}
