@@ -600,15 +600,22 @@ def deal_for_account(acct):
     last = name.split(',')[0].strip().upper() if name else ''
     if not last:
         return None, 'no_last_name', []
-    inv_hits = inv_by_last.get(last, [])
+
+    # Filter SoldInventory by FULL lookupname, not just last name. Without
+    # this, Adams Malic (whose Sentra isn't in inv yet — only Brittney
+    # Adams's MDX is) would inherit Brittney's vehicle data and get
+    # mis-linked to her MDX deal.
+    inv_full = [r for r in inv_by_last.get(last, [])
+                if r.get('lookupname','').strip().upper() == name]
+    inv_any  = inv_by_last.get(last, [])
     deals_hits = deals_by_last.get(last, [])
-    if not inv_hits and not deals_hits:
+    if not inv_any and not deals_hits:
         return None, 'no_match', []
 
-    # If only one inventory hit and it has a year+model that matches a deal,
-    # pick that deal.
-    if len(inv_hits) == 1:
-        inv = inv_hits[0]
+    # If exactly one inv record matches the full name → use year+model to
+    # narrow the deal. This is the strongest signal we have.
+    if len(inv_full) == 1:
+        inv = inv_full[0]
         yr  = str(inv.get('year','')).strip()
         mdl = str(inv.get('model','')).upper()
         for d in deals_hits:
@@ -621,25 +628,24 @@ def deal_for_account(acct):
                 return d, 'inv_year_model', [inv]
         if len(deals_hits) == 1:
             return deals_hits[0], 'inv_only_one_deal', [inv]
-        return None, 'inv_one_but_no_deal_match', [inv]
+        # Inv had this customer but no matching deal — unusual. Fall through
+        # to the active-deals heuristic below.
 
     if len(deals_hits) == 1:
-        return deals_hits[0], 'one_deal', inv_hits
+        return deals_hits[0], 'one_deal', inv_any
 
-    # Multiple deals → prefer the active one (F > 0). Same-name multi-car
-    # case: e.g., one Emery in DeBary (F>0, active) + one in DeLand (dead).
-    # The active deal is the one currently receiving payments.
+    # Multiple deals under same last name AND inv doesn't disambiguate.
+    # Prefer the active one (F > 0) — handles the common case where a
+    # customer has one paid-off old car and one current active car.
     active_deals = [d for d in deals_hits if (d.get('owed') or 0) > 0]
     if len(active_deals) == 1:
-        return active_deals[0], 'active_only_one_in_profit', inv_hits
+        return active_deals[0], 'active_only_one_in_profit', inv_any
     if len(active_deals) > 1:
-        # Two active deals under same name — could be same customer with two
-        # active cars (rare). Try to narrow with the customer's CSV first txn
-        # date against the deal's saledate equivalent (year prefix in car_desc).
-        # For now, return ambiguous with active candidates flagged.
-        return None, f'ambiguous_multiple_active({len(active_deals)})', inv_hits
+        return None, f'ambiguous_multiple_active({len(active_deals)})', inv_any
 
-    return None, 'ambiguous', inv_hits
+    # No active deals (all paid off / dead). If only one is non-zero F,
+    # pick it; otherwise ambiguous.
+    return None, 'ambiguous', inv_any
 
 # Walk every April-active account
 for acct, txns in acc_april_txns.items():
