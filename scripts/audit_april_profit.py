@@ -232,7 +232,7 @@ all_deals = []   # list of {tab, location, car_desc, owed (F), payments (G), pay
 
 try:
     rows = sb_get('deals26',
-        'select=id,car_desc,cost,expenses,taxes,money,owed,payments,payment_notes,location&limit=2000')
+        'select=id,car_desc,cost,expenses,taxes,money,owed,payments,payment_notes,location,sort_order&limit=2000')
     for r in rows:
         cd = (r.get('car_desc') or '').strip()
         if not cd: continue
@@ -242,6 +242,9 @@ try:
             'payments': float(r.get('payments') or 0),
             'payment_notes': r.get('payment_notes') or '',
             'last_name': cd.split()[-1].upper() if cd.split() else '',
+            # Supabase sort_order corresponds to the sheet row number for
+            # Deals26 (mirrored 1:1 with the sheet via the reconciler).
+            'sheet_row': r.get('sort_order'),
         })
     print(f'  deals26 (Supabase): {len(rows)} rows')
 except Exception as e:
@@ -265,6 +268,8 @@ for tab in ['Deals25', 'Deals24']:
                     'payments': float(r.get('payments') or 0),
                     'payment_notes': r.get('payment_notes') or '',
                     'last_name': cd.split()[-1].upper() if cd.split() else '',
+                    # Apps Script read_all populates _sheetRow on each row.
+                    'sheet_row': r.get('_sheetRow'),
                 })
             print(f'  {tab} {loc}: {len(rows)} rows')
         except Exception as e:
@@ -995,8 +1000,27 @@ for p in forward_results.get('wrong_lot', []):
         note_line=p.get('raw', '')
     )
 
+# Helper: build a list of CSV-transaction-shaped entries from inverse-pass
+# day details (the audit already aggregated per-day totals; here we expand
+# back to a shape Apply Fix can consume).
+def _expand_missing_days(days):
+    out = []
+    for d in (days or []):
+        if d.get('found') != 'missing': continue
+        out.append({'date': d.get('date'), 'amount': d.get('total'),
+                    'type': 'PAYMENT', 'ref': ''})
+    return out
+
+# Helper: look up sheet_row + payment_notes from the deals index
+def _deal_meta(deal_loc, deal_tab, deal_car_desc):
+    for d in all_deals:
+        if d['location'] == deal_loc and d['tab'] == deal_tab and d['car_desc'] == deal_car_desc:
+            return d.get('sheet_row'), d.get('payment_notes', '')
+    return None, ''
+
 # Inverse — missing_from_profit (F>0 deal, no Profit26 entry, not in col G either)
 for m in inverse_results.get('missing_from_profit', []):
+    sheet_row, payment_notes = _deal_meta(m.get('deal_loc'), m.get('deal_tab'), m.get('deal_car_desc'))
     push_review(
         customer_name=m.get('name', ''),
         amount=m.get('april_total', 0),
@@ -1006,12 +1030,12 @@ for m in inverse_results.get('missing_from_profit', []):
         snapshot={
             'car_desc':    m.get('deal_car_desc') or '',
             'tab':         m.get('deal_tab') or '',
-            'sheet_row':   None,
+            'sheet_row':   sheet_row,
             'sheet_total': 0,
             'csv_total':   m.get('april_total', 0),
             'difference':  m.get('april_total', 0),
-            'csv_transactions': [d for d in (m.get('days') or []) if d.get('found') == 'missing'],
-            'sheet_notes': '',
+            'csv_transactions': _expand_missing_days(m.get('days')),
+            'sheet_notes': payment_notes,
             'note':        f'Deal in profit but no Profit26 entry for April; col G also missing it. Truly dropped.',
             'deal_F':      m.get('deal_F'),
         },
@@ -1020,6 +1044,7 @@ for m in inverse_results.get('missing_from_profit', []):
 
 # Inverse — missing_from_col_g (F≤0 deal, no col G entry, not in Profit26 either)
 for m in inverse_results.get('missing_from_col_g', []):
+    sheet_row, payment_notes = _deal_meta(m.get('deal_loc'), m.get('deal_tab'), m.get('deal_car_desc'))
     push_review(
         customer_name=m.get('name', ''),
         amount=m.get('april_total', 0),
@@ -1029,12 +1054,12 @@ for m in inverse_results.get('missing_from_col_g', []):
         snapshot={
             'car_desc':    m.get('deal_car_desc') or '',
             'tab':         m.get('deal_tab') or '',
-            'sheet_row':   None,
+            'sheet_row':   sheet_row,
             'sheet_total': 0,
             'csv_total':   m.get('april_total', 0),
             'difference':  m.get('april_total', 0),
-            'csv_transactions': [d for d in (m.get('days') or []) if d.get('found') == 'missing'],
-            'sheet_notes': '',
+            'csv_transactions': _expand_missing_days(m.get('days')),
+            'sheet_notes': payment_notes,
             'note':        f'Deal not in profit (F={m.get("deal_F")}) but no col G entry for April. Dropped payment.',
             'deal_F':      m.get('deal_F'),
         },
