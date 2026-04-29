@@ -1336,15 +1336,15 @@ body.light .cal-fab{background:#4488ff !important;}
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#60a5fa;letter-spacing:1px;margin-bottom:10px;text-transform:uppercase;">Scan Payment</div>
         <div style="font-size:13px;color:#666;margin-bottom:14px;line-height:1.4;">Take a photo of a receipt to auto-fill details, or fill manually below.</div>
         <div style="display:flex;gap:10px;">
-          <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;">
+          <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;-webkit-tap-highlight-color:transparent;">
             <span style="font-size:28px;">📷</span>
             Take Photo
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" onchange="payScanPhoto(this)" style="display:none;"/>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" onchange="payScanPhoto(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>
           </label>
-          <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;">
+          <label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:24px 12px;background:#111;border:1px dashed #333;border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:center;gap:6px;-webkit-tap-highlight-color:transparent;">
             <span style="font-size:28px;">📁</span>
             Upload
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onchange="payScanPhoto(this)" style="display:none;"/>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onchange="payScanPhoto(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>
           </label>
         </div>
       </div>
@@ -16785,9 +16785,15 @@ async function payDenyDelete(id){
   payViewBack();
 }
 
-function payScanPhoto(inp){
+async function payScanPhoto(inp){
   if(!inp.files||!inp.files[0])return;
-  var file=inp.files[0];
+  // CRITICAL on iOS: when user picks from Photos, the file is HEIC. A
+  // FileReader.readAsDataURL on HEIC produces 'data:image/heic;base64,...'
+  // which most <img> elements can't decode — the subsequent canvas resize
+  // then runs on a blank/broken image, and the OCR call sees garbage.
+  // _normalizeImageFile transcodes HEIC → JPEG via createObjectURL +
+  // canvas before any of the dataURL/preview logic runs.
+  var file = await _normalizeImageFile(inp.files[0]);
   var reader=new FileReader();
   reader.onload=function(e){
     var img=document.getElementById('pay-scan-img');
@@ -16796,7 +16802,8 @@ function payScanPhoto(inp){
     document.getElementById('pay-scan-capture').style.display='none';
     document.getElementById('pay-skip-photo-btn').style.display='none';
     document.getElementById('pay-scan-fields').style.display='block';
-    // Convert to JPEG via canvas + resize to max 1600px (handles large camera photos & HEIC)
+    // Resize to max 1600px to keep the OCR payload small. Source is now
+    // guaranteed-renderable JPEG/PNG/WebP, so canvas decode is reliable.
     var convImg = new Image();
     convImg.onload = function(){
       var MAX=1600;
