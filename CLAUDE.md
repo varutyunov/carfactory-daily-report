@@ -32,6 +32,17 @@ When merging before push: `git fetch origin main && git merge origin/main --no-e
 ## Testing Rule
 **Always test in preview before pushing.** Use mobile viewport (375x812). Vlad only cares about phone UX.
 
+## Daily Backup to Google Drive
+**The whole project is backed up to a Google Drive folder named "Car Factory App Backup" every night at 8:00 PM** (local Windows Task Scheduler). GitHub holds the version history; Drive is a flat mirror of the working tree so untracked operational files (Payments CSVs, Sold Inventory, dealer-side data) are also covered.
+
+- **Backup script:** `scripts/backup-to-drive.py` — incremental Drive sync, only uploads files whose local mtime is newer than the Drive copy.
+- **Runner:** `scripts/backup-to-drive.cmd` — what Task Scheduler invokes. Logs to `backup-to-drive.log` (gitignored).
+- **One-time setup:** `scripts/install-backup-task.cmd` — registers the 8 PM daily task. Run once per machine as the logged-in user.
+- **Uses existing Google credentials** (`scripts/.google-credentials.json` + `.google-token.json`, both gitignored). First run prompts for OAuth consent in the browser.
+- **What's excluded:** `.git/`, `node_modules/`, `.claude/`, `*.zip`, `temp_form.png`, sensitive credentials (Supabase keys, OneSignal token, GitHub PAT, Google credential files). Those credentials belong in a password manager, NOT in cloud storage.
+
+If the daily task is failing or you want a manual run: `python scripts/backup-to-drive.py` from the repo root. Add `--dry-run` to preview without uploading.
+
 ## File Structure
 ```
 index.html          — THE app (all HTML + CSS + JS, ~27k lines)

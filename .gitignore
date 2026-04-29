@@ -24,3 +24,6 @@ logs5/
 logs6/
 logs7/
 temp_form.png
+
+# Daily backup-to-drive runtime log (regenerated each run)
+backup-to-drive.log
