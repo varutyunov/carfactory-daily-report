@@ -7,3 +7,7 @@ OneSignal.txt
 scripts/.google-credentials.json
 scripts/.google-token.json
 Inventory/
+# Auto-generated copy of google-apps-script.js for clasp push.
+# Source of truth is google-apps-script.js at the repo root.
+apps-script/Code.gs
+.clasprc.json

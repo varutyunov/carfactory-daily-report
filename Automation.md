@@ -136,6 +136,12 @@ will not have any post-cutoff CSV activity.
   their SoldInventory records and identify the active one by sale date
   + payment activity. (Example: Ethan Emery has 3 DeBary cars; only the
   03 Silverado is active.)
+- **CSV `lookupname` format is `LASTNAME, FIRSTNAMES`** — for customers
+  with multiple given names (e.g. `SANTIAGO, JOSE LUIS BERDECIA GIRALDO`),
+  the last name is the part BEFORE the comma (SANTIAGO). The rest are
+  first/middle/maternal names. Audit matchers must split on the comma
+  first; tokenizing the whole string can lock onto a middle name as a
+  pseudo-surname and miss the actual deal.
 - **Rare case: DeBary deal with DeLand paperwork.** Sometimes a sale is
   paperwork-processed at the opposite lot. The car ends up in the
   paperwork lot's SoldInventory but the deal lives in the other lot's
@@ -271,6 +277,11 @@ will not have any post-cutoff CSV activity.
 | 12-14 | Adams (Brittney+Malic), Hassanin | Audit matcher errors / threshold accounting / 4% CC fees | No fixes — all correctly placed. Captured rules in Automation.md (4% CC fee, threshold offset, compound surnames) |
 | 15 | Toro Maxcio — 09 VW CC DeBary | $75 4/7 in Profit26 was a registration fee (app-entered, no OCR, no CSV match) | Removed `75 09 Cc silver toro 4/7` from DeBary April Payments; now matches CSV $240 only |
 | 16-26 | Phase 5 phantoms (27 total) | Audit's matcher couldn't link due to compound surnames, threshold overflows, split entries, 4% CC fees, separate same-day pairs | All 27 either resolved as real-but-mislinked OR are threshold overflows correctly placed in Profit26. Only fix: removed $75 Toro registration. |
+| 27 | Santiago Ruben — 16 Expedition DeLand row 43 | RARE inverse case: DeLand deal but DeBary paperwork (so CSV is in DeBary, paymen post mistakenly went to DeBary Profit26). F=−$469 NOT in profit. | Removed `341 Expedition santia 4/24` from DeBary Profit26, added to col G of DeLand row 43. F: −$469 → −$128 |
+| 28 | Gonzalez Paola — 11 Sonata DeBary row 303 | F=+$434 (in profit). 4/9 $300 was in Profit26 + col G. 4/17 $200 missing from Profit26. | Added `200 11 Sonata gonzalez 4/17` to DeBary Profit26 April Payments |
+| 29 | Wright Paige — 18 Jetta DeLand row 10 | F=+$60. col G has full $590 4/24, Profit26 has only $60 — looks "missing" but correctly is the threshold overflow. | NO FIX — pre-payment F was −$530, $530 to col G + $60 to Profit26 is correct |
+| 30 | Santiago Jose Luis Berdecia Giraldo — 12 Accord cp white DeLand row 54 | Audit's matcher was confused by long compound name (`SANTIAGO, JOSE LUIS BERDECIA GIRALDO` — last name is SANTIAGO, the rest are middle names). Deal exists, col G has `275 santiago 4/24` correctly. | NO FIX — already correctly placed |
+| 31 | Phase 6 missing-from-Profit (22 total) | Mostly matcher errors: in-profit deals where the CSV April was in BOTH col G + Profit26 (correct dual-tracking) but audit's matcher linked to wrong deal. F≤0 deals where CSV April was correctly in col G only. | All 22 either resolved as already-correct or false positives. Real fixes: Santiago Ruben (#27), Gonzalez Paola (#28). |
 | 27 | Riel/Encarnacion — 13 Accord DeBary deal #64 | `cash_sale_pending` review regenerated every ~30 min after Vlad manually deleted the Profit26 post — `_sweepUnpostedCashSales` saw the gap and re-queued | Voided deal #64 (`voided_at` + `voided_reason="Manually deleted from Profit26"`); patched sweep + `_queueCashSaleReview` to filter `voided_at=is.null`. Will not regenerate. |
 | 28 | Rojas/Jasmine — 17 Pilot DeBary Deals25 row 149 | $450 4/28 CarPay payment landed as `no_vehicle` review — CarPay customer record had no vehicle linked, AND Sheet row labeled by first name "Jasmine" not surname | Threshold-crossing post: $450 → col G of Deals25 row 149 with `bypass_surname_check:true` and note `"450 jasmine 4/28"`; pre-payment owed −$150 → post-payment +$300, so $300 overflow → DeBary Profit26 April Payments. Review #1042 approved. |
 | 29 | Goodman jr — 03 RSX red 189k DeLand deal #66 | New finance deal landed as `multiple` review (instead of `deal_pending`); only candidate surfaced was an unrelated Lesabre Goodman in DeBary. Root cause: IC #224 (12 Odyssey white 175k DeBary) was incorrectly linked to `car_id=1369` (the RSX in DeLand), blocking IC #233 (the actual RSX cost row) from ever linking | Re-linked IC #224 → inventory #1359 (correct Odyssey); linked IC #233 → inventory #1369 (RSX); ran `_autopopulateDeals26` → Deals26 DeLand row 64 created with money=$2,288, owed=−$843. Review #802 approved. Row label initially built as "Jr" — patched `_extractSurname` to skip Jr/Sr/II/III suffix tokens; sheet cell corrected to "Goodman". |

@@ -1312,3 +1312,309 @@ that PATCHes Supabase → Sheet through `sort_order`. The sort_order
 - `2c250ea` DeLand CSV updated with Wyche + Vera
 - `9d2dbe9` Promoted root DeLand CSV
 - `05ba2b8` (auto-merge)
+
+---
+
+# Day 8 (2026-04-27) — DMS-CSV reconciliation + April Profit audit
+
+## Goal
+Verify automation is correct by cross-checking every move it made
+against the DMS export CSVs (the source of truth — every dollar
+ever collected is in there). The business question being answered:
+**"Is April's Profit26 number correct?"**
+
+## What's built
+
+### `scripts/reconcile_payments.py`
+Stand-alone Python script that pulls four data sources and
+cross-references them:
+1. **Payment CSVs** — `Payments/Debary/ProfitMoneyCollected_RunOn_*.csv`
+   and `Payments/Deland/ProfitMoneyCollected_RunOn_*.csv` (most
+   recent file picked automatically per folder).
+2. **SoldInventory CSVs** — `SoldInventoryDeBary.csv` +
+   `SoldInventoryDeLand.csv`. Used to link payment-CSV
+   `lookupname` → vehicle (year/make/model/VIN/stockno).
+3. **Deals tabs** — `deals26` from Supabase (fast); `Deals25` and
+   `Deals24` from each location via Apps Script `read_all`.
+4. **Sheet payment_notes** — parsed line-by-line for dated entries
+   like `230 Camry malpica 4/13` (regex: `<amount> <desc> <M>/<D>`).
+
+Run: `py scripts/reconcile_payments.py` (dry-run; writes
+`scripts/reconciliation_report.json`). Add `--push` to insert
+`payment_reviews` rows for discrepancies (NOT YET RUN — wait
+until audit logic is finalized).
+
+### Key decisions baked into the script
+- **Automation cutoff: `CUTOFF_DATE = '2026-04-09'`.** Only verify
+  accounts that have ≥1 CSV transaction on/after this date; pre-
+  automation accounts were entered by hand and Vlad trusts them.
+- **Per-side post-cutoff comparison.** Both sides are filtered to
+  ≥ 4/9 before comparing, so pre-April manual entries don't
+  pollute the diff. Sheet pre-cutoff = `col G total - sum of dated
+  notes`. Sheet post-cutoff = sum of dated note entries with M/D ≥
+  4/9 (year inferred = 2026).
+- **Account-level uniqueness:** primary join is full `lookupname`
+  (custaccountno ≠ stockno; the DMS exports don't share keys).
+  When a customer name has multiple `custaccountno`s, only the one
+  with post-cutoff activity is used (paid-off old cars are
+  excluded). Same-account-shared deals (two deals pointing at one
+  active account) get reassigned to `ambiguous`.
+- **Transaction types counted:**
+  | Type | Refs included | Why |
+  |---|---|---|
+  | PAYMENT | all except OPEN/NETPAYOFF*/OPEN REFINANCE OPEN | regular payments |
+  | PAYPICK | all except writeoff variants | pickup (deferred down) payments |
+  | PAY OFF | only NETPAYOFF + NETPAYOFF/NOWRITEOFF | final balloon payment |
+  | LATEFEE | all | counts toward total collected |
+  Excluded entirely: PAYOFF (REFIANCE PAYOFF) — refinance accounting,
+  no cash; DEPOSIT — sale deposit (col E); EARNEDINT — calc'd interest.
+
+### `_PROFIT_NOTE_MAX = 26`
+The `_fitProfitNoteLine` mileage-precedence fix is already deployed
+(@v76, see `apps-script` clasp setup). Not changed today.
+
+## Findings — automation-era only (post-2026-04-09)
+
+### Latest reconciliation snapshot (run 2026-04-27 evening)
+```
+Total deals rows scanned:        643
+  Skipped (pre-automation):      171   ← hand-entered, trusted
+  Verified (within $1):           65
+  Discrepant:                     12
+  Unlinked (no inv match):        37   ← incl. 5 dollar-perfect name matches
+  Ambiguous (multi-match):       118   ← same-name multi-car (Brittany Sinclair etc.)
+```
+
+Sheet underpaid (CSV > sheet) post-cutoff: $4,106
+Sheet overpaid (sheet > CSV) post-cutoff: $374
+
+### The 12 discrepant cars + their F (col F = "owed", + means in profit)
+
+**IN PROFIT (F > 0)** — April CSV $$ should be in **Profit26**:
+| Car | F | April CSV | Profit26 status |
+|---|---|---|---|
+| Thompson 03 Sierra | +249 (DeLand) | $900 | found in **DeBary** lot — wrong location |
+| McGrath 01 Blazer | +317 (DeLand) | $725 | `725 01 Blazer tan McGrath` (DeLand, no date) — looks ✓ |
+| Emery 03 Silverado | +518 (DeLand) | $700 | 2 entries `350 Silverado emery 4/5` in **DeBary** + `350 03 Silverado tan 2 Emery` undated — wrong lot + likely duplicate |
+| Tyrell 07 Cobalt | +18 (DeLand) | $440 | `440 14 Fiesta tyrell 4/19` in **DeBary** — wrong car desc + wrong lot |
+| Latorre 04 F150 | +10 (DeLand) | $490 | `10 04 F150 latorre 4/25` (DeLand) — only $10 overflow when 4/25 crossed threshold; but col G has phantom `160 04 F150 latorre 4/14` |
+| Green 12 Sienna | +791 (DeLand) | $100 | **NOT IN EITHER LOT** — completely missing |
+| Kelley 16 Caravan | +217 (DeLand) | $100 | `100 Grand kelley 4/11` (DeLand) ✓ |
+
+**NOT IN PROFIT (F ≤ 0)** — April CSV $$ should be in **col G**:
+| Car | F | April CSV | Issue |
+|---|---|---|---|
+| Logan 12 Silverado | −7,455 | $300 | $300 missing from col G ⚠️ |
+| Carrasquillo 15 TLX | −93 | $500 | $500 missing (note says "180 — re-queued after stale-alias carrasquillo") ⚠️ |
+| Santiago 16 Expedition | −469 | $341 | $341 missing + pre-Apr col G is $620 OVER (likely wrong customer linked) |
+| Gonzales 16 Outlander | −857 | $440 | $200 phantom note `200 Outlander gonzales 4/17` |
+| Hassanin 09 Wrangler | −1,983 | $350 | $14 phantom (LATEFEE-split issue: sheet 4/16 = $364 vs CSV 4/16 = $350) |
+
+### Already resolved
+- **Serrano 04 Corolla** — automation correctly logged `2004.49 Corolla
+  serrano 4/15` PAY OFF. Initial flag was a false positive — the
+  script was excluding all PAY OFF transtypes; fixed.
+- **Ozuna 16 Genesis** — once PAYPICK was added, sheet $800 = CSV $800.
+
+## Structural automation bug classes identified
+
+Across the 12, **four distinct bug families**:
+
+1. **Cross-lot misposting** — DeLand-deal payments landing in DeBary's
+   Profit26 (Thompson, Emery, Tyrell so far). Inflates DeBary April
+   profit, deflates DeLand.
+2. **Phantom col G entries** — automation wrote dated note lines that
+   have no CSV match at all (Gonzales 4/17 $200, Latorre 4/14 $160,
+   Hassanin 4/16 +$14).
+3. **Missing posts** — payment came in but never landed anywhere
+   (Green $100, Logan $300, Carrasquillo $500). Carrasquillo's note
+   "re-queued after stale-alias" suggests an automation retry path
+   that never recovered.
+4. **Wrong customer/car routing** — Tyrell's $440 logged as
+   "14 Fiesta" (he owns a 07 Cobalt). Santiago's pre-April col G
+   $620 OVER suggests another customer's payments hit Santiago's row.
+
+## Where we left off
+
+About to build a **systematic April Profit26 audit** that covers
+the unknown unknowns (entries in Profit26 that don't match any deal
+or any CSV). Logic:
+
+For every line in April Profit26 (Payments + Cash Sales notes for
+both lots):
+1. Parse: `<amount> <desc> <M>/<D>`
+2. Find the matching deal (by car_desc/last name across deals26/25/24).
+3. Pull deal's F. **F > 0 → entry should be here. F ≤ 0 → entry is
+   misplaced (should be in col G).**
+4. Find a matching CSV transaction (same customer, ~same date, ~same
+   amount). No match = phantom.
+5. Check for duplicates (same line appearing twice in the cell note).
+
+Inverse pass — for every April CSV transaction:
+- If linked deal F > 0 → must appear in Profit26 (same lot)
+- If linked deal F ≤ 0 → must appear in col G dated notes
+
+The pair of passes catches:
+- Phantom Profit posts (no CSV)
+- Wrong-lot Profit posts (in opposite lot)
+- Wrong-deal posts (deal not in profit)
+- Missing posts (CSV has it, neither side has it)
+- Duplicate Profit posts
+- Threshold-crossing edge cases
+
+## Pending implementation
+1. Build `scripts/audit_april_profit.py` doing the above bidirectional
+   audit. Use Apps Script `read_profit` for Profit26 and `read_all`
+   for Deals25/24. Use `deals26` from Supabase. Use the same
+   transaction-type filtering as `reconcile_payments.py`.
+2. Output JSON to `scripts/april_audit_report.json` and a console
+   summary by bug-class (cross-lot, phantom, missing, duplicate,
+   wrong-deal).
+3. Once validated, push results into `payment_reviews` (or a new
+   `profit_audit_reviews` if the schema's a bad fit) so the Review UI
+   can drive the per-entry fixes.
+4. Build Review UI extension for the new reason types — Dismiss / Fix
+   buttons that route to `correct_payments` (col G fix),
+   `profit_remove_entry` (Profit removal), or
+   `deals26_append_payment_direct` (add missing payment).
+
+## Known infrastructure issues to fix
+- **Deals25 DeBary timeout** — Apps Script `read_all` consistently
+  times out (90 s × 3 retries fail). Affects ~150 rows of 2025
+  DeBary deals that aren't in any of the audits. Likely needs
+  chunked read or direct Sheets API. The Deals26 Supabase mirror
+  doesn't help since 2025 deals aren't there.
+- **deals25 + deals24 missing from Supabase.** Currently we read them
+  via Apps Script `read_all`. Adding tables + reconciler would let
+  the Python scripts use Supabase (much faster). Out of scope for
+  the audit but should land eventually.
+- **Same-name multi-car ambiguity (118 cases).** Brittany Sinclair
+  has 4 cars under one full name. The fix is **saledate-chronology
+  pairing**: sort SoldInventory rows for each name by saledate, sort
+  CSV custaccountno's by first txn date, pair them up 1:1. Not
+  blocking April audit (those 118 are mostly pre-April deals).
+
+## Files touched today
+- `scripts/reconcile_payments.py` — new (~370 lines)
+- `google-apps-script.js` — added `Deals25` + `Deals24` to both
+  `LOCATION_CONFIGS`; added `correct_payments` action (used by
+  upcoming Review UI Fix flow).
+- `apps-script/.clasp.json` — Script ID wired up (clasp deploy works).
+- `apps-script/appsscript.json` — V8 webapp manifest.
+- `apps-script/.claspignore` — only Code.gs + manifest pushed.
+- `scripts/deploy-apps-script.sh` — single-command redeploy.
+- `scripts/apps-script-deploy-setup.md` — operator's notes.
+- `.gitignore` — added `apps-script/Code.gs` and `.clasprc.json`.
+
+## Standing rules (still in force from prior days)
+- No auto-posting (set 2026-04-24, Day 7 top of file).
+- All work pushes from `/c/Users/Vlad/Desktop/carfactory` (main
+  repo), never from a worktree (CLAUDE.md). `git push` updates both
+  `master` and `main` via dual refspec — verified.
+- Always test in preview before pushing.
+
+---
+
+# Day 8 (continued, 2026-04-28) — Audit walkthrough complete
+
+## Outcome
+
+Walked all 67 audit-flagged April issues with Vlad case-by-case. Final
+result: **April Profit26 audit is clean**. Most flags were matcher
+errors (the audit script couldn't disambiguate compound surnames,
+multi-customer same-name, threshold-crossing accounting). A handful of
+real fixes landed:
+
+### Real fixes applied (mutations to live sheet)
+
+| # | What | Net effect |
+|---|---|---|
+| 1 | Lopez Adrianna — moved $500 from DeBary Profit26 → col G of Deals25 DeBary row 354 (deal F=−$920) | DeBary Profit26 −$500 |
+| 2 | Emery Ethan — removed 3 Profit26 entries totaling $1,050; added 1 $350 to col G of row 254 (deal F=−$373) | DeBary Profit26 −$1,050 |
+| 3 | Carrasquillo Oscar — removed $500 from DeLand Profit26, added $220 catch-up + $500 split (col G $93 + Profit26 $407) | DeLand −$500, DeBary +$407, col G +$220, F: −$93 → +$127 |
+| 4 | Garcia Justin (RARE: DeBary deal w/ DeLand paperwork) — added $700 April to col G row 69 (F=−$3,348) | col G of row 69 +$700 |
+| 5 | Ozuna Rafael — converted flat $800 col G to dated `=500+300` formula with 2 dated notes via `deals26_set_row_g` | No \$ change, just formatting |
+| 6 | Toro Maxcio — removed $75 registration fee from DeBary Profit26 | DeBary Profit26 −$75 |
+| 7 | Santiago Ruben (RARE: DeLand deal w/ DeBary paperwork) — moved $341 from DeBary Profit26 → col G of DeLand row 43 (F=−$469) | DeBary Profit26 −$341, col G of DeLand row 43 +$341 |
+| 8 | Gonzalez Paola — added missing $200 4/17 to DeBary Profit26 (Sonata deal in profit) | DeBary Profit26 +$200 |
+
+Net DeBary Profit26 change: rough estimate −$1,500 from audit pass.
+Net DeLand Profit26 change: −$500 (Carrasquillo only — went to DeBary
+correctly).
+
+### Cases dismissed (not fixed)
+
+- Nieves Angelina — $742.62 phantom DMS PAY OFF on a long-closed
+  account, not a real payment.
+- Sierra Johnson — $23.31 over CSV but likely small CC fee, deal in
+  profit, dual-tracked OK.
+- Santiago Jose Luis Berdecia Giraldo — turned out to be the audit
+  matcher misreading the long compound name. Deal IS in Deals26
+  DeLand row 54 (`12 Accord cp white 230k Santiago`); the $275 4/24
+  is correctly placed in col G. No fix needed.
+
+### Audit-time finding: matcher must respect CSV `lookupname` comma-split
+
+When CSV has names like `SANTIAGO, JOSE LUIS BERDECIA GIRALDO`, the
+audit's tokenizer was using the LAST word ("GIRALDO") or middle words
+("BERDECIA") as the surname. The actual surname is the part BEFORE
+the comma (SANTIAGO). Captured in Automation.md as a rule.
+
+## Knowledge captured
+
+`Automation.md` at the repo root now documents:
+1. The cutoff date (2026-04-09)
+2. F-based profit threshold rule
+3. Where payments go (col G vs Profit26 vs threshold split)
+4. Backup-in-col-G-when-in-profit rule
+5. Lot vs paperwork-lot vs pay-lot trichotomy (incl. rare cross-lot
+   paperwork cases)
+6. Same-name customer disambiguation
+7. CSV transaction-type filter rules
+8. Apps Script actions reference (incl. the buggy `correct_payments`)
+9. Standing no-auto-post rule
+10. Plus an "Other gotchas" section covering: phantom DMS PAY OFFs,
+    truncation to 26 chars, threshold-offset accounting, CC 4% fees,
+    registration fees as app-only entries, multi-car-same-customer,
+    misfiled duplicates, first-name-as-row-identifier (bypass needed)
+
+Plus a running log of all 31 resolved cases with one-line
+explanations.
+
+## New Apps Script actions deployed (v77, v78)
+
+- `read_row` (tab, location, row) — single-row read, bypasses the
+  Deals25 DeBary timeout that's been blocking us all day.
+- `find_rows` (tab, location, query) — TextFinder substring search
+  across the tab. Returns matching rows with full column data. Used
+  for "find the deal for customer X" without enumeration.
+
+Both are now critical tooling — the audit walk would have been
+impossible without `find_rows` (Deals25 DeBary still times out on
+`read_all`).
+
+## Issues found in Apps Script that need attention
+
+- `correct_payments` action is **broken** — the dispatcher's outer
+  tab-config check at line 425 runs before correct_payments at line
+  534. Without `body.tab` set on the outer body, it returns "Unknown
+  tab: undefined". Workaround: use `deals26_set_row_g` instead. Real
+  fix: move the `correct_payments` handler above line 425 in the
+  dispatcher (similar to the Profit26 actions block).
+
+## Tomorrow's priorities
+
+1. Run `audit_april_profit.py` again with the matcher improvements:
+   compound-surname token-based search, 4% CC fee tolerance,
+   pair-sum + split detection, threshold-overflow recognition. Should
+   surface ~zero false positives now.
+2. Push the audit logic into the Review UI so Vlad has a control
+   panel for these reconciliations going forward.
+3. Address the Apps Script `correct_payments` dispatcher bug.
+4. Enter the Santiago Jose Luis Berdecia Giraldo deal in Deals26
+   DeLand.
+5. Build the saledate-chronology pairing for the 118 ambiguous cases
+   in `reconcile_payments.py` (Phase 6 territory but not blocking
+   anything immediate).
+6. Investigate the $3,421 unexplained DeBary Profit26 drop noted
+   mid-session (Vlad said "I know what happened" — confirm).

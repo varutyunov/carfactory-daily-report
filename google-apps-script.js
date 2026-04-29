@@ -39,6 +39,18 @@ var LOCATION_CONFIGS = {
       startRow: 2,
       columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
       cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
+    },
+    'Deals25': {
+      table: 'deals25',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
+    },
+    'Deals24': {
+      table: 'deals24',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
     }
   },
   'DeLand': {
@@ -50,6 +62,18 @@ var LOCATION_CONFIGS = {
     },
     'Deals26': {
       table: 'deals26',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
+    },
+    'Deals25': {
+      table: 'deals25',
+      startRow: 2,
+      columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
+      cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
+    },
+    'Deals24': {
+      table: 'deals24',
       startRow: 2,
       columns: { 'A': 'cost', 'B': 'car_desc', 'C': 'expenses', 'D': 'taxes', 'E': 'money', 'F': 'owed', 'G': 'payments', 'H': 'dealer_fee', 'I': 'manny', 'J': 'deal_num', 'K': 'gps_sold' },
       cellNotes: { 'C': 'expense_notes', 'G': 'payment_notes' }
@@ -496,6 +520,56 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'insert', row: insertRow });
     }
 
+    // ── ACTION: CORRECT_PAYMENTS — overwrite col G with a new total + note ──
+    // Used by the CSV-reconciliation Review fix flow to set a row's payment
+    // total to the authoritative CSV amount and replace the note with the
+    // CSV transaction breakdown.
+    //
+    // Inputs: body.data.{ tab, row, new_total, new_notes, expected_car_desc }
+    //   tab              — 'Deals26' | 'Deals25' | 'Deals24'
+    //   row              — sheet row number (1-based)
+    //   new_total        — the correct total (sets col G formula to =new_total)
+    //   new_notes        — full replacement note string (CSV breakdown)
+    //   expected_car_desc — safety: refuse if col B doesn't match (drift guard)
+    if (action === 'correct_payments') {
+      try {
+        var cpData = body.data || {};
+        var cpTab   = String(cpData.tab || 'Deals26');
+        var cpRow   = parseInt(cpData.row);
+        var cpTotal = parseFloat(cpData.new_total);
+        var cpNotes = String(cpData.new_notes || '');
+        var cpExp   = cpData.expected_car_desc ? String(cpData.expected_car_desc).trim().toLowerCase() : null;
+
+        if (!cpTab || !cpRow || cpRow < 2 || isNaN(cpTotal) || cpTotal < 0) {
+          return jsonResponse({ ok: false, error: 'invalid_params_correct_payments' });
+        }
+        if (cpTab !== 'Deals26' && cpTab !== 'Deals25' && cpTab !== 'Deals24') {
+          return jsonResponse({ ok: false, error: 'invalid_tab_correct_payments' });
+        }
+        var cpSs = SpreadsheetApp.openById(_getSpreadsheetId(location));
+        var cpSheet = cpSs.getSheetByName(cpTab);
+        if (!cpSheet) return jsonResponse({ ok: false, error: 'no_sheet_correct_payments' });
+
+        var cpDescVal = String(cpSheet.getRange(cpRow, 2).getValue() || '').trim();
+        if (!cpDescVal) return jsonResponse({ ok: false, error: 'empty_row_correct_payments', row: cpRow });
+        if (cpExp && cpDescVal.toLowerCase() !== cpExp) {
+          return jsonResponse({ ok: false, error: 'row_drift_correct_payments', expected: cpExp, actual: cpDescVal.toLowerCase() });
+        }
+
+        var cpGCell = cpSheet.getRange(cpRow, 7);
+        PropertiesService.getScriptProperties().setProperty('_syncLockTime', String(Date.now()));
+        cpGCell.setFormula(cpTotal > 0 ? '=' + cpTotal : '');
+        cpGCell.setNumberFormat('$#,##0');
+        cpGCell.setNote(cpNotes);
+        SpreadsheetApp.flush();
+
+        var cpFOwed = parseFloat(cpSheet.getRange(cpRow, 6).getValue()) || 0;
+        return jsonResponse({ ok: true, action: 'correct_payments', tab: cpTab, row: cpRow, new_total: cpTotal, owed: cpFOwed });
+      } catch(err) {
+        return jsonResponse({ ok: false, error: 'exception_correct_payments', message: err.message });
+      }
+    }
+
     // ── ACTION: DELETE — remove row entirely (no orphan formatting) ─
     if (action === 'delete') {
       var rowIndex = body.row_index;
@@ -561,6 +635,99 @@ function doPost(e) {
         }
       }
       return jsonResponse({ ok: true, action: 'delete', row: targetRow, method: 'deleteRow', resequenced: resequenced });
+    }
+
+    // ── ACTION: FIND_ROWS — search rows by text (uses TextFinder) ───
+    // Inputs: body.data.{ query } — case-insensitive substring search across
+    // the whole tab. Returns matching rows with full column data.
+    // Used to find a deal row when read_all times out (Deals25 DeBary).
+    if (action === 'find_rows') {
+      var queryF = String((body.data && body.data.query) || '').trim();
+      if (!queryF) {
+        return jsonResponse({ ok: false, error: 'no_query' });
+      }
+      var finder = sheet.createTextFinder(queryF).matchCase(false);
+      var matches = finder.findAll();
+      var resultsF = [];
+      var seenRowsF = {};
+      var colKeysF = Object.keys(config.columns);
+      for (var mi = 0; mi < matches.length; mi++) {
+        var rngF = matches[mi];
+        var rF = rngF.getRow();
+        if (seenRowsF[rF]) continue;
+        if (rF < config.startRow) continue;
+        seenRowsF[rF] = true;
+        var rowDataF = {};
+        for (var ci = 0; ci < colKeysF.length; ci++) {
+          var letterF = colKeysF[ci];
+          var fieldF  = config.columns[letterF];
+          var nF      = letterToColumn(letterF);
+          var valF    = sheet.getRange(rF, nF).getValue();
+          if (fieldF === 'gps_sold') {
+            rowDataF[fieldF] = (valF === 'X' || valF === 'x' || valF === true);
+          } else if (fieldF === 'car_name' || fieldF === 'car_desc') {
+            rowDataF[fieldF] = String(valF || '');
+          } else if (fieldF === 'deal_num') {
+            rowDataF[fieldF] = parseInt(valF) || 0;
+          } else {
+            rowDataF[fieldF] = parseFloat(String(valF).replace(/[$,]/g, '')) || 0;
+          }
+        }
+        if (config.cellNotes) {
+          var noteKeysF = Object.keys(config.cellNotes);
+          for (var nki = 0; nki < noteKeysF.length; nki++) {
+            var nLetterF = noteKeysF[nki];
+            var nFieldF  = config.cellNotes[nLetterF];
+            var nNumF    = letterToColumn(nLetterF);
+            rowDataF[nFieldF] = sheet.getRange(rF, nNumF).getNote() || '';
+          }
+        }
+        rowDataF._sheetRow = rF;
+        rowDataF._rowIndex = rF - config.startRow + 1;
+        resultsF.push(rowDataF);
+      }
+      return jsonResponse({ ok: true, action: 'find_rows', query: queryF, count: resultsF.length, rows: resultsF });
+    }
+
+    // ── ACTION: READ_ROW — read a single row by row number ───
+    // Inputs: body.data.{ row } (1-based sheet row). Tab + location come from
+    // outer body. Used to bypass read_all's full-tab scan, which times out on
+    // Deals25 DeBary specifically (large tab + heavy formulas push past the
+    // URLFetch deadline). Returns the same per-row shape read_all does.
+    if (action === 'read_row') {
+      var targetRowR = parseInt(body.data && body.data.row) || 0;
+      if (targetRowR < 1) {
+        return jsonResponse({ ok: false, error: 'invalid_row' });
+      }
+      var rowDataR = {};
+      var colKeysR = Object.keys(config.columns);
+      for (var ci = 0; ci < colKeysR.length; ci++) {
+        var letterR = colKeysR[ci];
+        var fieldR  = config.columns[letterR];
+        var nR      = letterToColumn(letterR);
+        var valR    = sheet.getRange(targetRowR, nR).getValue();
+        if (fieldR === 'gps_sold') {
+          rowDataR[fieldR] = (valR === 'X' || valR === 'x' || valR === true);
+        } else if (fieldR === 'car_name' || fieldR === 'car_desc') {
+          rowDataR[fieldR] = String(valR || '');
+        } else if (fieldR === 'deal_num') {
+          rowDataR[fieldR] = parseInt(valR) || 0;
+        } else {
+          rowDataR[fieldR] = parseFloat(String(valR).replace(/[$,]/g, '')) || 0;
+        }
+      }
+      if (config.cellNotes) {
+        var noteKeysR = Object.keys(config.cellNotes);
+        for (var ni = 0; ni < noteKeysR.length; ni++) {
+          var nLetterR = noteKeysR[ni];
+          var nFieldR  = config.cellNotes[nLetterR];
+          var nNumR    = letterToColumn(nLetterR);
+          rowDataR[nFieldR] = sheet.getRange(targetRowR, nNumR).getNote() || '';
+        }
+      }
+      rowDataR._sheetRow  = targetRowR;
+      rowDataR._rowIndex  = targetRowR - config.startRow + 1;
+      return jsonResponse({ ok: true, action: 'read_row', row: rowDataR });
     }
 
     // ── ACTION: READ_ALL — read all rows for reconciliation ───
