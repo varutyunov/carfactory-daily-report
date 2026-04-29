@@ -96,18 +96,24 @@ will not have any post-cutoff CSV activity.
 
 ## 8. Apps Script actions — what's available for fixes
 
+Live deployment is at `script.google.com/macros/.../exec`. Redeploy
+in one command: `bash scripts/deploy-apps-script.sh` (clasp push +
+update existing deployment ID, URL stays stable).
+
 | Action | Inputs | What it does |
 |---|---|---|
-| `read_row` | tab, location, row | Read one Deals row (used to bypass `read_all` timeout on Deals25 DeBary) |
-| `find_rows` | tab, location, query | TextFinder search — returns matching rows with full data |
-| `read_all` | tab, location | Bulk read (times out on Deals25 DeBary) |
-| `read_profit` | location | Read full Profit26 tab (months + items + notes) |
-| `profit_append_entry` | month_idx, row_type, amount, description | Add one entry to Payments/Cash Sales/Extras |
-| `profit_remove_entry` | month_idx, row_type, amount, description | Remove one matching entry |
-| `profit_update_entry` | month_idx, row_type, old_amount/desc, new_amount/desc | Edit one entry |
-| `deals26_append_payment_direct` | tab, row, amount, note_line, expected_car_desc | Append to col G formula + note |
-| `correct_payments` | tab, row, new_total, new_notes, expected_car_desc | Replace col G total + notes. **Fixed 2026-04-28 (v79)** — handler moved before the dispatcher's tab-config check, so `body.data.tab` works without needing `body.tab`. Note: sets formula to flat `=<total>`, so still use `deals26_set_row_g` when you need a breakdown formula. |
-| `deals26_set_row_g` | tab, row, payments_formula, payment_notes | Atomic set of col G formula + notes. Use for surgical fixes (rebuild a row's formula, replace notes). The right tool for "convert flat $800 to `=500+300` with dated notes". |
+| `read_row` | tab, location, row | Read one Deals row by sheet row #. Single API call — fast. |
+| `find_rows` | tab, location, query | TextFinder substring search across the whole tab. Returns matching rows with full column data. |
+| `read_all` | tab, location | Bulk read of all rows in a Deals tab. **Bulk reads since v81 (2026-04-28)** — N×M cell-by-cell calls replaced by 2 range reads (`getValues` + `getNotes`). ~22× faster; Deals25 DeBary now reads in 4s instead of timing out. |
+| `read_profit` | location | Read full Profit26 tab (months + items + notes). |
+| `profit_append_entry` | month_idx, row_type, amount, description | Add one entry to Payments/Cash Sales/Extras. |
+| `profit_remove_entry` | month_idx, row_type, amount, description | Remove one matching entry. Matches by amount + description. |
+| `profit_update_entry` | month_idx, row_type, old_amount/desc, new_amount/desc | Edit one entry in place. |
+| `deals26_append_payment_direct` | tab, row, amount, note_line, expected_car_desc, last_names | Append to col G formula + note. Drift guard checks `expected_car_desc` against col B; surname guard checks `last_names` are present in the row. |
+| `correct_payments` | tab, row, new_total, new_notes, expected_car_desc | Replace col G total + notes. **Fixed v79 (2026-04-28)** — handler moved before the dispatcher's tab-config check, so `body.data.tab` works without needing `body.tab`. Sets formula to flat `=<total>`, so use `deals26_set_row_g` when you need a breakdown formula. |
+| `deals26_set_row_g` | tab, row, payments_formula, payment_notes, clear | Atomic set of col G formula + notes. Use for surgical fixes (rebuild a row's formula, replace notes). The right tool for "convert flat $800 to `=500+300` with dated notes". |
+| `deals26_get_row_g` | tab, row | Read col G formula + value + note + all-row col data. |
+| `deals_lookup_by_lastname` | last_names[], owed_positive_only?, limit? | Cross-tab last-name search across both lots. Used by CarPay/Review when the matcher needs to surface candidates. |
 
 ## 9. Standing rules (from earlier)
 
@@ -286,5 +292,144 @@ will not have any post-cutoff CSV activity.
 | 28 | Rojas/Jasmine — 17 Pilot DeBary Deals25 row 149 | $450 4/28 CarPay payment landed as `no_vehicle` review — CarPay customer record had no vehicle linked, AND Sheet row labeled by first name "Jasmine" not surname | Threshold-crossing post: $450 → col G of Deals25 row 149 with `bypass_surname_check:true` and note `"450 jasmine 4/28"`; pre-payment owed −$150 → post-payment +$300, so $300 overflow → DeBary Profit26 April Payments. Review #1042 approved. |
 | 29 | Goodman jr — 03 RSX red 189k DeLand deal #66 | New finance deal landed as `multiple` review (instead of `deal_pending`); only candidate surfaced was an unrelated Lesabre Goodman in DeBary. Root cause: IC #224 (12 Odyssey white 175k DeBary) was incorrectly linked to `car_id=1369` (the RSX in DeLand), blocking IC #233 (the actual RSX cost row) from ever linking | Re-linked IC #224 → inventory #1359 (correct Odyssey); linked IC #233 → inventory #1369 (RSX); ran `_autopopulateDeals26` → Deals26 DeLand row 64 created with money=$2,288, owed=−$843. Review #802 approved. Row label initially built as "Jr" — patched `_extractSurname` to skip Jr/Sr/II/III suffix tokens; sheet cell corrected to "Goodman". |
 | 30 | Inventory review tab spam (228 cards when 5 expected) | `_rvForceScan` flagged every CSV car missing from `inventory_costs` — 222 of those were pre-existing inventory Vlad never tracked, plus duplicates from earlier broken-scan runs | Bulk auto_resolved 223 false-positive reviews (kept 5 truly-new); patched scan to require `inventory.created_at` within 7 days; added `_normalizeIcKey` color aliases (nardo/charcoal → gray, etc.) and trailing-row-number stripping; raised review fetch limit 100→300 so all valid Inventory cards are visible. |
+
+---
+
+## Bug fixes shipped Day 8 (2026-04-28)
+
+Five distinct automation bugs identified during the audit walkthrough,
+plus tooling improvements. All live on `main` (and Apps Script v79 →
+v81).
+
+| # | Bug | What was wrong | Fix |
+|---|---|---|---|
+| **disp** | `correct_payments` returned "Unknown tab: undefined" | Handler positioned at line 534 of Apps Script, AFTER the dispatcher's tab-config check at line 425 | Handler moved before line 425 (after `deals26_set_row_g`). Deployed v79. |
+| **#1** | Wrong-lot routing for cross-lot customers | `_findDealAlias` and `_findCarPayAccountAlias` didn't return `location`; alias direct-write paths used `payload.location` (= where customer paid) for both col G + Profit26 post, but a deal can sit on the opposite lot. | Both helpers now SELECT and return `location`. 4 alias direct-write call sites updated to use `alias.location`. `_appendPaymentToProfit` accepts a `dealLocation` override. |
+| **#2** | Stale-alias re-queue dead-end | When `deals26_append_payment_direct` returned `row_drift`/`surname_mismatch`/`empty_row` (v65/v66 guards), the code queued an empty-candidates `payment_reviews` card → user couldn't approve it → payment dead-ended. | Drift errors now deactivate the stale link AND fall through to the standard approve-first / matcher pipeline (which produces real candidates). 2 paths fixed: Stage-2 resolver + CarPay variant. |
+| **#3** | Wrong car description on alias post | `noteLine` was built from `payload.vehicle_*` fields, which come from `carpay_customers.vehicle` or receipt OCR. If vehicle metadata was updated for a NEW car but the alias still pointed at the OLD row, the note would say new car's text on old row. | New helper `_paymentNoteLineFromDeal(amount, carDesc, paymentDate)` builds the note from the matched ROW's `car_desc`. 4 alias direct-write call sites switched to use it. |
+| **#4** | Matcher dup-check returned input lot, not deal lot | `deals26_append_payment` action returned `location: location` (input/payment lot) on `already_posted` and `possible_duplicate` paths instead of `useLoc` (deal's actual sheet). | Changed to `location: useLoc` on both paths. Cross-lot customers no longer get re-routed to wrong lot's Profit26 on dup-check. Deployed v80. |
+| **#5** | Deal-link silent breakage on row drift | When a row in a Deals tab drifts (insert/delete shifts rows), `deal_links.target_row` becomes stale and posts go to the wrong car. | Self-heal: on drift error, call `find_rows` (TextFinder) with the link's `car_desc`. On unique match, update `deal_links.target_row` and retry the post. Wired into Stage-2 resolver + CarPay paths. |
+| **#5b** | Alias direct-write had no drift guard at all | `_findDealAlias`-driven posts didn't pass `expected_car_desc`, so silent mis-posts to drifted rows were possible. | Added `expected_car_desc` to all 3 alias-direct-write call sites + same self-heal logic as Bug #5 via `_updatePaymentAliasRow`. |
+| **bulk** | `read_all` timed out on Deals25 DeBary | Cell-by-cell `getRange().getValue()` calls = ~5,100 API round-trips for that tab, blowing the URLFetch deadline. | Switched to bulk `getRange(...).getValues()` + `getNotes()` — 2 calls total. Deals25 DeBary now reads in ~4s instead of timing out. Deployed v81. |
+
+## Audit + Reconcile tooling (Day 8)
+
+`scripts/reconcile_payments.py`
+- Account-level CSV reconciliation. Compares col G total to CSV total
+  per account, post-CUTOFF_DATE only.
+- Saledate-chronology pairing for same-name multi-car customers:
+  builds `inv_by_full_name` sorted by saledate + `name_acct_pairing`
+  sorted by first txn date, pairs them positionally when counts
+  match. Helper `acct_for_inv_record(inv_row)`.
+- Conservative — only pairs when `len(inv_list) == len(accts)`.
+
+`scripts/audit_april_profit.py` — bidirectional April Profit26 audit
+- **FORWARD pass**: every Profit26 line for both lots → must (a)
+  match a CSV April transaction and (b) be on a deal with F > 0.
+  Buckets: `ok`, `threshold_overflow`, `cc_fee_4pct`, `wrong_lot`,
+  `wrong_deal`, `phantom`, `duplicate`, `no_deal`, `ambiguous_deal`.
+- **INVERSE pass**: every CSV April transaction → must land in the
+  right place (col G or Profit26 by F status). Buckets:
+  `ok_in_profit`, `ok_in_col_g`, `ok_in_col_g_backup_only` (F>0 but
+  col G has it as backup — Rule 4), `tracked_in_profit_misplaced`
+  (F≤0 but found in Profit26), `wrong_lot_post`,
+  `missing_from_profit`, `missing_from_col_g` (truly dropped).
+- 4% CC fee tolerance on both passes.
+- Threshold-overflow detection for in-profit deals.
+- Within-account pair-sum (was bug: summed across all accts).
+- Truncation tolerance for surname matching (`whitted` ↔ `whitte`).
+- Conservative `deal_for_account`: prefers full-lookupname + year/
+  model match in inv; falls through to recent-col-G-activity > F>0;
+  bucks ambiguous when can't disambiguate.
+- `--push` flag: inserts `payment_reviews` rows with
+  `reason='csv_reconciliation'` for actionable findings (phantoms,
+  wrong_lot, missing_from_profit, missing_from_col_g). Idempotent
+  on re-run via (customer, direction) dedup.
+
+## Review UI extension for `csv_reconciliation` (Day 8)
+
+The Review tab (Payments sub-tab) renders a dedicated card type for
+`reason='csv_reconciliation'` rows.
+
+Card content:
+- **Direction header** with color: Sheet underpaid / Sheet overpaid /
+  No SoldInventory match / phantom / wrong-lot.
+- **Payment-source tag**: lazy-loaded after render. Cross-checks
+  customer + amount against `payments` table (app/scanned receipts)
+  and `carpay_payment_postings` (CarPay portal). Tags as `app
+  (scanned receipt)`, `CarPay portal`, `app + CarPay`, or `CSV/DMS
+  only (no app or CarPay record)`.
+- **Diff banner**: sheet $X vs CSV $Y with the Δ in red/yellow.
+- **CSV transactions table**: scrollable monospace, shows date /
+  type / amount / ref.
+- **Sheet payment_notes**: preformatted, scrollable.
+- **Fix preview block**: code-styled lines showing EXACTLY what
+  Apply Fix will write (e.g., `Append to col G of Deals26 row 12
+  [DeBary]: 250 14 Accord lopez 4/9`). Visible before tapping.
+
+Three actions:
+- **Dismiss** → `_reviewReject` → status='rejected'. No sheet
+  change. Used for non-actionable items.
+- **Mark resolved** → `_reviewMarkResolved` → status='resolved'.
+  No sheet change. Used when the discrepancy is acceptable as-is
+  (post-profit payment in Profit tab not col G, known fee, etc.).
+- **Apply fix** → `_csvReconAutoFix` → executes the fix on the
+  sheet (with confirm dialog), then marks resolved with
+  `resolved_by = userName + ' (auto-fix <kind>)'`.
+
+Apply Fix supported directions:
+- `sheet_short` / `missing_from_col_g` → append missing CSV txns
+  to col G via `deals26_append_payment_direct`.
+- `missing_from_profit` → append to deal's-lot Profit26 April
+  Payments via `profit_append_entry`.
+- `phantom_in_sheet` → remove via `profit_remove_entry`.
+- `wrong_lot` → `profit_remove_entry` on wrong lot, then
+  `profit_append_entry` on right lot.
+
+Idempotent: dedup logic (with 4% CC fee tolerance) skips entries
+already present in col G / Profit26.
+
+## Future enhancements (in the tank)
+
+Not built yet. Captured here so they don't get lost.
+
+- **Apply Fix preview matches dialog** — the confirm dialog could
+  use the same code-styled lines as the card preview for visual
+  consistency. Currently dialog is plain text.
+- **Manual reassign on csv_reconciliation cards** — when the
+  matcher's deal pick is clearly wrong (Vlad eyeballs the card and
+  knows it's the wrong car), let Vlad pick the correct deal in the
+  Review UI itself instead of having to fix manually outside.
+- **Push the ambiguous_deal cases too** — currently only actionable
+  buckets push. Ambiguous cases get silently dropped. Push them
+  with reason `'audit_ambiguous'` and let Vlad pick the right
+  deal. Becomes a manual-assign flow.
+- **Card grouping by customer** — collapse same-customer cards
+  into one parent (e.g., "Adams" with 2 sub-cards). Reduces visual
+  clutter when one customer has multiple findings.
+- **Reconcile_payments.py compound-name fix** — currently uses pure
+  last-name lookup; should mirror `audit_april_profit.py`'s
+  full-name-aware approach.
+- **Inverse audit for Cash Sales rows** — currently only Payments
+  rows are audited. Cash Sales rows in Profit26 should also
+  reconcile against deal-creation events (validating that every
+  Cash Sales line corresponds to a real deal close).
+- **CarPay cross-check audit** — for each CarPay payment, confirm
+  it landed in the right place (col G of right deal OR Profit26 of
+  right lot). Flag CarPay-side "ghost" postings that didn't make
+  it to the sheet.
+- **`payment_deal_aliases` self-heal extension** — Bug #5b only
+  covers the alias direct-write path. The alias may also drift
+  silently when the matcher creates new aliases pointing at rows
+  that later move. A periodic cleanup job that re-validates
+  `target_row` against `car_desc` would catch this.
+- **May/June+ audit cycles** — current scripts hardcode `CUTOFF_DATE
+  = '2026-04-09'` and look at April Profit26 specifically. To audit
+  later months, parameterize the cutoff and the target month
+  index, then re-run.
+- **$3,421 DeBary Profit26 mid-session drop** — Vlad said "I know
+  what happened" but never circled back to confirm. Worth checking
+  if there's a forensic trail in the audit log / Apps Script
+  Stackdriver.
 
 (Will keep extending as we work through the audit list.)
