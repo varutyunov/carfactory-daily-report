@@ -389,6 +389,44 @@ Apply Fix supported directions:
 Idempotent: dedup logic (with 4% CC fee tolerance) skips entries
 already present in col G / Profit26.
 
+## What new app-created deals look like (Day 4 onward)
+
+Important note for understanding why the audit's findings are almost
+all legacy:
+
+When a deal is created via the app's `_autopopulateDeals26` flow
+(post 2026-04-09), three linking records get created at the same
+time:
+1. `deals26` row in Supabase + corresponding sheet row.
+2. `deal_links` row keyed by VIN + customer_name + target_tab/row/
+   location.
+3. `customers` row (canonical record).
+
+For these deals, the CarPay / scanned-payment matcher chain is exact:
+CSV `lookupname` or VIN → `customers` → `deal_links` → (tab, row,
+lot). No fuzzy matching. No last-name guessing. No multi-deal
+disambiguation.
+
+Combined with Bug #5 self-heal, even if a row drifts later, the
+system relocates by `car_desc` and updates the link silently. The
+chain doesn't break.
+
+The audit findings we've been working through are almost entirely
+LEGACY:
+- Pre-app deals (no `deal_links` exist; the matcher must fuzzy-match
+  by last name + model).
+- Customers with multi-car histories spanning the pre/post-app
+  boundary (one car was hand-keyed pre-app, the next went through
+  the app).
+- Aliases learned in the early days before today's bug fixes.
+
+As legacy deals close out and new app-created ones replace them, the
+audit queue will dwindle. Going forward the cards Vlad sees will be
+limited to:
+- Brand-new edge cases (rare).
+- Periodic CSV reconciliation drift (rare, and now self-healing).
+- Truly dropped DMS payments (rare).
+
 ## Future enhancements (in the tank)
 
 Not built yet. Captured here so they don't get lost.
