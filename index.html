@@ -6124,13 +6124,14 @@ if(_savedSession){
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
       localStorage.setItem('cf_saved_pin', _savedPin||'');
-      // Refresh the auth JWT BEFORE the initial sync. The cf_jwt key is
-      // wiped on every page load by the localStorage purge above, so every
-      // restored session starts without a JWT — and post-RLS, an anon-only
-      // sbGet returns empty arrays. We must await the JWT before sync runs.
-      // Uses the saved username + pin (Phase 6 will replace this with
-      // refresh tokens stored separately from the wipe-zone).
-      var _jwtReady = (!_cfJwt() && _savedUser && _savedPin)
+      // Always acquire a fresh JWT on auto-login. Even if cf_jwt was
+      // preserved by the localStorage purge above, refreshing it via
+      // saved credentials is more reliable than trusting a cached token
+      // (which can be stale across mid-deploy JWT secret rotation, or
+      // get evicted by iOS Safari's aggressive PWA storage eviction).
+      // We must await this before sync runs — under RLS, sbGet without
+      // a valid JWT returns [] and the UI looks empty.
+      var _jwtReady = (_savedUser && _savedPin)
         ? _acquireAuthJwt(_savedUser, _savedPin).catch(function(e){ console.warn('[auth] auto-login JWT acquire failed:', e && e.message); return null; })
         : Promise.resolve(null);
       document.getElementById('login').style.display='none';
