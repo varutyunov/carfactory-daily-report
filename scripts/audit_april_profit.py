@@ -962,8 +962,22 @@ def _resolve_customer_name(profit_last, deal_car_desc):
     return (profit_last or '').upper().strip().rstrip('.,;:')
 
 pushed = skipped = errors = 0
+def _earliest_missing_date(days):
+    """Pick the earliest 'missing' CSV date from inverse-pass day details.
+    Used as the review's payment_date so the approve flow's _paymentNoteLine
+    stamps the original CSV transaction date on the col G / Profit26 line
+    instead of today's date. Without this, audit catch-up reviews approved
+    on (e.g.) 4/29 land as '470 17 Impala jackson 4/29' even when the
+    underlying CSV txn was on 4/13 — confusing on review."""
+    missing = [d.get('date') for d in (days or [])
+               if d.get('found') == 'missing' and d.get('date')]
+    if not missing:
+        return None
+    return sorted(missing)[0]
+
 def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model,
-                vehicle_vin, location, direction, snapshot, note_line):
+                vehicle_vin, location, direction, snapshot, note_line,
+                payment_date=None):
     global pushed, skipped, errors
     if already_pushed('csv_reconciliation', customer_name, direction):
         skipped += 1; return
@@ -977,7 +991,7 @@ def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model
             'vehicle_color':  '',
             'vehicle_vin':    str(vehicle_vin or ''),
             'location':       location or 'DeBary',
-            'payment_date':   None,
+            'payment_date':   payment_date,
             'payment_method': '',
             'note_line':      note_line or '',
             'reason':         'csv_reconciliation',
@@ -1094,7 +1108,10 @@ for m in inverse_results.get('missing_from_profit', []):
             'note':        f'Deal in profit but no Profit26 entry for April; col G also missing it. Truly dropped.',
             'deal_F':      m.get('deal_F'),
         },
-        note_line=''
+        note_line='',
+        # Use the earliest missing CSV date so the approve flow stamps the
+        # actual transaction date on the post line, not today's date.
+        payment_date=_earliest_missing_date(m.get('days')),
     )
 
 # Inverse — missing_from_col_g (F≤0 deal, no col G entry, not in Profit26 either)
@@ -1118,7 +1135,10 @@ for m in inverse_results.get('missing_from_col_g', []):
             'note':        f'Deal not in profit (F={m.get("deal_F")}) but no col G entry for April. Dropped payment.',
             'deal_F':      m.get('deal_F'),
         },
-        note_line=''
+        note_line='',
+        # Earliest missing CSV date — keeps the col G line dated from
+        # when the customer actually paid, not from today.
+        payment_date=_earliest_missing_date(m.get('days')),
     )
 
 print(f'  Pushed: {pushed} | Skipped (dup): {skipped} | Errors: {errors}')
