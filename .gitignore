@@ -11,3 +11,16 @@ Inventory/
 # Source of truth is google-apps-script.js at the repo root.
 apps-script/Code.gs
 .clasprc.json
+
+# Audit + reconcile output JSONs — contain customer-level data, regenerated
+# each run. Don't commit them.
+scripts/april_audit_report.json
+scripts/reconciliation_report.json
+
+# Legacy / backup files that shouldn't be in version control
+handoff.backup-*.md
+*.zip
+logs5/
+logs6/
+logs7/
+temp_form.png
