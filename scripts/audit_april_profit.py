@@ -916,18 +916,50 @@ def sb_post(table, body):
         return json.loads(r.read())
 
 def already_pushed(reason, customer_name, direction):
-    """Skip insert if a pending csv_reconciliation card for this customer
-    + direction already exists (idempotent re-runs)."""
+    """Skip insert if ANY pending review (any reason) for this customer
+    + direction already exists. Matches across reason values because the
+    same logical issue can be inserted by multiple code paths (live payment
+    flow inserts reason='multiple' / 'no_match', audit inserts reason=
+    'csv_reconciliation') — they all describe the same problem.
+    Customer match is case-insensitive (ilike) since some upstream
+    paths preserve case while others upper-case."""
     try:
         existing = sb_get('payment_reviews',
-            f'reason=eq.{reason}'
-            f'&status=eq.pending'
-            f'&customer_name=eq.{urllib.parse.quote(customer_name or "")}&limit=20')
+            f'status=eq.pending'
+            f'&customer_name=ilike.{urllib.parse.quote(customer_name or "")}'
+            f'&limit=20')
         for e in existing:
             snap = e.get('snapshot') or {}
-            if snap.get('direction') == direction: return True
-    except Exception: pass
-    return False
+            if snap.get('direction') == direction:
+                return True
+        return False
+    except Exception:
+        # Fail-safe: if dedup query errors, ASSUME duplicate to avoid
+        # creating dupes. Better to miss a real new card than spam the
+        # queue with triplicates.
+        return True
+
+def _name_from_car_desc(car_desc):
+    """Extract the canonical last name from a deal's car_desc string.
+    Format is roughly 'YY Model color [misc] LASTNAME' — last word is the
+    customer surname. Strip trailing punctuation and uppercase."""
+    if not car_desc:
+        return ''
+    words = str(car_desc).strip().split()
+    if not words:
+        return ''
+    return words[-1].upper().rstrip('.,;:')
+
+def _resolve_customer_name(profit_last, deal_car_desc):
+    """Prefer the surname from the deal's car_desc when available — that's
+    the canonical record. Profit26 description tails sometimes contain
+    abbreviations ('pa' for Pabon, 'c' for Carrasquillo) which would
+    otherwise become the customer_name. Fall back to the profit-line tail
+    only if no deal context exists."""
+    canonical = _name_from_car_desc(deal_car_desc)
+    if canonical and len(canonical) >= 2:
+        return canonical
+    return (profit_last or '').upper().strip().rstrip('.,;:')
 
 pushed = skipped = errors = 0
 def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model,
@@ -936,7 +968,7 @@ def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model
     if already_pushed('csv_reconciliation', customer_name, direction):
         skipped += 1; return
     try:
-        sb_post('payment_reviews', {
+        sb_post('payment_reviews', {  # noqa: F841 (constraint violation handled below)
             'customer_name':  customer_name or '',
             'amount':         round(abs(float(amount or 0)), 2),
             'vehicle_year':   str(vehicle_year or ''),
@@ -956,13 +988,22 @@ def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model
         })
         pushed += 1
     except Exception as e:
-        errors += 1
-        print(f'  ERROR for {customer_name}: {e}')
+        msg = str(e)
+        # 23505 = unique_violation. The DB-level partial unique index
+        # `payment_reviews_pending_unique_dir` rejects duplicate
+        # (customer_name, direction) pending pairs even when the
+        # client-side `already_pushed` check missed (e.g., a parallel
+        # write between our query and our insert). Treat as skipped.
+        if '23505' in msg or 'duplicate key' in msg.lower():
+            skipped += 1
+        else:
+            errors += 1
+            print(f'  ERROR for {customer_name}: {e}')
 
 # Forward — phantoms (no CSV match for a Profit26 entry)
 for p in forward_results.get('phantom', []):
     push_review(
-        customer_name=p.get('last_name', ''),
+        customer_name=_resolve_customer_name(p.get('last_name', ''), p.get('deal_car_desc', '')),
         amount=p.get('amount', 0),
         vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
         location=p.get('lot') or p.get('deal_loc') or 'DeBary',
@@ -989,7 +1030,7 @@ for p in forward_results.get('phantom', []):
 # Forward — wrong-lot
 for p in forward_results.get('wrong_lot', []):
     push_review(
-        customer_name=p.get('last_name', ''),
+        customer_name=_resolve_customer_name(p.get('last_name', ''), p.get('deal_car_desc', '')),
         amount=p.get('amount', 0),
         vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
         location=p.get('deal_loc') or 'DeBary',
