@@ -21932,7 +21932,48 @@ async function _reviewApprovePending(id){
       alert('Sheet name can\'t be empty.');
       return;
     }
-    if (!confirm('Add "' + icDraft.car_name + '" to ' + (icDraft.location || 'DeBary') + ' Inventory Sheet?')) return;
+    // Cost backfill: if the cron-side queueing got a stale CSV (race
+    // between dealer push and CSV publish), purchase_cost is $0 even
+    // when the dealer system has the real cost. Re-fetch CSVs on
+    // approve and look up by VIN/stock before writing $0 to the sheet.
+    if ((parseFloat(icDraft.purchase_cost) || 0) <= 0 && icDraft.car_id){
+      try {
+        var _csvLink = (S.inventory || []).find(function(c){ return c.id === icDraft.car_id; });
+        var _csvVin = _csvLink && _csvLink.vin;
+        var _csvStock = _csvLink && _csvLink.stock;
+        if (_csvVin || _csvStock){
+          var _DEBARY='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMaster.csv';
+          var _DELAND='https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/InventoryMasterDeland.csv';
+          var _urls=[{u:S.syncUrl||_DEBARY,loc:'DeBary'},{u:_DELAND,loc:'DeLand'}];
+          var _foundCost = 0;
+          for (var _ui = 0; _ui < _urls.length && !_foundCost; _ui++){
+            try {
+              var _resp = await fetch(_urls[_ui].u + '?t=' + Date.now());
+              if (!_resp.ok) continue;
+              var _txt = await _resp.text();
+              var _parsed = parseCSV(_txt, _urls[_ui].loc);
+              for (var _pi = 0; _pi < _parsed.length; _pi++){
+                var _pc = _parsed[_pi];
+                if ((_csvVin && _pc.vin === _csvVin) || (_csvStock && _pc.stock === _csvStock)){
+                  if (_pc.cost && _pc.cost > 0){ _foundCost = _pc.cost; break; }
+                }
+              }
+            } catch(_){}
+          }
+          if (_foundCost > 0){
+            console.log('[inv-create approve] backfilled cost from CSV: $' + _foundCost + ' for ' + icDraft.car_name);
+            icDraft.purchase_cost = _foundCost;
+          }
+        }
+      } catch(_){}
+    }
+    var _confirmMsg = 'Add "' + icDraft.car_name + '" to ' + (icDraft.location || 'DeBary') + ' Inventory Sheet?';
+    if ((parseFloat(icDraft.purchase_cost) || 0) <= 0){
+      _confirmMsg += '\n\n⚠ Cost is $0. The sheet will show $0 — fix in the Inventory Costs sheet later.';
+    } else {
+      _confirmMsg += '\n\nCost: $' + icDraft.purchase_cost;
+    }
+    if (!confirm(_confirmMsg)) return;
     _removeReviewCard(id);
     try {
       var addRes = await _executeInventoryAdd(icDraft);
