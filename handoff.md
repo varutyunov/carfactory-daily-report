@@ -1710,6 +1710,39 @@ Updated 4 alias direct-write call sites to use the helper instead of
 Falls back to the payload-based note when the alias doesn't have a
 car_desc (defensive).
 
+## Review UI extension for `csv_reconciliation` — ADDED
+
+When `scripts/reconcile_payments.py --push` (and the upcoming
+`scripts/audit_april_profit.py --push`) inserts review rows with
+`reason='csv_reconciliation'`, the Review UI now renders a dedicated
+card type instead of falling through to the generic "no_match" /
+"approve_first" template.
+
+The card shows:
+- Direction header (Sheet underpaid / Sheet overpaid / No SoldInventory match)
+- Car desc + customer + tab/row + lot
+- A big diff banner (sheet $X vs CSV $Y, with the Δ in red/yellow)
+- Full CSV transaction breakdown (date, type, amount, ref) — scrollable
+- Sheet's `payment_notes` text — preformatted, scrollable
+- Optional context note (e.g., "No SoldInventory record")
+- Dismiss + Mark Resolved buttons
+
+Two distinct resolutions:
+- **Dismiss** (`_reviewReject`): sets `status='rejected'` — used when
+  the discrepancy is wrong / not actionable.
+- **Mark Resolved** (`_reviewMarkResolved`, NEW): sets
+  `status='resolved'` — used when the discrepancy was verified
+  acceptable or handled out-of-band (e.g., post-profit payment in
+  Profit tab not col G, known fee, etc.).
+
+Both call `sbPatch('payment_reviews', id, {status, resolved_at,
+resolved_by})`. The `_reviewLoad` query (`status=eq.pending`) filters
+out resolved + rejected automatically.
+
+Card rendered before the existing `cash_sale_correction` block in
+`_reviewRender`. New cards appear in the Payments tab (default for
+unknown reasons via `_reviewIsSales` / `_reviewIsInventory` filters).
+
 ## Bug #5 — deal-link self-heal on row drift — ADDED
 
 When `deals26_append_payment_direct` returns `row_drift` /
