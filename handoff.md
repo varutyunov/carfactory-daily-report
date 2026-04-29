@@ -1861,3 +1861,161 @@ showing the old → new row).
   fails. Diagnostic effort needed (chunked read?).
 - **$3,421 DeBary Profit26 drop**: awaits Vlad's confirmation of
   what they "knew happened" mid-session.
+
+---
+
+# Day 8 (continued — late evening) — Bug fixes shipped + Review UI complete
+
+Calling it for the night. Recap of the full evening's progress, then
+tomorrow's punch list.
+
+## What landed tonight (full list)
+
+### Bug fixes shipped to live `index.html`
+- **Bug #1 — wrong-lot routing**: 4 alias direct-write paths now use
+  `alias.location` (deal's lot) instead of `payload.location` (where
+  the customer paid). Cross-lot customers (Carrasquillo style — pays
+  at Lot A but deal is on Lot B) now post to the correct sheet/profit.
+- **Bug #2 — stale-alias re-queue dead-end**: drift errors no longer
+  enqueue an empty Review card. They fall through to the matcher so
+  the payment hits the standard pipeline.
+- **Bug #3 — wrong car description on alias post**: new
+  `_paymentNoteLineFromDeal(amount, carDesc, paymentDate)` parses the
+  matched row's `car_desc` and builds the note from THAT, not from
+  payload metadata. 4 alias paths updated.
+- **Bug #5 — deal-link self-heal on row drift**: drift errors now
+  call `find_rows` to relocate the deal by `car_desc`, update
+  `deal_links.target_row`, and retry — silent self-recovery on row
+  inserts/deletes.
+- **Bug #5b — alias self-heal**: same self-heal extended to
+  `payment_deal_aliases`. Alias paths now pass `expected_car_desc`
+  and retry on relocation.
+- **`correct_payments` dispatcher fix (Apps Script v79)**: handler
+  moved before the tab-config check so it doesn't bail out with
+  "Unknown tab: undefined".
+
+### Performance fix
+- **Bulk `read_all` (Apps Script v81)**: replaced N×M individual
+  `getValue()` / `getNote()` calls with two range reads
+  (`getValues()` + `getNotes()`). Deals25 DeBary read dropped from
+  90s+ timeout to ~4s. The previously-deferred timeout item is now
+  resolved.
+
+### Audit + reconcile tooling (`scripts/audit_april_profit.py`,
+### `scripts/reconcile_payments.py`)
+- `--push` flag inserts `payment_reviews` rows with
+  `reason='csv_reconciliation'` for phantom, wrong_lot,
+  missing_from_profit, missing_from_col_g. Idempotent dedup via
+  `(customer_name, direction)`.
+- Snapshot includes `direction`, `tab`, `sheet_row`, `csv_transactions`,
+  `sheet_notes`, `profit_lot/amount/description`. `sheet_row` derived
+  from `sort_order` (deals26) or `_sheetRow` (Deals25/24).
+- Compound-name disambiguation: filter SoldInventory by FULL
+  lookupname match — fixes Adams Malic / Adams Brittney mis-link.
+- Conservative matcher: prefer recent col G activity over F>0;
+  return ambiguous when can't safely disambiguate (~3 deals).
+  Fixes Santiago BMW / Santiago Accord mis-link.
+- 4% CC fee tolerance in inverse pass — Hassanin false-positive
+  resolved (and the stale Review card auto-cleaned).
+- 2-stage inverse pass: F>0 → check Profit26, fall back to col G as
+  `ok_in_col_g_backup_only`. F≤0 → check col G, fall back to
+  Profit26 as `tracked_in_profit_misplaced`. Remaining
+  `missing_from_*` buckets now genuinely represent dropped payments.
+
+### Review UI extension (`csv_reconciliation` cards)
+- ~150 lines of dedicated renderer in `_reviewRender`: direction
+  header, customer/tab/row/lot, big diff banner, CSV transaction
+  table, preformatted sheet `payment_notes`, optional context note.
+- **Apply Fix button** (`_csvReconAutoFix`) supports 5 directions:
+  - `sheet_short` → `_csvReconAppendToColG`: append missing CSV
+    txns to col G.
+  - `phantom_in_sheet` → `_csvReconRemovePhantom`: remove
+    phantom note line(s).
+  - `wrong_lot` → `_csvReconMoveWrongLot`: relocate cross-lot post.
+  - `missing_from_profit` → `_csvReconAddToProfit`: append to
+    Profit26 with truncation rules.
+  - `missing_from_col_g` → `_csvReconAppendToColG`: same as
+    sheet_short.
+  All branches: idempotent dedup with 4% CC fee tolerance, drift-
+  guard via `expected_car_desc`, retry on relocation.
+- **Fix Preview block** (`_csvReconFixPreview`): code-styled HTML
+  preview of exactly what the Apply Fix button will write — visible
+  BEFORE the user taps.
+- **Payment Source tag** (`_csvReconLoadPaymentSources`): lazy-loads
+  per-card source by cross-checking `payments` (app-paid) vs
+  `carpay_payment_postings` (CarPay-paid).
+- **Mark Resolved** (`_reviewMarkResolved`) sets `status='resolved'`
+  for verified-OK discrepancies; distinct from Dismiss
+  (`status='rejected'`).
+
+### Documentation
+- `Automation.md` updated: Apps Script actions table refreshed,
+  Bug fixes table, Audit + Reconcile tooling section, Review UI
+  extension section, **Future enhancements (in the tank)** section
+  with 10 ideas, **What new app-created deals look like** section.
+- `.gitignore` updated to drop audit JSON outputs, legacy backups,
+  zip files, logs5/6/7, temp_form.png.
+
+### Live state
+- Last commit pushed to master + main: `c805e15` ("Automation.md:
+  document why new app-created deals 'just work'").
+- Apps Script deployed at v81 (bulk read_all).
+- 35 actionable cards in the Review queue (down from 39 after
+  conservative matcher excluded ambiguous cases).
+- All Day 8 evening commits live on both branches.
+
+## Tomorrow's punch list
+
+### 1. Walk the Review queue end-to-end
+35 pending cards. Goal: tap through each, verify the **Apply Fix**
+button does the right thing in real cases. Special attention to:
+- Idempotency — running Apply Fix twice on the same card must be
+  safe (dedup with 4% CC fee tolerance).
+- Drift-guard self-heal — confirm the relocation retry path works
+  on at least one drifted row.
+- All 5 directions (`sheet_short`, `phantom_in_sheet`, `wrong_lot`,
+  `missing_from_profit`, `missing_from_col_g`) — exercise each at
+  least once.
+- Payment Source tag — confirm CarPay vs App labeling matches the
+  Carpay/Payments cross-check.
+- Mark Resolved vs Dismiss — pick one of each, confirm DB state
+  ends up `resolved` vs `rejected`.
+
+### 2. Formatting (still an issue)
+The Review card layout / typography / spacing still feels off.
+TBD with Vlad in the morning — likely:
+- Preview block visual polish (code block styling, line spacing,
+  monospace font).
+- Direction badge color/contrast.
+- Diff banner alignment / number formatting.
+- CSV transaction table column widths + wrapping behavior.
+- Mobile rendering check (this is a PWA — test on phone).
+
+### 3. Surface optimization ideas (the "tank")
+Pulled from Automation.md's **Future enhancements (in the tank)**
+section. To prioritize tomorrow:
+1. Preview-in-dialog (richer fix preview before Apply).
+2. Manual reassign — "this card maps to a different deal" path.
+3. Push ambiguous cases — the ~3 deals the conservative matcher
+   skipped should still get a Review card so a human can pick.
+4. Customer-grouped cards (collapse N cards for one person).
+5. Reconcile compound-name fix — same disambiguation logic in
+   `reconcile_payments.py`.
+6. Inverse Cash Sales audit (currently only deals26 + profit26).
+7. CarPay cross-check pass — flag postings without a matching
+   `payments` row.
+8. Alias self-heal extension — deeper relocation (e.g., last-name
+   change, color drift).
+9. Multi-month audit — extend the April-only audit framework to
+   N-month windows.
+10. $3,421 DeBary Profit26 forensic — long-pending; revisit with
+    Vlad's notes.
+
+Pick the top 3 with Vlad and queue them for Day 9.
+
+## Open / awaiting input
+
+- $3,421 DeBary Profit26 drop — still awaits Vlad's recollection.
+- Per-card spot-checks of the 35 Review queue items will likely
+  surface 1–2 edge cases the matcher / fix logic doesn't yet handle.
+  Capture those tomorrow as new bugs.
