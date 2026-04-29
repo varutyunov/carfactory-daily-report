@@ -736,21 +736,56 @@ function doPost(e) {
     }
 
     // ── ACTION: READ_ALL — read all rows for reconciliation ───
+    // Bulk implementation (rev 2026-04-28): the original cell-by-cell
+    // version made N rows × M cols individual `getValue()` API calls
+    // (~4,800 round-trips for Deals25 DeBary), pushing past the URLFetch
+    // deadline. Switched to two range reads (getValues + getNotes) which
+    // is ~100× faster.
     if (action === 'read_all') {
       var rows = [];
       var lastRow = sheet.getLastRow();
       if (lastRow < config.startRow) {
         return jsonResponse({ ok: true, action: 'read_all', rows: [] });
       }
-      for (var r = config.startRow; r <= lastRow; r++) {
+      var colKeys = Object.keys(config.columns);
+      var colNumbers = colKeys.map(function(letter){ return letterToColumn(letter); });
+      var minCol = Math.min.apply(null, colNumbers);
+      var maxCol = Math.max.apply(null, colNumbers);
+      var numRows = lastRow - config.startRow + 1;
+
+      // Bulk-read data
+      var dataRange  = sheet.getRange(config.startRow, minCol, numRows, maxCol - minCol + 1);
+      var dataValues = dataRange.getValues();
+
+      // Column letter → offset in row array
+      var colOffset = {};
+      for (var ck = 0; ck < colKeys.length; ck++) {
+        colOffset[colKeys[ck]] = colNumbers[ck] - minCol;
+      }
+
+      // Bulk-read notes (only for cell-note columns)
+      var noteValues = null;
+      var noteOffset = {};
+      var noteKeys = config.cellNotes ? Object.keys(config.cellNotes) : [];
+      if (noteKeys.length) {
+        var noteNumbers = noteKeys.map(function(l){ return letterToColumn(l); });
+        var minNoteCol = Math.min.apply(null, noteNumbers);
+        var maxNoteCol = Math.max.apply(null, noteNumbers);
+        var noteRange  = sheet.getRange(config.startRow, minNoteCol, numRows, maxNoteCol - minNoteCol + 1);
+        noteValues = noteRange.getNotes();
+        for (var nk = 0; nk < noteKeys.length; nk++) {
+          noteOffset[noteKeys[nk]] = noteNumbers[nk] - minNoteCol;
+        }
+      }
+
+      for (var r = 0; r < numRows; r++) {
         var rowData = {};
         var hasData = false;
-        var colKeys = Object.keys(config.columns);
+        var rowVals = dataValues[r];
         for (var c = 0; c < colKeys.length; c++) {
           var cLetter = colKeys[c];
-          var cField = config.columns[cLetter];
-          var cNum = letterToColumn(cLetter);
-          var val = sheet.getRange(r, cNum).getValue();
+          var cField  = config.columns[cLetter];
+          var val     = rowVals[colOffset[cLetter]];
           if (cField === 'gps_sold') {
             rowData[cField] = (val === 'X' || val === 'x' || val === true);
           } else if (cField === 'car_name' || cField === 'car_desc') {
@@ -763,18 +798,16 @@ function doPost(e) {
             if (val) hasData = true;
           }
         }
-        // Read cell notes
-        if (config.cellNotes) {
-          var noteKeys = Object.keys(config.cellNotes);
+        if (noteValues) {
+          var rowNotes = noteValues[r];
           for (var n = 0; n < noteKeys.length; n++) {
             var nLetter = noteKeys[n];
-            var nField = config.cellNotes[nLetter];
-            var nNum = letterToColumn(nLetter);
-            rowData[nField] = sheet.getRange(r, nNum).getNote() || '';
+            var nField  = config.cellNotes[nLetter];
+            rowData[nField] = rowNotes[noteOffset[nLetter]] || '';
           }
         }
-        rowData._sheetRow = r;
-        rowData._rowIndex = r - config.startRow + 1;
+        rowData._sheetRow = r + config.startRow;
+        rowData._rowIndex = r + 1;
         if (hasData) rows.push(rowData);
       }
       return jsonResponse({ ok: true, action: 'read_all', rows: rows });
