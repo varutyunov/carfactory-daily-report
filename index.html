@@ -17376,7 +17376,7 @@ async function _findDealAlias(payload){
     if (vin){
       var byVin = await sbGet('payment_deal_aliases',
         'vin=eq.' + encodeURIComponent(vin) +
-        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+        '&order=created_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
       if (byVin && byVin.length) return byVin[0];
     }
     // Fall back to last-name + model. Try every candidate surname
@@ -17392,13 +17392,13 @@ async function _findDealAlias(payload){
         'customer_name_lower=in.' + encodeURIComponent(inList) +
         '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
         '&location=eq.' + encodeURIComponent(loc) +
-        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+        '&order=created_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
       if (bySameLot && bySameLot.length) return bySameLot[0];
       // Cross-lot fallback
       var byAnyLot = await sbGet('payment_deal_aliases',
         'customer_name_lower=in.' + encodeURIComponent(inList) +
         '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
-        '&order=created_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+        '&order=created_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
       if (byAnyLot && byAnyLot.length) return byAnyLot[0];
     }
   } catch(e){ /* silent — fallback to matcher */ }
@@ -17473,16 +17473,58 @@ async function _appendPaymentToDeals26(payload){
       var aliasNoteLine = alias.car_desc
         ? _paymentNoteLineFromDeal(amt, alias.car_desc, payload.payment_date)
         : noteLine;
+      var aliasTargetRow = alias.target_row;
+      var aliasCarDesc   = alias.car_desc;
+      // Bug fix #5b (alias self-heal): pass expected_car_desc so the v65
+      // drift guard can detect a stale alias. On drift, we'll relocate
+      // the row by car_desc and update the alias.
+      var allLastNamesAlias = _paymentLastNames(payload.customer_name);
       var dResp = await fetch(_SHEETS_URL, {
         method:'POST', headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({
           secret: _SHEETS_SECRET,
           action: 'deals26_append_payment_direct',
           location: aliasLoc,
-          data: { tab: alias.target_tab, row: alias.target_row, amount: amt, note_line: aliasNoteLine }
+          data: {
+            tab: alias.target_tab, row: aliasTargetRow,
+            amount: amt, note_line: aliasNoteLine,
+            last_names: allLastNamesAlias,
+            expected_car_desc: aliasCarDesc || null
+          }
         })
       });
       var dData = null; try { dData = await dResp.json(); } catch(e){}
+      // Self-heal on drift error
+      if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch' || dData.error === 'empty_row')){
+        var aliasReloc = aliasCarDesc
+          ? await _relocateRowByCarDesc(alias.target_tab, aliasLoc, aliasCarDesc)
+          : null;
+        if (aliasReloc && aliasReloc.row && aliasReloc.row !== aliasTargetRow){
+          await _updatePaymentAliasRow(alias.id, aliasReloc.row, aliasReloc.car_desc);
+          console.log('Alias self-heal: relocated ' + aliasCarDesc + ' from row ' + aliasTargetRow + ' → ' + aliasReloc.row);
+          aliasTargetRow = aliasReloc.row;
+          aliasCarDesc   = aliasReloc.car_desc;
+          aliasNoteLine  = _paymentNoteLineFromDeal(amt, aliasCarDesc, payload.payment_date);
+          var retryResp = await fetch(_SHEETS_URL, {
+            method:'POST', headers:{'Content-Type':'text/plain'},
+            body: JSON.stringify({
+              secret: _SHEETS_SECRET,
+              action: 'deals26_append_payment_direct',
+              location: aliasLoc,
+              data: { tab: alias.target_tab, row: aliasTargetRow, amount: amt, note_line: aliasNoteLine,
+                      last_names: allLastNamesAlias, expected_car_desc: aliasCarDesc }
+            })
+          });
+          var retryData = null; try { retryData = await retryResp.json(); } catch(e){}
+          if (retryData && retryData.ok !== false){
+            dData = retryData;
+          } else {
+            console.warn('Alias self-heal retry failed:', retryData);
+          }
+        } else {
+          console.warn('Alias drift but no relocation found:', dData);
+        }
+      }
       if (dData && dData.ok !== false){
         var dOwed = parseFloat(dData.owed) || 0;
         var dPosted = false;
@@ -17490,8 +17532,8 @@ async function _appendPaymentToDeals26(payload){
         if (dProfitCap > 0){
           try { await _appendPaymentToProfit(payload, dProfitCap, aliasLoc); dPosted = true; } catch(ep){ console.warn(ep); }
         }
-        console.log('Alias hit: ' + alias.car_desc + ' → ' + alias.target_tab + ' row ' + alias.target_row + ' [' + aliasLoc + '] · profitCap=$' + dProfitCap);
-        return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:alias.target_row, location:aliasLoc, via_alias:true };
+        console.log('Alias hit: ' + aliasCarDesc + ' → ' + alias.target_tab + ' row ' + aliasTargetRow + ' [' + aliasLoc + '] · profitCap=$' + dProfitCap);
+        return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:aliasTargetRow, location:aliasLoc, via_alias:true };
       }
       // Alias direct-write failed — fall through to the normal matcher
       console.warn('Alias direct-write failed, falling back to matcher:', dData);
@@ -18934,14 +18976,14 @@ async function _findCarPayAccountAlias(account, location){
         'account=eq.' + encodeURIComponent(account) +
         '&location=eq.' + encodeURIComponent(loc) +
         '&target_tab=not.is.null&target_row=not.is.null' +
-        '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+        '&order=processed_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
       if (Array.isArray(rowsSame) && rowsSame.length) return rowsSame[0];
     }
     // Any-location fallback
     var rows = await sbGet('carpay_payment_postings',
       'account=eq.' + encodeURIComponent(account) +
       '&target_tab=not.is.null&target_row=not.is.null' +
-      '&order=processed_at.desc&limit=1&select=target_tab,target_row,car_desc,location');
+      '&order=processed_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
     if (Array.isArray(rows) && rows.length) return rows[0];
   } catch(e){ console.warn('carpay account alias lookup failed:', e); }
   return null;
@@ -20525,9 +20567,20 @@ function _reviewRender(){
       }
 
       // Action buttons
-      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;">';
-      html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;background:rgba(107,114,128,.10);border:1px solid rgba(107,114,128,.30);border-radius:10px;color:#9ca3af;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Dismiss</button>';
-      html += '<button onclick="_reviewMarkResolved(' + r.id + ')" style="flex:1;background:rgba(74,222,128,.10);border:1px solid rgba(74,222,128,.30);border-radius:10px;color:#4ade80;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Mark resolved</button>';
+      // Three actions:
+      //  - Dismiss: rejected (won't act on this discrepancy)
+      //  - Apply: auto-execute the fix (only enabled when we can compute
+      //    a safe one-click action — see _csvReconAutoFix)
+      //  - Mark Resolved: positive sign-off (verified acceptable)
+      var canAutoFix = direction === 'sheet_short' && tabR && sheetRow &&
+                       Math.abs(diffR) > 0 && Math.abs(diffR) < 10000 &&
+                       carDescR;
+      html += '<div style="display:flex;gap:8px;padding:0 12px 12px;flex-wrap:wrap;">';
+      html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;min-width:90px;background:rgba(107,114,128,.10);border:1px solid rgba(107,114,128,.30);border-radius:10px;color:#9ca3af;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Dismiss</button>';
+      if (canAutoFix){
+        html += '<button onclick="_csvReconAutoFix(' + r.id + ')" style="flex:1;min-width:90px;background:rgba(96,165,250,.10);border:1px solid rgba(96,165,250,.30);border-radius:10px;color:#60a5fa;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Apply fix</button>';
+      }
+      html += '<button onclick="_reviewMarkResolved(' + r.id + ')" style="flex:1;min-width:90px;background:rgba(74,222,128,.10);border:1px solid rgba(74,222,128,.30);border-radius:10px;color:#4ade80;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Mark resolved</button>';
       html += '</div>';
 
       html += '</div>';
@@ -22294,6 +22347,108 @@ async function _reviewMarkResolved(id){
   } catch(e){
     alert('Error: ' + (e.message || e));
   }
+}
+
+// Auto-execute the fix for a csv_reconciliation card.
+//
+// Currently supports the most common case: `sheet_short` (CSV has more
+// recurring than the sheet) where the deal is NOT in profit (F≤0). The
+// fix is to append the missing CSV transactions to col G of the deal's
+// row as dated note lines.
+//
+// Other cases (sheet_excess, missing-from-Profit26 with F>0, etc.) are
+// more nuanced — leaving those as Mark Resolved / Dismiss / manual fix
+// for now.
+async function _csvReconAutoFix(reviewId){
+  var r = _reviewData.find(function(x){ return x.id === reviewId; });
+  if (!r) { alert('Review not found'); return; }
+  var snap = r.snapshot || {};
+  var direction = snap.direction || '';
+  var tab = snap.tab;
+  var row = parseInt(snap.sheet_row);
+  var carDesc = snap.car_desc || '';
+  var lot = r.location || 'DeBary';
+  var diff = parseFloat(snap.difference);
+
+  if (direction !== 'sheet_short'){
+    alert('Auto-fix only supports sheet_short discrepancies. Use Mark Resolved or fix manually.');
+    return;
+  }
+  if (!tab || !row || row < 2 || !carDesc){
+    alert('Not enough info on this card to auto-fix. Mark resolved or fix manually.');
+    return;
+  }
+  // Identify the missing CSV April transactions (those whose date ≥ cutoff
+  // AND whose amount doesn't already appear in the sheet's payment_notes).
+  var allTxns = Array.isArray(snap.csv_transactions) ? snap.csv_transactions : [];
+  var sheetNotes = String(snap.sheet_notes || '');
+  var noteLines = sheetNotes.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+  var CUTOFF = '2026-04-09';
+  // Group same-day txns so PAYMENT + LATEFEE pairs become one entry
+  var byDay = {};
+  allTxns.forEach(function(t){
+    if (!t.date || t.date < CUTOFF) return;
+    if (!byDay[t.date]) byDay[t.date] = { date: t.date, total: 0, types: [] };
+    byDay[t.date].total += parseFloat(t.amount) || 0;
+    byDay[t.date].types.push(t.type);
+  });
+  var missingDays = [];
+  Object.keys(byDay).forEach(function(d){
+    var day = byDay[d];
+    var amt = Math.round(day.total * 100) / 100;
+    // Already in notes?
+    var dateTag = (parseInt(d.split('-')[1])) + '/' + parseInt(d.split('-')[2]);
+    var found = noteLines.some(function(ln){
+      // Match if the line starts with this amount AND ends with this date
+      var m = /^([\d.]+)\s.*\s(\d{1,2}\/\d{1,2})\s*$/.exec(ln);
+      if (!m) return false;
+      var lineAmt = parseFloat(m[1]);
+      return Math.abs(lineAmt - amt) < 0.5 && m[2] === dateTag;
+    });
+    if (!found) missingDays.push({ date: d, dateTag: dateTag, amount: amt });
+  });
+  if (!missingDays.length){
+    alert('Nothing to add — all April CSV transactions already appear in the sheet notes.');
+    return;
+  }
+  var summary = missingDays.map(function(d){
+    return '$' + d.amount + ' (' + d.dateTag + ')';
+  }).join(', ');
+  if (!confirm('Append ' + missingDays.length + ' missing payment(s) to col G of ' +
+               tab + ' row ' + row + ' [' + lot + ']?\n\n' + summary +
+               '\n\nCar: ' + carDesc)) return;
+
+  var posted = 0;
+  for (var i = 0; i < missingDays.length; i++){
+    var d = missingDays[i];
+    var noteLine = _paymentNoteLineFromDeal(d.amount, carDesc, d.date);
+    try {
+      var resp = await fetch(_SHEETS_URL, {
+        method: 'POST', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET,
+          action: 'deals26_append_payment_direct',
+          location: lot,
+          data: { tab: tab, row: row, amount: d.amount, note_line: noteLine,
+                  expected_car_desc: carDesc }
+        })
+      });
+      var data = null; try { data = await resp.json(); } catch(_){}
+      if (data && data.ok !== false) posted++;
+      else { console.warn('Auto-fix entry failed:', d, data); }
+    } catch(e){ console.warn('Auto-fix entry exception:', e); }
+  }
+  if (posted === missingDays.length){
+    await sbPatch('payment_reviews', reviewId, {
+      status: 'resolved',
+      resolved_at: new Date().toISOString(),
+      resolved_by: (me ? me.name : '') + ' (auto-fix)'
+    });
+    alert('Posted ' + posted + ' entries to col G. Review marked resolved.');
+  } else {
+    alert('Posted ' + posted + ' of ' + missingDays.length + ' entries. Some failed — see console. Review NOT auto-resolved.');
+  }
+  await _reviewLoad();
 }
 
 // Quiet decline — no confirm dialog. Used by inv_create / inv_relocate

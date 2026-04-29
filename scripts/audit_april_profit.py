@@ -704,8 +704,28 @@ for acct, txns in acc_april_txns.items():
                         'csv_loc': acc_to_loc.get(acct, ''),
                         'april_total': deal_april_total,
                         'days': details}
+        # NEW: when a payment looks "missing from Profit26", also check col G
+        # — backup-in-col-G is acceptable per Rule 4. If found in col G, the
+        # payment isn't truly dropped, just placed conservatively.
+        col_g_entries_for_inprofit = parse_col_g_notes(deal['payment_notes'])
+        for det in details:
+            if det.get('found') == 'missing':
+                col_g_match = [c for c in col_g_entries_for_inprofit
+                               if abs(c['amount'] - det['total']) <= AMOUNT_TOL
+                               and days_apart(c['date'], det['date']) <= DATE_TOL_DAYS]
+                if col_g_match:
+                    det['found'] = 'col_g_backup'
+                    det['lines'] = [c['line'] for c in col_g_match]
+        # Recompute all_found after col-G fallback rescue
+        all_found = all(d.get('found') != 'missing' for d in details)
+
         if all_found:
-            inverse_results['ok_in_profit'].append(bucket_entry)
+            # If any day was found in col_g_backup (not Profit26), bucket
+            # specially so user knows it's tracked but not in canonical place.
+            if any(d.get('found') == 'col_g_backup' for d in details):
+                inverse_results.setdefault('ok_in_col_g_backup_only', []).append(bucket_entry)
+            else:
+                inverse_results['ok_in_profit'].append(bucket_entry)
         elif wrong_lot_hits > 0 and not any(x.get('found') == 'missing' for x in details):
             inverse_results['wrong_lot_post'].append(bucket_entry)
         else:
@@ -732,6 +752,32 @@ for acct, txns in acc_april_txns.items():
             else:
                 all_found = False
                 details.append({'date': d, 'total': day_total, 'found': 'missing'})
+        # NEW: when a F≤0 deal's payment is "missing from col G", check
+        # Profit26 — it might have been placed there in error (wrong_deal
+        # post). If so, the payment is tracked-but-misplaced, not dropped.
+        if not all_found:
+            last = name.split(',')[0].strip().upper()
+            for det in details:
+                if det.get('found') != 'missing':
+                    continue
+                # Search Profit26 (any lot) for matching txn
+                tracked_in_profit = []
+                for p in profit_april:
+                    if p['last_name'] != last:
+                        continue
+                    if abs(p['amount'] - det['total']) > AMOUNT_TOL:
+                        # Try single-txn match in case Profit has the LATEFEE/PAYMENT split
+                        if not any(abs(p['amount'] - t['amount']) <= AMOUNT_TOL for t in same_day.get(det['date'], [])):
+                            continue
+                    if p.get('date') and days_apart(p['date'], det['date']) > DATE_TOL_DAYS:
+                        continue
+                    tracked_in_profit.append(p)
+                if tracked_in_profit:
+                    det['found'] = 'profit_misplaced'
+                    det['lines'] = [x['raw'] for x in tracked_in_profit]
+                    det['profit_lot'] = tracked_in_profit[0]['lot']
+            all_found = all(d.get('found') != 'missing' for d in details)
+
         bucket_entry = {'acct': acct, 'name': name,
                         'deal_tab': deal['tab'], 'deal_loc': deal_loc,
                         'deal_car_desc': deal['car_desc'], 'deal_F': deal['owed'],
@@ -739,7 +785,10 @@ for acct, txns in acc_april_txns.items():
                         'april_total': deal_april_total,
                         'days': details}
         if all_found:
-            inverse_results['ok_in_col_g'].append(bucket_entry)
+            if any(d.get('found') == 'profit_misplaced' for d in details):
+                inverse_results.setdefault('tracked_in_profit_misplaced', []).append(bucket_entry)
+            else:
+                inverse_results['ok_in_col_g'].append(bucket_entry)
         else:
             inverse_results['missing_from_col_g'].append(bucket_entry)
 
@@ -765,13 +814,15 @@ print(f'  unparseable         : {len(fr["unparseable"])}')
 print()
 print('INVERSE pass — every April CSV transaction:')
 ir = inverse_results
-print(f'  ok_in_profit         : {len(ir["ok_in_profit"])}  ← F>0 deal, posted to correct-lot Profit')
-print(f'  ok_in_col_g          : {len(ir["ok_in_col_g"])}  ← F≤0 deal, posted to col G')
-print(f'  wrong_lot_post       : {len(ir["wrong_lot_post"])}  ← F>0, posted to wrong lot')
-print(f'  missing_from_profit  : {len(ir["missing_from_profit"])}  ← F>0 but no Profit entry')
-print(f'  missing_from_col_g   : {len(ir["missing_from_col_g"])}  ← F≤0 but no col G entry')
-print(f'  no_deal              : {len(ir["no_deal"])}  ← couldn’t link')
-print(f'  ambiguous_deal       : {len(ir["ambiguous_deal"])}')
+print(f'  ok_in_profit                : {len(ir["ok_in_profit"])}  ← F>0 deal, posted to correct-lot Profit')
+print(f'  ok_in_col_g                 : {len(ir["ok_in_col_g"])}  ← F≤0 deal, posted to col G')
+print(f'  ok_in_col_g_backup_only     : {len(ir.get("ok_in_col_g_backup_only", []))}  ← F>0, but col G has it (Rule 4 backup)')
+print(f'  tracked_in_profit_misplaced : {len(ir.get("tracked_in_profit_misplaced", []))}  ← F≤0 but found in Profit26 (wrong placement)')
+print(f'  wrong_lot_post              : {len(ir["wrong_lot_post"])}  ← F>0, posted to wrong lot')
+print(f'  missing_from_profit         : {len(ir["missing_from_profit"])}  ← F>0 but truly nowhere')
+print(f'  missing_from_col_g          : {len(ir["missing_from_col_g"])}  ← F≤0 but truly nowhere ⚠️ DROPPED PAYMENT')
+print(f'  no_deal                     : {len(ir["no_deal"])}  ← couldn’t link')
+print(f'  ambiguous_deal              : {len(ir["ambiguous_deal"])}')
 
 # Top issue tables
 def show_table(items, title, fields, limit=15):

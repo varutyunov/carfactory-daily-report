@@ -1743,6 +1743,78 @@ Card rendered before the existing `cash_sale_correction` block in
 `_reviewRender`. New cards appear in the Payments tab (default for
 unknown reasons via `_reviewIsSales` / `_reviewIsInventory` filters).
 
+## Bug #5b — alias self-heal — ADDED
+
+Extended Bug #5's self-heal logic from `deal_links` to
+`payment_deal_aliases`. Previously the alias direct-write path in
+`_appendPaymentToDeals26` had NO drift guard at all — it would post
+to whatever happened to be at the alias's `target_row`, potentially
+the wrong car after a row insert/delete.
+
+Now:
+- The alias direct-write call passes `expected_car_desc: alias.car_desc`
+  and `last_names` to enable the v65/v66 drift guards.
+- On `row_drift` / `surname_mismatch` / `empty_row` errors, the path
+  calls `_relocateRowByCarDesc` (TextFinder-backed), and on unique
+  match calls `_updatePaymentAliasRow` to update the alias's
+  target_row + car_desc, then retries the post.
+- On retry success, the post proceeds normally; on retry failure or
+  no-relocation, falls through to the matcher.
+
+Also: `_findDealAlias` now SELECTs `id` so the update can target the
+right row. Self-heal logs the old → new row mapping to console.
+
+## Inverse audit improvement — ADDED
+
+The audit's inverse pass previously bucketed every CSV April
+transaction into "right place / wrong place / missing":
+- F>0 deal: must be in same-lot Profit26 → else missing_from_profit.
+- F≤0 deal: must be in col G → else missing_from_col_g.
+
+Both checks ignored the OTHER place. Per Rule 4, col G can act as a
+backup for in-profit deals (acceptable). And per real-world data, F≤0
+deals can have payments mistakenly placed in Profit26 (still
+tracked, just misplaced).
+
+The improved pass now does a 2-stage check:
+- F>0 deal: check Profit26 first; if missing, check col G as a
+  backup. New bucket: `ok_in_col_g_backup_only` — tracked but not
+  in canonical place. Reduces false-positive "missing_from_profit".
+- F≤0 deal: check col G first; if missing, check Profit26 (any lot)
+  for misplacement. New bucket: `tracked_in_profit_misplaced` —
+  tracked but should be moved.
+
+The remaining `missing_from_profit` and `missing_from_col_g` buckets
+now genuinely represent **dropped payments** — txns that are in CSV
+but appear nowhere in the sheet. These get flagged with the
+`⚠️ DROPPED PAYMENT` marker in the summary.
+
+## Apply Fix button on csv_reconciliation Review cards — ADDED
+
+The Review UI's `csv_reconciliation` cards now have a third button
+(in addition to Dismiss and Mark Resolved): **Apply fix**.
+
+Currently supports the most common case: `sheet_short` direction
+with F≤0 deal — the fix is to append the missing CSV April
+transactions to col G of the deal's row as dated note lines.
+
+`_csvReconAutoFix(reviewId)`:
+1. Read the snapshot (csv_transactions, sheet_notes, etc.)
+2. Group same-day CSV txns into one entry each (handles
+   PAYMENT+LATEFEE pairs).
+3. Filter to entries that DON'T already appear in `sheet_notes`
+   (idempotent — running twice is safe).
+4. Show a confirm dialog listing the missing entries.
+5. For each missing entry, call `deals26_append_payment_direct`
+   with `expected_car_desc` to invoke the drift guard.
+6. On full success, mark the review `resolved` with
+   `resolved_by = userName + ' (auto-fix)'`.
+
+The button is hidden when the discrepancy isn't auto-fixable
+(sheet_excess, no row info, missing car_desc, |diff|>$10K, etc.).
+For those, the user uses Mark Resolved or fixes manually via other
+sheet tooling.
+
 ## Bug #5 — deal-link self-heal on row drift — ADDED
 
 When `deals26_append_payment_direct` returns `row_drift` /
