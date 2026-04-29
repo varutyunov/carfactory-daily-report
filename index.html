@@ -17640,6 +17640,28 @@ async function _upsertCustomerDealLink(payload, target){
   }
 }
 
+// Insert a payment_deal_alias, but first delete any existing alias rows
+// for the same VIN. Prevents the same VIN from accumulating multiple
+// aliases pointing at different deals (real bug — see Karian Jackson
+// Impala VIN that ended up in both an Impala alias and a Jetta alias,
+// causing _findDealAlias to return the wrong target).
+//
+// VIN is the canonical key here. If the alias has no VIN (rare —
+// some legacy paths just record last_name + model), we can't dedupe
+// safely so just insert.
+async function _upsertDealAlias(row){
+  if (row && row.vin){
+    // Delete-by-filter (sbDelete only supports id=eq, so use a raw fetch).
+    try {
+      await fetch(SB_URL + '/rest/v1/payment_deal_aliases?vin=eq.' + encodeURIComponent(row.vin), {
+        method: 'DELETE',
+        headers: _sbHeaders()
+      });
+    } catch(e){ console.warn('[alias] purge old VIN aliases failed:', e && e.message); }
+  }
+  return sbPost('payment_deal_aliases', row);
+}
+
 async function _findDealAlias(payload){
   // Returns the matched alias row including its `location` field. Callers
   // MUST use the alias's `location` (= the deal's actual lot) for any
@@ -17649,8 +17671,22 @@ async function _findDealAlias(payload){
   try {
     var vin = (payload.vehicle_vin || '').trim().toUpperCase();
     var loc = payload.location || 'DeBary';
-    // VIN is the most reliable key. Try it first. Look across BOTH lots
-    // since a customer can have a deal on one lot and pay at the other.
+    var modelL = (payload.vehicle_model || '').toLowerCase().trim();
+    // VIN is the most reliable key. Try it first. When we ALSO have a
+    // model, prefer the (vin + model) match — handles cases where
+    // legacy/buggy data has two aliases for the same VIN pointing at
+    // different deals (real bug observed for Karian Jackson Impala VIN
+    // mapped to both an Impala AND a Jetta target). The model filter
+    // disambiguates without requiring the dupes to be cleaned up first.
+    if (vin && modelL){
+      var byVinModel = await sbGet('payment_deal_aliases',
+        'vin=eq.' + encodeURIComponent(vin) +
+        '&vehicle_model_lower=eq.' + encodeURIComponent(modelL) +
+        '&order=created_at.desc&limit=1&select=id,target_tab,target_row,car_desc,location');
+      if (byVinModel && byVinModel.length) return byVinModel[0];
+    }
+    // Look across BOTH lots since a customer can have a deal on one
+    // lot and pay at the other.
     if (vin){
       var byVin = await sbGet('payment_deal_aliases',
         'vin=eq.' + encodeURIComponent(vin) +
@@ -21633,7 +21669,7 @@ async function _reviewManualPost(id){
     // carry a (tab,row) to remember.
     if (!profitOnly){
       try {
-        await sbPost('payment_deal_aliases', {
+        await _upsertDealAlias({
           vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
           customer_name_lower: _paymentLastName(r.customer_name) || null,
           vehicle_model_lower: (r.vehicle_model || '').toLowerCase().trim() || null,
@@ -21808,7 +21844,7 @@ async function _reviewApprove(id, candidateIdx){
       // via _findCarPayAccountAlias.
       _patchCarPayPostingsForReview(id, aliasTab, aliasRow, c.car_desc || null)
         .catch(function(e){ console.warn('CarPay alias stamp failed:', e); }),
-      sbPost('payment_deal_aliases', {
+      _upsertDealAlias({
         vin: aliasVin,
         customer_name_lower: aliasCust || null,
         vehicle_model_lower: aliasModel || null,
@@ -22613,7 +22649,7 @@ async function _reviewRematch(id, evt){
         } catch(ep){ console.warn('Profit26 post failed:', ep); }
       }
       try {
-        await sbPost('payment_deal_aliases', {
+        await _upsertDealAlias({
           vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
           customer_name_lower: lastName || null,
           vehicle_model_lower: model || null,
@@ -22706,7 +22742,7 @@ async function _reviewRematch(id, evt){
               } catch(ep){ console.warn('Profit26 post failed:', ep); }
             }
             try {
-              await sbPost('payment_deal_aliases', {
+              await _upsertDealAlias({
                 vin: ((r.vehicle_vin || '').trim().toUpperCase()) || null,
                 customer_name_lower: lastName || null,
                 vehicle_model_lower: model || null,
