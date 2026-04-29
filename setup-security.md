@@ -292,24 +292,42 @@ post-RLS for any operation that's not `SELECT FROM inventory`).
 
 ## Phase 6 — Cleanup (run after 24-48h of stable Phase 4)
 
-Only after the app has been running on RLS for a day or two with no issues:
+> **Status: 6a, 6b, 6c done on 2026-04-30 (Day 10).** Skipped 6d
+> (anon key rotation) — low priority; anon now nearly worthless.
 
-### 6a. Drop the plaintext pin column
+### 6a. Drop the plaintext pin column ✓
 ```sql
 ALTER TABLE public.employees DROP COLUMN pin;
 ```
-Verify auth-login still works (it uses pin_hash via the RPC, never `pin`).
+Auth-login uses `pin_hash` via the `verify_employee_pin` RPC — never
+the plaintext column. Run live via Supabase Management API on Day 10:
+```bash
+curl -s -X POST "https://api.supabase.com/v1/projects/hphlouzqlimainczuqyc/database/query" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"ALTER TABLE public.employees DROP COLUMN IF EXISTS pin"}'
+```
+Verified: all 6 employees still have `pin_hash`; auth-login still 200s.
 
-### 6b. Stop saving plaintext PIN in localStorage
-Edit `index.html`:
-- Remove `localStorage.setItem('cf_saved_pin', ...)` calls (3 sites near `doLogin()`)
-- The auto-login path needs an alternative for "remember me":
-  - Easiest: extend JWT lifetime to 30 days + add a refresh-token mechanism
-  - Or: keep the credential in iOS keychain only (Password Credential API), drop localStorage
+### 6b. Stop saving plaintext PIN in localStorage ✓
+Done in commit `dc415d0`. Changes:
+- `doLogin`: stopped writing `cf_saved_pin`. Saves only `cf_session`
+  + `cf_saved_user`. The 7-day JWT in `cf_jwt` is what auto-login
+  uses on subsequent loads.
+- Auto-login: `_jwtReady = Promise.resolve(_cfJwt() ? {hasJwt:true}
+  : null)`. If JWT missing or expired, kick to login.
+- Defensive `removeItem('cf_saved_pin')` at script start cleans up
+  any stale value from before this deploy.
+- Both localStorage wipe sites: dropped `cf_saved_pin` from keep
+  lists.
 
-### 6c. Remove the legacy fallback in doLogin
-After Phase 4 is locked in, the legacy `sbGet('employees','select=...,pin,...')`
-fallback in `doLogin()` is dead code — RLS won't return `pin`. Delete that block.
+Trade-off: when the 7-day JWT expires, user re-enters their PIN.
+That's acceptable — no plaintext credential at rest on the client.
+
+### 6c. Remove the legacy fallback in doLogin ✓
+The `sbGet('employees', 'select=...,pin,...')` fallback was dead code
+post-Phase-4 (column-level revoke + dropped pin column). Deleted in
+commit `dc415d0`.
 
 ### 6d. (Optional) Rotate the anon key
 After everything is on RLS + JWT, the anon key only matters for the

@@ -2260,3 +2260,86 @@ exact steps.
 
 Pick up the 35-card Review queue walkthrough + formatting work.
 Security migration is closed unless something breaks.
+
+---
+
+# Day 10 (2026-04-30) — Phase 6 cleanup shipped
+
+The 24h-soak reminder fired; Tommy reported his app working fine, so
+proceeded with cleanup.
+
+## What landed
+
+### Stability check
+- Last commit `23fbfae` (no overnight changes).
+- Auth-login: 200 for vlad/tommy/manny.
+- Anon-only request → `[]` (RLS still enforcing).
+- Service-role from `scripts/.env`: still works, fetched all 6 employees.
+
+### Phase 6a — `pin` column dropped
+Ran via Supabase Management API (using `SUPABASE_ACCESS_TOKEN` from
+`scripts/.env`):
+```bash
+ALTER TABLE public.employees DROP COLUMN IF EXISTS pin;
+```
+All 6 employees still have `pin_hash`. The
+`verify_employee_pin` / `create_employee` / `update_employee_pin`
+RPCs only reference `pin_hash`, so dropping the plaintext column was
+a no-op functionally. Auth-login still 200s for tested users.
+
+### Phase 6b — `cf_saved_pin` plaintext localStorage removed
+Commit `dc415d0` — `index.html` changes:
+- `doLogin`: stopped writing `cf_saved_pin`. Saves only `cf_session`
+  and `cf_saved_user`. The 7-day JWT in `cf_jwt` is the auto-login
+  mechanism now.
+- Auto-login simplified: `_jwtReady = Promise.resolve(_cfJwt() ?
+  {hasJwt:true} : null)`. If JWT missing/expired → kick to login.
+- Defensive `removeItem('cf_saved_pin')` at script start cleans up
+  any pre-deploy stale value automatically.
+- Both localStorage wipe sites: dropped `cf_saved_pin` from keep
+  lists.
+- `doSync`: dropped `cf_saved_pin` write.
+
+### Phase 6c — legacy `doLogin` fallback removed
+The `sbGet('employees', 'select=...,pin,...')` fallback path in
+`doLogin` was dead code post-Phase-4 (column-level revoke + dropped
+pin column). Deleted. `doLogin` is now: edge function → success or
+"Invalid username or PIN".
+
+### Skipped: Phase 6d — anon key rotation
+Low-priority; the anon key is now nearly worthless without a valid
+JWT. Could rotate later if a leak is suspected.
+
+## End-state security posture
+
+- ✅ No plaintext PIN anywhere (DB or client localStorage)
+- ✅ All auth via JWT signed with project's legacy HS256 secret
+- ✅ JWT lasts 7 days; on expiry user re-enters PIN
+- ✅ iOS Keychain / Chrome password manager (Web Credentials API) is
+  the durable "remember me" — silently autofills on next visit even
+  when localStorage is wiped
+- ✅ RLS denies anon access to every public table
+- ✅ pin_hash column-level revoked from authenticated; only
+  service_role can read it (via the SECURITY DEFINER RPCs)
+- ✅ Apps Script + 9 Python scripts use service-role from
+  `scripts/.env` (gitignored) / Apps Script script properties
+
+### Verified live
+- Cleared cf_session/cf_jwt/cf_user, refreshed → Web Credentials API
+  silent autofill kicked in → doLogin → JWT acquired → app shown as
+  "Vlad" with real badges (Repairs:3, Parts:4).
+- Username field pre-filled "vlad", PIN field empty (length 0) —
+  confirms no plaintext PIN is left in any client store accessible
+  to JS.
+
+### Latest commits on master + main
+- `dc415d0` (master) / `dc415d0` (main) — Phase 6: drop plaintext PIN
+
+## What's left (deferred for tomorrow or later)
+
+- Walk Review queue end-to-end (35 cards) — verify Apply Fix on each
+  direction, formatting check, surface optimization ideas.
+- Review card formatting issues (you flagged it last week).
+- Top 3 "Future enhancements (in the tank)" picks from Automation.md.
+
+Security migration is fully closed.
