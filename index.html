@@ -6144,14 +6144,22 @@ if(_savedSession){
       if(me.role==='manager'){document.getElementById('mtabs').style.display='none';showView('mgr-home');var _nm2=me.name.toLowerCase();var _hasCarPay2=['vlad'].includes(_nm2);var _hasTools2=['vlad','tommy'].includes(_nm2);if(_hasCarPay2){_swipePages=[0,1,2];}else if(_hasTools2){_swipePages=[0,2];}else{_swipePages=[0];}var _dots2=document.getElementById('swipe-dots');if(_dots2){if(_swipePages.length>1){_dots2.style.display='flex';_dots2.innerHTML='';for(var _di2=0;_di2<_swipePages.length;_di2++){var _dot2=document.createElement('span');_dot2.className='swipe-dot'+(_di2===0?' active':'');_dots2.appendChild(_dot2);}}else{_dots2.style.display='none';}}initSwipe();setSwipePage(0);}
       else{document.getElementById('emp-tabs').style.display='none';document.getElementById('emp-tab-name').textContent=me.name.split(' ')[0];document.getElementById('greeting').textContent='Hi '+me.name.split(' ')[0]+', your cars today';document.getElementById('personal-greeting').textContent=me.name.split(' ')[0]+"'s Assignments";showView('emp-home');}
       // Sync in background — but only AFTER the JWT is in place, otherwise
-      // every sbGet under RLS returns [] and the UI looks empty.
-      _jwtReady.then(function(){
-        return syncFromSupabase();
-      }).then(function(){
-        fetchNotifications();
-        if(me.role==='manager'){updateTabBadges();updateHomeBadges();}
-        else{goEmpHome();}
-        setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 5000);
+      // every sbGet under RLS returns [] and the UI looks empty. If the
+      // JWT acquisition fails (stale saved PIN, edge function down, etc.)
+      // and we don't already have a valid JWT, kick to the login screen
+      // — the user re-authenticates and we get a fresh token.
+      _jwtReady.then(function(authResult){
+        if(!_cfJwt()){
+          console.warn('[auth] auto-login JWT acquisition failed, kicking to login');
+          if(typeof _onAuthExpired==='function') _onAuthExpired();
+          return null;
+        }
+        return syncFromSupabase().then(function(){
+          fetchNotifications();
+          if(me.role==='manager'){updateTabBadges();updateHomeBadges();}
+          else{goEmpHome();}
+          setTimeout(function(){ syncNow().catch(function(e){console.log('Background CSV sync skipped:',e);}); }, 5000);
+        });
       }).catch(function(e){ console.error('[auth] post-login sync failed:', e); });
     }
   }catch(e){}
