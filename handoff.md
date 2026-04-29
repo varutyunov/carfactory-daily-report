@@ -2174,3 +2174,89 @@ re-enable per table.
 
 Resume the 35-card Review queue walkthrough + formatting work after
 the security rollout is stable for a day.
+
+---
+
+## Day 9 (continued — afternoon) — Migration deployed live
+
+All six phases applied to the live project. The anon key now gets ZERO
+data access; every authenticated employee carries a 7-day JWT issued by
+the `auth-login` edge function. End-to-end verified: Vlad logged in,
+THE BOARD shows 3 Repairs + 4 Parts (real data via JWT), `pin`/`pin_hash`
+columns are unreadable to authenticated, anon-only requests return [].
+
+### Live deploy steps actually run
+
+1. **Phase 0 — secrets**: pulled the legacy HS256 JWT secret + service-
+   role key from the new Supabase dashboard layout
+   (`/settings/jwt` → "Legacy JWT Secret" tab,
+   `/settings/api-keys` → "Legacy anon, service_role API keys" tab).
+   Saved both to `scripts/.env` (gitignored).
+2. **Phase 1 + 1b — SQL**: ran via Studio SQL Editor. Surfaced two
+   issues, both patched:
+   - pgcrypto's `crypt()` lives in the `extensions` schema (not public);
+     functions needed `SET search_path = public, extensions, pg_temp`.
+   - `employees.id` is `bigint` (not `integer`); function signatures
+     updated. `verify_employee_pin('vlad', 'Master1792')` returns Vlad's
+     row; wrong PIN returns empty.
+3. **Phase 2 — edge function**:
+   - `npx supabase` CLI v2.95.6, generated personal access token
+     (`carfactory-cli-deploy`, expires 2026-05-29).
+   - Renamed env var `SUPABASE_JWT_SECRET` → `CF_JWT_SECRET` (CLI
+     rejects names starting with `SUPABASE_`).
+   - `supabase secrets set CF_JWT_SECRET=...`
+   - `supabase functions deploy auth-login` → live.
+   - Verified: 200 with JWT for right PIN, 401 for wrong PIN.
+4. **Phase 5b — Apps Script**: added `SUPABASE_SERVICE_KEY` script
+   property in the Apps Script project settings via the dashboard.
+   Pushed updated `google-apps-script.js` (with PropertiesService
+   reading) via clasp. Live as v82.
+5. **Phase 4 — RLS**: ran the main migration. Initial verification
+   showed anon could STILL read inventory + employees(pin) — diagnosed
+   pre-existing `Public access` / `anon_all` policies left over from
+   an earlier "Enable RLS with public anon" migration. Wrote and ran
+   `20260429_040_cleanup_legacy_policies.sql` (catch-all DO block) to
+   drop every policy not on the Phase 4 whitelist. Re-verified: anon
+   now blocked everywhere.
+6. **Live PWA test**: surfaced one bug — auto-login was firing
+   `_acquireAuthJwt` fire-and-forget, then immediately starting
+   `syncFromSupabase`, which under RLS returned [] before the JWT
+   landed → blank UI. Fixed by awaiting `_jwtReady` before sync, AND
+   adding `cf_jwt`/`cf_user` to the localStorage wipe whitelist so
+   reloads don't lose them. Also: kick to login if JWT acquire fails
+   (so stale saved PINs don't leave the UI broken).
+   Re-verified: login works → JWT acquired → sync runs → Inventory
+   tile shows 148, Repairs 3, Parts 4, THE BOARD shows real rows.
+
+### What's now live
+
+- `auth-login` edge function (signs HS256 JWTs with the legacy secret).
+- 3 SQL migrations applied: pin_hash backfill, helper RPCs, RLS rollout
+  + cleanup. 4 SQL helper RPCs: `verify_employee_pin`,
+  `hash_employee_pin`, `create_employee` (owner-gated),
+  `update_employee_pin` (owner-or-self).
+- `index.html` v(timestamp) on master + main: JWT acquisition,
+  expired-JWT auto-clear, kick-to-login, JWT-aware `_sbHeaders`.
+- `google-apps-script.js` v82 deployed (reads SERVICE_KEY from
+  PropertiesService).
+- 9 Python scripts switched to the env-loaded service-role key via
+  `scripts/_sb_config.py`; `scripts/.env` (gitignored) has both
+  `SUPABASE_SERVICE_KEY` and `SUPABASE_ACCESS_TOKEN`.
+
+### Latest commits on master+main
+- `dd929f9` — Day 9: JWT auth + RLS migration scaffolding
+- `15ef8cd` — Day 9 deploy patches: search_path + bigint, drop legacy
+  anon policies, JWT preload on auto-login
+- `e8d2e05` — auto-login: kick to login when JWT acquire fails
+
+### Phase 6 (cleanup) — TODO when stable
+
+After ~24-48h with no issues, drop the plaintext `pin` column on
+employees, remove `cf_saved_pin` localStorage usage, and
+optionally rotate the anon key. See setup-security.md Phase 6 for
+exact steps.
+
+### Next session
+
+Pick up the 35-card Review queue walkthrough + formatting work.
+Security migration is closed unless something breaks.

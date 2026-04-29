@@ -1,5 +1,11 @@
 # Security migration runbook (Day 9)
 
+> **Status: deployed live on 2026-04-29.** All phases applied to project
+> `hphlouzqlimainczuqyc`. The app at https://carfactory.work runs on
+> JWT-authenticated Supabase calls; the anon key alone gets ZERO data
+> access. This file remains as the reference for future migrations or
+> if you ever need to rebuild from scratch.
+
 This is the deploy script for the JWT + RLS migration. Follow phases in order.
 Each phase is reversible; if a step breaks the live app, the rollback is at the
 end of the section.
@@ -18,16 +24,23 @@ end of the section.
 You'll need both of these. **Treat them like passwords — don't paste them
 into screenshots or commit them.**
 
-### A. JWT Secret
-1. Open https://supabase.com/dashboard/project/hphlouzqlimainczuqyc
-2. Settings (gear icon, bottom-left) → API
-3. Scroll to **JWT Settings** → click *Reveal* next to "JWT Secret"
-4. Copy the long base64 string — keep it open in a tab; you'll paste it in Phase 2.
+> **Note: dashboard layout updated April 2026.** Supabase has migrated to
+> ECC P-256 JWT signing keys; the legacy HS256 secret is on a separate
+> "Legacy JWT Secret" tab and is still used to verify tokens. Our edge
+> function signs with the legacy HS256 secret — works for now; future
+> migration to ES256 is a separate task.
 
-### B. Service-role key
-1. Same page (Settings → API)
-2. **Project API keys** section → row labeled `service_role` → click *Reveal*
-3. Copy the long JWT (starts with `eyJ...`)
+### A. Legacy JWT Secret (HS256)
+1. Open https://supabase.com/dashboard/project/hphlouzqlimainczuqyc/settings/jwt
+2. Click the **Legacy JWT Secret** tab
+3. Click *Reveal* next to "Legacy JWT secret (still used)"
+4. Copy the ~88-char base64 string — paste into the CLI in Phase 2.
+
+### B. Service-role key (legacy)
+1. https://supabase.com/dashboard/project/hphlouzqlimainczuqyc/settings/api-keys
+2. Click the **Legacy anon, service_role API keys** tab
+3. Row labeled `service_role` → *Reveal* → *Copy*
+4. The JWT (starts with `eyJ...`) goes into `scripts/.env`.
 
 ### Where they go
 - **JWT Secret** → Supabase dashboard env var (Phase 2 step 3)
@@ -90,16 +103,17 @@ supabase link --project-ref hphlouzqlimainczuqyc
 ### 2c. Set the JWT secret as an edge-function env var
 
 Use the JWT Secret from Phase 0A. **Don't paste it into any file** — set it
-directly via the CLI:
+directly via the CLI. **The env var name MUST NOT start with `SUPABASE_`**
+(the CLI rejects those):
 
 ```bash
-supabase secrets set SUPABASE_JWT_SECRET="<paste-jwt-secret-here>"
+supabase secrets set CF_JWT_SECRET="<paste-jwt-secret-here>"
 ```
 
 Verify:
 ```bash
 supabase secrets list
-# should show SUPABASE_JWT_SECRET (value not displayed)
+# should show CF_JWT_SECRET (value not displayed)
 ```
 
 ### 2d. Deploy
@@ -169,8 +183,13 @@ If JWT acquired correctly, the rest of the app should work normally
    (their JWT proves the edge function is healthy end-to-end).
 3. Supabase dashboard → **SQL Editor** → New query.
 4. Open `supabase/migrations/20260429_030_enable_rls.sql`, paste, **Run**.
+5. **Also run** `supabase/migrations/20260429_040_cleanup_legacy_policies.sql`
+   to drop pre-existing `Public access` / `anon_all` permissive policies
+   that pre-date this migration. Without this step, anon will still have
+   full read access — PostgREST OR-combines permissive policies, so a
+   single open policy defeats the lockdown.
 
-5. Verify every public table has RLS:
+6. Verify every public table has RLS:
    ```sql
    SELECT relname, relrowsecurity FROM pg_class c
      JOIN pg_namespace n ON n.oid = c.relnamespace
