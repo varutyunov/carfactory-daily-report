@@ -869,3 +869,169 @@ with open(out, 'w', encoding='utf-8') as f:
     json.dump(report, f, indent=2, default=str)
 print()
 print(f'Full audit report → {out}')
+
+# ── Optional: push findings to payment_reviews as csv_reconciliation rows ──
+# Run with --push to insert a Review card per actionable issue. The
+# `direction` field on the snapshot tells the Review UI which type of
+# card to render.
+PUSH = '--push' in sys.argv
+if not PUSH:
+    sys.exit(0)
+
+print()
+print('Pushing audit findings to payment_reviews (reason=csv_reconciliation)…')
+
+def sb_post(table, body):
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(f'{SB_URL}/rest/v1/{table}',
+        data=data, headers={**SB_HDR, 'Content-Type':'application/json',
+                             'Prefer':'return=representation'}, method='POST')
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read())
+
+def already_pushed(reason, customer_name, direction):
+    """Skip insert if a pending csv_reconciliation card for this customer
+    + direction already exists (idempotent re-runs)."""
+    try:
+        existing = sb_get('payment_reviews',
+            f'reason=eq.{reason}'
+            f'&status=eq.pending'
+            f'&customer_name=eq.{urllib.parse.quote(customer_name or "")}&limit=20')
+        for e in existing:
+            snap = e.get('snapshot') or {}
+            if snap.get('direction') == direction: return True
+    except Exception: pass
+    return False
+
+pushed = skipped = errors = 0
+def push_review(customer_name, amount, vehicle_year, vehicle_make, vehicle_model,
+                vehicle_vin, location, direction, snapshot, note_line):
+    global pushed, skipped, errors
+    if already_pushed('csv_reconciliation', customer_name, direction):
+        skipped += 1; return
+    try:
+        sb_post('payment_reviews', {
+            'customer_name':  customer_name or '',
+            'amount':         round(abs(float(amount or 0)), 2),
+            'vehicle_year':   str(vehicle_year or ''),
+            'vehicle_make':   str(vehicle_make or ''),
+            'vehicle_model':  str(vehicle_model or ''),
+            'vehicle_color':  '',
+            'vehicle_vin':    str(vehicle_vin or ''),
+            'location':       location or 'DeBary',
+            'payment_date':   None,
+            'payment_method': '',
+            'note_line':      note_line or '',
+            'reason':         'csv_reconciliation',
+            'candidates':     json.dumps([]),
+            'status':         'pending',
+            'snapshot':       {**snapshot, 'direction': direction},
+            'created_at':     datetime.now().isoformat()
+        })
+        pushed += 1
+    except Exception as e:
+        errors += 1
+        print(f'  ERROR for {customer_name}: {e}')
+
+# Forward — phantoms (no CSV match for a Profit26 entry)
+for p in forward_results.get('phantom', []):
+    push_review(
+        customer_name=p.get('last_name', ''),
+        amount=p.get('amount', 0),
+        vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
+        location=p.get('lot') or p.get('deal_loc') or 'DeBary',
+        direction='phantom_in_sheet',
+        snapshot={
+            'car_desc':    p.get('deal_car_desc') or p.get('raw') or '',
+            'tab':         p.get('deal_tab') or '',
+            'sheet_row':   None,
+            'sheet_total': p.get('amount', 0),
+            'csv_total':   0,
+            'difference':  -float(p.get('amount', 0) or 0),  # sheet excess
+            'csv_transactions': [],
+            'sheet_notes': p.get('raw') or '',
+            'note':        f'Phantom Profit26 entry (lot={p.get("lot")} label={p.get("label")}). No CSV match.',
+            'profit_lot':  p.get('lot'),
+            'profit_label': p.get('label'),
+            'profit_amount': p.get('amount'),
+            'profit_description': (p.get('raw','').split(' ', 1)[1] if ' ' in (p.get('raw') or '') else p.get('raw','')),
+            'deal_F': p.get('deal_F'),
+        },
+        note_line=p.get('raw', '')
+    )
+
+# Forward — wrong-lot
+for p in forward_results.get('wrong_lot', []):
+    push_review(
+        customer_name=p.get('last_name', ''),
+        amount=p.get('amount', 0),
+        vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
+        location=p.get('deal_loc') or 'DeBary',
+        direction='wrong_lot',
+        snapshot={
+            'car_desc':    p.get('deal_car_desc') or '',
+            'tab':         p.get('deal_tab') or '',
+            'sheet_row':   None,
+            'sheet_total': 0,
+            'csv_total':   0,
+            'difference':  0,
+            'csv_transactions': [],
+            'sheet_notes': '',
+            'note':        f'Profit26 entry posted to {p.get("lot")} but deal is in {p.get("deal_loc")}.',
+            'profit_lot':  p.get('lot'),
+            'profit_label': p.get('label'),
+            'profit_amount': p.get('amount'),
+            'profit_description': (p.get('raw','').split(' ', 1)[1] if ' ' in (p.get('raw') or '') else p.get('raw','')),
+            'deal_lot':    p.get('deal_loc'),
+            'deal_F':      p.get('deal_F'),
+        },
+        note_line=p.get('raw', '')
+    )
+
+# Inverse — missing_from_profit (F>0 deal, no Profit26 entry, not in col G either)
+for m in inverse_results.get('missing_from_profit', []):
+    push_review(
+        customer_name=m.get('name', ''),
+        amount=m.get('april_total', 0),
+        vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
+        location=m.get('deal_loc') or 'DeBary',
+        direction='missing_from_profit',
+        snapshot={
+            'car_desc':    m.get('deal_car_desc') or '',
+            'tab':         m.get('deal_tab') or '',
+            'sheet_row':   None,
+            'sheet_total': 0,
+            'csv_total':   m.get('april_total', 0),
+            'difference':  m.get('april_total', 0),
+            'csv_transactions': [d for d in (m.get('days') or []) if d.get('found') == 'missing'],
+            'sheet_notes': '',
+            'note':        f'Deal in profit but no Profit26 entry for April; col G also missing it. Truly dropped.',
+            'deal_F':      m.get('deal_F'),
+        },
+        note_line=''
+    )
+
+# Inverse — missing_from_col_g (F≤0 deal, no col G entry, not in Profit26 either)
+for m in inverse_results.get('missing_from_col_g', []):
+    push_review(
+        customer_name=m.get('name', ''),
+        amount=m.get('april_total', 0),
+        vehicle_year='', vehicle_make='', vehicle_model='', vehicle_vin='',
+        location=m.get('deal_loc') or 'DeBary',
+        direction='missing_from_col_g',
+        snapshot={
+            'car_desc':    m.get('deal_car_desc') or '',
+            'tab':         m.get('deal_tab') or '',
+            'sheet_row':   None,
+            'sheet_total': 0,
+            'csv_total':   m.get('april_total', 0),
+            'difference':  m.get('april_total', 0),
+            'csv_transactions': [d for d in (m.get('days') or []) if d.get('found') == 'missing'],
+            'sheet_notes': '',
+            'note':        f'Deal not in profit (F={m.get("deal_F")}) but no col G entry for April. Dropped payment.',
+            'deal_F':      m.get('deal_F'),
+        },
+        note_line=''
+    )
+
+print(f'  Pushed: {pushed} | Skipped (dup): {skipped} | Errors: {errors}')

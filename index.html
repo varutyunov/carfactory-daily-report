@@ -20572,9 +20572,17 @@ function _reviewRender(){
       //  - Apply: auto-execute the fix (only enabled when we can compute
       //    a safe one-click action — see _csvReconAutoFix)
       //  - Mark Resolved: positive sign-off (verified acceptable)
-      var canAutoFix = direction === 'sheet_short' && tabR && sheetRow &&
-                       Math.abs(diffR) > 0 && Math.abs(diffR) < 10000 &&
-                       carDescR;
+      // Auto-fix supported directions:
+      //  sheet_short / missing_from_col_g — append to col G (needs tab+row+carDesc)
+      //  missing_from_profit              — append to deal's-lot Profit26 (needs carDesc)
+      //  phantom_in_sheet                 — remove from Profit26 (needs profit_lot + amount + description)
+      //  wrong_lot                        — move between Profit26 lots (needs both lots + amount + description)
+      var canAutoFix =
+        ( (direction === 'sheet_short' || direction === 'missing_from_col_g')
+          && tabR && sheetRow && carDescR && Math.abs(diffR) > 0 && Math.abs(diffR) < 10000 )
+        || ( direction === 'missing_from_profit' && carDescR && (snapR.csv_transactions || []).length )
+        || ( direction === 'phantom_in_sheet' && snapR.profit_lot && snapR.profit_amount && snapR.profit_description )
+        || ( direction === 'wrong_lot' && snapR.profit_lot && snapR.deal_lot && snapR.profit_amount && snapR.profit_description );
       html += '<div style="display:flex;gap:8px;padding:0 12px 12px;flex-wrap:wrap;">';
       html += '<button onclick="_reviewReject(' + r.id + ')" style="flex:1;min-width:90px;background:rgba(107,114,128,.10);border:1px solid rgba(107,114,128,.30);border-radius:10px;color:#9ca3af;padding:14px;font-size:14px;font-weight:700;cursor:pointer;">Dismiss</button>';
       if (canAutoFix){
@@ -22351,73 +22359,74 @@ async function _reviewMarkResolved(id){
 
 // Auto-execute the fix for a csv_reconciliation card.
 //
-// Currently supports the most common case: `sheet_short` (CSV has more
-// recurring than the sheet) where the deal is NOT in profit (F≤0). The
-// fix is to append the missing CSV transactions to col G of the deal's
-// row as dated note lines.
+// Routes by snapshot.direction:
+//   sheet_short          → append missing CSV txns to col G (F≤0 case)
+//   missing_from_col_g   → same — F≤0 deal needs col G entries
+//   missing_from_profit  → append missing CSV txns to deal's lot Profit26 (F>0)
+//   phantom_in_sheet     → remove phantom entry from Profit26
+//   wrong_lot            → remove from posted lot, append to deal's lot
+//   sheet_excess         → use deals26_set_row_g to rebuild col G (manual review)
 //
-// Other cases (sheet_excess, missing-from-Profit26 with F>0, etc.) are
-// more nuanced — leaving those as Mark Resolved / Dismiss / manual fix
-// for now.
+// Most paths are idempotent and use drift-guarded API calls. Falls back
+// to a friendly message + Mark Resolved when the case isn't auto-fixable.
 async function _csvReconAutoFix(reviewId){
   var r = _reviewData.find(function(x){ return x.id === reviewId; });
   if (!r) { alert('Review not found'); return; }
   var snap = r.snapshot || {};
   var direction = snap.direction || '';
+
+  if (direction === 'phantom_in_sheet'){
+    return _csvReconRemovePhantom(reviewId, r, snap);
+  }
+  if (direction === 'wrong_lot'){
+    return _csvReconMoveWrongLot(reviewId, r, snap);
+  }
+  if (direction === 'missing_from_profit'){
+    return _csvReconAddToProfit(reviewId, r, snap);
+  }
+  // sheet_short, missing_from_col_g, sheet_excess (treated as col-G append)
+  return _csvReconAppendToColG(reviewId, r, snap);
+}
+
+// sheet_short / missing_from_col_g — append missing CSV txns to col G
+async function _csvReconAppendToColG(reviewId, r, snap){
   var tab = snap.tab;
   var row = parseInt(snap.sheet_row);
   var carDesc = snap.car_desc || '';
   var lot = r.location || 'DeBary';
-  var diff = parseFloat(snap.difference);
 
-  if (direction !== 'sheet_short'){
-    alert('Auto-fix only supports sheet_short discrepancies. Use Mark Resolved or fix manually.');
-    return;
-  }
   if (!tab || !row || row < 2 || !carDesc){
     alert('Not enough info on this card to auto-fix. Mark resolved or fix manually.');
     return;
   }
-  // Identify the missing CSV April transactions (those whose date ≥ cutoff
-  // AND whose amount doesn't already appear in the sheet's payment_notes).
   var allTxns = Array.isArray(snap.csv_transactions) ? snap.csv_transactions : [];
   var sheetNotes = String(snap.sheet_notes || '');
   var noteLines = sheetNotes.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
   var CUTOFF = '2026-04-09';
-  // Group same-day txns so PAYMENT + LATEFEE pairs become one entry
   var byDay = {};
   allTxns.forEach(function(t){
     if (!t.date || t.date < CUTOFF) return;
-    if (!byDay[t.date]) byDay[t.date] = { date: t.date, total: 0, types: [] };
+    if (!byDay[t.date]) byDay[t.date] = { date: t.date, total: 0 };
     byDay[t.date].total += parseFloat(t.amount) || 0;
-    byDay[t.date].types.push(t.type);
   });
   var missingDays = [];
   Object.keys(byDay).forEach(function(d){
-    var day = byDay[d];
-    var amt = Math.round(day.total * 100) / 100;
-    // Already in notes?
+    var amt = Math.round(byDay[d].total * 100) / 100;
     var dateTag = (parseInt(d.split('-')[1])) + '/' + parseInt(d.split('-')[2]);
     var found = noteLines.some(function(ln){
-      // Match if the line starts with this amount AND ends with this date
       var m = /^([\d.]+)\s.*\s(\d{1,2}\/\d{1,2})\s*$/.exec(ln);
       if (!m) return false;
-      var lineAmt = parseFloat(m[1]);
-      return Math.abs(lineAmt - amt) < 0.5 && m[2] === dateTag;
+      return Math.abs(parseFloat(m[1]) - amt) < 0.5 && m[2] === dateTag;
     });
     if (!found) missingDays.push({ date: d, dateTag: dateTag, amount: amt });
   });
   if (!missingDays.length){
-    alert('Nothing to add — all April CSV transactions already appear in the sheet notes.');
+    alert('Nothing to add — all April CSV transactions already in sheet notes.');
     return;
   }
-  var summary = missingDays.map(function(d){
-    return '$' + d.amount + ' (' + d.dateTag + ')';
-  }).join(', ');
+  var summary = missingDays.map(function(d){ return '$' + d.amount + ' (' + d.dateTag + ')'; }).join(', ');
   if (!confirm('Append ' + missingDays.length + ' missing payment(s) to col G of ' +
-               tab + ' row ' + row + ' [' + lot + ']?\n\n' + summary +
-               '\n\nCar: ' + carDesc)) return;
-
+               tab + ' row ' + row + ' [' + lot + ']?\n\n' + summary + '\n\nCar: ' + carDesc)) return;
   var posted = 0;
   for (var i = 0; i < missingDays.length; i++){
     var d = missingDays[i];
@@ -22435,18 +22444,160 @@ async function _csvReconAutoFix(reviewId){
       });
       var data = null; try { data = await resp.json(); } catch(_){}
       if (data && data.ok !== false) posted++;
-      else { console.warn('Auto-fix entry failed:', d, data); }
+      else console.warn('Auto-fix entry failed:', d, data);
     } catch(e){ console.warn('Auto-fix entry exception:', e); }
   }
   if (posted === missingDays.length){
     await sbPatch('payment_reviews', reviewId, {
-      status: 'resolved',
-      resolved_at: new Date().toISOString(),
+      status: 'resolved', resolved_at: new Date().toISOString(),
       resolved_by: (me ? me.name : '') + ' (auto-fix)'
     });
     alert('Posted ' + posted + ' entries to col G. Review marked resolved.');
   } else {
-    alert('Posted ' + posted + ' of ' + missingDays.length + ' entries. Some failed — see console. Review NOT auto-resolved.');
+    alert('Posted ' + posted + ' of ' + missingDays.length + '. Some failed — review NOT auto-resolved.');
+  }
+  await _reviewLoad();
+}
+
+// phantom_in_sheet — remove the bogus Profit26 entry
+async function _csvReconRemovePhantom(reviewId, r, snap){
+  var lot = snap.profit_lot || r.location;
+  var label = snap.profit_label || 'Payments';
+  var amount = parseFloat(snap.profit_amount);
+  var description = snap.profit_description || '';
+  if (!lot || !label || !isFinite(amount) || !description){
+    alert('Not enough info to remove this phantom entry. Manual fix needed.');
+    return;
+  }
+  // Month index from the date in the description ("4/15" → 3 = April)
+  var monthIdx = 3; // default April
+  var dateMatch = /(\d{1,2})\/(\d{1,2})\s*$/.exec(description);
+  if (dateMatch) monthIdx = parseInt(dateMatch[1]) - 1;
+  if (!confirm('Remove phantom entry from ' + lot + ' Profit26 ' + (monthIdx === 3 ? 'April' : 'month '+monthIdx) +
+               ' ' + label + '?\n\nLine: $' + amount + ' ' + description)) return;
+  try {
+    var resp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'profit_remove_entry', location: lot,
+        data: { month_idx: monthIdx, row_type: label.toLowerCase().replace(' ','_'),
+                amount: amount, description: description }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(_){}
+    if (data && data.ok){
+      await sbPatch('payment_reviews', reviewId, {
+        status: 'resolved', resolved_at: new Date().toISOString(),
+        resolved_by: (me ? me.name : '') + ' (auto-fix phantom)'
+      });
+      alert('Phantom entry removed. Profit26 total now $' + (data.new_value || '?'));
+      await _reviewLoad();
+    } else {
+      alert('Remove failed: ' + JSON.stringify(data));
+    }
+  } catch(e){ alert('Error: ' + (e.message || e)); }
+}
+
+// wrong_lot — remove from posted lot's Profit26, append to deal's lot Profit26
+async function _csvReconMoveWrongLot(reviewId, r, snap){
+  var fromLot = snap.profit_lot;
+  var toLot   = snap.deal_lot;
+  var label   = snap.profit_label || 'Payments';
+  var amount  = parseFloat(snap.profit_amount);
+  var description = snap.profit_description || '';
+  if (!fromLot || !toLot || !isFinite(amount) || !description){
+    alert('Not enough info to move this entry between lots. Manual fix needed.');
+    return;
+  }
+  var monthIdx = 3;
+  var dateMatch = /(\d{1,2})\/(\d{1,2})\s*$/.exec(description);
+  if (dateMatch) monthIdx = parseInt(dateMatch[1]) - 1;
+  if (!confirm('Move entry from ' + fromLot + ' Profit26 → ' + toLot + ' Profit26?\n\nLine: $' + amount + ' ' + description)) return;
+  try {
+    // Remove from wrong lot
+    var rmResp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET, action: 'profit_remove_entry', location: fromLot,
+        data: { month_idx: monthIdx, row_type: label.toLowerCase().replace(' ','_'),
+                amount: amount, description: description }
+      })
+    });
+    var rmData = null; try { rmData = await rmResp.json(); } catch(_){}
+    if (!rmData || !rmData.ok){ alert('Remove from ' + fromLot + ' failed: ' + JSON.stringify(rmData)); return; }
+    // Append to right lot
+    var apResp = await fetch(_SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET, action: 'profit_append_entry', location: toLot,
+        data: { month_idx: monthIdx, row_type: label.toLowerCase().replace(' ','_'),
+                amount: amount, description: description }
+      })
+    });
+    var apData = null; try { apData = await apResp.json(); } catch(_){}
+    if (apData && apData.ok){
+      await sbPatch('payment_reviews', reviewId, {
+        status: 'resolved', resolved_at: new Date().toISOString(),
+        resolved_by: (me ? me.name : '') + ' (auto-fix wrong-lot)'
+      });
+      alert('Moved $' + amount + ' from ' + fromLot + ' → ' + toLot + ' Profit26.');
+      await _reviewLoad();
+    } else {
+      alert('Append to ' + toLot + ' failed: ' + JSON.stringify(apData));
+    }
+  } catch(e){ alert('Error: ' + (e.message || e)); }
+}
+
+// missing_from_profit — F>0 deal, append CSV txns to deal's lot Profit26
+async function _csvReconAddToProfit(reviewId, r, snap){
+  var lot = r.location || 'DeBary';
+  var carDesc = snap.car_desc || '';
+  var allTxns = Array.isArray(snap.csv_transactions) ? snap.csv_transactions : [];
+  var CUTOFF = '2026-04-09';
+  var byDay = {};
+  allTxns.forEach(function(t){
+    if (!t.date || t.date < CUTOFF) return;
+    if (!byDay[t.date]) byDay[t.date] = { date: t.date, total: 0 };
+    byDay[t.date].total += parseFloat(t.amount) || 0;
+  });
+  var entries = Object.keys(byDay).map(function(d){
+    var amt = Math.round(byDay[d].total * 100) / 100;
+    var dateTag = (parseInt(d.split('-')[1])) + '/' + parseInt(d.split('-')[2]);
+    return { date: d, dateTag: dateTag, amount: amt };
+  });
+  if (!entries.length){ alert('No April CSV transactions to add.'); return; }
+  var summary = entries.map(function(d){ return '$' + d.amount + ' (' + d.dateTag + ')'; }).join(', ');
+  if (!confirm('Add ' + entries.length + ' Profit26 entry(ies) to ' + lot + ' April Payments?\n\n' +
+               summary + '\n\nCar: ' + carDesc)) return;
+  var posted = 0;
+  for (var i = 0; i < entries.length; i++){
+    var e = entries[i];
+    // Build description matching the existing convention: short car ref + last name + date
+    var pieces = _parseCarDesc(carDesc);
+    var desc = [pieces.year, pieces.model, pieces.lastName, e.dateTag].filter(Boolean).join(' ');
+    try {
+      var resp = await fetch(_SHEETS_URL, {
+        method:'POST', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: _SHEETS_SECRET, action: 'profit_append_entry', location: lot,
+          data: { month_idx: parseInt(e.date.split('-')[1]) - 1,
+                  row_type: 'payments', amount: e.amount, description: desc }
+        })
+      });
+      var data = null; try { data = await resp.json(); } catch(_){}
+      if (data && data.ok) posted++;
+      else console.warn('Profit26 append failed:', e, data);
+    } catch(err){ console.warn('Profit26 append exception:', err); }
+  }
+  if (posted === entries.length){
+    await sbPatch('payment_reviews', reviewId, {
+      status: 'resolved', resolved_at: new Date().toISOString(),
+      resolved_by: (me ? me.name : '') + ' (auto-fix add-to-profit)'
+    });
+    alert('Added ' + posted + ' entries to ' + lot + ' Profit26.');
+  } else {
+    alert('Added ' + posted + ' of ' + entries.length + '. Some failed — review NOT auto-resolved.');
   }
   await _reviewLoad();
 }
