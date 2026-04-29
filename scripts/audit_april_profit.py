@@ -635,17 +635,30 @@ def deal_for_account(acct):
         return deals_hits[0], 'one_deal', inv_any
 
     # Multiple deals under same last name AND inv doesn't disambiguate.
-    # Prefer the active one (F > 0) — handles the common case where a
-    # customer has one paid-off old car and one current active car.
-    active_deals = [d for d in deals_hits if (d.get('owed') or 0) > 0]
-    if len(active_deals) == 1:
-        return active_deals[0], 'active_only_one_in_profit', inv_any
-    if len(active_deals) > 1:
-        return None, f'ambiguous_multiple_active({len(active_deals)})', inv_any
+    # Prefer deals with RECENT col G activity (post-cutoff dated notes) —
+    # that's a stronger signal of "currently being paid on" than F > 0,
+    # because F > 0 can mean "paid off a long time ago".
+    def _has_recent_activity(d):
+        notes = parse_col_g_notes(d.get('payment_notes', ''))
+        return any(n['date'] >= CUTOFF_DATE for n in notes)
 
-    # No active deals (all paid off / dead). If only one is non-zero F,
-    # pick it; otherwise ambiguous.
-    return None, 'ambiguous', inv_any
+    recent_active = [d for d in deals_hits if _has_recent_activity(d)]
+    if len(recent_active) == 1:
+        return recent_active[0], 'recent_col_g_activity', inv_any
+    if len(recent_active) > 1:
+        # Multiple deals receiving payments under same last name — only
+        # safe to pick one when the customer's first names map cleanly
+        # to one of them (rare). Otherwise return ambiguous.
+        return None, f'ambiguous_multiple_recent({len(recent_active)})', inv_any
+
+    # No recent col G activity. Last-resort: F > 0 with at most 2 deals
+    # (heuristic: customer paid off old car + active new one not yet
+    # tracked). Otherwise return ambiguous — don't guess.
+    active_deals = [d for d in deals_hits if (d.get('owed') or 0) > 0]
+    if len(active_deals) == 1 and len(deals_hits) <= 2:
+        return active_deals[0], 'active_only_one_in_profit', inv_any
+
+    return None, f'ambiguous({len(deals_hits)} deals)', inv_any
 
 # Walk every April-active account
 for acct, txns in acc_april_txns.items():
