@@ -17131,6 +17131,70 @@ function _paymentNoteLineFromDeal(amount, carDesc, paymentDate){
   return _paymentNoteLineFit(amtStr, pieces);
 }
 
+// Self-healing alias: when a row drifts (the row at target_row no longer
+// has the expected car_desc), search the same tab for the original
+// car_desc using the Apps Script find_rows TextFinder. If exactly one
+// match, that's the new row — update the alias, return the new row, and
+// the caller can retry the post. If 0 or multiple matches, return null
+// so the caller falls through to the matcher.
+//
+// Returns: {row, car_desc} on unique re-match, or null otherwise.
+async function _relocateRowByCarDesc(tab, location, expectedCarDesc){
+  if (!expectedCarDesc || !tab || !location) return null;
+  try {
+    var resp = await fetch(_SHEETS_URL, {
+      method: 'POST', headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: _SHEETS_SECRET,
+        action: 'find_rows', tab: tab, location: location,
+        data: { query: String(expectedCarDesc).trim() }
+      })
+    });
+    var data = null; try { data = await resp.json(); } catch(_){}
+    if (!data || !data.ok || !Array.isArray(data.rows)) return null;
+    // Filter to exact car_desc matches (TextFinder is substring-based,
+    // we want a precise match on the trimmed value).
+    var want = String(expectedCarDesc).trim().toLowerCase();
+    var exact = data.rows.filter(function(r){
+      return String(r.car_desc || '').trim().toLowerCase() === want;
+    });
+    if (exact.length === 1) return { row: exact[0]._sheetRow, car_desc: exact[0].car_desc };
+    // No exact match? If there's a single substring hit, accept it
+    // (covers minor whitespace/punctuation drift).
+    if (data.rows.length === 1) return { row: data.rows[0]._sheetRow, car_desc: data.rows[0].car_desc };
+    return null;
+  } catch(e){
+    console.warn('_relocateRowByCarDesc failed:', e);
+    return null;
+  }
+}
+
+// Update a deal_links row's target_row to the new row found by
+// _relocateRowByCarDesc. Used by drift-error self-heal paths.
+async function _updateDealLinkRow(linkId, newRow, newCarDesc){
+  if (!linkId || !newRow) return false;
+  try {
+    await sbPatch('deal_links', linkId, {
+      target_row: newRow,
+      car_desc: newCarDesc || undefined,
+      updated_at: new Date().toISOString()
+    });
+    return true;
+  } catch(e){ console.warn('deal_link row update failed:', e); return false; }
+}
+
+// Update a payment_deal_aliases row's target_row similarly.
+async function _updatePaymentAliasRow(aliasId, newRow, newCarDesc){
+  if (!aliasId || !newRow) return false;
+  try {
+    await sbPatch('payment_deal_aliases', aliasId, {
+      target_row: newRow,
+      car_desc: newCarDesc || undefined
+    });
+    return true;
+  } catch(e){ console.warn('payment_deal_aliases row update failed:', e); return false; }
+}
+
 // Build the Profit26 description (same rule but WITHOUT the amount —
 // Apps Script's profit_append_entry prepends the amount itself).
 // Delegates to the same amount-aware builder so the resulting cell note
@@ -19022,20 +19086,45 @@ async function _appendCarPayPaymentToDeals26(cp, custByAccount){
           })
         });
         var data2 = null; try { data2 = await resp2.json(); } catch(_){}
-        // v65: drift / surname mismatch → disable stale link AND fall through
-        // to the rest of this function (account-alias short-circuit /
-        // approve-first queue / matcher) instead of queuing an empty
-        // payment_reviews card the user can't act on.
+        // v65: drift / surname mismatch.
         //
-        // Bug fix #2 (2026-04-28): previously this path called
-        // _carpayQueueReview with empty candidates and returned. The
-        // resulting card had nothing to approve. Falling through ensures
-        // the payment hits paths that produce real candidates.
+        // Bug fix #2 (2026-04-28): fall through instead of dead-ending.
+        // Bug fix #5 (2026-04-28): SELF-HEAL — try to relocate the
+        // car_desc to its new row first; if found, update the deal_link
+        // and retry the post.
         if (data2 && data2.ok === false && (data2.error === 'row_drift' || data2.error === 'surname_mismatch' || data2.error === 'empty_row')){
-          try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
-          console.warn('CarPay v65 guard tripped, stale link ' + lk2.id + ' deactivated; falling through:', data2);
-          // intentional fall-through (no return)
-        } else
+          var reloc2 = await _relocateRowByCarDesc(lk2.target_tab, lk2.location || cpLoc, lk2.car_desc);
+          if (reloc2 && reloc2.row && reloc2.row !== lk2.target_row){
+            await _updateDealLinkRow(lk2.id, reloc2.row, reloc2.car_desc);
+            console.log('CarPay self-heal: relocated ' + lk2.car_desc + ' from row ' + lk2.target_row + ' → ' + reloc2.row);
+            var retry2 = await fetch(_SHEETS_URL, {
+              method: 'POST', headers: {'Content-Type':'text/plain'},
+              body: JSON.stringify({
+                secret: _SHEETS_SECRET,
+                action: 'deals26_append_payment_direct',
+                location: lk2.location || cpLoc,
+                data: {
+                  tab: lk2.target_tab, row: reloc2.row,
+                  amount: stage2Payload.amount,
+                  note_line: stage2NoteLine,
+                  last_names: _paymentLastNames(stage2Payload.customer_name),
+                  check_dup: true,
+                  expected_car_desc: reloc2.car_desc
+                }
+              })
+            });
+            var retryData2 = null; try { retryData2 = await retry2.json(); } catch(_){}
+            if (retryData2 && retryData2.ok !== false){
+              data2 = retryData2;  // proceed to success branch
+            } else {
+              try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
+              console.warn('CarPay self-heal retry failed, link ' + lk2.id + ' deactivated:', retryData2);
+            }
+          } else {
+            try { await sbPatch('deal_links', lk2.id, { active: false }); } catch(_){}
+            console.warn('CarPay v65 guard tripped, link ' + lk2.id + ' deactivated (no relocation); falling through:', data2);
+          }
+        }
         if (data2 && data2.ok !== false){
           if (data2.status === 'already_posted'){
             await _carpayRecordPosting(cp, stage2Payload, {
@@ -19662,22 +19751,54 @@ async function _appendPaymentToDeals26Checked(payload){
         })
       });
       var dData = null; try { dData = await dResp.json(); } catch(e){}
-      // v65: rows drifted or surname isn't on the target row. Deactivate
-      // the stale link and FALL THROUGH to the rest of this function
-      // (approve-first queue / alias short-circuit / matcher) so the
-      // payment doesn't dead-end on an empty-candidates review card.
+      // v65: row drifted or surname isn't on the target row.
       //
-      // Bug fix #2 (2026-04-28): previously this path inserted a
-      // payment_reviews row with reason='row_drift' and candidates='[]'.
-      // The empty card was unactionable in the Review UI — the user
-      // couldn't pick a candidate because there were none. Falling
-      // through ensures the payment hits the standard approve-first /
-      // alias / matcher pipeline, which produces real candidates.
+      // Bug fix #2 (2026-04-28): instead of dead-ending on an empty-
+      // candidates review card, fall through to matcher.
+      //
+      // Bug fix #5 (2026-04-28): SELF-HEAL — before deactivating the
+      // stale link, try to relocate the original car_desc to its new
+      // row via Apps Script find_rows. If we find a unique new row,
+      // update the deal_link's target_row and retry the post. This
+      // handles the common case of rows drifting due to inserts/deletes
+      // in the Deals tab — automation auto-recovers without bothering
+      // the user.
       if (dData && dData.ok === false && (dData.error === 'row_drift' || dData.error === 'surname_mismatch' || dData.error === 'empty_row')){
-        try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
-        console.warn('Resolver post blocked by v65 guard, stale link ' + lk.id + ' deactivated; falling through to matcher:', dData);
-        // intentional fall-through (no return)
-      } else
+        var relocated = await _relocateRowByCarDesc(lk.target_tab, lk.location || loc, lk.car_desc);
+        if (relocated && relocated.row && relocated.row !== lk.target_row){
+          await _updateDealLinkRow(lk.id, relocated.row, relocated.car_desc);
+          console.log('Self-heal: relocated ' + lk.car_desc + ' from row ' + lk.target_row + ' → ' + relocated.row);
+          // Retry the post on the relocated row
+          var retryResp = await fetch(_SHEETS_URL, {
+            method: 'POST', headers: {'Content-Type':'text/plain'},
+            body: JSON.stringify({
+              secret: _SHEETS_SECRET,
+              action: 'deals26_append_payment_direct',
+              location: lk.location || loc,
+              data: {
+                tab: lk.target_tab, row: relocated.row,
+                amount: amt, note_line: lkNoteLine,
+                last_names: _paymentLastNames(payload.customer_name),
+                check_dup: true,
+                expected_car_desc: relocated.car_desc
+              }
+            })
+          });
+          var retryData = null; try { retryData = await retryResp.json(); } catch(_){}
+          if (retryData && retryData.ok !== false){
+            dData = retryData;  // proceed to the success branch below
+          } else {
+            // Retry also failed — deactivate and fall through
+            try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
+            console.warn('Self-heal retry failed, link ' + lk.id + ' deactivated:', retryData);
+          }
+        } else {
+          // Couldn't relocate — deactivate and fall through
+          try { await sbPatch('deal_links', lk.id, { active: false }); } catch(_){}
+          console.warn('Resolver post blocked by v65 guard, link ' + lk.id + ' deactivated (no relocation found); falling through:', dData);
+        }
+        // (no return here — either dData is now retryData success, or we fall through)
+      }
       if (dData && dData.ok !== false){
         if (dData.status === 'already_posted') return { skipped: true };
         if (dData.status === 'possible_duplicate'){

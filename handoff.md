@@ -1710,6 +1710,41 @@ Updated 4 alias direct-write call sites to use the helper instead of
 Falls back to the payload-based note when the alias doesn't have a
 car_desc (defensive).
 
+## Bug #5 — deal-link self-heal on row drift — ADDED
+
+When `deals26_append_payment_direct` returns `row_drift` /
+`surname_mismatch` / `empty_row` (the v65/v66 guards), the previous
+behavior (after Bug #2 fix) was to deactivate the stale link and fall
+through to the matcher. This worked but threw away the user's
+previous deal_link selection — every drift cost the customer one
+manual re-link.
+
+Now we self-heal first:
+1. Call new Apps Script `find_rows` action with the link's stored
+   `car_desc` as the search query.
+2. If exactly one row matches (or one substring hit when no exact),
+   that's the new row.
+3. Update `deal_links.target_row` (and `car_desc` if minor whitespace
+   drift). Retry the `deals26_append_payment_direct` post on the new
+   row.
+4. If retry succeeds → proceed to the success branch as if no drift
+   happened.
+5. If retry fails OR no relocation found → deactivate the link and
+   fall through to the matcher (current behavior).
+
+Implementation in `index.html`:
+- New helper `_relocateRowByCarDesc(tab, location, expectedCarDesc)`
+  → returns `{row, car_desc}` on unique relocation, else null.
+- New helpers `_updateDealLinkRow(linkId, newRow, newCarDesc)` and
+  `_updatePaymentAliasRow(aliasId, newRow, newCarDesc)`.
+- Wired into the Stage-2 resolver drift path in
+  `_appendPaymentToDeals26Checked` and the CarPay equivalent in
+  `_processCarPayPayment`.
+
+Effect: drifts caused by row inserts/deletes in Deals tabs no longer
+require a Review re-link. Self-recovery is silent (logs a `console.log`
+showing the old → new row).
+
 ## Deferred (not done this session)
 
 - **Review UI for `csv_reconciliation`**: significant new feature.
