@@ -2862,7 +2862,7 @@ async function syncFromSupabase(showUI){
       S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
-      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepPin=localStorage.getItem('cf_saved_pin');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepPin)localStorage.setItem('cf_saved_pin',_keepPin);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);
+      var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);
       if(Object.keys(colorMap).length) localStorage.setItem('cf_colormap',JSON.stringify(colorMap));
       if(pxSaved) localStorage.setItem('px_cache',pxSaved);
       sv();
@@ -2941,33 +2941,26 @@ async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value.trim();
   showLoading('Signing in...');
-  // Primary auth path: edge function verifies the PIN server-side (via the
-  // verify_employee_pin RPC + bcrypt) and returns a 7-day JWT. This is the
-  // only path that survives once RLS locks down the pin/pin_hash columns.
+  // Auth path: edge function verifies the PIN server-side (via the
+  // verify_employee_pin RPC + bcrypt) and returns a 7-day JWT. The JWT
+  // is what auto-login uses on subsequent page loads — we no longer
+  // store the plaintext PIN in localStorage.
   let e = null;
   const authResult = await _acquireAuthJwt(u, p);
   if(authResult && authResult.user){
     const au = authResult.user;
     e = { id: au.id, name: au.name, username: au.username, role: au.role, location: au.location };
   }
-  // Legacy fallback for the brief transition window before the edge function
-  // is deployed: fetch employees + local match. This path breaks the moment
-  // RLS is enabled on `employees`; that's intentional — by then everyone
-  // logs in via the edge function. Remove in Phase 6.
-  if(!e){
-    try {
-      const emps = await sbGet('employees','select=id,name,username,pin,role,location');
-      S.employees = emps.map(x=>({id:x.id,name:x.name,username:x.username,pin:x.pin,role:x.role,location:x.location}));
-      e = S.employees.find(x=>x.username.toLowerCase()===u && x.pin===p);
-    } catch(err){ console.warn('[auth] legacy fallback failed:', err && err.message); }
-  }
   hideLoading();
   if(!e){document.getElementById('lerr').textContent='Invalid username or PIN';return;}
   me=e;
-  // Save session for auto-login if remember-me is checked
+  // Save session + username (for "remember me"). PIN is NOT saved — the
+  // 7-day JWT in cf_jwt is what auto-login uses. When the JWT expires,
+  // the user just re-enters their PIN.
   const rememberMe=document.getElementById('remember-me');
-  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());localStorage.setItem('cf_saved_pin',document.getElementById('lp').value.trim());}
-  // Store credential in iOS keychain so Face ID triggers on next open
+  if(!rememberMe||rememberMe.checked){localStorage.setItem('cf_session',JSON.stringify(me));localStorage.setItem('cf_saved_user',document.getElementById('lu').value.trim());}
+  // Store credential in iOS keychain so Face ID triggers on next open.
+  // This is the durable cross-PWA-launch credential store on iOS.
   if(navigator.credentials&&window.PasswordCredential){try{await navigator.credentials.store(new PasswordCredential({id:u,password:p,name:e.name}));}catch(ex){}}
   initOneSignalUser(e.name);
   document.getElementById('login').style.display='none';
@@ -2998,7 +2991,6 @@ function doSync(){
   // Save session so user stays logged in after reload
   if(me) localStorage.setItem('cf_session', JSON.stringify(me));
   if(_savedUser) localStorage.setItem('cf_saved_user', _savedUser);
-  if(_savedPin) localStorage.setItem('cf_saved_pin', _savedPin);
   // Tell SW to skip waiting so new app code activates on next load
   if('serviceWorker' in navigator && navigator.serviceWorker.controller){
     navigator.serviceWorker.controller.postMessage('SYNC');
@@ -6095,10 +6087,12 @@ async function addCarManually(){
   renderInv();
 }
 
-// Restore session if coming back from a sync reload
+// Restore session if coming back from a sync reload. Plaintext PIN is
+// no longer stored — auto-login uses the persistent cf_jwt instead.
 const _savedSession = localStorage.getItem('cf_session');
 const _savedUser = localStorage.getItem('cf_saved_user');
-const _savedPin = localStorage.getItem('cf_saved_pin');
+// Defensive: any stale cf_saved_pin from before Phase 6 should be wiped.
+try{ localStorage.removeItem('cf_saved_pin'); }catch(e){}
 
 // ── AI key cookie helpers (cookies outlive iOS localStorage wipes) ──────────
 function _getAiKeyCookie(){var m=document.cookie.match(/(?:^|;\s*)cf_ai_key=([^;]*)/);return m?decodeURIComponent(m[1]):null;}
@@ -6112,9 +6106,8 @@ function clearAiKey(){localStorage.removeItem('cf_ai_key');_clearAiKeyCookie();}
 // Wipe ALL localStorage on every load - Supabase is always the source of truth
 var _keepAiKey=getAiKey();var _keepBadges=localStorage.getItem('cf_seen_badges');var _keepNotifDismissed=localStorage.getItem('cf_notif_dismissed');var _keepGVision=localStorage.getItem('cf_gvision_key');var _keepPayments=localStorage.getItem('cf_payments');var _keepLang=localStorage.getItem('cf-lang');var _keepFormsSeen=localStorage.getItem('forms_last_seen_count');var _keepDealsSeen=localStorage.getItem('deals_last_seen_count');var _keepWorkflow=localStorage.getItem('cf_workflow_cars');var _keepCalEv=null;var _keepSwReload=localStorage.getItem('_swReload');var _keepJwt=localStorage.getItem('cf_jwt');var _keepCfUser=localStorage.getItem('cf_user');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepBadges)localStorage.setItem('cf_seen_badges',_keepBadges);if(_keepNotifDismissed)localStorage.setItem('cf_notif_dismissed',_keepNotifDismissed);if(_keepGVision)localStorage.setItem('cf_gvision_key',_keepGVision);if(_keepPayments)localStorage.setItem('cf_payments',_keepPayments);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepFormsSeen)localStorage.setItem('forms_last_seen_count',_keepFormsSeen);if(_keepDealsSeen)localStorage.setItem('deals_last_seen_count',_keepDealsSeen);if(_keepWorkflow)localStorage.setItem('cf_workflow_cars',_keepWorkflow);if(_keepJwt)localStorage.setItem('cf_jwt',_keepJwt);if(_keepCfUser)localStorage.setItem('cf_user',_keepCfUser);// cf_work_cal is excluded from wipe (cf_work_ prefix) — no restore needed. cf_jwt + cf_user preserved so RLS calls don't have a window of empty results.
 try{S.calendarEvents=JSON.parse(localStorage.getItem('cf_work_cal')||'[]');}catch(e){}if(_keepSwReload)localStorage.setItem('_swReload',_keepSwReload);
-// Always pre-fill credentials if saved
+// Always pre-fill username if saved (PIN is no longer stored)
 if(_savedUser){ try{ const _u=document.getElementById('lu'); if(_u)_u.value=_savedUser; }catch(e){} }
-if(_savedPin){ try{ const _p=document.getElementById('lp'); if(_p)_p.value=_savedPin; }catch(e){} }
 if(_savedSession){
   try{
     const _s = JSON.parse(_savedSession);
@@ -6123,17 +6116,11 @@ if(_savedSession){
       // Re-save immediately so session survives even if sync fails
       localStorage.setItem('cf_session', JSON.stringify(me));
       localStorage.setItem('cf_saved_user', _savedUser||'');
-      localStorage.setItem('cf_saved_pin', _savedPin||'');
-      // Always acquire a fresh JWT on auto-login. Even if cf_jwt was
-      // preserved by the localStorage purge above, refreshing it via
-      // saved credentials is more reliable than trusting a cached token
-      // (which can be stale across mid-deploy JWT secret rotation, or
-      // get evicted by iOS Safari's aggressive PWA storage eviction).
-      // We must await this before sync runs — under RLS, sbGet without
-      // a valid JWT returns [] and the UI looks empty.
-      var _jwtReady = (_savedUser && _savedPin)
-        ? _acquireAuthJwt(_savedUser, _savedPin).catch(function(e){ console.warn('[auth] auto-login JWT acquire failed:', e && e.message); return null; })
-        : Promise.resolve(null);
+      // Auto-login uses the persistent JWT in cf_jwt (7-day expiry).
+      // If cf_jwt is missing or expired, _cfJwt() returns null → we
+      // kick to the login screen for the user to re-enter their PIN.
+      // We no longer carry the plaintext PIN around.
+      var _jwtReady = Promise.resolve(_cfJwt() ? {hasJwt:true} : null);
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='flex';
       document.getElementById('ub').textContent=me.name;
