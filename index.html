@@ -2336,6 +2336,7 @@ function _cfJwt(){
     var payload=JSON.parse(atob((parts[1]+pad).replace(/-/g,'+').replace(/_/g,'/')));
     if(payload.exp && payload.exp*1000 < Date.now()){
       console.warn('[auth] JWT expired, clearing');
+      try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'cleared_expired', t:Date.now(), exp: payload.exp, now: Date.now()/1000})); }catch(e){}
       localStorage.removeItem('cf_jwt');
       return null;
     }
@@ -2379,7 +2380,8 @@ Object.defineProperty(window, 'SB_HEADERS', {
 var _onAuthExpired = null;
 async function _sbHandleResponse(r){
   if(r.status===401 && _cfJwt()){
-    console.warn('[auth] Supabase 401 — JWT rejected, clearing');
+    console.warn('[auth] Supabase 401 — JWT rejected, clearing', r.url);
+    try{ localStorage.setItem('cf_work_authdebug', JSON.stringify({step:'cleared_401', t:Date.now(), url: r.url})); }catch(e){}
     localStorage.removeItem('cf_jwt');
     try{ if(typeof _onAuthExpired==='function') _onAuthExpired(); }catch(e){}
   }
