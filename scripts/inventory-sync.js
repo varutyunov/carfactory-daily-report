@@ -209,7 +209,7 @@ async function main() {
   // Get ALL existing vehicles from Supabase (include re_acquired so we can
   // preserve cars that came back via the app's "Return to Inventory" button
   // even though the back-office CSV still considers them sold).
-  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color,miles,re_acquired');
+  const existing = await sbGetAll('inventory', 'id,stock,vin,name,location,color,miles,re_acquired,sold_at');
   const existingByVin = new Map(existing.filter(c => c.vin).map(c => [c.vin, c]));
   console.log('Currently in DB:', existing.length);
   const reAcquiredVins = new Set(existing.filter(c => c.re_acquired).map(c => c.vin));
@@ -280,6 +280,11 @@ async function main() {
       patch.re_acquired_at = null;
       patch.re_acquired_from_deal_id = null;
     }
+    // If a sold car reappears in the CSV (re-listed, deal fell through, etc.),
+    // clear the sold_at marker so it returns to active inventory.
+    if (ex.sold_at) {
+      patch.sold_at = null;
+    }
     if (!Object.keys(patch).length) continue;
     const res = await fetch(`${SB_URL}/rest/v1/inventory?id=eq.${ex.id}`, {
       method: 'PATCH', headers: HEADERS, body: JSON.stringify(patch)
@@ -289,13 +294,16 @@ async function main() {
   }
   console.log('Updated:', updated);
 
-  // --- REMOVE SOLD CARS (VIN no longer in any CSV) ---
+  // --- SOFT-MARK SOLD CARS (VIN no longer in any CSV) ---
+  // Soft-delete pattern: instead of removing the row, stamp `sold_at` with the
+  // current timestamp. Staff can still look up VIN, take a deposit, or record
+  // a final payment for ~30 days. Hard-delete happens after that.
   const assignments = await sbGetAll('assignments', 'inventory_id,approved');
   const activeAssignments = new Set(
     assignments.filter(a => !a.approved).map(a => a.inventory_id)
   );
 
-  const toRemove = existing.filter(c => {
+  const toMarkSold = existing.filter(c => {
     if (!c.vin) return false;
     if (allCsvVins.has(c.vin)) return false;
     if (activeAssignments.has(c.id)) return false;
@@ -303,24 +311,53 @@ async function main() {
     // button (deals that fell through, repossessions). Back-office CSV still
     // has them as sold, but they're physically on the lot.
     if (c.re_acquired) return false;
+    // Already marked sold — don't re-stamp the timestamp; the 30-day clock
+    // should keep ticking from when the car FIRST disappeared from the CSV.
+    if (c.sold_at) return false;
     return true;
   });
 
-  let removed = 0;
-  if (toRemove.length > 0) {
-    console.log('Sold/removed cars to delete:', toRemove.length);
-    for (const car of toRemove) {
+  let markedSold = 0;
+  if (toMarkSold.length > 0) {
+    console.log('Cars to soft-mark as sold:', toMarkSold.length);
+    const nowIso = new Date().toISOString();
+    for (const car of toMarkSold) {
       const res = await fetch(
         `${SB_URL}/rest/v1/inventory?id=eq.${car.id}`,
-        { method: 'DELETE', headers: HEADERS }
+        { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ sold_at: nowIso }) }
       );
-      if (res.ok) { removed++; }
-      else { console.error('Delete error for', car.vin, ':', await res.text()); }
+      if (res.ok) { markedSold++; }
+      else { console.error('Mark-sold error for', car.vin, ':', await res.text()); }
     }
   }
 
+  // --- HARD-DELETE cars sold > 30 days ago ---
+  // Removes rows long after staff have stopped looking them up.
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
+  let removed = 0;
+  try {
+    const oldSold = await sbGetAll('inventory',
+      'id,vin,sold_at&sold_at=lt.' + encodeURIComponent(cutoff) + '&sold_at=not.is.null');
+    if (oldSold.length > 0) {
+      console.log('Cars sold >30d ago to hard-delete:', oldSold.length);
+      for (const car of oldSold) {
+        // Same safety filters as before
+        if (activeAssignments.has(car.id)) continue;
+        const res = await fetch(
+          `${SB_URL}/rest/v1/inventory?id=eq.${car.id}`,
+          { method: 'DELETE', headers: HEADERS }
+        );
+        if (res.ok) { removed++; }
+        else { console.error('Hard-delete error for', car.vin, ':', await res.text()); }
+      }
+    }
+  } catch(e) {
+    console.warn('Hard-delete pass failed (non-fatal):', e.message);
+  }
+
   console.log('=== SYNC COMPLETE ===');
-  console.log('Added:', added, '| Updated:', updated, '| Removed:', removed, '| Total now:', existing.length + added - removed);
+  console.log('Added:', added, '| Updated:', updated, '| Marked sold:', markedSold, '| Hard-deleted (>30d):', removed, '| Total now:', existing.length + added - removed);
 
   // --- QUEUE inv_create_pending REVIEWS for newly inserted cars ---
   if (insertedWithIds.length > 0) {

@@ -2859,7 +2859,7 @@ async function syncFromSupabase(showUI){
       S.employees = emps.map(e=>({id:e.id,name:e.name,username:e.username,pin:e.pin,role:e.role,location:e.location}));
       const _rawCM=JSON.parse(localStorage.getItem('cf_colormap')||'{}');const colorMap={};Object.keys(_rawCM).forEach(function(k){colorMap[k]=fixColor(_rawCM[k]);});
       const pxSaved=localStorage.getItem('px_cache');
-      S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired}));
+      S.inventory = inv.map(c=>({id:c.id,name:c.name,stock:c.stock,vin:c.vin||'',color:fixColor(c.color||colorMap[c.vin]||colorMap[c.stock]||''),miles:c.miles||null,location:c.location,photo:c.photo||null,work:c.work||{},re_acquired:!!c.re_acquired,sold_at:c.sold_at||null}));
       S.assignments = asgn.map(a=>({id:a.id,inventoryId:a.inventory_id,employeeId:a.employee_id,tasks:a.tasks||[],submitted:a.submitted,approved:a.approved,photos:a.photos||[],assignedAt:a.assigned_at,submittedAt:a.submitted_at}));
       // Wipe stale localStorage but preserve session + settings
       var _keepAiKey=getAiKey();var _keepND=localStorage.getItem('cf_notif_dismissed');var _keepSession=localStorage.getItem('cf_session');var _keepUser=localStorage.getItem('cf_saved_user');var _keepLang=localStorage.getItem('cf-lang');var _keepJwt2=localStorage.getItem('cf_jwt');var _keepCfUser2=localStorage.getItem('cf_user');var _keepSwR2=localStorage.getItem('_swReload');Object.keys(localStorage).filter(k=>!k.startsWith("cf_work_")&&!k.startsWith("cf_miles_")).forEach(k=>localStorage.removeItem(k));if(_keepAiKey)localStorage.setItem('cf_ai_key',_keepAiKey);if(_keepND)localStorage.setItem('cf_notif_dismissed','1');if(_keepSession)localStorage.setItem('cf_session',_keepSession);if(_keepUser)localStorage.setItem('cf_saved_user',_keepUser);if(_keepLang)localStorage.setItem('cf-lang',_keepLang);if(_keepJwt2)localStorage.setItem('cf_jwt',_keepJwt2);if(_keepCfUser2)localStorage.setItem('cf_user',_keepCfUser2);if(_keepSwR2)localStorage.setItem('_swReload',_keepSwR2);
@@ -3193,7 +3193,8 @@ function renderEmpHome(){
   if(langBtn){langBtn.style.display=isLangUser?'inline-block':'none';langBtn.textContent=window._lang==='es'?'🇺🇸':'🇵🇷';}
   var hasDock=isDealUser;
   // Inventory tile — count matches employee's location
-  var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
+  // Active inventory count — exclude sold cars (kept in DB for ~30 days post-sale).
+  var invTile={id:'inventory',label:'Inventory',count:(S.inventory||[]).filter(function(c){return (c.location||'DeBary')===myEmpLoc && !c.sold_at;}).length,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',bg:'linear-gradient(145deg,#011a10,#013d24,#015c38)',glow:'rgba(52,211,153,0.25)'};
   // Forms tile — always visible
   var depositTile={id:'forms',label:'Forms',count:0,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/><circle cx="17" cy="17" r="3" fill="#1d4ed8" stroke="#60a5fa"/><path d="M17 15.5v3M15.5 17h3" stroke="#fff" stroke-width="1.2"/></svg>',bg:'linear-gradient(145deg,#001233,#003080,#1d4ed8)',glow:'rgba(96,165,250,0.25)',noCount:true};
   // Widget-only users (Jesse etc) see only inventory; regular employees see their work tiles + inventory
@@ -3717,6 +3718,9 @@ async function quickAddToDetail(){
 }
 function renderInv(){
   var filtered=S.inventory.filter(function(c){
+    // Sold cars (within 30-day grace window) only show if user is searching
+    // for them. Otherwise the inventory grid stays "active inventory only".
+    if(c.sold_at && !invFilter) return false;
     if(invFilter&&!fuzzyMatch([c.name,c.stock||'',c.vin||'',c.color||''],invFilter)) return false;
     return true;
   });
@@ -3746,7 +3750,8 @@ function renderInv(){
     const dispColor=car.color;
     const colorMiles=[dispColor,car.miles?(Number(car.miles)||0).toLocaleString()+' mi':''].filter(Boolean).join(' \xB7 ');
     const vinLine=car.vin?`<div style="font-size:9px;color:#444;margin-top:1px;letter-spacing:.3px;">${car.vin}</div>`:'';
-    return`<div class="inv-tile" onclick="openCarActions(${car.id})"><div class="inv-tile-wrap">${photoHTML}</div><div class="inv-tile-body"><div class="inv-tile-name">${car.name}</div><div class="inv-tile-sub">${meta}${colorMiles?' \xB7 '+colorMiles:''}</div>${vinLine}</div></div>`;
+    const soldBadge = car.sold_at ? '<div style="position:absolute;top:6px;left:6px;background:#7f1d1d;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase;box-shadow:0 2px 6px rgba(0,0,0,.5);z-index:2;">SOLD</div>' : '';
+    return`<div class="inv-tile" onclick="openCarActions(${car.id})" style="${car.sold_at?'opacity:.6;':''}"><div class="inv-tile-wrap" style="position:relative;">${soldBadge}${photoHTML}</div><div class="inv-tile-body"><div class="inv-tile-name">${car.name}</div><div class="inv-tile-sub">${meta}${colorMiles?' \xB7 '+colorMiles:''}</div>${vinLine}</div></div>`;
   }).join('')+'</div>';
   applyPexels(items);
 }
@@ -13160,9 +13165,20 @@ function depRenderCarList(cars) {
   el.innerHTML = cars.map(function(c){
     var label = c.name || [c.year, c.make, c.model].filter(Boolean).join(' ') || 'Unknown';
     var sub   = [c.stock ? 'Stock: '+c.stock : '', c.color||'', c.location||''].filter(Boolean).join(' · ');
-    return '<div onclick="depSelectCar(\''+c.id+'\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
-      '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+'</div>' +
-      '<div style="font-size:13px;color:#555;">'+sub+'</div>' +
+    var soldDays = '';
+    if (c.sold_at){
+      var ms = Date.now() - Date.parse(c.sold_at);
+      var days = Math.max(0, Math.floor(ms / (24*60*60*1000)));
+      soldDays = ' \xB7 sold ' + (days === 0 ? 'today' : days + 'd ago');
+    }
+    var soldBadge = c.sold_at
+      ? '<span style="display:inline-block;background:#7f1d1d;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase;margin-left:8px;vertical-align:middle;">SOLD</span>'
+      : '';
+    var bg = c.sold_at ? '#1a0a0a' : '#0d0d0d';
+    var border = c.sold_at ? '#3a1818' : '#1e1e1e';
+    return '<div onclick="depSelectCar(\''+c.id+'\')" style="background:'+bg+';border:1px solid '+border+';border-radius:14px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;'+(c.sold_at?'opacity:.85;':'')+'">' +
+      '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:2px;">'+label+soldBadge+'</div>' +
+      '<div style="font-size:13px;color:#555;">'+sub+soldDays+'</div>' +
       (c.vin ? '<div style="font-size:11px;color:#333;margin-top:2px;">VIN: '+c.vin+'</div>' : '') +
     '</div>';
   }).join('');

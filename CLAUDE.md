@@ -32,6 +32,22 @@ When merging before push: `git fetch origin main && git merge origin/main --no-e
 ## Testing Rule
 **Always test in preview before pushing.** Use mobile viewport (375x812). Vlad only cares about phone UX.
 
+## Sold Inventory Grace Window (30 days)
+**Cars don't get hard-deleted from `inventory` immediately when they leave the dealer master CSV.** The sync soft-marks them with `inventory.sold_at = now()` and keeps them in the table for 30 days. Hard-delete happens on the next sync after `sold_at < now() - 30 days`.
+
+This lets staff still:
+- Take a deposit/payment that references a just-sold car
+- Look up VIN/stock for paperwork after the sale
+- Find the car in vehicle search
+
+UI rules:
+- **Inventory tile count** excludes `sold_at IS NOT NULL` (active inventory only).
+- **Main inventory grid** (renderInv) hides sold cars by default; they only appear when the user is searching (search reveals everything).
+- **Vehicle search lists** (deposit form, etc.) show sold cars with a red `SOLD` badge + `sold Xd ago` subtitle so they're findable but visually distinct.
+- If a sold VIN reappears in the dealer master CSV (deal fell through, re-list), `sold_at` is cleared automatically by the next sync.
+
+Schema: `supabase/migrations/20260429_050_inventory_sold_at.sql`. Sync logic lives at the bottom of `scripts/inventory-sync.js`.
+
 ## Daily Backup to Google Drive
 **The whole project is backed up to a Google Drive folder named "Car Factory App Backup" every night at 8:00 PM** (local Windows Task Scheduler). GitHub holds the version history; Drive is a flat mirror of the working tree so untracked operational files (Payments CSVs, Sold Inventory, dealer-side data) are also covered.
 
