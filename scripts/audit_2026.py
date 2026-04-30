@@ -35,9 +35,14 @@ For deals NOT linked to an account:
     so the operator can resolve over time.
 
 Usage:
-  python scripts/audit_2026.py            # dry-run, prints plan
-  python scripts/audit_2026.py --apply    # executes corrections
-  python scripts/audit_2026.py --month=4  # restrict to April only
+  python scripts/audit_2026.py                    # dry-run, prints plan
+  python scripts/audit_2026.py --apply            # date fixes + missing adds (NOT dupes)
+  python scripts/audit_2026.py --apply --dedup    # also delete duplicates
+  python scripts/audit_2026.py --month=4          # restrict to April
+
+Duplicate detection runs on EVERY invocation (including dry-run) and
+surfaces dupes in the plan output. Deletion requires the explicit
+--dedup flag — duplicates are reviewed by the operator before removal.
 """
 import sys, io
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -59,6 +64,7 @@ AMOUNT_TOL = 1.00
 DATE_TOL_DAYS = 7
 NOTE_MAX = 26
 APPLY = '--apply' in sys.argv
+DEDUP = '--dedup' in sys.argv
 MONTH_ARG = next((int(a.split('=')[1]) for a in sys.argv if a.startswith('--month=')), None)
 TODAY = datetime.now().strftime('%Y-%m-%d')
 
@@ -369,8 +375,77 @@ corrections = {
     'missing_col_g':      [],  # auto-add
     'missing_profit':     [],  # auto-add
     'phantom_post':       [],  # review (don't auto-delete)
+    'duplicate_col_g':    [],  # delete only with --dedup (have date tail — safe)
+    'duplicate_profit':   [],  # delete only with --dedup (have date tail — safe)
+    'duplicate_no_date':  [],  # surface only — may be legitimate repeat (no date)
     'unlinked_with_activity': [],  # log only
 }
+
+# ── Duplicate detection (runs unconditionally; deletion gated by --dedup) ─
+print('Scanning for duplicate sheet entries…')
+
+def _normalize_line(line):
+    s = (line or '').strip().lower()
+    s = re.sub(r'\s+', ' ', s)
+    s = re.sub(r'[,.;:]', '', s)
+    return s
+
+def _has_date_tail(line):
+    return bool(re.search(r'\b\d{1,2}/\d{1,2}\b\s*$', (line or '').strip()))
+
+# 1. col G dupes — per deal
+for dk, deal in all_deals.items():
+    notes = (deal.get('payment_notes') or '').strip()
+    if not notes: continue
+    lines = [ln for ln in notes.split('\n') if ln.strip()]
+    seen = defaultdict(list)
+    for ln in lines:
+        seen[_normalize_line(ln)].append(ln.strip())
+    for norm, group in seen.items():
+        if len(group) <= 1: continue
+        # Restrict to month if --month set (ignore for no-date entries)
+        if MONTH_ARG and _has_date_tail(group[0]):
+            md = re.search(r'(\d{1,2})/(\d{1,2})', group[0])
+            if not md or int(md.group(1)) != MONTH_ARG: continue
+        if _has_date_tail(group[0]):
+            corrections['duplicate_col_g'].append({
+                'deal': deal, 'line': group[0], 'count': len(group),
+            })
+        else:
+            # Anchor lines (no date) can legitimately repeat. Surface for
+            # manual review; never auto-delete.
+            corrections['duplicate_no_date'].append({
+                'kind': 'col_g',
+                'deal_key': dk, 'tab': deal['tab'], 'loc': deal['loc'],
+                'row': deal['row'], 'car_desc': deal['car_desc'],
+                'line': group[0], 'count': len(group),
+            })
+
+# 2. Profit26 dupes — per cell
+for loc in profit_cells:
+    for mi in profit_cells[loc]:
+        if MONTH_ARG and mi != MONTH_ARG - 1: continue
+        for label, lines in profit_cells[loc][mi].items():
+            seen = defaultdict(list)
+            for ln in lines:
+                seen[_normalize_line(ln['raw'])].append(ln)
+            for norm, group in seen.items():
+                if len(group) <= 1: continue
+                if _has_date_tail(group[0]['raw']):
+                    corrections['duplicate_profit'].append({
+                        'loc': loc, 'month_idx': mi, 'label': label,
+                        'line': group[0], 'count': len(group),
+                    })
+                else:
+                    corrections['duplicate_no_date'].append({
+                        'kind': 'profit',
+                        'loc': loc, 'month_idx': mi, 'label': label,
+                        'line_raw': group[0]['raw'], 'count': len(group),
+                    })
+
+print(f'  col G dupes (with date — safe to dedup): {len(corrections["duplicate_col_g"])}')
+print(f'  Profit26 dupes (with date — safe to dedup): {len(corrections["duplicate_profit"])}')
+print(f'  no-date dupes (surface only): {len(corrections["duplicate_no_date"])}')
 
 linked_deals = 0
 unlinked_with_april = 0
@@ -534,6 +609,13 @@ dump(corrections['phantom_post'], 'PHANTOM POSTS',
      lambda it: f'{it["post"]["kind"]:6s} {it["post"]["loc"]} ${it["post"]["line"]["amount"]:>7} {it["post"]["line"].get("date") or "?":10s} [{it["post"]["line"]["raw"]}] (deal: {it["deal"]["car_desc"][:30]})')
 dump(corrections['unlinked_with_activity'], 'UNLINKED DEALS WITH 2026 ACTIVITY',
      lambda it: f'{it["deal"]["tab"]} {it["deal"]["loc"]} r{it["deal"]["row"]} {it["deal"]["car_desc"][:40]} owed={it["deal"]["owed"]:.0f}')
+dump(corrections['duplicate_col_g'], 'DUPLICATES — col G (use --dedup to delete)',
+     lambda it: f'{it["deal"]["tab"]} {it["deal"]["loc"]} r{it["deal"]["row"]} {it["deal"]["car_desc"][:30]} × {it["count"]}: {it["line"]}')
+dump(corrections['duplicate_profit'], 'DUPLICATES — Profit26 (use --dedup to delete)',
+     lambda it: f'{it["loc"]} mo{it["month_idx"]+1} {it["label"]} × {it["count"]}: {it["line"]["raw"]}')
+dump(corrections['duplicate_no_date'], 'DUPLICATES — no date tail (info only, never auto-deleted)',
+     lambda it: (f'{it["kind"]:6s} {it.get("loc","")} {it.get("car_desc","") or ("mo"+str(it.get("month_idx",0)+1)+" "+it.get("label",""))} × {it["count"]}: '
+                 f'{it.get("line", it.get("line_raw",""))}'))
 
 # Save plan JSON
 def _ser(x):
@@ -771,6 +853,84 @@ for c in corrections['phantom_post']:
         'created_at': datetime.now().isoformat(),
     })
 
+# 6. Dedupe — only when --dedup explicitly requested. Removes ONE copy
+# per duplicated line. Operator gates this with --dedup so dupes are
+# reviewed first (printed in the plan above).
+dd_profit_ok = dd_profit_err = 0
+dd_col_g_ok = dd_col_g_err = 0
+if DEDUP:
+    L('')
+    L('-- DEDUP --')
+    # Profit26 dupes
+    for d in corrections['duplicate_profit']:
+        line = d['line']
+        amount = line['amount']
+        desc_with_date = line['text'] + (f' {line["date"][5:7].lstrip("0")}/{line["date"][8:10].lstrip("0")}' if line.get('date') else '')
+        # Reconstruct EXACT raw description as stored in cell — text + date tail
+        # (profit_remove_entry matches by amount + description).
+        old_desc = line['raw'].split(' ', 1)[1] if ' ' in line['raw'] else ''
+        row_type = 'payments' if d['label'] == 'Payments' else 'cash_sales'
+        # Remove (count - 1) copies
+        for _ in range(d['count'] - 1):
+            try:
+                resp = gas({'action':'profit_remove_entry','location':d['loc'],
+                    'data':{'month_idx': d['month_idx'], 'row_type': row_type,
+                            'amount': amount, 'description': old_desc}})
+                if resp and resp.get('ok'):
+                    dd_profit_ok += 1
+                    L(f'  DEDUP_PROFIT {d["loc"]} mo{d["month_idx"]+1} {d["label"]}: removed "{line["raw"]}"')
+                else:
+                    dd_profit_err += 1
+                    L(f'  ERR DEDUP_PROFIT {d["loc"]}: {line["raw"]} → {resp}')
+            except Exception as e:
+                dd_profit_err += 1
+                L(f'  ERR DEDUP_PROFIT {d["loc"]}: {e}')
+    # col G dupes — group by deal and rewrite cell with one fewer of each
+    cg_by_deal = defaultdict(list)
+    for d in corrections['duplicate_col_g']:
+        key = (d['deal']['tab'], d['deal']['loc'], d['deal']['row'], d['deal']['car_desc'])
+        cg_by_deal[key].append(d)
+    for key, grp in cg_by_deal.items():
+        tab, loc, row, car_desc = key
+        # Re-read current notes (apply phase already wrote new entries)
+        try:
+            resp = gas({'action':'read_all','tab':tab,'location':loc})
+            cur = next((r for r in (resp or {}).get('rows', [])
+                        if r.get('_sheetRow') == row), None)
+            if not cur:
+                dd_col_g_err += 1
+                L(f'  ERR DEDUP_COLG {tab} r{row}: row not found')
+                continue
+            cur_lines = (cur.get('payment_notes') or '').split('\n')
+        except Exception as e:
+            dd_col_g_err += 1
+            L(f'  ERR DEDUP_COLG read {tab} r{row}: {e}')
+            continue
+        to_remove = {(d['line']).strip(): (d['count'] - 1) for d in grp}
+        new_lines = []
+        for ln in cur_lines:
+            s = ln.strip()
+            if s in to_remove and to_remove[s] > 0:
+                to_remove[s] -= 1
+                continue
+            new_lines.append(ln)
+        new_notes = '\n'.join(new_lines).rstrip()
+        total = sum(p['amount'] for p in (parse_line(ln) for ln in new_lines) if p)
+        try:
+            resp = gas({'action':'correct_payments','location':loc,
+                'data':{'tab':tab,'row':row,'new_total':round(total,2),
+                        'new_notes': new_notes,
+                        'expected_car_desc': car_desc}})
+            if resp and resp.get('ok'):
+                dd_col_g_ok += sum(d['count'] - 1 for d in grp)
+                L(f'  DEDUP_COLG {tab} {loc} r{row} ({car_desc[:30]}): removed {sum(d["count"]-1 for d in grp)} dup(s)')
+            else:
+                dd_col_g_err += 1
+                L(f'  ERR DEDUP_COLG {tab} r{row}: {resp}')
+        except Exception as e:
+            dd_col_g_err += 1
+            L(f'  ERR DEDUP_COLG {tab} r{row}: {e}')
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 L('')
 L('=' * 70)
@@ -781,6 +941,12 @@ L(f'  Profit date fixes: ok={pf_ok}  err={pf_err}')
 L(f'  added col G      : ok={mcg_ok}  skipped={mcg_skip}  err={mcg_err}')
 L(f'  added Profit26   : ok={mp_ok}  skipped={mp_skip}  err={mp_err}')
 L(f'  pushed to review : {review_pushed}')
+if DEDUP:
+    L(f'  dedup col G      : ok={dd_col_g_ok}  err={dd_col_g_err}')
+    L(f'  dedup Profit26   : ok={dd_profit_ok}  err={dd_profit_err}')
+elif corrections['duplicate_col_g'] or corrections['duplicate_profit']:
+    L(f'  duplicates DETECTED but not removed (use --dedup):')
+    L(f'    col G: {len(corrections["duplicate_col_g"])} | Profit26: {len(corrections["duplicate_profit"])}')
 
 # Save log
 log_path = os.path.join(REPO, 'scripts', 'audit_2026_log.txt')
