@@ -239,10 +239,22 @@ for link in links:
                 profit26_lines.append({**ln, 'lot': loc})
                 profit26_total += ln['amount']
     profit26_total = round(profit26_total, 2)
-    # Conservation rule: col_G alone should equal CSV lifetime.
-    # Profit26 is informational (monthly profit-overflow report).
-    sheet_tracked = col_g
-    delta = round(sheet_tracked - csv_lifetime, 2)
+    # Best-fit conservation rule. Vlad's pattern varies by deal:
+    #   Some deals: col_G holds the full running ledger; Profit26 is
+    #               an informational monthly snapshot (Perez Odyssey).
+    #   Other deals: col_G holds only pre-profit; Profit26 holds the
+    #                post-profit overflow (Dinsmore Charger).
+    # Pick whichever interpretation gets the smallest |delta|.
+    delta_a = round(col_g - csv_lifetime, 2)              # col_G alone
+    delta_b = round((col_g + profit26_total) - csv_lifetime, 2)  # col_G + Profit26
+    if abs(delta_a) <= abs(delta_b):
+        sheet_tracked = col_g
+        delta = delta_a
+        rule_used = 'col_g'
+    else:
+        sheet_tracked = round(col_g + profit26_total, 2)
+        delta = delta_b
+        rule_used = 'col_g+profit26'
     findings.append({
         'deal_key': link['deal_key'],
         'car_desc': deal['car_desc'],
@@ -255,6 +267,7 @@ for link in links:
         'profit26_total': profit26_total,
         'sheet_tracked': sheet_tracked,
         'delta': delta,
+        'rule_used': rule_used,
         'profit26_lines': profit26_lines,
     })
 
