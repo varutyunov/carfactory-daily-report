@@ -32,3 +32,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_KEY }}
         continue-on-error: true
+      # Refresh csv_accounts master from latest payments + sold-inventory
+      # CSVs. Idempotent upsert. Provides the source-of-truth account
+      # database that deal_account_links and audit_2026.py join against.
+      - run: python scripts/sync_csv_accounts.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_KEY }}
+        continue-on-error: true
