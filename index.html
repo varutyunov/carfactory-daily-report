@@ -25922,9 +25922,35 @@ async function _createTradeInCar(payment, dealRecord) {
   var shortYr = yr.length === 4 ? yr.slice(2) : yr;
   var milesK = milesNum ? Math.round(milesNum / 1000) + 'k' : '';
   var carName = [shortYr, model, color.toLowerCase(), milesK, 'trade'].filter(Boolean).join(' ');
+  var invName = [yr, make, model].filter(Boolean).join(' ');
 
-  // Dedup: if an IC with this name already exists at this location, skip — the
-  // trade was already created (e.g. user editing the same deal twice).
+  // Dedup pass 1 (loose): if an inventory row with the same year+make+
+  // model already exists at this location AND was created in the last
+  // hour, treat this as a re-upload — Vlad re-typed the trade after
+  // deleting and re-creating the deal, possibly with a typo (Day 11
+  // bug: "13 328i white 97k trade" + "13 328i wgite 96k trade" — color
+  // typo + 1k miles drift defeated the exact-name dedup, so two trades
+  // got created for one car). Skip both inventory + IC creation here.
+  if (invName){
+    try {
+      var oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      var recentInv = await sbGet('inventory',
+        'name=eq.' + encodeURIComponent(invName) +
+        '&location=eq.' + encodeURIComponent(loc) +
+        '&created_at=gte.' + encodeURIComponent(oneHourAgoIso) +
+        '&select=id,name,color,miles&limit=2');
+      if (Array.isArray(recentInv) && recentInv.length){
+        console.log('Trade-in dedup (loose): inv "' + invName + '" already exists at ' + loc +
+                    ' (created in the last hour) — skipping create. Existing: ' +
+                    recentInv.map(function(r){ return 'id=' + r.id + ' ' + (r.color||'') + ' ' + (r.miles||'') + 'mi'; }).join(', '));
+        return;
+      }
+    } catch(_) { /* on lookup failure, fall through to exact-name check */ }
+  }
+
+  // Dedup pass 2 (exact): if an IC with this exact car_name already
+  // exists at this location, skip. Catches the "edit same deal twice"
+  // case where year+make+model+color+miles all match exactly.
   try {
     var existing = await sbGet('inventory_costs',
       'car_name=eq.' + encodeURIComponent(carName) +
@@ -25934,7 +25960,6 @@ async function _createTradeInCar(payment, dealRecord) {
   } catch(_) {}
 
   // 1. Insert into inventory table
-  var invName = [yr, make, model].filter(Boolean).join(' ');
   var invRow = {
     name: invName,
     stock: '',
