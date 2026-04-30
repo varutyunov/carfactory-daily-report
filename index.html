@@ -22237,7 +22237,24 @@ async function _reviewApprovePending(id){
     return;
   }
 
-  if (r.reason === 'deal_pending'){
+  // Drift rescue: a review that was queued as deal_pending but had its
+  // reason flipped to 'multiple' (or another payment-flow reason) by a
+  // stale _reviewRematch invocation still carries the deal_pending
+  // fingerprint — snapshot.ic + snapshot.inv + a deal_id. Treat it as
+  // deal_pending so the approve path runs _autopopulateDeals26 and
+  // creates the Deals26 row. Without this, drifted reviews approve via
+  // the payment-handler path, which posts a payment to col G of an
+  // arbitrary candidate row instead of creating the deal — losing the
+  // sale entirely from Deals26 (Day 11 — Lancer Purple, Goodman RSX,
+  // and the original Lancer all drifted this way).
+  var _snapDealFp = r.snapshot || {};
+  var _isDealFingerprint = !!(r.deal_id && _snapDealFp.ic && _snapDealFp.inv);
+  var _treatAsDealPending = (r.reason === 'deal_pending') ||
+    (_isDealFingerprint && r.reason !== 'cash_sale_pending' &&
+     r.reason !== 'cash_sale_correction' && r.reason !== 'inv_create_pending' &&
+     r.reason !== 'inv_relocate_pending');
+
+  if (_treatAsDealPending){
     // Block the obvious dup case. The card already shows a red banner;
     // this is the last safety net on the Approve tap.
     if (r._preview && r._preview.existing){
@@ -22845,7 +22862,24 @@ async function _reviewRematch(id, evt){
         if (seen[key]) return; seen[key] = true;
         merged.push({ tab: c.tab, row: c.row, car_desc: c.car_desc, location: c.location, owed: c.owed, has_last: true, has_car: !!c.has_car });
       });
-      await sbPatch('payment_reviews', id, { candidates: JSON.stringify(merged), reason: merged.length ? 'multiple' : r.reason });
+      // Preserve deal-pending fingerprint reason. _reviewRematch was
+      // historically only invoked from payment-flow review cards, but
+      // a stale render or an old onclick can fire it on a deal_pending
+      // card (snapshot.ic + snapshot.inv set + deal_id set). Flipping
+      // those to reason='multiple' clobbers the deal-create path and
+      // sends the approve to the payment-handler instead, which doesn't
+      // run _autopopulateDeals26 (Day 11 — the Lancer Purple, Goodman
+      // RSX, and the original Lancer all drifted this way and never
+      // got Deals26 rows). Detect the fingerprint and keep the original
+      // reason — only update the candidates field.
+      var snapKeep = r.snapshot || {};
+      var isDealFingerprint = !!(r.deal_id && snapKeep.ic && snapKeep.inv);
+      var nextReason = (isDealFingerprint && (r.reason === 'deal_pending' ||
+                        r.reason === 'cash_sale_pending' ||
+                        r.reason === 'cash_sale_correction'))
+        ? r.reason
+        : (merged.length ? 'multiple' : r.reason);
+      await sbPatch('payment_reviews', id, { candidates: JSON.stringify(merged), reason: nextReason });
       var msg = merged.length ? 'Found ' + merged.length + ' candidate(s) by surname — pick one above.' : 'No matches by surname on either lot. Try Manual.';
       _showReviewToast(msg, 3000);
       await _reviewLoad();

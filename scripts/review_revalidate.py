@@ -525,6 +525,7 @@ def main():
     print(f'  {len(reviews)} pending')
 
     resolved = []
+    drifted_restored = 0
     skipped = 0
     for rv in reviews:
         snap = rv.get('snapshot') or {}
@@ -533,6 +534,28 @@ def main():
         rid = rv.get('id')
         nm = (rv.get('customer_name') or '')[:25]
         amt = rv.get('amount')
+
+        # Drift restore: a review with the deal_pending fingerprint
+        # (snapshot.ic + snapshot.inv + deal_id) but reason='multiple'
+        # got clobbered by a stale _reviewRematch — flip it back to
+        # deal_pending so the Sales-tab card renders + the in-app
+        # approve handler runs _autopopulateDeals26 instead of the
+        # payment-handler. Day 11 — Lancer Purple, Goodman RSX, and
+        # the original Lancer all drifted this way and missed Deals26.
+        if (reason == 'multiple' and rv.get('deal_id') and
+                snap.get('ic') and snap.get('inv')):
+            print(f'  RESTORE  {rid:5d} {nm:25s} ${amt} multiple → deal_pending '
+                  f'(deal_pending fingerprint detected)')
+            if APPLY:
+                try:
+                    sb_patch('payment_reviews', rid, {
+                        'reason': 'deal_pending',
+                        'candidates': '[]',
+                    })
+                except Exception as e:
+                    print(f'    ERR restore id={rid}: {e}')
+            drifted_restored += 1
+            continue  # don't run resolution on a just-restored card
 
         result = None
         # Orphan check (runs first, applies to ANY reason that has a
@@ -583,6 +606,8 @@ def main():
                       f'{direction or "-":20s}')
 
     print()
+    if drifted_restored:
+        print(f'Drifted deal_pending restored: {drifted_restored}')
     print(f'Resolvable: {len(resolved)} / Keep: {skipped}')
     if not resolved:
         return 0
