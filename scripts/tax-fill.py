@@ -32,9 +32,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _sb_config import SB_URL, SB_KEY as KEY  # noqa: E402
 
 SUPABASE = f'{SB_URL}/rest/v1'
-GS_URL = os.environ.get('SHEETS_URL',
-    'https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec')
-GS_SECRET = os.environ.get('SHEETS_SECRET', 'cf-sync-2026')
+# `or` after .get() so an env var set-but-empty (GitHub secret missing →
+# CI exports the var as ''') falls back to the published defaults instead
+# of breaking the urlopen with "unknown url type: ''". Day 11 — the
+# tax-fill workflow had SHEETS_URL/SHEETS_SECRET secrets unset and the
+# script crashed on every PATCH attempt.
+GS_URL = os.environ.get('SHEETS_URL') or \
+    'https://script.google.com/macros/s/AKfycbxKUGfGi0WFQZFIKl2ElJhdaCNLBy95TJVJDBNvIEVRaDr9ja5zMo6WcwwPh453Xb-luQ/exec'
+GS_SECRET = os.environ.get('SHEETS_SECRET') or 'cf-sync-2026'
 CTX = ssl.create_default_context()
 
 
