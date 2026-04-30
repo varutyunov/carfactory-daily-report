@@ -557,3 +557,199 @@ DO $$ DECLARE r record; BEGIN
 END $$;
 ```
 Then diagnose what broke per-table.
+
+---
+
+## The Profit / Payment Architecture (Day 10)
+
+This section defines the canonical model for how payments flow into
+profit, where they live, and how we guarantee accuracy. Read this
+before adding any audit / reconciliation logic.
+
+### Sources of truth (in priority order)
+
+There are three independent records of what a customer paid:
+
+1. **DMS CSV (`Payments/Debary/*.csv`, `Payments/Deland/*.csv`)** — the
+   dealer system's authoritative ledger. Every payment posted to a
+   customer account by the office staff appears here. Keyed on
+   `custaccountno`. **Source of truth for: amount paid, date paid, type
+   (PAYMENT vs LATEFEE vs PAY OFF).** Limitations: down payments and
+   refis filed under the same account; OPEN / NETPAYOFF rows are
+   accounting artifacts not real cash. Filter rules in §7.
+
+2. **CarPay portal** — recurring online + in-portal card payments.
+   Mirror posts a webhook to `payments` table. Has OCR receipt text
+   for verification. Same payment also lands in the CSV one DMS
+   import cycle later.
+
+3. **App (`payments` Supabase table)** — manual entries by Vlad/Manny
+   from in-person cash/card payments not yet in CSV. Has raw OCR text
+   when scanned from a receipt; no OCR when manually entered (that's
+   the signal it's a registration fee or similar non-loan payment that
+   shouldn't hit Profit26).
+
+The CSV is the **gold standard** because the DMS reconciles cash daily.
+But it lags real-time by hours-to-days. CarPay/app entries are real-time
+but represent a subset of payments.
+
+For audit/reconciliation: trust CSV when it conflicts with sheet.
+
+### The two-cell rule
+
+A payment lands in **one of two places** based on the deal's profit
+state at the moment of payment:
+
+1. **`col G` of the deal row (Deals26 / Deals25 / Deals24)** —
+   pre-profit ledger. Tracks every dollar received until the deal
+   crosses F=0.
+2. **`Profit26 -> April -> Payments` cell (deal's lot)** — post-profit
+   reporting. The dollars that count toward this month's profit.
+
+Mechanics:
+- Sale -> `money` (col E) reflects the down payment.
+- Each subsequent payment goes to col G; col G's `=SUM()` formula in
+  col F shows `owed` = how far below profit the deal is.
+- When col G total exceeds F=0 (i.e. customer overpaid the cost basis),
+  the deal is **in profit**. Subsequent payments go to Profit26.
+- The **threshold-crossing payment** is the only one that splits:
+  the portion that fills the F=0 gap goes to col G, the overflow goes
+  to Profit26. Both halves dated the same day.
+
+### Why the sheet can disagree with the CSV
+
+There are real, legitimate reasons the totals differ. **Any
+reconciliation tool must understand these or it will produce false
+positives:**
+
+- **Threshold splits.** A $400 CSV payment can show as `$240 col G + $160 Profit26`. The CSV total ($400) does NOT equal the Profit26 portion ($160) does NOT equal the col G portion ($240). All three are correct.
+- **Backup duals.** For deals already F>0, operators sometimes log a payment in BOTH col G and Profit26. The Profit26 entry is what counts for the month; the col G entry is a redundant ledger note. Don't flag as duplicate if the deal is in profit.
+- **CC fees.** For card payments Vlad sometimes adds the processing fee onto the col G line — `$364` for a $350 CSV PAYMENT (4% fee). Profit26 may show the pre-fee $350 or the post-fee $364 depending on how it was entered.
+- **Same-day pairs.** PAYMENT + LATEFEE on the same day are one logical payment. The CSV has 2 rows; the sheet has 1 line at the sum.
+- **Multi-customer cosigner.** Two account holders can pay against the same deal (Gorski + Silva on the 11 Silverado). Both sets of payments are real; they appear under different surnames in Profit26 attributable to the same deal.
+- **Compound surnames.** "DIAZ ORALES, CARLOS" — the surname is the LAST word before the comma in CSV format ("ORALES"), not "DIAZ". Sheet may show either depending on operator preference.
+- **F-state at time of payment is NOT F-state now.** A payment correctly placed in col G in February (when F<0) stays in col G even after the deal becomes F>0 in April. The audit cannot retroactively relocate it without historical F data.
+
+### What "in profit" means for the business
+
+Profit26 -> "April" -> "Payments" cell value = total dollars collected
+that month from customers whose deal has been paid past cost basis.
+That number, plus "Cash Sales" + "Extras", is **the profit for the
+month**. Net profit = that minus inventory costs, expenses, taxes
+(formulas in the sheet).
+
+This is the number Vlad uses to know the business is profitable. It
+must reflect reality. The historical operator workflow — manual entry
+into Profit26 — works but is error-prone. Automation's job is to keep
+this number **honest** without inflating it.
+
+### How to NOT inflate Profit26
+
+Two patterns inflate profit and should never happen:
+
+1. **Posting the same payment twice** (once in col G, once in Profit26
+   for a F<0 deal). Profit26 should never receive entries for deals
+   currently F<0, EXCEPT the overflow portion of a threshold-crossing
+   payment.
+2. **Posting a payment in Profit26 when historically (at time of
+   payment) the deal was F<0**. The audit can't easily recover this
+   without per-payment F snapshots.
+
+Audit logic must:
+- Group CSV -> logical payments (same-day same-acct PAYMENT+LATEFEE).
+- For each, locate the deal via `deal_account_links` (custaccountno -> deal).
+- Check the deal's CURRENT F to bucket: if F>0 today AND was likely F>0 at payment date, expect Profit26; otherwise expect col G.
+- Estimate "F at payment date" by subtracting all later col G entries from current F.
+- For each posted entry on the sheet, find the matching CSV txn. If absent, flag for review (don't auto-delete — operator may have a non-CSV cash payment).
+- For each CSV txn, find the matching posted entry. If absent, flag. Auto-add ONLY for high-confidence cases with explicit write-locked re-checks.
+
+### Account-link database (`csv_accounts` + `deal_account_links`)
+
+The `csv_accounts` table mirrors every customer in the payments CSV
+(932 accounts as of Day 10). `deal_account_links` is the bridge from
+sheet deals to those accounts. Once linked, every audit becomes a
+deterministic join:
+
+```
+CSV txn (custaccountno) -> csv_accounts -> deal_account_links -> deal
+```
+
+Auto-link covers ~80% (VIN match + name+year+model). The remaining
+~20% surface in chat for human pick. Once a link is set, never re-derive
+it with surname guessing.
+
+### Rules for any future audit script
+
+1. **Always lockfile.** `scripts/.audit_2026.lock` prevents two
+   `--apply` runs from racing into the sheet (Day 10 lesson).
+2. **Pre-add dup safety.** Before adding to col G, check the existing
+   col G blob for amount+surname-token within 7 days. Before adding to
+   Profit26, check the lot's Profit26 cell for same. Skip if found.
+3. **Never trust raw `sort_order` as sheet row.** Supabase
+   `deals26.sort_order` is sheet row MINUS 1 (header). For Apps Script
+   writes, pass `sort_order + 1`.
+4. **Apps Script's `_rewriteNoteLineLastName` will overwrite the
+   surname** in note lines you pass to `deals26_append_payment_direct`
+   if it doesn't match the row's car_desc surname. Pass an empty
+   `last_names` list and `bypass_surname_check: true` to disable.
+   Better: build the entire `payment_notes` blob and use
+   `correct_payments` instead — it writes the notes literally.
+5. **Always show the plan before applying.** Dry-run output is the
+   gate; `--apply` writes; `--dedup` is a separate flag for
+   destructive deletes.
+6. **Validator runs every cron tick** (`scripts/review_revalidate.py`).
+   Auto-resolves stale review cards once the underlying issue is
+   fixed by another path.
+
+### Data-flow diagram (current state — "in between")
+
+```
+DMS CSV ----------------------------------------------+
+   |  (every cron, 2hr)                               |
+   v                                                  |
+sync_csv_accounts.py                                  |
+   |                                                  |
+   v                                                  |
+csv_accounts <-- deal_account_links --> deals26       |
+                                        (Supabase)    |
+                                                      |
+CarPay webhook --> payments (Supabase) <--------------+
+                                                      |
+App manual entry --> payments (Supabase) <------------+
+                                                      |
+                                                      v
+                                       Profit26 (Sheet)
+                                       col G (Sheet)
+                                       (mirrored to Supabase)
+                                                      |
+                                                      v
+                                       Audit + reconciliation
+                                       (audit_2026.py)
+                                                      |
+                                                      v
+                                       Review queue (UI)
+```
+
+### End state (what we're building toward)
+
+- All payments captured in the app + CarPay (no DMS dependency).
+- Each deal has its own ledger row in Supabase (`deal_ledgers` table —
+  not yet built): cost basis, all payments timestamped, current F,
+  threshold-crossed flag, profit-portion, all fees.
+- "Deals" sheet stays as a human-readable mirror, regenerated from the
+  ledger.
+- Profit26 sheet stays as a monthly summary, regenerated from the
+  ledgers.
+- CSV becomes audit-only: a daily check that the DMS still agrees
+  with the app. Discrepancies surface as review cards.
+
+The current "in between" state requires both the sheet and the app to
+stay accurate because:
+- Vlad still does most posting through the sheet.
+- The app's payment flow is incomplete (no built-in profit ledger yet).
+- Some deals were entered before the automation existed.
+
+Until the app is the source of truth, **every audit must reconcile
+the sheet against the CSV**. Inflation is the bigger sin than
+deflation — better to under-count than to over-count and pay tax on
+ghost income.

@@ -462,3 +462,117 @@ These are built, working, and must survive every future change. `scripts/validat
 - **Sheet writes via `sheetsPush` use `sort_order` as `row_index`, not visual sheet row.** `targetRow = startRow + rowIndex - 1`. For sheets with gaps, `row_index` counts hasData positions, not raw row numbers — always read the live sheet first if you need an exact row (use the `read_all` action and pick `_rowIndex`).
 - **The Apps Script `update` action writes only the fields in `data`** — other columns are untouched. Skipping a field (e.g. dropping `payments` from the payload) leaves the cell alone; this is the correct way to "don't touch column G" for new deal uploads. Do NOT add blanket `clearContent` to Apps Script — it nuked 97 rows' column G on April 20, 2026.
 - **When doing data repairs, ALWAYS read the live state first.** The DB `sort_order` can be stale relative to the sheet; writing to `row_index=X` will hit a different row than you expect if the sheet has been restructured. Use `action:read_all` to resolve the current `_rowIndex` before any targeted write or delete.
+
+---
+
+## Profit / Payment Architecture (Day 10 — added 2026-04-29)
+
+This section is the elevator pitch for how Car Factory tracks money.
+Read this before touching any audit / reconciliation / payment code.
+Full details in `Automation.md` ("The Profit / Payment Architecture").
+
+### What the business needs
+
+The number that matters: **Profit26 → April → Payments cell value**
+(per lot). That's the dollars collected this month from customers
+whose deal has been paid past cost basis. Plus Cash Sales + Extras,
+that's the month's profit. **This is where the business lives.**
+Inflated → pay tax on ghost income. Deflated → undercount real income.
+**Inflation is the bigger sin.**
+
+### Three sources of truth
+
+1. **DMS CSV** (`Payments/Debary/*.csv`, `Payments/Deland/*.csv`) —
+   gold standard. Office staff posts every customer payment to the
+   DMS; we get a CSV export. Keyed on `custaccountno`.
+2. **CarPay portal** — recurring online card payments. Webhooks the
+   `payments` Supabase table; reconciles with CSV one cycle later.
+3. **App manual entry** — in-person cash/card from Vlad/Manny via the
+   app. Lands in the `payments` table immediately.
+
+When sheet disagrees with CSV → trust CSV. Always.
+
+### The two-cell rule
+
+A payment goes to **one of two places** based on the deal's profit
+state at time of payment:
+
+- **`col G` of the deal row** — pre-profit ledger. Tracks every dollar
+  received until the deal crosses F=0 (col F = "owed").
+- **`Profit26 → <month> → Payments` cell (deal's lot)** — post-profit
+  reporting. Counts toward this month's profit.
+
+Threshold-crossing payment splits: portion that fills F=0 to col G,
+overflow to Profit26.
+
+### Account-link database
+
+Every payment lookup goes through the deterministic chain:
+```
+CSV (custaccountno) → csv_accounts → deal_account_links → deal
+```
+
+`csv_accounts` mirrors all 932 customer accounts from CSVs (refreshed
+every cron). `deal_account_links` bridges to sheet deals — auto-linked
+where VIN/year/model match (~80%), human-picked for the rest.
+
+NEVER re-derive customer→deal by surname guessing. Use the link table.
+
+### Why the sheet legitimately disagrees with CSV
+
+- **Threshold splits** — CSV $400 = col G $240 + Profit26 $160.
+- **Backup duals** — F>0 deal can have entries in both cells.
+- **CC fees** — col G `$364` for $350 CSV PAYMENT (4% fee added).
+- **Same-day pairs** — PAYMENT + LATEFEE = one logical payment.
+- **Cosigners** — multiple accounts paying same deal (Gorski + Silva).
+- **Compound surnames** — "DIAZ ORALES, CARLOS" → surname is "ORALES"
+  (last word before comma).
+- **Historical F-state** — payment correctly placed in col G when F<0
+  stays there even after deal becomes F>0.
+
+Audit logic must understand all of these. See Automation.md.
+
+### Critical anti-patterns (Day 10 lessons)
+
+1. **Supabase `sort_order` is NOT the sheet row.** Sheet row =
+   `sort_order + 1` (header offset). Pass `sort_order + 1` to all
+   Apps Script row-write actions for Deals26.
+2. **Apps Script's `deals26_append_payment_direct` rewrites surnames.**
+   When the row's car_desc surname doesn't match the surname in your
+   note line, `_rewriteNoteLineLastName` mangles it (e.g. "logan" →
+   "silverado"). To bypass, use `correct_payments` and build the
+   entire `payment_notes` blob yourself.
+3. **No parallel `--apply` runs.** A killed-but-not-actually-killed
+   Python process can still be writing. Use `scripts/.audit_2026.lock`.
+4. **Audit cannot retroactively re-bucket col-G ↔ Profit26.** A
+   payment placed correctly when F<0 stays in col G even when F>0
+   later. Don't "fix" by moving to Profit26 — that inflates the
+   month's profit by the historical balance.
+
+### End state (what we're building toward)
+
+- App + CarPay are the source of truth. CSV becomes audit-only.
+- Each deal has its own `deal_ledger` row in Supabase: cost basis,
+  every payment timestamped, current F, threshold-crossed flag,
+  profit portion, fees.
+- Sheet stays as a human-readable mirror regenerated from the ledgers.
+- Profit26 sheet stays as a monthly summary regenerated from ledgers.
+
+Right now ("in between"): both sheet AND app must stay accurate
+because Vlad still does manual posting via the sheet. Audit
+reconciles them.
+
+### Reconciliation tools (`scripts/`)
+
+| Script | Purpose |
+|---|---|
+| `sync_csv_accounts.py` | Refresh `csv_accounts` from CSVs (every cron). |
+| `auto_link_accounts.py` | Auto-link deals → accounts (VIN, then name+yr+mdl). Surfaces ambiguous in JSON. |
+| `audit_2026.py` | The main audit. Per-deal CSV vs sheet reconciliation. `--apply` runs corrections, `--dedup` deletes duplicates. Lockfile-protected. |
+| `find_duplicates.py` | Standalone: finds exact-line duplicates across all sheet cells. |
+| `verify_dupes.py` | Cross-checks each "duplicate" against CSV — distinguishes legit recurring from real dupes. |
+| `dedupe_sheet.py` | Removes one copy of each duplicate (uses `profit_remove_entry` / `correct_payments`). |
+| `fix_misplaced_col_g.py` | Detects col G entries on wrong rows (surname mismatch); moves to correct row. |
+| `restore_surnames.py` | Fixes surnames mangled by Apps Script's `_rewriteNoteLineLastName`. |
+| `rollback_audit_adds.py` | Reverses entries added by an `audit_2026.py --apply` run (reads the log). |
+| `review_revalidate.py` | Auto-resolves stale review cards (every cron). |
