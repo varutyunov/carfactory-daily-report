@@ -267,10 +267,16 @@ all_deals = {}  # deal_key → deal
 for r in sb_get_all('deals26', 'select=id,car_desc,owed,location,sold_inv_vin,sort_order,payment_notes'):
     cd = (r.get('car_desc') or '').strip()
     if not cd: continue
+    # NOTE: deal_account_links keys on sort_order (the original schema). But
+    # Apps Script writes use sheet row, which is sort_order+1 (header row).
+    # Keep deal_key as sort_order for stability with existing links; track
+    # sheet_row separately so writes go to the right place.
     dk = f'Deals26:{r.get("location")}:{r.get("sort_order")}'
     all_deals[dk] = {
         'tab': 'Deals26', 'loc': r.get('location') or 'DeBary',
-        'row': r.get('sort_order'), 'car_desc': cd,
+        'row': (r.get('sort_order') or 0) + 1,  # sheet row for GAS writes
+        'sort_order': r.get('sort_order'),
+        'car_desc': cd,
         'owed': float(r.get('owed') or 0),
         'payment_notes': r.get('payment_notes') or '',
         'vin': (r.get('sold_inv_vin') or '').strip().upper(),
