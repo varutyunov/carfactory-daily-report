@@ -22108,7 +22108,7 @@ async function _reviewApprovePending(id){
         'Location': r.location || '',
       },
       warning: (r._preview && r._preview.ic && (r._preview.ic.purchase_cost || 0) <= 0)
-        ? 'Inventory cost is $0 for this car. Upload will be REFUSED by the v571 guard until cost is filled in on the Inventory Costs sheet.'
+        ? 'Inventory cost is $0. For a real repo (no purchase cost, only expenses) this is fine — you\'ll be asked to confirm before posting. For a normal purchase, fill the cost on the Inventory Costs sheet first.'
         : null,
       confirmLabel: 'Post to Deals26'
     });
@@ -24535,23 +24535,35 @@ async function _autopopulateDeals26(record, car, icOverride) {
   var vladExp = _useIc ? (parseFloat(ic.vlad_expenses) || 0) : 0;
   var expenses = jointExp + vladExp;
 
-  // Guard — refuse to post a deal with $0 cost. Cost for a real purchase
-  // is always tracked in the Inventory Costs sheet before sale. When this
-  // is $0, it means one of:
-  //   - the inventory_costs row for this VIN doesn't exist yet (user
-  //     uploaded the deal before Vlad filled in the cost)
-  //   - the color/year-conflict check earlier intentionally zero'd cost
-  //     (carDescWarning path) because the linked ic row was for a
-  //     different car
-  // Either way, writing $0 to Deals26 col A silently corrupts the
-  // profit math downstream. Block the upload and tell the user exactly
-  // what to fix. Caller (dealSubmit / _reviewApprovePending) surfaces
-  // the thrown error as an alert.
+  // $0 cost guard — hybrid block + confirm.
+  //
+  //   - carDescWarning path: linked IC was zero'd because the row
+  //     describes a different car (color/year mismatch). That's a data
+  //     error, not a real $0-cost car — hard-block; the user must fix
+  //     the IC linkage in the Inventory Costs sheet.
+  //
+  //   - everything else: $0 cost can be legitimate. Repos are the
+  //     canonical case — Vlad takes the car back from a defaulted
+  //     buyer, has no purchase cost, only the recovery + repair
+  //     expenses. We still want a speed bump (the typical case is
+  //     "you forgot to fill in the cost"), so prompt confirm() before
+  //     proceeding. If the user confirms, post with cost=$0 and let
+  //     the profit math reflect reality (owed = money − expenses −
+  //     taxes − dealer fee − manny).
   if (!cost || cost <= 0){
-    var reason = carDescWarning
-      ? 'inventory_costs linked row disagrees with this deal (' + carDescWarning + '). Fix the Inventory Costs sheet link first.'
-      : 'no cost found in inventory_costs for VIN ' + vin + '. Fill the cost in the Inventory Costs sheet (Google Sheets "Inventory" tab) before uploading this deal.';
-    throw new Error('Cost is $0 — ' + reason);
+    if (carDescWarning){
+      throw new Error('Cost is $0 — inventory_costs linked row disagrees with this deal (' + carDescWarning + '). Fix the Inventory Costs sheet link first.');
+    }
+    var _money = parseFloat(record.total_collected) || 0;
+    var _msg = 'Cost is $0 for this deal.\n\n' +
+      'For a repo (no purchase cost, just recovery + repair expenses) this is correct.\n' +
+      'For a normal purchase, you usually want the cost filled in on the Inventory Costs sheet first.\n\n' +
+      'Money collected: $' + _money + '\n' +
+      'Expenses recorded: $' + expenses + '\n\n' +
+      'Post the deal with cost = $0?';
+    if (!confirm(_msg)){
+      throw new Error('Cost is $0 — user declined to post.');
+    }
   }
 
   // 5. Combine expense notes — only on trusted link, same rule.
