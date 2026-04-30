@@ -20477,21 +20477,21 @@ var _INV_REVIEW_REASONS = {
 function _reviewIsSales(r){
   if (!r) return false;
   if (_SALES_REVIEW_REASONS[r.reason]) return true;
-  // Drift rescue at the tab-filter level: a review with the
-  // deal_pending fingerprint (deal_id + snapshot.ic + snapshot.inv)
-  // belongs on the Sales tab even when its reason has been clobbered
-  // to 'multiple' or another payment-flow reason. Without this, drifted
-  // cards "disappear" from Sales — they're still in the queue, just
-  // hidden under the wrong tab. Combined with the drift rescue inside
-  // _reviewApprovePending, the user can find AND approve them.
-  var snap = r.snapshot || {};
-  if (r.deal_id && snap.ic && snap.inv){
-    // Don't claim the card for Sales if it's already cash-sale / inv —
-    // those have their own dedicated reasons and shouldn't be coopted.
-    if (r.reason !== 'cash_sale_pending' && r.reason !== 'cash_sale_correction' &&
-        r.reason !== 'inv_create_pending' && r.reason !== 'inv_relocate_pending'){
-      return true;
-    }
+  if (_INV_REVIEW_REASONS[r.reason]) return false;
+  // Drift rescue at the tab-filter level. Reviews queued via the deal
+  // submission path (_queueDealReview / _queueCashSaleReview /
+  // _queueCashSaleCorrectionReview) all share a fingerprint:
+  //   - payment_id IS NULL  (not from the live payment-scan flow)
+  //   - deal_id IS NOT NULL (always tied to a deals row)
+  //   - amount > 0
+  // When their reason gets clobbered to 'multiple' or another
+  // payment-flow value, they "disappear" from Sales — but they're
+  // still our reviews and belong here. The deal-side fingerprint
+  // alone is enough to claim them. Combined with the drift rescue
+  // inside _reviewApprovePending, the user can both find AND approve
+  // them even while the drift trigger remains unidentified.
+  if (r.deal_id && !r.payment_id && (parseFloat(r.amount) || 0) > 0){
+    return true;
   }
   return false;
 }
@@ -22370,7 +22370,23 @@ async function _reviewApprovePending(id){
     return;
   }
 
-  if (r.reason === 'cash_sale_correction'){
+  // Drift-rescue intent detection — figures out which deal-side
+  // handler this card was originally queued for, even when reason
+  // has been clobbered by the drift bug. Fingerprints:
+  //   - deal_pending:        snap.ic + snap.inv set (handled above)
+  //   - cash_sale_correction: snap.posted_amount set (queued by
+  //                           profit_sweep / _queueCashSaleCorrectionReview)
+  //   - cash_sale_pending:    deal_id + null payment_id + amount > 0
+  //                           and neither of the above (queued by
+  //                           _queueCashSaleReview)
+  // Dispatch by fingerprint, not by reason, so drifted reviews still
+  // route to the correct handler.
+  var _snapDS = r.snapshot || {};
+  var _isCorrectionFp = !!(r.deal_id && _snapDS.posted_amount !== undefined &&
+                            _snapDS.posted_amount !== null);
+  var _treatAsCorrection = (r.reason === 'cash_sale_correction') || _isCorrectionFp;
+
+  if (_treatAsCorrection){
     var snap = r.snapshot || {};
     var oldAmt = parseFloat(snap.posted_amount);
     var oldDesc = snap.posted_desc || '';
@@ -22472,7 +22488,17 @@ async function _reviewApprovePending(id){
     return;
   }
 
-  if (r.reason === 'cash_sale_pending'){
+  // cash_sale_pending fingerprint check — same drift defense as the
+  // correction handler. A review with deal_id, no payment_id, and
+  // amount > 0 was queued from the deal-submit / _queueCashSaleReview
+  // path even when its reason has drifted. Dispatch to the post-to-
+  // Profit26-Cash-Sales flow regardless of what reason currently says.
+  var _isCashSaleFp = !!(r.deal_id && !r.payment_id &&
+                          (parseFloat(r.amount) || 0) > 0 &&
+                          !_isDealFingerprint && !_isCorrectionFp);
+  var _treatAsCashSale = (r.reason === 'cash_sale_pending') || _isCashSaleFp;
+
+  if (_treatAsCashSale){
     var amt = parseFloat(r.amount) || 0;
 
     // Inline tax pull — fetch the latest Pending Sales CSV right before
