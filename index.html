@@ -20492,6 +20492,22 @@ async function _reviewAutoStale(reviewRows){
     if (!r) continue;
     try {
       if (r.reason === 'deal_pending'){
+        // Orphan check: deal_id points at a row that no longer exists
+        // (user deleted the deal) or is voided (user marked it
+        // returned). Either way, the review is stale — auto-resolve so
+        // the queue doesn't carry it forward across re-uploads.
+        if (r.deal_id){
+          try {
+            var dealRows = await sbGet('deals',
+              'id=eq.' + r.deal_id +
+              '&select=id,voided_at&limit=1');
+            var dealRow = (dealRows && dealRows[0]) || null;
+            if (!dealRow || dealRow.voided_at){
+              staleIds.push(r.id);
+              continue;
+            }
+          } catch(_){ /* lookup fail — fall through to VIN check */ }
+        }
         if (!r.vehicle_vin) continue;
         var d26 = await sbGet('deals26',
           'sold_inv_vin=eq.' + encodeURIComponent(r.vehicle_vin) +
@@ -20505,9 +20521,13 @@ async function _reviewAutoStale(reviewRows){
         if (!r.deal_id) continue;
         var deal = await sbGet('deals',
           'id=eq.' + r.deal_id +
-          '&select=customer_name,vehicle_desc,vin,location,created_at,color&limit=1');
+          '&select=customer_name,vehicle_desc,vin,location,created_at,color,voided_at&limit=1');
         var d = (deal || [])[0];
-        if (!d || !d.vin) continue;
+        // Orphan: the deal got deleted or voided after this review was
+        // queued. Auto-resolve so the queue stays clean across the
+        // re-upload of the same VIN.
+        if (!d || d.voided_at){ staleIds.push(r.id); continue; }
+        if (!d.vin) continue;
         var d26Rows = await sbGet('deals26',
           'sold_inv_vin=eq.' + encodeURIComponent(d.vin) +
           '&select=car_desc,owed&limit=1');
@@ -28113,6 +28133,11 @@ async function dealReturnFinal(id, reason) {
     // Inventory upsert succeeded — now mark the deal as voided.
     await sbPatch('deals', id, { voided_reason: reason, voided_at: now });
 
+    // Cleanup any pending reviews tied to this voided deal — they're
+    // for a deal that didn't actually go through, so they shouldn't
+    // sit in the queue. Same rationale as dealDeleteFinal.
+    try { await _cleanupReviewsForDeal(id, 'deal-voided-' + reason); } catch(_){}
+
     // Update local cache so UI reflects it
     d.voided_reason = reason;
     d.voided_at = now;
@@ -28130,6 +28155,11 @@ async function dealDeleteFinal(id) {
   var btn = document.getElementById('deal-delete-btn');
   btn.textContent = 'Deleting...'; btn.disabled = true; btn.style.opacity = '0.5';
   try {
+    // Cleanup any pending reviews tied to this deal BEFORE the delete
+    // lands. Without this, deleting a deal with a deal_pending /
+    // cash_sale_pending review leaves an orphan review referencing a
+    // gone deal_id (and the queue gets confused on the re-upload).
+    try { await _cleanupReviewsForDeal(id, 'deal-deleted'); } catch(_){}
     await sbDelete('deals', id);
     _dealsData = _dealsData.filter(function(d){ return d.id !== id; });
     _dealsFiltered = _dealsFiltered.filter(function(d){ return d.id !== id; });
@@ -28137,6 +28167,49 @@ async function dealDeleteFinal(id) {
   } catch(e) {
     btn.textContent = 'Error: '+(e.message||e);
     btn.style.background = '#1a0505'; btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
+// Auto-resolve pending payment_reviews whose deal_id points at a deal
+// that's about to be deleted or just got voided. Without this, the
+// queue accumulates orphan cards (visible bug: deleting a misuploaded
+// deal left behind a deal_pending card pointing at a gone deal_id, so
+// the next upload of the same car landed as a "duplicate" warning even
+// though the first upload was already retracted).
+//
+// Call BEFORE the delete/void lands so we don't have to re-hydrate the
+// deal context to figure out what to dismiss.
+async function _cleanupReviewsForDeal(dealId, why){
+  if (!dealId) return [];
+  try {
+    var reviews = await sbGet('payment_reviews',
+      'deal_id=eq.' + encodeURIComponent(dealId) +
+      '&status=eq.pending' +
+      '&select=id,reason,snapshot');
+    if (!Array.isArray(reviews) || !reviews.length) return [];
+    var ids = [];
+    for (var i = 0; i < reviews.length; i++){
+      var rv = reviews[i];
+      var snap = (rv && rv.snapshot) || {};
+      try {
+        await sbPatch('payment_reviews', rv.id, {
+          status: 'auto_resolved',
+          snapshot: Object.assign({}, snap, {
+            auto_resolved: true,
+            auto_resolved_at: new Date().toISOString(),
+            auto_resolved_reason: 'cleanup-on-' + (why || 'deal-removed') + ' (deal_id=' + dealId + ' is gone)'
+          })
+        });
+        ids.push(rv.id);
+      } catch(e){
+        console.warn('_cleanupReviewsForDeal patch failed id=' + rv.id, e);
+      }
+    }
+    if (ids.length) console.log('_cleanupReviewsForDeal: auto_resolved ' + ids.length + ' review(s) for deal ' + dealId + ' (' + why + ')');
+    return ids;
+  } catch(e){
+    console.warn('_cleanupReviewsForDeal lookup failed:', e);
+    return [];
   }
 }
 

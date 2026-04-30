@@ -493,10 +493,27 @@ def check_live_flow(rv, deals, profit):
     return None
 
 # ── Main ────────────────────────────────────────────────────────────────────
+def load_deal_ids():
+    """Returns dict: deal_id → voided_at (None for live deals). Used to
+    detect orphan reviews (deal_id points to a row that's gone or voided
+    after the review was queued)."""
+    out = {}
+    try:
+        rows = sb_get('deals', 'select=id,voided_at&limit=2000')
+        for r in rows:
+            out[r.get('id')] = r.get('voided_at')
+    except Exception as e:
+        print(f'  WARN: deals lookup failed for orphan check: {e}')
+    return out
+
+
 def main():
     print(f'review_revalidate {"--apply" if APPLY else "(dry-run)"}')
     print('Loading deals…')
     deals = load_deals()
+    print('Loading deals (id+voided_at) for orphan check…')
+    deal_state = load_deal_ids()
+    print(f'  {len(deal_state)} deal rows')
     print('Loading Profit26…')
     profit = load_profit()
 
@@ -518,26 +535,41 @@ def main():
         amt = rv.get('amount')
 
         result = None
+        # Orphan check (runs first, applies to ANY reason that has a
+        # deal_id): if the deal got deleted or voided after this review
+        # was queued, the review is stale. Mirrors the in-app
+        # _reviewAutoStale orphan path so the queue stays clean even
+        # when the cron is running and the user isn't on the Review tab.
+        # Skip when deal_state lookup failed to avoid auto-resolving
+        # everything on a transient API error.
+        if rv.get('deal_id') and deal_state:
+            did = rv['deal_id']
+            if did not in deal_state:
+                result = f'orphan: deal_id={did} no longer exists'
+            elif deal_state.get(did):
+                result = f'orphan: deal_id={did} voided at {deal_state[did]}'
+
         # Direction-first dispatch: many `multiple` and `no_match` reviews
         # historically had snapshot.direction set by the audit (the audit
         # used to inherit the live-flow row's reason instead of overwriting
         # it to csv_reconciliation). Direction is the authoritative
         # classifier — use it whenever set.
-        if direction == 'phantom_in_sheet':
+        if not result and direction == 'phantom_in_sheet':
             result = check_phantom(rv, profit)
-        elif direction == 'wrong_lot':
+        elif not result and direction == 'wrong_lot':
             result = check_wrong_lot(rv, profit)
-        elif direction == 'missing_from_profit':
+        elif not result and direction == 'missing_from_profit':
             result = check_missing(rv, deals, profit, in_profit_required=True)
-        elif direction == 'missing_from_col_g':
+        elif not result and direction == 'missing_from_col_g':
             result = check_missing(rv, deals, profit, in_profit_required=False)
-        elif reason in ('multiple', 'no_match', 'partial',
+        elif not result and reason in ('multiple', 'no_match', 'partial',
                         'possible_duplicate', 'approve_first',
                         'no_vehicle', 'no_customer'):
             result = check_live_flow(rv, deals, profit)
         # deal_pending / cash_sale_* / inv_* are left to the in-app
         # validator (they need stronger signals like sold_inv_vin presence
-        # in deals26).
+        # in deals26) — except for the orphan path above, which the cron
+        # handles regardless of reason.
 
         if result:
             resolved.append((rid, nm, amt, reason, direction, result))
