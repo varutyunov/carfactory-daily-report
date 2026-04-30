@@ -211,7 +211,12 @@ findings = []
 for link in links:
     deal = all_deals.get(link['deal_key'])
     if not deal: continue
-    if deal['owed'] <= 0: continue  # only in-profit
+    # Audit ALL linked deals, not just in-profit ones. The conservation
+    # rule (col_G + Profit26 = CSV lifetime) holds regardless of F state:
+    #   F<0 deal: col_G should equal CSV (all payments go to col G)
+    #   F>0 deal: col_G + Profit26 should equal CSV (split or all-Profit26)
+    # Skipping F<=0 deals missed the Panayotis class of bugs (operator
+    # never logged Jan/Feb/Mar payments, sheet shows fraction of CSV).
     acct = link['custaccountno']
     customer = accts.get(acct, {})
     surname_tokens = deal_surname_tokens(deal['car_desc'], customer.get('lookupname',''))
