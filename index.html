@@ -22056,6 +22056,70 @@ function _reviewApprovePreview(opts){
   });
 }
 
+// Fetch the live Pending Sales CSV (cache-busted) and pull
+// salestax + tagfee + titlefee for a given VIN. Returns the
+// total (rounded to cents) or null if the VIN isn't in the file.
+//
+// Used at cash-sale approve time so a deal whose CSV row landed
+// AFTER the deal_pending was queued still posts the right profit.
+// Without this, a deal queued at 4pm with taxes=0 (CSV not synced
+// yet) and approved at 5pm (CSV synced) would post the un-taxed
+// owed and need a separate cash_sale_correction trip later.
+async function _fetchLatestTaxForVin(vin, location){
+  vin = String(vin || '').trim();
+  if (!vin) return null;
+  var psFile = (location === 'DeLand') ? 'PendingSalesDeland.csv' : 'PendingSalesDebary.csv';
+  var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/' + psFile + '?t=' + Date.now();
+  try {
+    var resp = await fetch(psUrl);
+    if (!resp.ok) return null;
+    var text = await resp.text();
+    var lines = text.trim().split('\n');
+    if (lines.length < 2) return null;
+    // Quoted-aware row parser — cells like "ENCARNATION, EMMANUEL RIEL"
+    // have an embedded comma that naive split() corrupts.
+    var _row = function(s){
+      var out = [], cur = '', q = false;
+      for (var i = 0; i < s.length; i++){
+        var ch = s.charAt(i);
+        if (q){
+          if (ch === '"' && s.charAt(i+1) === '"'){ cur += '"'; i++; }
+          else if (ch === '"'){ q = false; }
+          else cur += ch;
+        } else {
+          if (ch === '"') q = true;
+          else if (ch === ','){ out.push(cur); cur = ''; }
+          else cur += ch;
+        }
+      }
+      out.push(cur);
+      return out.map(function(v){ return v.trim(); });
+    };
+    var hdr = _row(lines[0]).map(function(h){ return h.toLowerCase(); });
+    var vinIdx = hdr.indexOf('vin');
+    var taxIdx = hdr.indexOf('salestax');
+    var tagIdx = hdr.indexOf('tagfee');
+    var titleIdx = hdr.indexOf('titlefee');
+    if (vinIdx < 0 || taxIdx < 0) return null;
+    for (var i = 1; i < lines.length; i++){
+      var vals = _row(lines[i]);
+      var pVin = (vals[vinIdx] || '').trim();
+      if (!pVin) continue;
+      // Match by full or prefix VIN — the DMS sometimes truncates.
+      if (vin.indexOf(pVin) === 0 || pVin.indexOf(vin) === 0){
+        var st = parseFloat(vals[taxIdx]) || 0;
+        var tg = tagIdx >= 0 ? (parseFloat(vals[tagIdx]) || 0) : 0;
+        var tt = titleIdx >= 0 ? (parseFloat(vals[titleIdx]) || 0) : 0;
+        return Math.round((st + tg + tt) * 100) / 100;
+      }
+    }
+    return null;
+  } catch(e){
+    console.warn('_fetchLatestTaxForVin error:', e);
+    return null;
+  }
+}
+
 async function _reviewApprovePending(id){
   var r = _reviewData.find(function(x){ return x.id === id; });
   if (!r) return;
@@ -22354,6 +22418,56 @@ async function _reviewApprovePending(id){
 
   if (r.reason === 'cash_sale_pending'){
     var amt = parseFloat(r.amount) || 0;
+
+    // Inline tax pull — fetch the latest Pending Sales CSV right before
+    // we post. If salestax/tag/title for this deal's VIN are now in the
+    // CSV (and weren't when the review was queued), recompute owed from
+    // the deals26 fields, update deals26 + the sheet, and use the new
+    // amount for the post. This is the canonical "pull taxes before
+    // posting profit" hook Vlad asked for — the review's stored amount
+    // is freshest at approve time, not at queue time.
+    //
+    // Skips the pull when there's no VIN or the deal is out_of_state
+    // (those legitimately have taxes=0 forever).
+    try {
+      var ctxPre = await _loadDealForReview(r.deal_id);
+      var dealRecPre = ctxPre && ctxPre.record;
+      if (dealRecPre && dealRecPre.vin && !dealRecPre.out_of_state){
+        var liveTax = await _fetchLatestTaxForVin(dealRecPre.vin, dealRecPre.location || r.location);
+        if (liveTax !== null && liveTax > 0){
+          var d26 = await sbGet('deals26',
+            'sold_inv_vin=eq.' + encodeURIComponent(dealRecPre.vin) +
+            '&select=id,sort_order,location,money,cost,expenses,dealer_fee,manny,taxes,owed&limit=1');
+          var d26Row = (Array.isArray(d26) && d26[0]) ? d26[0] : null;
+          if (d26Row){
+            var existingTax = parseFloat(d26Row.taxes) || 0;
+            // Only act when CSV taxes meaningfully differ from what's
+            // already on deals26 (>$1 drift). Avoids re-pushing identical
+            // numbers on a second tap.
+            if (Math.abs(liveTax - existingTax) >= 1){
+              var _money = parseFloat(d26Row.money) || 0;
+              var _cost  = parseFloat(d26Row.cost) || 0;
+              var _exp   = parseFloat(d26Row.expenses) || 0;
+              var _df    = parseFloat(d26Row.dealer_fee) || 0;
+              var _mn    = parseFloat(d26Row.manny) || 0;
+              var newOwed = Math.round((_money - _cost - _exp - liveTax - _df - _mn) * 100) / 100;
+              await sbPatch('deals26', d26Row.id, { taxes: liveTax, owed: newOwed });
+              try {
+                await sheetsPush('Deals26', d26Row.sort_order,
+                  { taxes: liveTax, owed: newOwed },
+                  'update', d26Row.location || 'DeBary');
+              } catch(_){}
+              console.log('Cash-sale approve: live tax pull updated deals26 — taxes ' + existingTax +
+                          ' → ' + liveTax + ', owed ' + (parseFloat(d26Row.owed) || 0) + ' → ' + newOwed);
+              amt = newOwed;
+            }
+          }
+        }
+      }
+    } catch(e){
+      console.warn('Live tax pull failed (proceeding with stored amount):', e);
+    }
+
     if (!confirm('Post $' + amt + ' to Profit26 Cash Sales?\n\n' + (r.note_line || r.customer_name || ''))) return;
     _removeReviewCard(id);
     try {
