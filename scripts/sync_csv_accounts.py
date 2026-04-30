@@ -29,7 +29,9 @@ from datetime import datetime, timedelta
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _sb_config import SB_URL, SB_HDR  # noqa: E402
+from _csv_filter import is_real_payment, real_amount, parsed_date  # noqa: E402
 
+# Legacy constant kept for any reference; canonical filter lives in _csv_filter.
 SKIP_PAYMENT_REFS = {'OPEN', 'OPEN REFINANCE OPEN'}
 
 # ── Load SoldInventory by lookupname ────────────────────────────────────────
@@ -77,20 +79,14 @@ for csv_loc, folder in [('DeBary', 'Debary'), ('DeLand', 'Deland')]:
             ref = (row.get('reference') or '').strip().upper()
             if acct not in acct_meta:
                 acct_meta[acct] = {'lookupname': name, 'location': csv_loc}
-            # Skip pure setup rows (down payments / refis)
-            if ttype == 'PAYMENT' and ref in SKIP_PAYMENT_REFS:
+            # Use canonical filter (matches Automation.md §7).
+            if not is_real_payment(row):
                 continue
-            try:
-                amt = float(row.get('totalamt', 0) or 0) if ttype != 'LATEFEE' \
-                      else float(row.get('latefee', 0) or 0)
-            except ValueError:
-                amt = 0
-            try:
-                dt = datetime.strptime(str(row.get('paiddate','')).split(' ')[0], '%m/%d/%Y')
-                date_str = dt.strftime('%Y-%m-%d')
-            except Exception:
+            amt = real_amount(row)
+            if amt <= 0:
                 continue
-            if amt <= 0 and ttype != 'PAY OFF':
+            date_str = parsed_date(row)
+            if not date_str:
                 continue
             acct_txns[acct].append({
                 'date': date_str, 'amount': round(amt, 2),

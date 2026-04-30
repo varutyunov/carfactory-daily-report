@@ -84,7 +84,7 @@ will not have any post-cutoff CSV activity.
 | PAYMENT | OPEN REFINANCE OPEN | ❌ | refinance opening entry |
 | PAYMENT | NETPAYOFF / NETPAYOFF/* | ❌ | system payoff calc, not real payment |
 | PAYPICK | CASH / ONLINE / etc | ✅ | pickup payment (deferred down installment) |
-| PAYPICK | NETPAYOFF/PTWRITEOFF | ❌ | writeoff variant |
+| PAYPICK | NETPAYOFF/PTWRITEOFF | ✅ | partial-writeoff cash portion (real cash collected when account was settled). Updated 2026-04-30: previously marked ❌, but the PAYPICK side of a PT-WRITEOFF is the cash that was actually picked up — only the paired `PAY OFF` row is the write-off amount. |
 | PAY OFF | NETPAYOFF | ✅ | final balloon payment to close the loan |
 | PAY OFF | NETPAYOFF/NOWRITEOFF | ✅ | same — no writeoff applied |
 | PAY OFF | NETPAYOFF/WRITEOFF | ❌ | dealer wrote off this amount, not collected |
