@@ -20474,7 +20474,27 @@ var _SALES_REVIEW_REASONS = {
 var _INV_REVIEW_REASONS = {
   'inv_create_pending': 1, 'inv_relocate_pending': 1
 };
-function _reviewIsSales(r){ return !!_SALES_REVIEW_REASONS[(r || {}).reason]; }
+function _reviewIsSales(r){
+  if (!r) return false;
+  if (_SALES_REVIEW_REASONS[r.reason]) return true;
+  // Drift rescue at the tab-filter level: a review with the
+  // deal_pending fingerprint (deal_id + snapshot.ic + snapshot.inv)
+  // belongs on the Sales tab even when its reason has been clobbered
+  // to 'multiple' or another payment-flow reason. Without this, drifted
+  // cards "disappear" from Sales — they're still in the queue, just
+  // hidden under the wrong tab. Combined with the drift rescue inside
+  // _reviewApprovePending, the user can find AND approve them.
+  var snap = r.snapshot || {};
+  if (r.deal_id && snap.ic && snap.inv){
+    // Don't claim the card for Sales if it's already cash-sale / inv —
+    // those have their own dedicated reasons and shouldn't be coopted.
+    if (r.reason !== 'cash_sale_pending' && r.reason !== 'cash_sale_correction' &&
+        r.reason !== 'inv_create_pending' && r.reason !== 'inv_relocate_pending'){
+      return true;
+    }
+  }
+  return false;
+}
 function _reviewIsInventory(r){ return !!_INV_REVIEW_REASONS[(r || {}).reason]; }
 var _reviewTab = 'sales';
 try { _reviewTab = localStorage.getItem('cf_review_tab') || 'sales'; } catch(_){}
