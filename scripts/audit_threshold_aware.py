@@ -2,20 +2,23 @@
 # -*- coding: utf-8 -*-
 """
 audit_threshold_aware.py
-Per-deal audit using the conservation rule:
+Per-deal audit comparing 2026 sheet entries to 2026 CSV payments.
 
-   col G (cell value) = CSV lifetime paid (excluding down payment)
+   sum(2026-dated col G lines) + sum(Profit26 entries) ≈ CSV 2026 paid
 
-The col G running ledger captures every dollar received. Profit26 is a
-SIDE report (the profit-overflow portion above threshold gets logged
-there for monthly profit tracking) but does NOT add to the total cash
-received — it's already counted in col G.
+Why 2026-only: CSV lifetime includes pre-2026 history (some customers
+paid off years ago). The current 2026 sheet only tracks 2026 activity.
+Comparing lifetime CSV to current sheet generates false "missing"
+findings for old paid-off accounts.
 
-Updated Day 11 (2026-04-30): originally treated col G + Profit26 as
-the conservation total. Vlad clarified (Perez Odyssey case) that
-col G holds the full payment and Profit26 is a derived monthly-profit
-snapshot. Including Profit26 in the conservation total double-counted
-post-threshold profits.
+The 2026 col G entries are the dated note lines in payment_notes
+(e.g. "300 11 Sonata gonzalez 4/9"). The col G CELL VALUE represents
+cumulative lifetime — not useful for 2026-only audit.
+
+Best-fit conservation: per deal, pick whichever rule produces the
+smaller |delta|:
+  Rule A: col_G_2026_dated alone = CSV 2026 paid
+  Rule B: col_G_2026_dated + Profit26 total = CSV 2026 paid
 
 For each linked in-profit deal:
   CSV lifetime  = sum of all PAYMENT + PAYPICK + PAY OFF + LATEFEE in CSV
@@ -230,7 +233,36 @@ for link in links:
     if not surname_tokens: continue
     csv_lifetime = round(acct_csv_lifetime.get(acct, 0), 2)
     csv_2026 = round(acct_csv_2026.get(acct, 0), 2)
-    col_g = round(deal['col_g_value'], 2)
+    col_g_value = round(deal['col_g_value'], 2)  # cumulative lifetime
+
+    # Skip deals with NO 2026 activity at all (CSV or Profit26).
+    # These are older paid-off deals — irrelevant for 2026 audit.
+    has_2026_profit_entries = False
+    profit26_test_total = 0
+    for loc in ('DeBary','DeLand'):
+        for ln in profit_lines.get(loc, []):
+            if line_matches_deal(ln['text_lower'], surname_tokens, model_tokens):
+                profit26_test_total += ln['amount']
+    if csv_2026 == 0 and profit26_test_total == 0:
+        continue  # nothing to audit for 2026
+
+    # Parse col G's note lines for 2026-dated entries
+    col_g_2026_dated = 0
+    has_dated_entries = False
+    _DATED_RE = re.compile(r'^\s*(-?[\d,]+(?:\.\d+)?)\s+.+?\s+(\d{1,2})/(\d{1,2})\s*$')
+    for ln in (deal.get('payment_notes') or '').split('\n'):
+        m = _DATED_RE.match(ln.strip())
+        if m:
+            try: amt = float(m.group(1).replace(',', ''))
+            except: continue
+            col_g_2026_dated += amt
+            has_dated_entries = True
+    col_g_2026_dated = round(col_g_2026_dated, 2)
+    # If no dated entries but cell value > 0, treat the WHOLE col_g
+    # value as the 2026 contribution (assumption: Vlad entered the
+    # current-year amount without dating it). Only valid when the
+    # deal has 2026 CSV activity (filter above).
+    col_g_2026 = col_g_2026_dated if has_dated_entries else col_g_value
     profit26_lines = []
     profit26_total = 0
     for loc in ('DeBary','DeLand'):
@@ -239,22 +271,23 @@ for link in links:
                 profit26_lines.append({**ln, 'lot': loc})
                 profit26_total += ln['amount']
     profit26_total = round(profit26_total, 2)
-    # Best-fit conservation rule. Vlad's pattern varies by deal:
-    #   Some deals: col_G holds the full running ledger; Profit26 is
-    #               an informational monthly snapshot (Perez Odyssey).
-    #   Other deals: col_G holds only pre-profit; Profit26 holds the
-    #                post-profit overflow (Dinsmore Charger).
-    # Pick whichever interpretation gets the smallest |delta|.
-    delta_a = round(col_g - csv_lifetime, 2)              # col_G alone
-    delta_b = round((col_g + profit26_total) - csv_lifetime, 2)  # col_G + Profit26
+    # Best-fit conservation. Compare 2026 CSV to:
+    #   Rule A: col_G_2026_dated alone (deal logs all to col G with dates)
+    #   Rule B: col_G_2026_dated + Profit26 (split between cells)
+    # Pre-2026 col G value is irrelevant for 2026 audit (those are
+    # cumulative lifetime entries that may pre-date 2026).
+    delta_a = round(col_g_2026 - csv_2026, 2)
+    delta_b = round((col_g_2026 + profit26_total) - csv_2026, 2)
     if abs(delta_a) <= abs(delta_b):
-        sheet_tracked = col_g
+        sheet_tracked = col_g_2026
         delta = delta_a
-        rule_used = 'col_g'
+        rule_used = 'col_g_2026'
     else:
-        sheet_tracked = round(col_g + profit26_total, 2)
+        sheet_tracked = round(col_g_2026 + profit26_total, 2)
         delta = delta_b
-        rule_used = 'col_g+profit26'
+        rule_used = 'col_g_2026+profit26'
+    # Keep lifetime values for context
+    col_g = col_g_value
     findings.append({
         'deal_key': link['deal_key'],
         'car_desc': deal['car_desc'],
@@ -263,7 +296,9 @@ for link in links:
         'acct': acct,
         'csv_lifetime': csv_lifetime,
         'csv_2026': csv_2026,
-        'col_g': col_g,
+        'col_g_lifetime': col_g_value,
+        'col_g_2026': col_g_2026,
+        'col_g': col_g_value,  # legacy field
         'profit26_total': profit26_total,
         'sheet_tracked': sheet_tracked,
         'delta': delta,
