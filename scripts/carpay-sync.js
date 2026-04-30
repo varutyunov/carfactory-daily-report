@@ -226,6 +226,11 @@ async function cpGetPayments(dealerId) {
 }
 
 // ── Supabase helpers ────────────────────────────────────────────────────────
+// Both helpers now THROW on any HTTP failure. The script used to swallow
+// errors with console.error + continue, which made every silent failure
+// land as a "success" CI run while no data actually moved. Confirmed
+// April 30 2026 — runs every 2 hrs were green for 30+ hrs while
+// synced_at was frozen at 2026-04-29 02:38.
 async function sbUpsert(table, rows) {
   if (!rows.length) return 0;
   const allKeys = {};
@@ -244,8 +249,11 @@ async function sbUpsert(table, rows) {
       headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
       body: JSON.stringify(batch)
     });
-    if (res.ok) upserted += (await res.json()).length;
-    else console.error('Upsert error for ' + table + ':', await res.text());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('Upsert ' + table + ' batch ' + (i / 50 + 1) + ' failed: HTTP ' + res.status + ' — ' + errText.slice(0, 300));
+    }
+    upserted += (await res.json()).length;
   }
   return upserted;
 }
@@ -253,9 +261,12 @@ async function sbUpsert(table, rows) {
 async function sbDeleteByLocation(table, location) {
   const res = await fetch(SB_URL + '/rest/v1/' + table + '?location=eq.' + location, {
     method: 'DELETE',
-    headers: SB_HEADERS
+    headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=minimal' })
   });
-  if (!res.ok) console.error('Delete error ' + table + ' ' + location + ':', await res.text());
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('Delete ' + table + ' location=' + location + ' failed: HTTP ' + res.status + ' — ' + errText.slice(0, 300));
+  }
 }
 
 // Fetch fields we will NOT overwrite — email, vehicle, current_amount_due,
@@ -315,6 +326,13 @@ async function main() {
 
   let totalCust = 0, totalPay = 0;
 
+  // Stamp synced_at on every row we write so the audit trail in
+  // Supabase tells us when the data last moved (the column had a
+  // DEFAULT now() but on UPSERT/UPDATE Postgres keeps the existing
+  // value — leaving rows looking ancient). Single timestamp per run
+  // keeps all rows for the same sync grouped.
+  const NOW_ISO = new Date().toISOString();
+
   for (const loc of LOCATIONS) {
     console.log('\nSyncing ' + loc.name + ' (dealerId=' + loc.dealerId + ')...');
 
@@ -323,22 +341,51 @@ async function main() {
 
     const customers = await cpGetCustomers(loc.dealerId);
     console.log('  Fetched ' + customers.length + ' customers from list page');
+    if (customers.length){
+      const sample = customers[0];
+      console.log('    sample customer: ' + JSON.stringify({
+        name: sample.name, account: sample.account, days_late: sample.days_late
+      }));
+    }
 
     const payments = await cpGetPayments(loc.dealerId);
     console.log('  Fetched ' + payments.length + ' payments from list page');
+    if (payments.length){
+      // Sample = the most recent date string we got, so logs surface
+      // CarPay's freshness directly.
+      const sample = payments[payments.length - 1];
+      console.log('    sample latest payment: ' + JSON.stringify({
+        name: sample.name, account: sample.account, date: sample.date,
+        amount_sent: sample.amount_sent, reference: sample.reference
+      }));
+    }
+
+    // Sanity guard — refuse to wipe the table to zero. CarPay portal
+    // sometimes serves an empty list page (login expired mid-fetch,
+    // dealer-select bounced, etc.) and the old script would silently
+    // DELETE everything. Better to fail loudly and keep yesterday's
+    // data than silently lose it.
+    if (customers.length === 0 && payments.length === 0){
+      throw new Error('CarPay returned 0 customers AND 0 payments for ' + loc.name +
+        ' — refusing to wipe Supabase. Likely login bounce or HTML structure change.');
+    }
 
     customers.forEach(c => {
       c.location = LOCATION_OVERRIDES[c.account] || loc.name;
+      c.synced_at = NOW_ISO;
       applyPreserved(c, preserved);
     });
-    payments.forEach(p => { p.location = LOCATION_OVERRIDES[p.account] || loc.name; });
+    payments.forEach(p => {
+      p.location = LOCATION_OVERRIDES[p.account] || loc.name;
+      p.synced_at = NOW_ISO;
+    });
 
     await sbDeleteByLocation('carpay_customers', loc.name);
     await sbDeleteByLocation('carpay_payments', loc.name);
 
     const custCount = await sbUpsert('carpay_customers', customers);
     const payCount = await sbUpsert('carpay_payments', payments);
-    console.log('  Stored: ' + custCount + ' customers, ' + payCount + ' payments');
+    console.log('  Stored: ' + custCount + ' customers, ' + payCount + ' payments (synced_at=' + NOW_ISO + ')');
     totalCust += custCount;
     totalPay += payCount;
   }
