@@ -35,3 +35,13 @@ scripts/.env
 scripts/.env.local
 scripts/__pycache__/
 supabase/.temp/
+
+# Audit / sync run artifacts (machine-generated, regenerated each run)
+scripts/.audit_2026.lock
+scripts/audit_2026_log.txt
+scripts/audit_2026_run.txt
+scripts/audit_2026_plan.json
+scripts/april_audit_report.json
+scripts/duplicates.json
+scripts/account_links_*.json
+scripts/reconcile_april_plan.json

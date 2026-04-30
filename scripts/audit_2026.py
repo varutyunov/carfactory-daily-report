@@ -62,6 +62,40 @@ APPLY = '--apply' in sys.argv
 MONTH_ARG = next((int(a.split('=')[1]) for a in sys.argv if a.startswith('--month=')), None)
 TODAY = datetime.now().strftime('%Y-%m-%d')
 
+# Single-instance lockfile — prevents two --apply runs from racing and
+# double-writing payment notes. Acquired only when --apply. Stale
+# locks older than 30 min are reaped (a previous run probably crashed).
+LOCK_PATH = os.path.join(REPO, 'scripts', '.audit_2026.lock')
+def _acquire_lock():
+    if not APPLY:
+        return
+    if os.path.exists(LOCK_PATH):
+        try:
+            mtime = os.path.getmtime(LOCK_PATH)
+            age = time.time() - mtime
+            if age < 1800:
+                with open(LOCK_PATH, encoding='utf-8') as f:
+                    other = f.read().strip()
+                print(f'ERROR: another --apply run is in progress (lock held by {other}, age={int(age)}s).')
+                print(f'Wait for it to finish or delete {LOCK_PATH} if confirmed dead.')
+                sys.exit(2)
+            else:
+                print(f'(stale lock from {int(age)}s ago — reaping)')
+                os.remove(LOCK_PATH)
+        except Exception as e:
+            print(f'WARN: lock check failed: {e}')
+    with open(LOCK_PATH, 'w', encoding='utf-8') as f:
+        f.write(f'pid={os.getpid()} started={datetime.now().isoformat()}')
+
+import atexit
+def _release_lock():
+    try:
+        if APPLY and os.path.exists(LOCK_PATH):
+            os.remove(LOCK_PATH)
+    except Exception: pass
+atexit.register(_release_lock)
+_acquire_lock()
+
 SKIP_PAYMENT_REFS = {'OPEN', 'OPEN REFINANCE OPEN'}
 PAYOFF_OK_REFS = {'NETPAYOFF', 'NETPAYOFF/NOWRITEOFF'}
 
