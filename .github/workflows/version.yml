@@ -18,7 +18,44 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add version.json
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update version timestamp"
-            git push origin HEAD:main HEAD:master
+          if git diff --staged --quiet; then
+            echo "no version change"
+            exit 0
           fi
+          git commit -m "chore: update version timestamp"
+
+          # Push to main first — that's the deployed branch and all that
+          # truly needs the bump. Retry on race with a quick rebase.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "main push ok (attempt $attempt)"
+              break
+            fi
+            echo "main push rejected — pull --rebase + retry ($attempt)"
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+            if [ "$attempt" = "5" ]; then
+              echo "main push failed after 5 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 2))
+          done
+
+          # Mirror to master — best-effort. The old version pushed to
+          # main + master in a single git push command, which fails the
+          # whole workflow when master's ahead (concurrent
+          # pending-sales-sync push, a worktree push that bypassed the
+          # dual refspec, etc.). Day 11 — that pattern fired ~9 failure
+          # emails over the prior weeks. Now: rebase the version commit
+          # onto current master and push, but if anything is off, log
+          # and exit 0 so the workflow still reports success once main
+          # is up to date.
+          git fetch origin master || { echo "fetch master failed; skip mirror"; exit 0; }
+          if git rebase origin/master; then
+            git push origin HEAD:master && echo "master mirror ok" || \
+              echo "master push rejected after rebase — leaving alone"
+          else
+            git rebase --abort || true
+            echo "master rebase had conflicts — main is ahead; manual reconcile needed"
+          fi
+          exit 0
