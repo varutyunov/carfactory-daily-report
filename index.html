@@ -22339,8 +22339,27 @@ async function _reviewApprovePending(id){
     var oldDesc = snap.posted_desc || '';
     var newAmt = Math.round(parseFloat(r.amount) || 0);
     var newDesc = r.note_line || oldDesc || '';
+    // row_type defaults to 'cash_sales' for backward compat (existing
+    // queue cards have no row_type in their snapshot). profit_sweep
+    // sets snap.row_type='payments' for finance-deal corrections so
+    // the Apps Script profit_update_entry targets the right Profit26
+    // cell (Cash Sales vs Payments).
+    var rowType = (snap.row_type === 'payments') ? 'payments' : 'cash_sales';
+    var rowTypeLabel = rowType === 'payments' ? 'Profit26 Payments' : 'Profit26 Cash Sales';
+    var isFinanceMulti = rowType === 'payments' && (snap.matched_line_count || 1) > 1;
     if (!isFinite(oldAmt)) {
       alert('Posted amount is missing on this review — can\'t correct safely. Tap Dismiss instead.');
+      return;
+    }
+    if (isFinanceMulti) {
+      // Finance deal with several Profit26 Payments lines — we can't
+      // mechanically rewrite a multi-line sum with profit_update_entry
+      // (which targets one line). Surface the situation; user fixes
+      // in the sheet manually.
+      alert('Finance deal with ' + snap.matched_line_count + ' Profit26 Payments lines for this customer ' +
+            '(sum $' + (snap.posted_total || oldAmt) + '). Owed is $' + newAmt + '. ' +
+            'Multi-line sums need a manual fix in the sheet — review the lines and adjust there. ' +
+            'Tap Dismiss when done.');
       return;
     }
     if (Math.abs(oldAmt - newAmt) < 1.00) {
@@ -22349,7 +22368,7 @@ async function _reviewApprovePending(id){
     }
     var diff = newAmt - oldAmt;
     var sign = diff >= 0 ? '+' : '−';
-    if (!confirm('Rewrite Profit26 cash sale entry?\n\n  Posted: $' + oldAmt + (oldDesc ? ' · ' + oldDesc : '') + '\n  → New: $' + newAmt + (newDesc ? ' · ' + newDesc : '') + '\n  Change: ' + sign + '$' + Math.abs(Math.round(diff*100)/100))) return;
+    if (!confirm('Rewrite ' + rowTypeLabel + ' entry?\n\n  Posted: $' + oldAmt + (oldDesc ? ' · ' + oldDesc : '') + '\n  → New: $' + newAmt + (newDesc ? ' · ' + newDesc : '') + '\n  Change: ' + sign + '$' + Math.abs(Math.round(diff*100)/100))) return;
     _removeReviewCard(id);
     try {
       var ctx3 = await _loadDealForReview(r.deal_id);
@@ -22369,7 +22388,7 @@ async function _reviewApprovePending(id){
           action: 'profit_update_entry',
           location: loc3,
           data: {
-            month_idx: monthIdx3, row_type: 'cash_sales',
+            month_idx: monthIdx3, row_type: rowType,
             old_amount: oldAmt, old_description: oldDesc,
             new_amount: newAmt, new_description: newDesc
           }
@@ -22377,7 +22396,7 @@ async function _reviewApprovePending(id){
       });
       var data3 = null; try { data3 = await resp3.json(); } catch(_){}
       if (!data3 || data3.ok === false){
-        alert('Profit26 correction failed: ' + ((data3 && data3.error) || 'unknown') + '\nReview restored.');
+        alert(rowTypeLabel + ' correction failed: ' + ((data3 && data3.error) || 'unknown') + '\nReview restored.');
         await _reviewLoad();
         return;
       }
@@ -22389,7 +22408,7 @@ async function _reviewApprovePending(id){
             source_id: r.deal_id,
             location: loc3,
             month_idx: monthIdx3,
-            row_type: 'cash_sales',
+            row_type: rowType,
             amount: newAmt,
             description: newDesc,
             vin: ctx3.record.vin || null,
@@ -22408,9 +22427,9 @@ async function _reviewApprovePending(id){
           secret: _SHEETS_SECRET, action: 'sync_profit', location: loc3
         })});
       } catch(_){}
-      _showReviewToast('Profit26 corrected: $' + oldAmt + ' → $' + newAmt + '.', 4000);
+      _showReviewToast(rowTypeLabel + ' corrected: $' + oldAmt + ' → $' + newAmt + '.', 4000);
     } catch(e){
-      alert('Cash sale correction failed: ' + (e.message || e));
+      alert('Profit correction failed: ' + (e.message || e));
       await _reviewLoad();
     }
     return;
