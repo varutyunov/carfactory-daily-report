@@ -24,10 +24,16 @@ SKIP_PAYMENT_REFS = {
     'NETPAYOFF/WRITEOFF',       # written off
 }
 
-# Only these PAY OFF references are real cash collections:
+# Only these PAY OFF references are real cash collections.
+# PT WRITEOFF historically labeled as "partial writeoff" but Vlad
+# confirmed (Day 11) that PAY OFF NETPAYOFF/PTWRITEOFF entries
+# represent real cash collected — the DMS uses PTWRITEOFF for any
+# payoff that didn't follow the original schedule (e.g., negotiated
+# settlement, early payoff with adjustment). The customer DID pay.
 PAYOFF_OK_REFS = {
     'NETPAYOFF',                # final balloon payment to close (real cash)
     'NETPAYOFF/NOWRITEOFF',     # same — no writeoff applied
+    'NETPAYOFF/PTWRITEOFF',     # negotiated payoff — real cash collected
 }
 
 # PAYPICK refs to skip (full writeoffs — no cash collected):

@@ -88,7 +88,7 @@ will not have any post-cutoff CSV activity.
 | PAY OFF | NETPAYOFF | ✅ | final balloon payment to close the loan |
 | PAY OFF | NETPAYOFF/NOWRITEOFF | ✅ | same — no writeoff applied |
 | PAY OFF | NETPAYOFF/WRITEOFF | ❌ | dealer wrote off this amount, not collected |
-| PAY OFF | NETPAYOFF/PTWRITEOFF | ❌ | partial writeoff |
+| PAY OFF | NETPAYOFF/PTWRITEOFF | ✅ | negotiated/early payoff — real cash collected. Updated 2026-04-30: previously marked ❌ "partial writeoff," but Vlad confirmed (Perez Odyssey case) the DMS uses PTWRITEOFF for any payoff that didn't follow the original schedule. Real cash WAS collected. |
 | PAYOFF | REFIANCE PAYOFF | ❌ | refinance accounting (no cash) |
 | LATEFEE | (any) | ✅ | counts toward total collected, uses `latefee` field |
 | DEPOSIT | PAY | ❌ | sale deposit, belongs in col E |

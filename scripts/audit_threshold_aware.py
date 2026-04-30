@@ -4,12 +4,18 @@
 audit_threshold_aware.py
 Per-deal audit using the conservation rule:
 
-   col G (cell value) + sum(Profit26 entries for this deal) = CSV lifetime paid
-                                                               (excl. down payment)
+   col G (cell value) = CSV lifetime paid (excluding down payment)
 
-This handles threshold splits correctly: a payment that crossed F=0 is
-partly in col G (fills threshold) + partly in Profit26 (overflow). The
-two halves sum to the CSV amount, so per-deal total reconciles.
+The col G running ledger captures every dollar received. Profit26 is a
+SIDE report (the profit-overflow portion above threshold gets logged
+there for monthly profit tracking) but does NOT add to the total cash
+received — it's already counted in col G.
+
+Updated Day 11 (2026-04-30): originally treated col G + Profit26 as
+the conservation total. Vlad clarified (Perez Odyssey case) that
+col G holds the full payment and Profit26 is a derived monthly-profit
+snapshot. Including Profit26 in the conservation total double-counted
+post-threshold profits.
 
 For each linked in-profit deal:
   CSV lifetime  = sum of all PAYMENT + PAYPICK + PAY OFF + LATEFEE in CSV
@@ -233,7 +239,9 @@ for link in links:
                 profit26_lines.append({**ln, 'lot': loc})
                 profit26_total += ln['amount']
     profit26_total = round(profit26_total, 2)
-    sheet_tracked = round(col_g + profit26_total, 2)
+    # Conservation rule: col_G alone should equal CSV lifetime.
+    # Profit26 is informational (monthly profit-overflow report).
+    sheet_tracked = col_g
     delta = round(sheet_tracked - csv_lifetime, 2)
     findings.append({
         'deal_key': link['deal_key'],
