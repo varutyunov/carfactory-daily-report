@@ -24469,12 +24469,14 @@ async function _autopopulateDeals26(record, car, icOverride) {
 
   var ic = null;
   var invId = null;
+  var icFromSnapshot = false;
   if (icOverride){
     // Snapshot-driven: the review carried forward exactly what was
     // linked at upload time. Prefer it — this is how we preserve
     // expense_notes when the live ic row has since been deleted.
     ic = icOverride;
     invId = icOverride.car_id || null;
+    icFromSnapshot = true;
   } else {
     // 1. Find inventory car by VIN to get inventory.id
     var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
@@ -24524,6 +24526,52 @@ async function _autopopulateDeals26(record, car, icOverride) {
     if (_dealYearShort && _icLower.indexOf(_dealYearShort) === -1 &&
         _icLower.indexOf(_dealYearFull) === -1){
       _yearConflict = true;
+    }
+
+    if (_colorConflict || _yearConflict){
+      // Snapshot-stale rescue: if we got `ic` from the review's
+      // snapshot, the IC linkage may have been fixed in the DB after
+      // the review was queued (Vlad re-pointed an inventory_costs row
+      // at the right car, etc.). Re-fetch the live IC by VIN+car_id
+      // and see if the conflict goes away. If it does, use the live
+      // row — it's the up-to-date truth.
+      if (icFromSnapshot){
+        try {
+          var _liveInvRows = await sbGet('inventory',
+            'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
+          var _liveInvId = (Array.isArray(_liveInvRows) && _liveInvRows[0]) ? _liveInvRows[0].id : null;
+          if (_liveInvId){
+            var _liveIcRows = await sbGet('inventory_costs',
+              'car_id=eq.' + _liveInvId + '&limit=1');
+            var _liveIc = (Array.isArray(_liveIcRows) && _liveIcRows[0]) ? _liveIcRows[0] : null;
+            if (_liveIc && _liveIc.car_name){
+              var _liveColor = _extractColorWord(_liveIc.car_name);
+              var _liveLower = String(_liveIc.car_name).toLowerCase();
+              var _liveColorConflict = false;
+              if (_liveColor && _dealColor && _liveColor !== _dealColor){
+                var _liveGray = (_liveColor === 'gray' && _dealColor === 'grey') ||
+                                (_liveColor === 'grey' && _dealColor === 'gray');
+                if (!_liveGray) _liveColorConflict = true;
+              }
+              var _liveYearConflict = false;
+              if (_dealYearShort && _liveLower.indexOf(_dealYearShort) === -1 &&
+                  _liveLower.indexOf(_dealYearFull) === -1){
+                _liveYearConflict = true;
+              }
+              if (!_liveColorConflict && !_liveYearConflict){
+                console.log('Deals26 autopopulate: snapshot IC stale (id=' +
+                  ic.id + ' "' + ic.car_name + '" conflicts) — using live IC ' +
+                  'id=' + _liveIc.id + ' "' + _liveIc.car_name + '"');
+                ic = _liveIc;
+                invId = _liveInvId;
+                _icNameColor = _liveColor;
+                _colorConflict = false;
+                _yearConflict = false;
+              }
+            }
+          }
+        } catch(_){ /* live re-fetch failed; fall through to original conflict path */ }
+      }
     }
 
     if (_colorConflict || _yearConflict){
