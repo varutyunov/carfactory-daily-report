@@ -22246,7 +22246,16 @@ async function _reviewApprovePending(id){
 
       // Cash-sale follow-up: queue the Profit26 post as a separate review
       // so the user gets a second confirmation before it lands.
-      if (ctx.record.deal_type === 'cash' && snap && snap.taxesKnown && snap.owed > 0){
+      //
+      // Used to gate on snap.taxesKnown — only queue if taxes were
+      // present (CSV match or OOS). Day 11: that gate left the Lancer
+      // cash sale unposted because the Pending Sales CSV hadn't synced
+      // yet, and the user expected the profit to show up immediately.
+      // New rule: always queue, with whatever owed is right now. If
+      // taxes get filled later (_fillMissingTaxes recomputes owed),
+      // _sweepUnpostedCashSales detects the amount mismatch and
+      // queues a one-tap cash_sale_correction.
+      if (ctx.record.deal_type === 'cash' && snap && snap.owed > 0){
         try { await _queueCashSaleReview(ctx.record, ctx.car, snap.owed, snap.carDesc); } catch(e){}
         await _reviewLoad();
         _showReviewToast('Deal posted. Cash sale awaiting a second approval in Review.', 4500);
@@ -25301,7 +25310,28 @@ async function _fillMissingTaxes() {
           var dealForPost = dealsByVin[vin];
           if (dealForPost && dealForPost.deal_type === 'cash' && _owed > 0) {
             if (_APPROVE_FIRST_MODE){
-              await _queueCashSaleReview(dealForPost, null, _owed, row.car_desc);
+              // Skip if a cash_sale review (pending OR resolved) already
+              // exists for this deal. The deal_pending approve handler
+              // now ALWAYS queues cash_sale_pending right after the deal
+              // posts (no longer gated on taxesKnown), so by the time
+              // _fillMissingTaxes runs, the review already exists.
+              // _sweepUnpostedCashSales is the right path for surfacing
+              // an amount mismatch — it queues cash_sale_correction
+              // instead of a duplicate cash_sale_pending.
+              var _existingCashRev = null;
+              try {
+                _existingCashRev = await sbGet('payment_reviews',
+                  'deal_id=eq.' + dealForPost.id +
+                  '&reason=in.(cash_sale_pending,cash_sale_correction)' +
+                  '&select=id,status&limit=2');
+              } catch(_){}
+              var _hasExisting = Array.isArray(_existingCashRev) && _existingCashRev.length > 0;
+              if (_hasExisting){
+                console.log('_fillMissingTaxes: cash_sale review already exists for deal ' + dealForPost.id +
+                  ' — skipping new queue; _sweepUnpostedCashSales will handle correction if needed');
+              } else {
+                await _queueCashSaleReview(dealForPost, null, _owed, row.car_desc);
+              }
             } else {
               await _appendCashSaleToProfit({
                 record: dealForPost,
