@@ -237,6 +237,42 @@ def profit_cap(amount, owed_after):
     return after
 
 
+def find_account_posting_alias(carpay_account, location):
+    """Look up the most recent successful posting for this CarPay
+    account in carpay_payment_postings. Mirrors _findCarPayAccountAlias
+    in index.html — same-lot first, then any-lot fallback. Returns a
+    deal-link-shaped dict so resolve_deal_link's caller can post via
+    the same path. None when no prior posting exists.
+
+    This is the missing fallback that was making recurring CarPay
+    payments land in `no_vehicle` review every time — the old code
+    only checked deal_links, which we never auto-populate from a
+    CarPay match. carpay_payment_postings IS where every successful
+    match gets recorded. Reading from it makes the second payment
+    onward auto-route to the same target."""
+    if not carpay_account:
+        return None
+    loc = (location or '').strip()
+    sel = ('select=target_tab,target_row,car_desc,location'
+           '&target_tab=not.is.null&target_row=not.is.null'
+           '&order=processed_at.desc&limit=1')
+    if loc:
+        try:
+            r = sb_get(f'carpay_payment_postings?account=eq.{urllib.parse.quote(str(carpay_account))}'
+                       f'&location=eq.{urllib.parse.quote(loc)}&{sel}')
+            if r:
+                return r[0]
+        except urllib.error.HTTPError:
+            pass
+    try:
+        r = sb_get(f'carpay_payment_postings?account=eq.{urllib.parse.quote(str(carpay_account))}&{sel}')
+        if r:
+            return r[0]
+    except urllib.error.HTTPError:
+        pass
+    return None
+
+
 def resolve_deal_link(vin, carpay_account, customer_name, location):
     loc = location or 'DeBary'
     v = (vin or '').strip().upper()
@@ -271,6 +307,19 @@ def resolve_deal_link(vin, carpay_account, customer_name, location):
                     return {'ambiguous': dls}
         except urllib.error.HTTPError:
             pass
+    # Fallback: prior successful posting on this CarPay account.
+    # Wrap the posting row in the same shape as a deal_link so the
+    # main loop can post via the existing single-link branch.
+    alias = find_account_posting_alias(carpay_account, location)
+    if alias:
+        return {'link': {
+            'target_tab': alias['target_tab'],
+            'target_row': alias['target_row'],
+            'car_desc': alias.get('car_desc'),
+            'location': alias.get('location') or location,
+            'id': None,  # not from deal_links — drift handler skips deactivation
+            '_source': 'carpay_payment_posting',
+        }}
     return None
 
 
@@ -331,6 +380,14 @@ def queue_review(payload, reason, candidates):
         'location': payload.get('location'),
         'payment_date': payload.get('payment_date') or None,
         'payment_method': payload.get('payment_method') or '',
+        # carpay_account stamps the CarPay portal account id onto the
+        # review so the in-app _findCarPayAccountAlias and the cron-side
+        # alias resolver can route a future approval (or a re-process
+        # pass) without needing the user to re-link from scratch.
+        # Day 11 — every CarPay-queued review was missing this column,
+        # making recurring-payment matching impossible until the next
+        # payment-flow learn pass.
+        'carpay_account': payload.get('carpay_account') or None,
         'note_line': build_note(payload['amount'],
                                 payload.get('vehicle_year'),
                                 payload.get('vehicle_model'),
@@ -433,18 +490,20 @@ def main():
                 continue
 
             # v65: row drift or surname mismatch — deactivate stale link
-            # and queue review.
+            # and queue review. Skip the deactivate when the alias came
+            # from carpay_payment_postings (no deal_links row to flip).
             if res.get('ok') is False and res.get('error') in ('row_drift', 'surname_mismatch'):
-                try:
-                    req = urllib.request.Request(
-                        f'{SB}/deal_links?id=eq.{lk["id"]}',
-                        data=json.dumps({'active': False}).encode(),
-                        headers={'apikey': KEY, 'Authorization': f'Bearer {KEY}',
-                                 'Content-Type': 'application/json'},
-                        method='PATCH')
-                    urllib.request.urlopen(req, context=CTX, timeout=30).read()
-                except Exception:
-                    pass
+                if lk.get('id'):
+                    try:
+                        req = urllib.request.Request(
+                            f'{SB}/deal_links?id=eq.{lk["id"]}',
+                            data=json.dumps({'active': False}).encode(),
+                            headers={'apikey': KEY, 'Authorization': f'Bearer {KEY}',
+                                     'Content-Type': 'application/json'},
+                            method='PATCH')
+                        urllib.request.urlopen(req, context=CTX, timeout=30).read()
+                    except Exception:
+                        pass
                 rid = queue_review(payload, 'row_drift', [])
                 record_posting(cp, payload, {'status': 'review', 'review_id': rid})
                 counters['row_drift'] += 1
