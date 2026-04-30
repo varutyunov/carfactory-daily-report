@@ -1,0 +1,35 @@
+name: Profit Sweep
+
+# Server-side mirror of the in-app _sweepUnpostedCashSales loop. Catches
+# the case where Vlad edits a deals26 row directly in the Google Sheet
+# (adds a missed expense, fixes a tax, etc.) — the row's `owed` recomputes
+# but any previously-posted Profit26 Cash Sales line stays at the old
+# amount until the in-app sweep runs, which only happens when the PWA is
+# open. This cron picks up the drift within ~30 min regardless.
+#
+# For each cash deal: queue cash_sale_correction when Profit26 amount
+# diverges from deals26.owed by > $1, or cash_sale_pending if no
+# Profit26 line exists yet. Idempotent — skips deals with any pending
+# review.
+
+on:
+  schedule:
+    - cron: '15 12,14,16,18,20,22,0 * * 1-6'  # offset from inventory-sync (xx:30)
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/profit_sweep.py --apply
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # _sb_config.py reads SUPABASE_SERVICE_KEY first; pass the
+          # repo secret under both names so the script picks it up as
+          # service-role (bypasses RLS).
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
