@@ -753,3 +753,216 @@ Until the app is the source of truth, **every audit must reconcile
 the sheet against the CSV**. Inflation is the bigger sin than
 deflation — better to under-count than to over-count and pay tax on
 ghost income.
+
+---
+
+## Day 11 — what reconciliation actually requires (2026-04-30)
+
+A long, frustrating day spent trying to bring April Profit26 into
+agreement with CSV truth. The architecture from Day 10 (csv_accounts
++ deal_account_links + audit) is sound, but reconciliation is harder
+than it looks. Captured below: the bugs hit, the fixes shipped, and
+the limits we ran into.
+
+### Filter rules: one canonical source
+
+Every audit / sync script that reads payment CSVs must use the same
+filter rules. Created `scripts/_csv_filter.py` as the single source
+of truth — `is_real_payment(row)` and `real_amount(row)`. Any new
+script reads from there. Inconsistent filters between
+`sync_csv_accounts.py` and `audit_2026.py` previously gave different
+totals from the same CSV.
+
+### Filter rule corrections discovered today
+
+The §7 table had two errors that produced fake "missing" cases:
+
+| transtype | reference | Original | Corrected | Why |
+|---|---|---|---|---|
+| PAYPICK | NETPAYOFF/PTWRITEOFF | ❌ | ✅ | The PAYPICK side of a PT-WRITEOFF settlement IS real cash — the dealer collected it. The paired PAY OFF row holds the writeoff amount. |
+| PAY OFF | NETPAYOFF/PTWRITEOFF | ❌ | ✅ | Vlad confirmed (Perez Odyssey case): the DMS uses PTWRITEOFF for any payoff that didn't follow the original schedule (negotiated payoff, early-pay adjustment). The customer DID pay the full amount. |
+
+After these fixes, Perez Martinez (acct 4428) showed correct lifetime
+$4688 instead of fake $336.
+
+### Conservation rule: best-fit not strict
+
+"Per deal, col G + Profit26 should equal CSV lifetime paid" sounded
+right but failed on real cases. Vlad's posting pattern varies:
+
+- **Pattern A (Perez Odyssey style)**: col G holds the full running
+  ledger (entire payment received). Profit26 holds a derived
+  monthly-profit snapshot (informational). They overlap — adding
+  both double-counts.
+- **Pattern B (Dinsmore Charger style)**: col G holds only pre-profit
+  receipts. Profit26 holds the post-profit overflow. They sum to CSV.
+- **Pattern C (Panayotis style)**: incomplete — col G + Profit26 < CSV
+  because Vlad never logged Jan/Feb/Mar payments.
+
+Audit logic should compute BOTH `delta_a = col_G - CSV` and
+`delta_b = (col_G + Profit26) - CSV` and pick the one with smaller
+absolute value. Each finding records `rule_used` so the operator can
+see which interpretation was applied.
+
+### CSV lifetime is NOT the right comparison
+
+For the 2026 audit, comparing `CSV lifetime` to current sheet creates
+massive false positives: customers like McDonald who paid off
+pre-2026 still have $5K+ CSV lifetime, but their 2026 sheet rows are
+correctly $0. Filter:
+1. Skip deals with NO 2026 CSV activity AND NO 2026 Profit26 entries
+   (these are old paid-off; not 2026 audit material).
+2. Compare CSV 2026 only.
+3. For col G's 2026 contribution: parse dated note lines (e.g.
+   "300 Lancer panayotis 4/12") and sum.
+4. Fallback: if NO dated col G entries exist but cell value > 0,
+   assume the value is 2026 (Vlad sometimes types the amount
+   without a date). Only valid when the deal HAS 2026 CSV activity.
+
+### Auto-linking bugs that wasted hours
+
+The auto-linker we built Day 10 has these failure modes:
+
+1. **VIN-multi**: when one CSV VIN appears on multiple custaccountnos
+   (refi/rebuy), the script picked the most-recently-active. Wrong
+   when the customer has multiple cars on different VINs but DMS
+   crossed them. Caught Carter / Toro / Lopez Cruz / Logan Passat —
+   all auto-vin links pointing at the wrong customer's car.
+2. **auto-name-active**: "single 2026-active candidate per surname"
+   linked Bing Challenger to Bing's Tesla account because there was
+   only one active Bing in csv_accounts.
+3. **Same surname, different car**: Krouse 05 Ranger deal (Vlad
+   collected cash, no DMS account) auto-linked to Krouse 14 Equinox
+   account. The audit then treated Equinox CSV payments ($200 4/24)
+   as Ranger payments. Symptom: rebuild added $200 to Ranger,
+   removed the real $208 cash entry as "orphan."
+
+**Defensive auto-link rules** added to `autolink_remaining.py`:
+- ONLY link when (a) account has no inv data → can't be disproven,
+  OR (b) year + model both match the deal car_desc.
+- Reject "single-surname" matches when the account has CLEAR inv
+  data that disagrees with the deal (e.g., Bing Challenger linking
+  to Bing's Tesla).
+
+### Sheet write hazards
+
+Two Apps Script behaviors that bit us today:
+
+1. **Supabase `deals26.sort_order` is NOT the sheet row.** Sheet row
+   = sort_order + 1 (header offset). Passing sort_order directly to
+   `deals26_append_payment_direct` writes one row above the intended
+   deal. Apps Script's surname matcher catches some but not all,
+   producing scattered wrong-row writes. Always pass sort_order + 1.
+
+2. **`deals26_append_payment_direct` rewrites the surname** in the
+   note line you pass when the row's car_desc surname doesn't match.
+   Mangled "logan" → "silverado", "davis" → "model", etc. Workarounds:
+   - Pass empty `last_names` array AND `bypass_surname_check: true`
+   - Or skip this action entirely; build the full payment_notes blob
+     yourself and write via `correct_payments` (which writes notes
+     literally without rewriting).
+
+3. **Race condition: parallel --apply runs corrupt the sheet.** A
+   killed-but-not-killed Python process can still be writing while
+   a new one starts. Both fire on the same data, both add the same
+   entries. Result: 28 duplicates from one race. Fix: lockfile at
+   `scripts/.audit_2026.lock`, refused if <30 min old.
+
+### Tools shipped this day (in order)
+
+| Script | Purpose |
+|---|---|
+| `scripts/_csv_filter.py` | Canonical CSV filter — `is_real_payment` + `real_amount`. Used by all sync/audit scripts. |
+| `scripts/sync_csv_accounts.py` | Refresh csv_accounts (now uses canonical filter). |
+| `scripts/auto_link_accounts.py` | Auto-link by VIN, year+model, with conservative fallbacks. |
+| `scripts/autolink_remaining.py` | Catches deals missed by primary autolink (no-inv accounts). |
+| `scripts/audit_2026.py` | Per-deal April reconciliation with corrections. Lockfile-protected. |
+| `scripts/audit_per_customer.py` | "Rivera method" — per-customer per-month CSV vs sheet count. |
+| `scripts/audit_threshold_aware.py` | Conservation-rule audit: 2026-only, best-fit between col_G and col_G+Profit26. |
+| `scripts/rebuild_april_profit.py` | Rebuild April Profit26 from CSV truth (5-phase pairing: exact date, date-fix, undated-fix, cross-lot, add-new). |
+| `scripts/rollback_audit_adds.py` | Reverse entries added by an audit_2026 --apply run (reads the log). |
+| `scripts/find_duplicates.py` | Detect exact-line duplicates across all sheet cells. |
+| `scripts/verify_dupes.py` | Per-customer CSV check — distinguishes real dupes from legitimate recurring same-amount payments. |
+| `scripts/dedupe_sheet.py` | Remove one copy of each duplicate via profit_remove_entry / correct_payments. |
+| `scripts/fix_misplaced_col_g.py` | Detect col G entries on wrong rows (surname mismatch); move to correct row. |
+| `scripts/restore_surnames.py` | Fix surnames mangled by Apps Script's `_rewriteNoteLineLastName`. |
+| `scripts/verify_links.py` | Sanity-check existing deal_account_links by year+model match. |
+
+### What we couldn't solve
+
+After all the work, the 2026 audit ends with 281 deals, 30 balanced,
+102 OVER ($92k), 149 UNDER ($118k). Vlad's intuition: "There's no
+possible way that much money is missing." He's right — most of that
+delta is **noise from undated col G entries that the audit can't
+classify as 2026 or pre-2026.**
+
+The fundamental limit: col G has historically been used as a running
+ledger without consistent dating. Vlad's pattern varies — some entries
+are dated, others are just amounts. Without dates, the audit can't
+tell 2026 from history. Best-effort = noise.
+
+### What unblocks proper auditing (not yet built)
+
+A `deal_payments` table per Day 10 end-state vision:
+```sql
+CREATE TABLE deal_payments (
+    id BIGSERIAL PRIMARY KEY,
+    deal_key TEXT NOT NULL,           -- 'Deals26:DeBary:5'
+    custaccountno TEXT,                -- linked CSV account
+    payment_date DATE NOT NULL,        -- the actual payment date
+    amount NUMERIC NOT NULL,
+    source TEXT NOT NULL,              -- 'csv' | 'app' | 'carpay' | 'cash-noncsv'
+    csv_paiddate TEXT,                 -- DMS paiddate raw
+    csv_transtype TEXT,                -- PAYMENT/LATEFEE/PAY OFF/PAYPICK
+    csv_reference TEXT,
+    threshold_portion NUMERIC,         -- if split (filling F=0)
+    profit_portion NUMERIC,            -- if split (overflow)
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+Once every payment has its own row with a date, `deal_key`, and
+amount, the audit is a clean SQL join — no surname matching, no
+date-guessing on col G entries. `col G` and `Profit26` regenerate
+from this table.
+
+Until built, audits remain best-effort against the legacy sheet.
+
+### Standing rules going forward
+
+1. **Don't run --apply twice in parallel.** Always check the
+   lockfile or use `scripts/.audit_2026.lock` pattern.
+2. **Don't trust "single surname match" for auto-linking.** Require
+   year+model agreement OR an account with no inv data (defensible).
+3. **Don't add to col G via `deals26_append_payment_direct` blindly.**
+   Apps Script will rewrite the surname. Use `correct_payments` with
+   the full notes blob you computed, OR pass `bypass_surname_check`
+   AND `last_names: []`.
+4. **Always pass sort_order + 1 for Deals26 row writes.**
+5. **CSV lifetime is the wrong comparison for 2026 audits.** Filter
+   to 2026 transactions only.
+6. **CSV is gold but not perfect.** PT WRITEOFF labels mean "off
+   schedule" not "not collected" — verify with Vlad on suspicious
+   accounts before assuming bad data.
+7. **The audit produces suspicions, not facts.** Operator review
+   per case is required for any historical mismatch. Best-effort.
+8. **Inflation is the worse sin** — when a case is genuinely
+   ambiguous and both readings are plausible, prefer the one that
+   under-counts profit. Better to miss legitimate income than to
+   pay tax on phantom income.
+
+### Open questions for the next session
+
+- Which OVER cases (~$92k) are real inflation vs legitimate non-CSV
+  cash sales (cars Vlad sold for cash without going through DMS)?
+- Which UNDER cases (~$118k) are real backlogged payments vs
+  customers whose DMS records aren't accurate?
+- Should we backfill col G with CSV truth in bulk, or only for
+  specific high-confidence customers (Panayotis-style)?
+- Build `deal_payments` table now or keep iterating on the legacy
+  sheet?
+
+These are decisions for Vlad after he's had time to think. Today's
+audit infrastructure is committed and ready — it produces honest
+suspicions; acting on them is operator work.
