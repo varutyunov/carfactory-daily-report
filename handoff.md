@@ -2343,3 +2343,208 @@ JWT. Could rotate later if a leak is suspected.
 - Top 3 "Future enhancements (in the tank)" picks from Automation.md.
 
 Security migration is fully closed.
+
+---
+
+# Day 11 (2026-04-30) — Posting fixes, drift defenses, inventory linking
+
+A long day of "actually use the system" friction surfacing real bugs.
+Vlad worked through a backlog of pending sales — every one exposed
+something. Each fix below traces back to a specific deal that wouldn't
+post.
+
+## Posting flow fixes (Civic Yellow, Lancer, Crv, etc.)
+
+### `_autopopulateDeals26` — $0 cost on repos
+- Repo deals legitimately have $0 cost (we own the car already, only
+  expenses to track). The hard-throw guard was blocking those posts.
+- **Fix:** when carDescWarning is absent (i.e. the IC link is sane,
+  the cost is just zero), show a confirm() instead of throwing. Vlad
+  taps OK → post proceeds.
+
+### Stale-snapshot rescue
+- Civic Yellow had IC #80 (silver 73k) and IC #136 (yellow 173k) with
+  swapped car_ids in deals/ic. The deal's snapshot pointed to the
+  wrong IC, so Approve fired the carDescWarning path with the wrong
+  cost.
+- **Fix:** `_autopopulateDeals26` now re-fetches the live IC by VIN
+  before posting. If the snapshot's IC has color/year disagreement
+  with the live row, the live IC overrides — the snapshot is treated
+  as stale.
+- **Permanent repair:** swapped car_ids on IC 80 / 136 directly in
+  Supabase.
+
+### `_reviewIsSales` — fingerprint-aware tab filter
+- 'multiple' reviews were drifting between tabs. Sales tab missed
+  Lancer purple because the reason had been flipped to 'multiple' by
+  some unidentified path.
+- **Fix:** sales-tab membership now checks fingerprint
+  (`deal_id && !payment_id && amount > 0` → sales) BEFORE relying on
+  the reason field. Same for inventory tab.
+
+### Lancer drift — triple defense
+Reviews 1501, 1500, 1360, 1562 all drifted from `deal_pending` (or
+`cash_sale_correction`) to `multiple`. Could not find the live caller
+that PATCHes reason='multiple'. Built three independent defenses:
+1. **Preserve in `_reviewRematch`** — if the original was a posting
+   review, never overwrite the reason.
+2. **Dispatch by fingerprint** in `_reviewApprovePending` — even if
+   reason has drifted, the snapshot shape decides which handler
+   runs.
+3. **Cron restore** — `review_revalidate.py` flips
+   reason='multiple' rows back to deal_pending when fingerprint
+   matches.
+
+### Tax pull on approval
+- RSX/CRV approved successfully but `taxes` was 0 because
+  PendingSales CSV hadn't synced yet.
+- **Fix:** `_reviewApprovePending` for `cash_sale_pending` now calls
+  `_fetchLatestTaxForVin(vin)` inline (cache-busted) and stamps
+  `taxes` into the d26 row at post time. No more "approve, then
+  re-pull tax" two-step.
+- **Banner:** `_checkStaleCsvForReview` + `_reviewStaleBannerTap`
+  detect taxes=0 in-state non-voided d26 rows and show a tap-to-fix
+  banner.
+
+### Profit adjustment after post
+- Vlad: "I forgot an expense; profit needs to be adjusted."
+- **Fix:** added `scripts/profit_sweep.py` — server-side mirror of
+  `_sweepUnpostedCashSales`. Runs every 2 hours at xx:15. Now handles
+  BOTH cash sales AND finance deals:
+  - Cash: token-match Profit26 Cash Sales line; check single line.
+  - Finance: token-match Profit26 Payments; sum all matching lines.
+  - Drift > $1 → queue `cash_sale_correction` review with
+    `row_type` ('cash_sales' or 'payments').
+
+## CarPay app tab — payments not pulling in
+
+### Silent failure root cause
+- `scripts/carpay-sync.js` was swallowing 4xx responses on Supabase
+  upserts. Eventually surfaced when Vlad noticed CarPay payments
+  weren't landing.
+- **Discovered:** the GitHub secret `SUPABASE_KEY` was set to the
+  ANON key, not service-role. With RLS now on every table (Day 9),
+  anon writes silently 401'd.
+- **Fix part 1:** rewrote `carpay-sync.js` to throw on any non-OK
+  HTTP, stamp `synced_at` on every row, and refuse to wipe Supabase
+  if CSV returns 0+0.
+- **Fix part 2:** updated GitHub secret `SUPABASE_KEY` to the
+  service-role JWT. Used libsodium sealed-box encryption via PyNaCl
+  to upload the encrypted secret via the GitHub API
+  (token from credential manager).
+
+### Posting-alias fallback in `carpay-process.py`
+- New `find_account_posting_alias(carpay_account, location)` reads
+  `carpay_payment_postings` for a prior successful target. Wraps the
+  result in deal-link shape so the main loop posts via the existing
+  path.
+- `queue_review` now stamps `carpay_account` on the review row so
+  re-runs can re-resolve cleanly.
+
+## Multi-method payment tiles
+
+- Vlad: "I don't like how in payments deals have multiple posts if
+  the payment methods are multiple."
+- 9 multi-method groups in the last 80 payments (e.g. Genesis Barrera
+  $520 card + $2500 cash = single sale, two rows).
+- **Fix:** `_payRenderCards` now groups by
+  (customer + vin + payment_time + raw_ocr_text) within a 5-minute
+  `created_at` window. New helper `_payMethodBadgeWithAmount`
+  renders one tile per logical sale with multiple method badges
+  inside.
+
+## Trade duplicate fix
+
+- Trade-in BMW 328i was created twice — once with "wgite" typo.
+- **Fix:** `_createTradeInCar` now does a loose dedup by
+  inventory.name + location + 1-hour window before the exact-name
+  match. Prevents typo-induced duplicates.
+
+## Review cleanup
+
+### Orphan check
+- "There are several with no cars to match" — reviews tied to deals
+  that were deleted/voided.
+- **Fix:** `_cleanupReviewsForDeal` now runs from `dealDeleteFinal`
+  and `dealReturnFinal`. Auto-resolves pending payment_reviews when
+  the source deal disappears.
+- **Cron:** `review_revalidate.py` adds `load_deal_ids()` orphan
+  check at the top of each pass.
+
+### Adelaida Gonzalez confusion
+- Came up because the deal's auto-tax-pull hadn't run; reviews
+  appeared in payments tab when they should have been in sales.
+- Cleared up once tax pull on approval landed.
+
+## SoldInventory backfill (afternoon)
+
+Vlad: "I want to link every car in deals to an actual car but some
+cars are missing." 87 unlinked deals26 rows; audit pass linked 56 by
+exact VIN match in SoldInventory; 31 remained.
+
+### Phase 1 — create stub inventory rows
+Wrote a one-shot script (now removed): for each unlinked d26 row,
+parsed year/model/color/miles from `car_desc`, pretty-printed the
+model name (CR-V, HR-V, M35, 528i…), and created an `inventory` row
+with empty VIN/stock for Vlad to link manually. Created rows
+`#5885-5914` (30 rows).
+
+### Phase 2 — empty-VIN rows broke the linker
+- Vlad: "They're not liking when you hit the button."
+- The d26 link picker (`d26LinkSelect`) writes the row's VIN field
+  straight to `deals26.sold_inv_vin`. Empty VIN → empty string saved
+  → link silently fails.
+- **Fix part A:** `d26LinkPick` now warns on empty-VIN rows (amber
+  dashed border + "tap to add VIN & link" hint), prompts for the
+  VIN, saves to `inventory.vin`, then patches the d26 row.
+- **Fix part B:** Vlad: "Shouldn't the VIN be in SoldInventory?" Yes.
+  Re-ran the SoldInventory match with looser model logic
+  (substring match, BMW '528i' → '5-series', multi-word models like
+  'grand caravan'). Backfilled 10 of 30 unambiguously via Supabase
+  PATCH (Escalade, M35, HR-V, Highlander, Challenger, Outlander
+  2018, Chrysler 300, Silverado, Caravan, Armada).
+- **Fix part C:** the picker now queries the cached `sold-inventory.json`
+  for candidates. 1 match → auto. 2+ matches → chooser overlay
+  showing each VIN with its buyer names so Vlad picks the right
+  sale. 0 matches → manual prompt. New helpers
+  `_findSoldInvCandidates`, `_pickSoldInvVin`, `_modelLooseMatch`,
+  `_parseInvName` — all in `index.html`.
+
+## Workflow stability
+
+### `version.yml` master-mirror best-effort
+- The single `git push origin HEAD:main HEAD:master` was failing the
+  whole workflow whenever master was ahead of main (carpay-sync
+  push, pending-sales-sync push, worktree push). 9 failure emails
+  over recent weeks.
+- **Fix:** push to main with rebase-retry loop (5 attempts), then
+  best-effort master mirror. Master conflicts log a warning and
+  exit 0 so main success doesn't get masked.
+
+### `tax-fill.py` SHEETS_URL empty
+- GitHub Actions sets unset secrets to empty string, defeating
+  `os.environ.get('SHEETS_URL', '<default>')` (returns '' not
+  default).
+- **Fix:** changed to
+  `os.environ.get('SHEETS_URL') or '<default>'`.
+
+## End state
+
+- 10 of 30 audit-created inventory rows have VINs.
+- The other 20 will get VINs as Vlad taps them — chooser auto-loads
+  candidates from sold-inventory.json.
+- Service-role key in GitHub secrets, all syncs running.
+- profit_sweep cron running every 2 hours.
+- Drift defenses in place (3 layers).
+
+## Latest commits on master + main
+- `e28481f` — sold-inventory.json chooser in d26 link picker
+- `83f80e1` — empty-VIN prompt in d26 link picker
+- (plus the day's earlier carpay/profit_sweep/tax/version commits)
+
+## What's deferred
+- GPS sync Passtime credentials (Vlad: "GPS will be another day").
+- Manual VIN linking pass for the remaining 20 audit-created rows
+  (now self-serve via the chooser).
+- 19 ambiguous SoldInventory matches from earlier audit phase.
+- 12 deals26 rows with no SoldInventory entry at all.

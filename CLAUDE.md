@@ -575,4 +575,44 @@ reconciles them.
 | `fix_misplaced_col_g.py` | Detects col G entries on wrong rows (surname mismatch); moves to correct row. |
 | `restore_surnames.py` | Fixes surnames mangled by Apps Script's `_rewriteNoteLineLastName`. |
 | `rollback_audit_adds.py` | Reverses entries added by an `audit_2026.py --apply` run (reads the log). |
-| `review_revalidate.py` | Auto-resolves stale review cards (every cron). |
+| `review_revalidate.py` | Auto-resolves stale review cards (every cron). Includes orphan check + reason-drift restore. |
+| `profit_sweep.py` | Server-side mirror of `_sweepUnpostedCashSales`. Runs every 2h (xx:15). Detects Profit26 vs d26 drift for cash AND finance deals. |
+
+### Inventory linking (`d26LinkPick`)
+
+When a Deals26 row has no `sold_inv_vin`, the LINK CAR button opens a
+picker over the live `inventory` table. **Empty-VIN inventory rows
+(audit-created stubs) get special handling:**
+
+1. The picker queries `sold-inventory.json` (`loadSoldInventory`) for
+   candidates matching the row's year+make+model.
+2. **1 distinct VIN** → auto-saves to `inventory.vin` and links the
+   deal.
+3. **2+ VINs** → shows a chooser overlay listing each VIN with its
+   buyer names so Vlad picks the right sale. Each VIN appears once
+   even if the same VIN was sold/repo'd multiple times.
+4. **0 matches** → manual prompt for the VIN.
+
+Loose model matching covers: substring ('caravan' ↔ 'grand caravan',
+'armada' ↔ 'pathfinder armada'), BMW series ('328i' → '3-series',
+'528i' → '5-series'), and token intersection.
+
+If you build a future audit script that creates inventory rows for
+unlinked deals, **always** pre-populate VIN/stock from SoldInventory
+when there's an unambiguous match. Empty VIN is a UX trap.
+
+### Drift defense for review reasons
+
+`payment_reviews.reason` drifts from posting reasons (`deal_pending`,
+`cash_sale_pending`, `cash_sale_correction`) to `multiple` from some
+unidentified path. **Don't trust the reason field alone** — three
+defenses are in place:
+
+1. `_reviewRematch` preserves posting reasons.
+2. `_reviewApprovePending` dispatches by snapshot fingerprint, not
+   reason.
+3. `review_revalidate.py` cron restores reason='multiple' rows whose
+   fingerprint matches a posting reason.
+
+Same fingerprint logic drives `_reviewIsSales` / `_reviewIsInv` for
+tab membership.

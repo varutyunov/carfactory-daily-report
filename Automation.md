@@ -966,3 +966,93 @@ Until built, audits remain best-effort against the legacy sheet.
 These are decisions for Vlad after he's had time to think. Today's
 audit infrastructure is committed and ready — it produces honest
 suspicions; acting on them is operator work.
+
+---
+
+## Day 11 — inventory linking + drift defenses (2026-04-30)
+
+### Audit-created inventory rows MUST carry SoldInventory data
+
+When an audit pass creates new inventory rows for unlinked d26 deals
+(d26 rows where `sold_inv_vin=''`), always pre-populate `vin` and
+`stock` from SoldInventory CSV. Empty VIN is a UX trap — every picker
+in the app uses VIN as the join key, so an empty-VIN inventory row
+appears clickable but writes empty string when tapped.
+
+**Matching strategy** (use this in any future audit-created-inventory
+script):
+
+1. Build a (year, make, model_lower) index of SoldInventory rows.
+2. For each unlinked d26 row, parse year/make/model from `car_desc`.
+3. Check candidates by year+make. Apply loose model match:
+   - exact match
+   - substring either direction ('caravan' in 'grand caravan')
+   - BMW series mapping ('328i' → '3-series', '528i' → '5-series')
+   - token intersection
+4. Dedupe candidates by VIN. Distinct VIN count:
+   - 1 → auto-fill (`{vin, stock}`).
+   - 2+ → leave empty; the in-app chooser will surface candidates.
+   - 0 → leave empty; manual prompt.
+
+The app's `_findSoldInvCandidates` (in `index.html`) is the canonical
+client-side implementation of the same logic. Server-side audits that
+pre-populate inventory rows must produce the same result so the
+"taps to add VIN" affordance only appears for genuinely ambiguous /
+unmatchable cases.
+
+### Drift defenses for review reasons
+
+A `payment_reviews.reason` field can drift from a posting reason
+(`deal_pending`, `cash_sale_pending`, `cash_sale_correction`) to
+`multiple` from some unidentified path. Don't try to find the trigger
+— defend in three places:
+
+1. **Preserve in `_reviewRematch`** (client) — never overwrite a
+   posting reason.
+2. **Dispatch by fingerprint** in `_reviewApprovePending` (client) —
+   ignore the reason field; pick the handler from the snapshot
+   shape (`snap.ic+inv` → deal_pending, `snap.posted_amount` →
+   cash_sale_correction, `deal_id+null payment_id` →
+   cash_sale_pending).
+3. **Cron restore** in `review_revalidate.py` — flip reason='multiple'
+   rows back to their fingerprint reason once per cron pass.
+
+Same fingerprint logic decides Sales-tab vs Inventory-tab membership
+(`_reviewIsSales` / `_reviewIsInv`).
+
+### Tax-pull on approval
+
+Don't approve a deal-pending review if `taxes` haven't been pulled
+yet — the post lands and Profit26 is short by the tax amount.
+`_reviewApprovePending` for `cash_sale_pending` and `deal_pending`
+must call `_fetchLatestTaxForVin(vin)` before posting. Banner
+(`_checkStaleCsvForReview`) detects stale taxes for in-state
+non-voided d26 rows and surfaces a tap-to-fix.
+
+### Profit drift sweep
+
+`scripts/profit_sweep.py` runs every 2 hours (cron `15 12,14,16,18,20,22,0`).
+Token-matches Profit26 lines against d26 deals (cash + finance) and
+queues `cash_sale_correction` reviews when sheet-vs-d26 differs by
+more than $1. Set `row_type` ('cash_sales' or 'payments') on the
+review snapshot so the dispatcher knows which sheet section to fix.
+
+### CarPay sync — fail loud, service-role only
+
+`scripts/carpay-sync.js` must:
+- Throw on any non-OK HTTP response (don't swallow 401/4xx).
+- Use the service-role JWT in `SUPABASE_KEY` (anon is silently
+  rejected by RLS).
+- Stamp `synced_at` on every row.
+- Refuse to wipe Supabase if both DeBary and DeLand CSVs return 0+0.
+
+Verify the GitHub secret is service-role with: `decode the JWT
+payload — `role` should be `service_role`.
+
+### Handling deal deletion / void cleanup
+
+Pending `payment_reviews` for a deleted/voided deal become orphans.
+`_cleanupReviewsForDeal` runs from `dealDeleteFinal` and
+`dealReturnFinal`. `review_revalidate.py` does the same via
+`load_deal_ids()` orphan check on every cron pass. Don't leave
+orphan reviews.
