@@ -24,11 +24,17 @@
   // ── Config ──────────────────────────────────────────────────────────────────
   var SB_URL = 'https://hphlouzqlimainczuqyc.supabase.co';
   var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaGxvdXpxbGltYWluY3p1cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjY0MTIsImV4cCI6MjA4OTM0MjQxMn0.-nmd36YCd2p_Pyt5VImN7rJk9MCLRdkyv0INmuFwAVo';
+  // After the Day 9 RLS lockdown, anon role can't read `deals` directly. The
+  // bookmarklet now talks to the `gps-sync` edge function which uses the
+  // service-role key server-side; this shared secret gates access. Same
+  // pattern as Apps Script's SHEETS_SECRET — leakage risk is bounded to the
+  // function's surface (list pending + mark uploaded), not full Supabase.
+  var GPS_SYNC_SECRET = 'q00cSu1SnDJo_wrNiguDp12r6mLhrG6Z';
+  var GPS_SYNC_URL = SB_URL + '/functions/v1/gps-sync';
   var SB_HEADERS = {
     'apikey': SB_KEY,
     'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
+    'Content-Type': 'application/json'
   };
   var ORIGIN = 'https://secure.passtimeusa.com';
   // Search page works under Dashboard or CodeSite
@@ -59,23 +65,26 @@
 
   function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-  // ── Supabase helpers ────────────────────────────────────────────────────────
-  async function sbGet(table, params) {
-    var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + (params || ''), {
-      headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' })
+  // ── Edge-function helpers (gps-sync) ────────────────────────────────────────
+  // The two operations the bookmarklet needs (list pending finance deals
+  // with non-empty serial; mark a deal gps_uploaded=true) both go through
+  // the gps-sync edge function. RLS lockdown means we can't query `deals`
+  // directly with the anon key.
+  async function gpsSyncCall(body) {
+    var r = await fetch(GPS_SYNC_URL, {
+      method: 'POST',
+      headers: SB_HEADERS,
+      body: JSON.stringify(Object.assign({ secret: GPS_SYNC_SECRET }, body))
     });
-    if (!r.ok) throw new Error('sbGet ' + table + ': ' + (await r.text()));
+    if (!r.ok) throw new Error('gps-sync ' + r.status + ': ' + (await r.text()));
     return r.json();
   }
-
-  async function sbPatch(table, id, body) {
-    var r = await fetch(SB_URL + '/rest/v1/' + table + '?id=eq.' + id, {
-      method: 'PATCH',
-      headers: SB_HEADERS,
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('sbPatch ' + table + '/' + id + ': ' + (await r.text()));
-    return r.json();
+  async function gpsSyncListPending() {
+    var resp = await gpsSyncCall({ action: 'list' });
+    return resp.deals || [];
+  }
+  async function gpsSyncMarkUploaded(dealId) {
+    return await gpsSyncCall({ action: 'mark_uploaded', deal_id: dealId });
   }
 
   // ── Parse Deal ──────────────────────────────────────────────────────────────
@@ -139,19 +148,18 @@
 
   // ── Pull deals to push ──────────────────────────────────────────────────────
   log('\u{1F4E1} Checking for new deals to push...');
-  var deals;
+  var dealsWithGps;
   try {
-    deals = await sbGet('deals', 'gps_uploaded=eq.false&order=created_at.asc');
+    // Server-side filter: deal_type=finance, gps_uploaded=false,
+    // voided_at IS NULL, gps_serial non-empty — already applied by the
+    // edge function so the response is the exact list we want to push.
+    dealsWithGps = await gpsSyncListPending();
   } catch (e) {
     log('❌ ' + e.message, '#ef4444');
     return;
   }
 
-  var dealsWithGps = deals.filter(function(d) {
-    return (d.gps_serial || '').trim().length > 0;
-  });
-
-  log('Found ' + deals.length + ' unprocessed, ' + dealsWithGps.length + ' with GPS serials');
+  log('Found ' + dealsWithGps.length + ' new finance deal(s) with GPS serials');
 
   if (!dealsWithGps.length) {
     log('✅ No new deals to push!', '#30d158');
@@ -249,7 +257,7 @@
 
         if (saveResult.url.includes('ViewDetail.aspx') && !saveResult.url.includes('M=ED')) {
           log('✅ Updated!', '#30d158');
-          await sbPatch('deals', deal.id, { gps_uploaded: true });
+          await gpsSyncMarkUploaded(deal.id);
           log('\u{1F4E4} Marked done in Supabase', '#30d158');
           successCount++;
         } else {
@@ -294,7 +302,7 @@
 
           if (saveResult2.url.includes('ViewDetail.aspx') && !saveResult2.url.includes('M=ED')) {
             log('✅ Updated!', '#30d158');
-            await sbPatch('deals', deal.id, { gps_uploaded: true });
+            await gpsSyncMarkUploaded(deal.id);
             log('\u{1F4E4} Marked done in Supabase', '#30d158');
             successCount++;
             continue;
@@ -377,7 +385,7 @@
 
           if (resultUrl2.includes('viewdetail.aspx')) {
             log('✅ Added!', '#30d158');
-            await sbPatch('deals', deal.id, { gps_uploaded: true });
+            await gpsSyncMarkUploaded(deal.id);
             log('\u{1F4E4} Marked done in Supabase', '#30d158');
             successCount++;
           } else {
