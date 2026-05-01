@@ -12708,8 +12708,9 @@ function openFormDetail(id) {
   // Add Payment button
   html += '<button onclick="depAddPaymentOpen('+dep.id+')" style="width:100%;margin-top:16px;padding:14px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:14px;color:#4ade80;font-size:15px;font-weight:600;cursor:pointer;">+ Add Payment to Deposit</button>';
 
-  // Delete button
-  html += '<button id="dep-delete-btn" onclick="depDeleteConfirm1(' + dep.id + ')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+  // Edit + Delete buttons
+  html += '<button onclick="formEditOpen(\'deposits\',' + dep.id + ')" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">✎ Edit Form</button>';
+  html += '<button id="dep-delete-btn" onclick="depDeleteConfirm1(' + dep.id + ')" style="width:100%;margin-top:12px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
 
   html += '</div>';
 
@@ -13747,7 +13748,8 @@ async function openInvoiceDetail(id){
   if(inv.created_by)html+='Created by: '+inv.created_by+'<br>';
   if(inv.location)html+='Location: '+inv.location;
   html+='</div>';
-  html+='<button id="form-delete-btn" onclick="formDeleteConfirm(\'invoices\','+inv.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+  html+='<button onclick="formEditOpen(\'invoices\','+inv.id+')" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">✎ Edit Form</button>';
+  html+='<button id="form-delete-btn" onclick="formDeleteConfirm(\'invoices\','+inv.id+')" style="width:100%;margin-top:12px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
   html+='</div>';
   var body=document.getElementById('forms-body');
   body.innerHTML=html;
@@ -14171,7 +14173,8 @@ async function openVRDetail(id){
   if(vr.created_by)html+='Created by: '+vr.created_by+'<br>';
   if(vr.location)html+='Location: '+vr.location;
   html+='</div>';
-  html+='<button id="form-delete-btn" onclick="formDeleteConfirm(\'void_releases\','+vr.id+')" style="width:100%;margin-top:28px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
+  html+='<button onclick="formEditOpen(\'void_releases\','+vr.id+')" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">✎ Edit Form</button>';
+  html+='<button id="form-delete-btn" onclick="formDeleteConfirm(\'void_releases\','+vr.id+')" style="width:100%;margin-top:12px;padding:14px;background:none;border:1px solid #331111;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">Delete This Form</button>';
   html+='</div>';
   var body=document.getElementById('forms-body');
   body.innerHTML=html;
@@ -14976,6 +14979,222 @@ function _completeAndClose(tableName){
   if(tableName==='deposits')formsInnerTab('deposits');
   else if(tableName==='invoices')formsInnerTab('invoices');
   else if(tableName==='void_releases')formsInnerTab('void');
+}
+
+// ══════════════════════════════════════════════════════════════
+// Unified form-edit system — works for deposits, invoices, void_releases.
+// Triggered by the "Edit" button on each form's detail view. Renders a
+// per-table set of editable fields + photo upload sections (replace ID
+// photo, replace signed-form photo) into #forms-body, then patches the
+// row on Save. Photos go through _normalizeImageFile for HEIC->JPEG so
+// iOS uploads work end-to-end.
+// ══════════════════════════════════════════════════════════════
+
+var _FORM_EDIT_CONFIG = {
+  deposits: {
+    title: 'Edit Deposit',
+    fields: [
+      { id:'customer_name', label:'Customer Name', type:'text' },
+      { id:'vehicle_desc',  label:'Vehicle',       type:'text' },
+      { id:'vin',           label:'VIN',           type:'text' },
+      { id:'stock',         label:'Stock #',       type:'text' },
+      { id:'deposit_amount',label:'Deposit Amount',type:'number' },
+      { id:'balance',       label:'Balance Due',   type:'text' },
+      { id:'deposit_date',  label:'Deposit Date',  type:'text' },
+      { id:'withdraw_until',label:'Hold Until',    type:'text' }
+    ],
+    photos: [
+      { field:'id_photo_url',     label:'Customer ID' },
+      { field:'signed_form_url',  label:'Signed Form' }
+    ]
+  },
+  invoices: {
+    title: 'Edit Invoice',
+    fields: [
+      { id:'invoice_num',   label:'Invoice #',      type:'text' },
+      { id:'customer_name', label:'Customer Name',  type:'text' },
+      { id:'vehicle_desc',  label:'Vehicle',        type:'text' },
+      { id:'vin',           label:'VIN',            type:'text' },
+      { id:'total',         label:'Total',          type:'number' },
+      { id:'payment_method',label:'Payment Method', type:'text' },
+      { id:'notes',         label:'Notes',          type:'textarea' }
+    ],
+    photos: [
+      { field:'id_photo_url',     label:'Customer ID' },
+      { field:'signed_form_url',  label:'Signed Invoice' }
+    ]
+  },
+  void_releases: {
+    title: 'Edit Void / Release',
+    fields: [
+      { id:'customer_name', label:'Customer Name', type:'text' },
+      { id:'co_customer',   label:'Co-Customer',   type:'text' },
+      { id:'vehicle_desc',  label:'Vehicle',       type:'text' },
+      { id:'vin',           label:'VIN',           type:'text' },
+      { id:'account',       label:'Account #',     type:'text' }
+    ],
+    photos: [
+      { field:'id_photo_url',     label:'Customer ID' },
+      { field:'signed_form_url',  label:'Signed Form' }
+    ]
+  }
+};
+
+// Files staged but not yet uploaded — keyed by photo field name.
+var _formEditFiles = {};
+
+function _formEditFindRecord(table, id){
+  if (table === 'deposits')      return (_formsData||[]).find(function(d){return d.id===id;});
+  if (table === 'invoices')      return (_invData_list||[]).find(function(d){return d.id===id;});
+  if (table === 'void_releases') return (_vrData_list||[]).find(function(d){return d.id===id;});
+  return null;
+}
+
+function _formEditReturnToDetail(table, id){
+  _formEditFiles = {};
+  if (table === 'deposits')      openFormDetail(id);
+  else if (table === 'invoices') openInvoiceDetail(id);
+  else                           openVRDetail(id);
+}
+
+function formEditOpen(table, id){
+  var rec = _formEditFindRecord(table, id);
+  if (!rec) { alert('Record not found.'); return; }
+  _formEditFiles = {};
+  _formEditRender(table, rec);
+}
+
+function _formEditRender(table, rec){
+  var cfg = _FORM_EDIT_CONFIG[table];
+  if (!cfg) return;
+  var html = '<div style="padding:16px 12px 40px;">';
+  html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:24px;font-weight:900;color:#60a5fa;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">' + cfg.title + '</div>';
+
+  // Editable fields
+  cfg.fields.forEach(function(f){
+    var raw = rec[f.id];
+    var val = raw == null ? '' : String(raw);
+    html += '<div style="margin-bottom:12px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">' + f.label + '</div>';
+    if (f.type === 'textarea'){
+      html += '<textarea id="fe-'+f.id+'" rows="3" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;">' + _escHtml(val) + '</textarea>';
+    } else {
+      var safeVal = _escHtml(val).replace(/"/g, '&quot;');
+      var inputType = f.type === 'number' ? 'text' : (f.type || 'text');
+      var inputmode = f.type === 'number' ? ' inputmode="decimal"' : '';
+      html += '<input id="fe-'+f.id+'" type="'+inputType+'"'+inputmode+' value="'+safeVal+'" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:11px 12px;font-size:14px;outline:none;box-sizing:border-box;"/>';
+    }
+    html += '</div>';
+  });
+
+  // Photo sections
+  if (cfg.photos && cfg.photos.length){
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px;">Photos</div>';
+    cfg.photos.forEach(function(p){
+      html += _formEditPhotoSection(p.field, p.label, rec[p.field] || '');
+    });
+  }
+
+  // Save / Cancel
+  html += '<div style="display:flex;gap:10px;margin-top:24px;">';
+  html += '<button onclick="formEditCancel(\''+table+'\','+rec.id+')" style="flex:1;padding:14px;background:none;border:1px solid #333;border-radius:14px;color:#888;font-size:15px;font-weight:600;cursor:pointer;">Cancel</button>';
+  html += '<button id="form-edit-save-btn" onclick="formEditSave(\''+table+'\','+rec.id+')" style="flex:2;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">Save Changes</button>';
+  html += '</div>';
+  html += '<div id="form-edit-status" style="text-align:center;font-size:13px;color:#888;margin-top:10px;"></div>';
+  html += '</div>';
+
+  document.getElementById('forms-body').innerHTML = html;
+}
+
+function _formEditPhotoSection(field, label, current){
+  var hasCurrent = !!current;
+  var html = '<div id="fe-'+field+'-wrap" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:10px;">'+label+'</div>';
+  if (hasCurrent){
+    html += '<img id="fe-'+field+'-img" src="'+current+'" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#0a0a0a;margin-bottom:10px;"/>';
+  } else {
+    html += '<div id="fe-'+field+'-img" style="font-size:12px;color:#555;margin-bottom:10px;text-align:center;padding:24px;background:#0a0a0a;border-radius:10px;">No photo uploaded</div>';
+  }
+  html += '<label style="display:block;position:relative;width:100%;padding:12px;background:rgba(96,165,250,.08);border:1px dashed rgba(96,165,250,.3);border-radius:10px;color:#60a5fa;font-size:13px;font-weight:700;text-align:center;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;box-sizing:border-box;">';
+  html += (hasCurrent ? '↻ Replace ' : '+ Upload ') + 'Photo';
+  html += '<input type="file" accept="image/*" capture="environment" onchange="formEditPhotoChosen(this,\''+field+'\')" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;"/>';
+  html += '</label>';
+  html += '</div>';
+  return html;
+}
+
+async function formEditPhotoChosen(input, field){
+  if (!input.files || !input.files[0]) return;
+  var file = await _normalizeImageFile(input.files[0]);
+  _formEditFiles[field] = file;
+  // Update preview
+  var imgEl = document.getElementById('fe-'+field+'-img');
+  var reader = new FileReader();
+  reader.onload = function(e){
+    if (imgEl && imgEl.tagName === 'IMG'){
+      imgEl.src = e.target.result;
+    } else if (imgEl){
+      // Replace the placeholder div with an img element
+      var newImg = document.createElement('img');
+      newImg.id = 'fe-'+field+'-img';
+      newImg.src = e.target.result;
+      newImg.style.cssText = 'width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#0a0a0a;margin-bottom:10px;';
+      imgEl.parentNode.replaceChild(newImg, imgEl);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function formEditCancel(table, id){
+  _formEditReturnToDetail(table, id);
+}
+
+async function formEditSave(table, id){
+  var btn = document.getElementById('form-edit-save-btn');
+  var status = document.getElementById('form-edit-status');
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; btn.style.opacity = '0.6'; }
+  if (status) status.innerHTML = '';
+  try {
+    var cfg = _FORM_EDIT_CONFIG[table];
+    var patch = {};
+
+    // Collect field values
+    cfg.fields.forEach(function(f){
+      var el = document.getElementById('fe-'+f.id);
+      if (!el) return;
+      var v = el.value;
+      if (f.type === 'number') v = parseFloat(String(v).replace(/[^0-9.\-]/g,'')) || 0;
+      patch[f.id] = (typeof v === 'string') ? v.trim() : v;
+    });
+
+    // Upload any new photos
+    var ts = Date.now();
+    for (var i = 0; i < (cfg.photos||[]).length; i++){
+      var p = cfg.photos[i];
+      var file = _formEditFiles[p.field];
+      if (file){
+        var ext = (file.name && file.name.split('.').pop() || 'jpg').toLowerCase();
+        var path = table + '/' + ts + '_' + p.field + '.' + ext;
+        await sbUpload(path, file);
+        patch[p.field] = SB_URL + '/storage/v1/object/public/car-photos/' + path;
+      }
+    }
+
+    await sbPatch(table, id, patch);
+    _formEditFiles = {};
+
+    // Mutate the cached record in place so the detail view shows the new
+    // data immediately (without re-fetching the whole list).
+    var rec = _formEditFindRecord(table, id);
+    if (rec) Object.keys(patch).forEach(function(k){ rec[k] = patch[k]; });
+
+    if (status) status.innerHTML = '<span style="color:#4ade80;font-weight:600;">Saved!</span>';
+    setTimeout(function(){ _formEditReturnToDetail(table, id); }, 500);
+  } catch(e){
+    console.error('formEditSave error:', e);
+    if (status) status.innerHTML = '<span style="color:#ef4444;">Error: ' + (e.message||e) + '</span>';
+    if (btn) { btn.textContent = 'Save Changes'; btn.disabled = false; btn.style.opacity = '1'; }
+  }
 }
 
 function formDeleteConfirm(tableName,id){
