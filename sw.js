@@ -1,7 +1,7 @@
 // Import OneSignal service worker for push notification handling
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-const CACHE = 'cf-cache-v617';
+const CACHE = 'cf-cache-v618';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
@@ -79,16 +79,36 @@ self.addEventListener('push', e => {
   );
 });
 
-// Notification clicked — open or focus the app
+// Notification clicked — focus / open the app and deep-link to the tab the
+// notification belongs to. The push payload's `data.tab` survives across
+// OneSignal's various nestings (top-level on web, `additionalData` on iOS,
+// `custom.a` on Android in some SDK versions) — try each so a one-line
+// caller in index.html (`sendPushNotification(..., 'deals')`) just works.
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const d = e.notification.data || {};
+  const tab =
+    d.tab ||
+    (d.data && d.data.tab) ||
+    (d.additionalData && d.additionalData.tab) ||
+    (d.custom && d.custom.a && d.custom.a.tab) ||
+    null;
+
   e.waitUntil(
     self.clients.matchAll({type:'window',includeUncontrolled:true}).then(clients => {
       if(clients.length > 0){
-        clients[0].focus();
-        return;
+        const client = clients[0];
+        if(tab){
+          // Tell the existing window to switch tabs. _navigateToTab in the
+          // page-side message listener does the actual UI work.
+          try { client.postMessage({type:'NAVIGATE_TAB', tab:tab}); } catch(_){}
+        }
+        return client.focus();
       }
-      return self.clients.openWindow('/');
+      // No open window — pass tab as URL param. The page parses ?notif_tab
+      // on startup and switches to it after login finishes rendering.
+      const url = tab ? '/?notif_tab=' + encodeURIComponent(tab) : '/';
+      return self.clients.openWindow(url);
     })
   );
 });

@@ -2495,16 +2495,85 @@ function dismissNotifBarPermanent(){
   localStorage.setItem('cf_notif_dismissed','1');
 }
 
-async function sendPushNotification(targetNames, title, body){
+// Push: targetNames=array of employee names, title/body as shown.
+// `tab` (optional) deep-links the recipient to that section when they
+// tap the notification — see sw.js notificationclick handler + the
+// _navigateToTab + ?notif_tab= URL param below.
+async function sendPushNotification(targetNames, title, body, tab){
   if(!targetNames||targetNames.length===0) return;
   try{
+    var payload = {target_names:targetNames, title:title, body:body};
+    if(tab) payload.tab = tab;
     await fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
       headers:_sbHeaders({'Prefer':null}),
-      body:JSON.stringify({target_names:targetNames, title:title, body:body})
+      body:JSON.stringify(payload)
     });
   }catch(e){ console.log('Push failed:',e); }
 }
+
+// ── Notification deep-link routing ────────────────────────────────────────
+// When a push is tapped, the SW either focuses an existing window and
+// posts {type:'NAVIGATE_TAB', tab:'...'} to it, OR opens a fresh window
+// with `?notif_tab=...`. Both paths land here. Mirrors the AI tool's
+// `navigate` action so the destinations stay in sync.
+function _navigateToTab(s){
+  try {
+    if(!s) return;
+    if(s==='home'){ if(typeof goMgrHome==='function') goMgrHome(); return; }
+    if(s==='carpay'){ if(typeof setSwipePage==='function') setSwipePage(1); return; }
+    if(s==='payments'){ if(typeof setSwipePage==='function') setSwipePage(2); return; }
+    if(s==='forms'){ if(typeof openFormsView==='function') openFormsView(); return; }
+    if(s==='deals'){
+      var tabBtn=document.getElementById('tab-deals');
+      if(tabBtn && typeof mgrGo==='function') mgrGo('deals',tabBtn);
+      else if(typeof openDealsView==='function') openDealsView();
+      return;
+    }
+    var tabSections=['inventory','assigned','tasks','photos','parts','employees'];
+    if(tabSections.indexOf(s) >= 0){
+      var btn=document.querySelector('#mtabs .mt[onclick*="\''+s+'\'"]')||
+              document.querySelector('#mtabs .mt[onclick*=\'"'+s+'"\']');
+      if(btn) { btn.click(); return; }
+    }
+    var sectionLabels={progress:'Progress',calendar:'Calendar',repair:'Repairs',detail:'Detail',paint:'Paint'};
+    if(typeof mgrGoSection==='function') mgrGoSection(s, sectionLabels[s]||s);
+  } catch(e){ console.warn('_navigateToTab failed:', e); }
+}
+
+// SW → page bridge: notification click on a focused PWA fires here.
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('message', function(e){
+    if (!e.data || e.data.type !== 'NAVIGATE_TAB' || !e.data.tab) return;
+    _navigateToTab(e.data.tab);
+  });
+}
+
+// Cold-open from a notification: the SW used clients.openWindow with
+// `?notif_tab=X`. After the app finishes its initial render (login + me
+// resolved), navigate. We poll briefly because login flows are async.
+(function(){
+  try {
+    var params = new URLSearchParams(location.search);
+    var t = params.get('notif_tab');
+    if (!t) return;
+    // Strip the param so a refresh doesn't keep re-triggering.
+    var url = new URL(location.href);
+    url.searchParams.delete('notif_tab');
+    history.replaceState({}, '', url.toString());
+    // Wait for `me` (logged-in user) to be set before routing.
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if (typeof me !== 'undefined' && me) {
+        clearInterval(iv);
+        setTimeout(function(){ _navigateToTab(t); }, 300);
+      } else if (tries > 40) { // ~10s max
+        clearInterval(iv);
+      }
+    }, 250);
+  } catch(_){}
+})();
 
 async function sbGet(table, params='') {
   const hdrs = _sbHeaders({'Cache-Control':'no-cache','Pragma':'no-cache'});
@@ -3487,7 +3556,7 @@ async function markDetailDone(carId,section){
       try{await createNotification(m.id,msg,null,carName);}catch(e){}
     }
     const mgrNames=managers.map(m=>m.name);
-    await sendPushNotification(mgrNames,'✅ Detail Ready',me.name+' marked '+carName+' detail as done');
+    await sendPushNotification(mgrNames,'✅ Detail Ready',me.name+' marked '+carName+' detail as done','detail');
   }
   openDetailDoneModal(carId);
   renderDetailQueue();
@@ -3611,7 +3680,7 @@ async function submitReview(){
     var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
     var carName=car?car.name:'vehicle';
     var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
-    await sendPushNotification(managers.map(function(m){return m.name;}),'📋 Review Needed',me.name+' submitted work on '+carName);
+    await sendPushNotification(managers.map(function(m){return m.name;}),'📋 Review Needed',me.name+' submitted work on '+carName,'tasks');
     for(var mi=0;mi<managers.length;mi++){
       try{await createNotification(managers[mi].id,me.name+' submitted work on '+carName+' — needs review',a.id,carName);}catch(e2){}
     }
@@ -4046,7 +4115,7 @@ async function doAssign(){
       const car=S.inventory.find(c=>c.id===curAssign);
       const emp=S.employees.find(e=>e.id===empId);
       createNotification(empId, me.name+' assigned you to '+(car?car.name:'a vehicle'), row.id, car?car.name:'');
-      if(emp) await sendPushNotification([emp.name],'🚗 New Assignment',me.name+' assigned you to '+(car?car.name:'a vehicle'));
+      if(emp) await sendPushNotification([emp.name],'🚗 New Assignment',me.name+' assigned you to '+(car?car.name:'a vehicle'),'assigned');
     }
     sv();
   }catch(e){alert('Error: '+e.message);}
@@ -4174,7 +4243,7 @@ async function mgrEditTask(idx,val){
     if(val){
       const emp=S.employees.find(e=>e.id===a.employeeId);
       const car=S.inventory.find(c=>c.id===a.inventoryId);
-      if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 Task Updated',me.name+' updated a task on '+(car?car.name:'a vehicle'));
+      if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 Task Updated',me.name+' updated a task on '+(car?car.name:'a vehicle'),'tasks');
     }
   }catch(e){alert('Error: '+e.message);}
 }
@@ -4187,7 +4256,7 @@ async function mgrAddTask(){
     await sbPatch('assignments',a.id,{tasks:a.tasks});sv();renderMgrTaskList();
     const emp=S.employees.find(e=>e.id===a.employeeId);
     const car=S.inventory.find(c=>c.id===a.inventoryId);
-    if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 New Task Added',me.name+' added a task to '+(car?car.name:'a vehicle'));
+    if(emp&&emp.role!=='manager') await sendPushNotification([emp.name],'📋 New Task Added',me.name+' added a task to '+(car?car.name:'a vehicle'),'tasks');
   }catch(e){alert('Error: '+e.message);}
   hideLoading();
   // Focus the new empty input
@@ -4252,7 +4321,7 @@ async function approveDetail(carId){
   // Notify employee who did the work
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'✅ Detail Approved',me.name+' approved detail on '+carName);
+    await sendPushNotification([doneBy],'✅ Detail Approved',me.name+' approved detail on '+carName,'detail');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved detail on '+carName,null,carName);}catch(e){}
   }
@@ -4272,7 +4341,7 @@ async function rejectDetail(carId){
   // Notify employee to redo
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'↩ Detail Sent Back',me.name+' sent back detail on '+carName);
+    await sendPushNotification([doneBy],'↩ Detail Sent Back',me.name+' sent back detail on '+carName,'detail');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' sent back detail on '+carName+' — needs redo',null,carName);}catch(e){}
   }
@@ -4403,7 +4472,7 @@ async function markPhotosDone(carId){
     for(const m of managers){
       try{await createNotification(m.id,me.name+' completed photos on '+carName,null,carName);}catch(e){}
     }
-    await sendPushNotification(managers.map(m=>m.name),'📸 Photos Ready',me.name+' finished photos on '+carName);
+    await sendPushNotification(managers.map(m=>m.name),'📸 Photos Ready',me.name+' finished photos on '+carName,'photos');
   }
   openPhotosDoneModal(carId);
   renderPhotosQueue();
@@ -4426,7 +4495,7 @@ async function approvePhotos(carId){
   await saveWorkState(carId);
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'✅ Photos Approved',me.name+' approved photos on '+carName);
+    await sendPushNotification([doneBy],'✅ Photos Approved',me.name+' approved photos on '+carName,'photos');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved photos on '+carName,null,carName);}catch(e){}
   }
@@ -4443,7 +4512,7 @@ async function rejectPhotos(carId){
   await saveWorkState(carId);
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'↩ Photos Sent Back',me.name+' sent back photos on '+carName);
+    await sendPushNotification([doneBy],'↩ Photos Sent Back',me.name+' sent back photos on '+carName,'photos');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' sent back photos on '+carName+' — needs redo',null,carName);}catch(e){}
   }
@@ -4532,7 +4601,7 @@ async function markPartsDone(carId){
     for(const m of managers){
       try{await createNotification(m.id,me.name+' completed parts on '+carName,null,carName);}catch(e){}
     }
-    await sendPushNotification(managers.map(m=>m.name),'🔩 Parts Ready',me.name+' finished parts on '+carName);
+    await sendPushNotification(managers.map(m=>m.name),'🔩 Parts Ready',me.name+' finished parts on '+carName,'parts');
   }
   openPartsDoneModal(carId);
   renderPartsQueue();
@@ -4774,7 +4843,7 @@ async function approvePaint(carId){
   await saveWorkState(carId);
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'✅ Paint Approved',me.name+' approved paint on '+carName);
+    await sendPushNotification([doneBy],'✅ Paint Approved',me.name+' approved paint on '+carName,'paint');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved paint on '+carName,null,carName);}catch(e){}
   }
@@ -5604,7 +5673,7 @@ async function approveParts(carId){
   await saveWorkState(carId);
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'✅ Parts Approved',me.name+' approved parts on '+carName);
+    await sendPushNotification([doneBy],'✅ Parts Approved',me.name+' approved parts on '+carName,'parts');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' approved parts on '+carName,null,carName);}catch(e){}
   }
@@ -5621,7 +5690,7 @@ async function rejectParts(carId){
   await saveWorkState(carId);
   if(doneBy){
     var carName=car?car.name:'vehicle';
-    await sendPushNotification([doneBy],'↩ Parts Sent Back',me.name+' sent back parts on '+carName);
+    await sendPushNotification([doneBy],'↩ Parts Sent Back',me.name+' sent back parts on '+carName,'parts');
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' sent back parts on '+carName+' — needs redo',null,carName);}catch(e){}
   }
@@ -5658,7 +5727,7 @@ async function approve(aid){
     var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
     if(emp){
       var carName=car?car.name:'vehicle';
-      await sendPushNotification([emp.name],'✅ Work Approved',me.name+' approved your work on '+carName);
+      await sendPushNotification([emp.name],'✅ Work Approved',me.name+' approved your work on '+carName,'tasks');
       try{await createNotification(emp.id,me.name+' approved your work on '+carName,aid,carName);}catch(e2){}
     }
   }catch(e){alert('Error: '+e.message);}
@@ -5676,7 +5745,7 @@ async function sendBack(aid){
     var car=(S.inventory||[]).find(function(c){return c.id===a.inventoryId;});
     if(emp){
       var carName=car?car.name:'vehicle';
-      await sendPushNotification([emp.name],'↩ Sent Back',me.name+' sent back your work on '+carName);
+      await sendPushNotification([emp.name],'↩ Sent Back',me.name+' sent back your work on '+carName,'tasks');
       try{await createNotification(emp.id,me.name+' sent back your work on '+carName+' — needs redo',aid,carName);}catch(e2){}
     }
   }catch(e){alert('Error: '+e.message);}
@@ -6851,7 +6920,12 @@ async function mgrSendCatBack(carId,section){
   var carName=car?car.name:'Car';
   // Notify the employee who did the work
   if(doneBy){
-    try{await sendPushNotification([doneBy],'↩ '+sectionLabel+' Sent Back',me.name+' sent back '+sectionLabel.toLowerCase()+' on '+carName);}catch(e){}
+    try{
+      // Map the section label back to a tab id for deep-linking.
+      var _sb = (sectionLabel||'').toLowerCase();
+      var _sbTab = ({photos:'photos',parts:'parts',paint:'paint',detail:'detail',repairs:'repair',tasks:'tasks'})[_sb] || 'tasks';
+      await sendPushNotification([doneBy],'↩ '+sectionLabel+' Sent Back',me.name+' sent back '+_sb+' on '+carName,_sbTab);
+    }catch(e){}
     var emp=(S.employees||[]).find(function(e){return e.name===doneBy;});
     if(emp) try{await createNotification(emp.id,me.name+' sent back '+sectionLabel.toLowerCase()+' on '+carName+' — needs redo',null,carName);}catch(e){}
   }
@@ -11079,7 +11153,7 @@ async function empAddNote(){
     var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
     if(managers.length>0){
       var msg=(me?me.name:'Employee')+' added a note on '+car.name+': '+text.substring(0,80);
-      await sendPushNotification(managers.map(function(m){return m.name;}), car.name, msg);
+      await sendPushNotification(managers.map(function(m){return m.name;}), car.name, msg, 'inventory');
       for(var i=0;i<managers.length;i++){
         try{await createNotification(managers[i].id, msg, null, car.name);}catch(e2){}
       }
@@ -11101,7 +11175,7 @@ async function empRequestAttention(carId,type){
   var managers=(S.employees||[]).filter(function(e){return e.role==='manager';});
   if(managers.length>0){
     var msg=(me?me.name:'Employee')+' requests '+type+' attention on '+car.name;
-    try{await sendPushNotification(managers.map(function(m){return m.name;}),car.name,msg);
+    try{await sendPushNotification(managers.map(function(m){return m.name;}),car.name,msg,'inventory');
     for(var i=0;i<managers.length;i++){try{await createNotification(managers[i].id,msg,null,car.name);}catch(e2){}}
     }catch(e){console.warn('Attention notify error:',e);}
   }
@@ -24432,7 +24506,7 @@ async function payScanSave(){
       });
       var amtStr='$'+totalAmt.toFixed(2);
       var methodStr=payRows.length>1?'('+methodParts.join(' + ')+')':'('+payRows[0].method.toUpperCase()+')';
-      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amtStr+' '+methodStr+' '+_payLocation+finalTag);
+      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amtStr+' '+methodStr+' '+_payLocation+finalTag,'payments');
     }catch(ex){console.warn('Push notify failed:',ex);}
   }
 
@@ -24933,7 +25007,7 @@ async function dealSubmit() {
       var mgrNames=S.employees.filter(function(e){return e.role==='manager';}).map(function(e){return e.name;});
       var dealLoc=record.location||'DeBary';
       var totalStr='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      await sendPushNotification(mgrNames,'🤝 New Deal',_dealData.customer+' — '+(car.name||'')+' — '+totalStr+' '+dealLoc);
+      await sendPushNotification(mgrNames,'🤝 New Deal',_dealData.customer+' — '+(car.name||'')+' — '+totalStr+' '+dealLoc,'deals');
     }catch(ex){console.warn('Deal push notify failed:',ex);}
 
     // Sync first payment to calendar
