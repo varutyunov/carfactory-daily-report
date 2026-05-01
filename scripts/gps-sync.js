@@ -268,12 +268,15 @@ async function passtimeLogin(page) {
       }
     }
 
-    // Check for 2FA / verification page
+    // Check for 2FA / verification page. Passtime renders the MFA field
+    // right on the login form ("MFA:" label, no separate page) so we look
+    // for the literal token here too.
     const pageText = await page.evaluate(() => document.body.innerText);
-    if (/verification|security code|two.?factor|2fa|one.?time/i.test(pageText)) {
-      console.log('  ❌ 2FA/verification page detected — cannot proceed in CI mode');
-      console.log('  Page text:', pageText.substring(0, 300));
-      return false;
+    if (/verification|security code|two.?factor|2fa|one.?time|\bMFA\b/i.test(pageText)) {
+      console.log('  ⏭️  MFA / 2FA required — cannot proceed in headless CI.');
+      console.log('     Run `node scripts/gps-sync.js --local` from a workstation to enter the code,');
+      console.log('     or store a TOTP seed and have CI generate the code (future enhancement).');
+      return 'mfa-required';
     }
 
     // Check for invalid credentials
@@ -599,6 +602,14 @@ async function main() {
   try {
     // Step 2: Login to Passtime
     const loggedIn = await passtimeLogin(page);
+    if (loggedIn === 'mfa-required') {
+      // Credentials worked but Passtime wants an MFA code. Headless CI
+      // can't satisfy that, so exit 0 — the daily cron stops emailing
+      // failures and the GPS work just defers until --local runs.
+      console.log('⏭️  Skipping GPS sync — MFA required.');
+      await browser.close();
+      process.exit(0);
+    }
     if (!loggedIn) {
       console.error('❌ Failed to login to Passtime');
       await browser.close();
