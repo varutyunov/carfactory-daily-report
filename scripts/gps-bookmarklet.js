@@ -391,13 +391,17 @@
     return ex && ex.battery_mode && ex.updated_at > oneDayAgo;
   }
 
-  // First: deals with VINs
+  // First: deals with VINs. Carry dealId + currentSerial so we can backfill
+  // deals.gps_serial when Passtime has a serial we don't have on file yet.
   allFinance.forEach(function(d) {
     if (!d.vin) return;
     var acct = d.stock || String(d.id);
     if (shouldSkip(acct)) return;
     seenAccounts[acct] = true;
-    pullTargets.push({ name: d.customer_name, vin: d.vin, account: acct, searchBy: 'VinNumber' });
+    pullTargets.push({
+      name: d.customer_name, vin: d.vin, account: acct, searchBy: 'VinNumber',
+      dealId: d.id, currentSerial: (d.gps_serial || '').trim()
+    });
   });
 
   // Second: CarPay customers not already covered by a deal
@@ -602,6 +606,21 @@
             updated_at: new Date().toISOString(),
             updated_by: 'GPS Bookmarklet'
           });
+
+          // Backfill deals.gps_serial when Passtime has a serial we don't.
+          // The app's Repo / Deals views all key off this column, so a
+          // missing serial means the deal looks "unregistered" even when
+          // Passtime already has it. Only writes for finance deals
+          // (CarPay-only customers have no deal row) and only when the
+          // current value is empty — never overwrites an existing serial.
+          if (pt.dealId && pgd.serial && !pt.currentSerial) {
+            try {
+              await sbPatch('deals', pt.dealId, { gps_serial: pgd.serial });
+              log('  💾 Saved serial ' + pgd.serial + ' to deal #' + pt.dealId, '#30d158');
+            } catch (serialErr) {
+              log('  ⚠️ Could not save serial: ' + serialErr.message, '#f59e0b');
+            }
+          }
           pullSuccess++;
         } else {
           log('  Not in Passtime', '#888');
