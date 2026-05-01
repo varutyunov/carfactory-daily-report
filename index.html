@@ -2412,13 +2412,15 @@ OneSignalDeferred.push(async function(OneSignal){
   try {
     OneSignal.Notifications.addEventListener('click', function(ev){
       try {
+        _notifDebugToast('OS click fired', '#0a4d6e');
         var n = ev && ev.notification ? ev.notification : {};
         var d = n.additionalData || n.data || {};
         var tab = d.tab || (d.data && d.data.tab) || null;
+        _notifDebugToast('OS data: '+JSON.stringify(d).slice(0,120), '#0a4d6e');
         if (tab && typeof _navigateToTab === 'function'){
           _navigateToTab(tab);
         }
-      } catch(_){}
+      } catch(err){ _notifDebugToast('OS click err: '+err.message, '#a02020'); }
     });
   } catch(_){}
 });
@@ -2538,7 +2540,21 @@ async function sendPushNotification(targetNames, title, body, tab){
 // posts {type:'NAVIGATE_TAB', tab:'...'} to it, OR opens a fresh window
 // with `?notif_tab=...`. Both paths land here. Mirrors the AI tool's
 // `navigate` action so the destinations stay in sync.
+// ── Temporary diagnostic toast ──
+// Shown for 4s in the upper-right when notification routing fires (or
+// fails to). Helps verify which path triggered without devtools. Remove
+// once deep-link is confirmed working.
+function _notifDebugToast(msg, color){
+  try {
+    var el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:'+(color||'#222')+';color:#fff;padding:10px 14px;border-radius:8px;font:600 13px system-ui;box-shadow:0 4px 12px rgba(0,0,0,.4);max-width:80vw;word-wrap:break-word;';
+    document.body.appendChild(el);
+    setTimeout(function(){ try{document.body.removeChild(el);}catch(_){} }, 4000);
+  } catch(_){}
+}
 function _navigateToTab(s){
+  _notifDebugToast('🎯 _navigateToTab("'+s+'")', '#1a4d2e');
   try {
     if(!s) return;
     if(s==='home'){ if(typeof goMgrHome==='function') goMgrHome(); return; }
@@ -2566,6 +2582,7 @@ function _navigateToTab(s){
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener('message', function(e){
     if (!e.data || e.data.type !== 'NAVIGATE_TAB' || !e.data.tab) return;
+    _notifDebugToast('SW msg → '+e.data.tab, '#6e0a4d');
     _navigateToTab(e.data.tab);
   });
 }
@@ -2582,6 +2599,7 @@ function _checkNotifTabAndRoute(){
     var params = new URLSearchParams(location.search);
     var t = params.get('notif_tab');
     if (!t) return;
+    _notifDebugToast('URL parse → '+t, '#4d3d0a');
     // Strip the param so a refresh / second visibility doesn't re-fire.
     var url = new URL(location.href);
     url.searchParams.delete('notif_tab');
