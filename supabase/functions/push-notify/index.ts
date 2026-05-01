@@ -1,17 +1,3 @@
-// push-notify — sends a OneSignal push to a list of employees.
-//
-// Body shape:
-//   {
-//     target_names: string[],   // employee names; lowercased + underscored as external_id
-//     title: string,
-//     body?: string,
-//     tab?: string,             // optional deep-link target (e.g. "deals", "payments")
-//     data?: Record<string,unknown>  // optional additional data merged into OneSignal payload
-//   }
-//
-// `tab` and `data` are forwarded as `payload.data` to OneSignal so the service
-// worker can read it back from the notification on click and route the user
-// straight to the right section of the app.
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const ONESIGNAL_APP_ID =
@@ -25,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-serve(async (req: Request) => {
+serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -33,18 +19,21 @@ serve(async (req: Request) => {
   try {
     const { target_names, title, body, tab, data } = await req.json();
 
-    if (!Array.isArray(target_names) || !target_names.length || !title) {
+    if (!Array.isArray(target_names) || target_names.length === 0 || !title) {
       return new Response(
         JSON.stringify({ error: "Missing target_names or title" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    const aliases = target_names.map((n: string) =>
+    const aliases = target_names.map((n) =>
       String(n).toLowerCase().replace(/\s+/g, "_")
     );
 
-    const payload: Record<string, unknown> = {
+    const payload = {
       app_id: ONESIGNAL_APP_ID,
       include_aliases: { external_id: aliases },
       target_channel: "push",
@@ -52,32 +41,40 @@ serve(async (req: Request) => {
       contents: { en: body || "" },
     };
 
-    // Merge tab + arbitrary data into the OneSignal `data` field. The SW
-    // reads `notification.data` on click and uses `data.tab` to deep-link.
-    const extra: Record<string, unknown> = {};
+    // Forward optional `tab` and `data` to OneSignal so the SW can read it
+    // back from the notification on click and deep-link to the right tab.
+    const extra = {};
     if (tab) extra.tab = String(tab);
-    if (data && typeof data === "object") Object.assign(extra, data);
-    if (Object.keys(extra).length > 0) payload.data = extra;
+    if (data && typeof data === "object") {
+      for (const k in data) extra[k] = data[k];
+    }
+    if (Object.keys(extra).length > 0) {
+      payload.data = extra;
+    }
 
-    const osResp = await fetch("https://onesignal.com/api/v1/notifications", {
+    // OneSignal v2 endpoint with v2 app key (`os_v2_app_*`) and Key auth.
+    // The legacy onesignal.com/api/v1/notifications endpoint rejects the
+    // newer key format with both Basic and Key prefixes; api.onesignal.com
+    // is the correct host for v2 keys.
+    const osResp = await fetch("https://api.onesignal.com/notifications?c=push", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Basic ${ONESIGNAL_API_KEY}`,
+        "Authorization": `Key ${ONESIGNAL_API_KEY}`,
       },
       body: JSON.stringify(payload),
     });
 
     const osData = await osResp.json();
     if (!osResp.ok) {
-      throw new Error(osData.errors?.[0] || "OneSignal error");
+      throw new Error((osData.errors && osData.errors[0]) || "OneSignal error");
     }
 
     return new Response(JSON.stringify({ success: true, id: osData.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
+    return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
