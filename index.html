@@ -2388,7 +2388,12 @@ async function _sbHandleResponse(r){
 
 /* ── OneSignal Push Notifications ── */
 const OS_APP_ID = 'ff6238d8-1a7b-4415-a589-229cd4059233';
-const OS_API_KEY = 'os_v2_app_75rdrwa2pncbljmjekonibmsgockubkbqhye6s4z4gqacioqkjnikx3h2c4kmvnegu7lrveqk22en7uzkrhw56fqc3cms2jduc2aojq';
+// Note: this REST API key is exposed to anyone who reads page source. It only
+// stays here for the calendar-event reminder push (the only client-side use).
+// All employee push goes via the push-notify edge function and reads from
+// env, so the key isn't shipped in those flows. Future: route calendar
+// pushes through push-notify too and drop this constant.
+const OS_API_KEY = 'os_v2_app_75rdrwa2pncbljmjekonibmsgnoinu2qx4ielyvlnyeoliavrmwzog2da2pakxgnowaleag6r2bi5qazzjtjupwnyqpwl4ymar46j2i';
 
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal){
