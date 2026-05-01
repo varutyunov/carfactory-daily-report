@@ -541,8 +541,17 @@ async function main() {
     process.exit(1);
   }
   if (!PT_PASS) {
-    console.error('❌ Missing PASSTIME_PASS');
-    process.exit(1);
+    // CI cron: don't fail the workflow when Passtime credentials are
+    // unset — the daily 9AM job otherwise fires a noisy "All jobs have
+    // failed" email until the secret is added. Local --local invocations
+    // still hard-fail so a missing local config is obvious.
+    if (LOCAL_MODE) {
+      console.error('❌ Missing PASSTIME_PASS');
+      process.exit(1);
+    }
+    console.log('⏭️  PASSTIME_PASS not set in CI secrets — skipping GPS sync.');
+    console.log('    Add the secret in GitHub → Settings → Secrets to enable.');
+    process.exit(0);
   }
 
   // Step 1: Get unprocessed finance deals with GPS serials
