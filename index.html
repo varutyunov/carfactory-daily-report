@@ -13710,6 +13710,9 @@ async function openInvoiceDetail(id){
     }
   }catch(e){}
   if(!inv)return;
+  // Bucket is private — re-fetched record carries the unsigned /public/...
+  // URL we stored in the DB. Sign it so the <img src=...> below renders.
+  try { await _signStorageUrls([inv], ['id_photo_url','signed_form_url']); } catch(_){}
   document.getElementById('forms-header-title').textContent=inv.customer_name||'Invoice';
   var total=inv.total?'$'+parseFloat(inv.total).toLocaleString('en-US',{minimumFractionDigits:2}):'N/A';
   var html='<div style="padding:16px 12px 40px;">';
@@ -14155,6 +14158,8 @@ async function openVRDetail(id){
     }
   }catch(e){}
   if(!vr)return;
+  // Sign storage URLs since the fresh fetch above replaced any cached signing.
+  try { await _signStorageUrls([vr], ['id_photo_url','signed_form_url']); } catch(_){}
   document.getElementById('forms-header-title').textContent=vr.customer_name||'Void/Release';
   var typeLabel=vr.form_type==='void'?'Deal Void':vr.form_type==='release'?'Vehicle Release':'Deal Void & Vehicle Release';
   var html='<div style="padding:16px 12px 40px;">';
