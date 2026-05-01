@@ -12512,20 +12512,31 @@ async function loadForms() {
   try {
     var allDeps = await sbGet('deposits', 'order=created_at.desc');
     _formsData = allDeps.filter(function(d){ return (d.location||'DeBary').toLowerCase() === _formsLocation.toLowerCase(); });
-    await _signStorageUrls(_formsData, ['id_photo_url','signed_form_url']);
-    // Preload deposit payment methods for list display
-    try {
-      var depPays=await sbGet('payments','raw_ocr_text=like.Deposit*&select=customer_name,amount,payment_method&order=created_at.desc&limit=500');
-      _formsPayMethodMap={};
-      if(depPays&&depPays.length){
-        depPays.forEach(function(pp){
-          var k=(pp.customer_name||'').toLowerCase()+'|'+(parseFloat((pp.amount||'').replace(/[^0-9.]/g,''))||0).toFixed(2);
-          if(!_formsPayMethodMap[k]) _formsPayMethodMap[k]=pp.payment_method||'cash';
-        });
-      }
-    }catch(e){_formsPayMethodMap={};}
+
+    // Render the list IMMEDIATELY. Signing every photo URL upfront used to
+    // block this for ~100 network calls (2 photos × N deposits), making the
+    // tab feel frozen on first open. The list view doesn't even show
+    // photos — only the detail view does — so we kick off a background
+    // sign and let openFormDetail also sign-on-demand for the one record
+    // the user actually taps.
     _formsFiltered = _formsData;
     renderForms();
+    _signStorageUrls(_formsData, ['id_photo_url','signed_form_url']).catch(function(){});
+
+    // Preload deposit payment methods for list display — also non-blocking.
+    sbGet('payments','raw_ocr_text=like.Deposit*&select=customer_name,amount,payment_method&order=created_at.desc&limit=500')
+      .then(function(depPays){
+        _formsPayMethodMap={};
+        if(depPays&&depPays.length){
+          depPays.forEach(function(pp){
+            var k=(pp.customer_name||'').toLowerCase()+'|'+(parseFloat((pp.amount||'').replace(/[^0-9.]/g,''))||0).toFixed(2);
+            if(!_formsPayMethodMap[k]) _formsPayMethodMap[k]=pp.payment_method||'cash';
+          });
+          // Re-render so any list rows that show payment method pick it up.
+          renderForms();
+        }
+      })
+      .catch(function(){ _formsPayMethodMap={}; });
   } catch(e) {
     list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0;">Error loading forms: ' + (e.message||e) + '</div>';
   }
@@ -12596,10 +12607,14 @@ function renderForms() {
   list.innerHTML = html;
 }
 
-function openFormDetail(id) {
+async function openFormDetail(id) {
   _formsViewingDetail = true;
   var dep = _formsData.find(function(d){ return d.id === id; });
   if(!dep) return;
+  // Sign just this record's photo URLs if loadForms' background signer
+  // hasn't gotten to it yet. Cheap (2 cached calls vs. blocking the whole
+  // list at load time).
+  try { await _signStorageUrls([dep], ['id_photo_url','signed_form_url']); } catch(_){}
 
   document.getElementById('forms-header-title').textContent = dep.customer_name || 'Detail';
 
