@@ -2388,12 +2388,11 @@ async function _sbHandleResponse(r){
 
 /* ── OneSignal Push Notifications ── */
 const OS_APP_ID = 'ff6238d8-1a7b-4415-a589-229cd4059233';
-// Note: this REST API key is exposed to anyone who reads page source. It only
-// stays here for the calendar-event reminder push (the only client-side use).
-// All employee push goes via the push-notify edge function and reads from
-// env, so the key isn't shipped in those flows. Future: route calendar
-// pushes through push-notify too and drop this constant.
-const OS_API_KEY = 'os_v2_app_75rdrwa2pncbljmjekonibmsgpbfwzmptmduwpf7cymrz5wxvdqem3dq3jnf6jqaddb2do3mjics2oukw67pghagp34iz3bn4ftq4wa';
+// REST API key intentionally NOT in source. GitHub's secret scanner pings
+// OneSignal whenever a key is committed and OneSignal auto-revokes it
+// within minutes — we burned through three keys in one afternoon learning
+// this. Every push call now routes through the push-notify edge function,
+// which reads ONESIGNAL_API_KEY from Supabase env (never the client).
 
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal){
@@ -7776,14 +7775,20 @@ async function calScheduleNotification(ev){
     var p=ev.event_date.split('-');
     var dateLabel=MON3[parseInt(p[1])-1]+' '+parseInt(p[2]);
     var bodyTxt=dateLabel+(ev.event_time?' at '+_fmtTime(ev.event_time):'')+(ev.notes?' — '+ev.notes:'');
-    var payload={app_id:OS_APP_ID,headings:{en:'Event Reminder: '+ev.title},contents:{en:bodyTxt},included_segments:['All']};
+    var payload={
+      included_segments:['All'],
+      title:'Event Reminder: '+ev.title,
+      body:bodyTxt,
+      tab:'calendar'
+    };
     if(ev.event_date&&ev.event_time){
       var sendAt=new Date(ev.event_date+'T'+ev.event_time);
       if(sendAt>new Date()) payload.send_after=sendAt.toUTCString();
     }
-    await fetch('https://onesignal.com/api/v1/notifications',{
+    // Route through push-notify so the OneSignal REST key stays server-side.
+    await fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Key '+OS_API_KEY},
+      headers:_sbHeaders({'Prefer':null}),
       body:JSON.stringify(payload)
     });
   }catch(e){console.warn('Notification error',e);}

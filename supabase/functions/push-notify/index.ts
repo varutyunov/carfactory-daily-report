@@ -17,11 +17,24 @@ serve(async (req) => {
   }
 
   try {
-    const { target_names, title, body, tab, data } = await req.json();
+    const {
+      target_names,
+      included_segments,
+      send_after,
+      title,
+      body,
+      tab,
+      data,
+    } = await req.json();
 
-    if (!Array.isArray(target_names) || target_names.length === 0 || !title) {
+    const hasNames = Array.isArray(target_names) && target_names.length > 0;
+    const hasSegments = Array.isArray(included_segments) && included_segments.length > 0;
+
+    if ((!hasNames && !hasSegments) || !title) {
       return new Response(
-        JSON.stringify({ error: "Missing target_names or title" }),
+        JSON.stringify({
+          error: "Missing target_names/included_segments or title",
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -29,17 +42,30 @@ serve(async (req) => {
       );
     }
 
-    const aliases = target_names.map((n) =>
-      String(n).toLowerCase().replace(/\s+/g, "_")
-    );
-
-    const payload = {
+    const payload: Record<string, unknown> = {
       app_id: ONESIGNAL_APP_ID,
-      include_aliases: { external_id: aliases },
       target_channel: "push",
       headings: { en: title },
       contents: { en: body || "" },
     };
+
+    // Targeting: per-employee external_id alias (e.g. ["vlad","tommy"]) OR
+    // segment broadcast (e.g. ["All"]). Both are forwarded as-is to
+    // OneSignal — no extra logic needed.
+    if (hasNames) {
+      const aliases = target_names.map((n: string) =>
+        String(n).toLowerCase().replace(/\s+/g, "_")
+      );
+      payload.include_aliases = { external_id: aliases };
+    }
+    if (hasSegments) {
+      payload.included_segments = included_segments;
+    }
+
+    // Optional scheduled-send (calendar event reminders use this).
+    if (send_after) {
+      payload.send_after = send_after;
+    }
 
     // Forward optional `tab` and `data` to OneSignal so the SW can read it
     // back from the notification on click and deep-link to the right tab.
