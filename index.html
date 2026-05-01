@@ -20732,12 +20732,63 @@ async function _reviewAutoStale(reviewRows){
   return staleIds;
 }
 
+// Stale Pending Sales CSV detector — populated at _reviewLoad and
+// rendered as a banner inside _reviewRender. Per location, counts the
+// deals26 rows that are still missing taxes (and which legitimately
+// should have them: in-state, not voided, has a VIN, has positive
+// money, and whose deal record is recent enough that the CSV ought to
+// have caught up by now).
+//
+// The user-facing fix is to pull a fresh `SalesOpenPending` export
+// from the DMS for that location and push it — the
+// pending-sales-sync.yml workflow promotes it to the repo root and
+// tax-fill.yml backfills the deals26 rows automatically. Without this
+// banner the staleness was silent and produced wrong owed numbers
+// (Day 11 — Adelaida Gonzalez CR-V + Goodman RSX both had taxes=0
+// because no DeLand CSV had been pushed since their sale dates).
+var _reviewStaleCsv = null;
+async function _checkStaleCsvForReview(){
+  try {
+    var d26 = await sbGet('deals26',
+      'taxes=eq.0&sold_inv_vin=neq.&select=id,sold_inv_vin,car_desc,location,money,created_at&limit=200');
+    if (!Array.isArray(d26) || !d26.length){ _reviewStaleCsv = null; return; }
+    // Filter to in-state deals (out_of_state legitimately has taxes=0
+    // forever) and money > 0. Pull deals.out_of_state per VIN.
+    var vins = d26.map(function(r){ return r.sold_inv_vin; }).filter(Boolean);
+    var inList = '(' + vins.map(function(v){ return '"' + v + '"'; }).join(',') + ')';
+    var dealRows = await sbGet('deals',
+      'vin=in.' + encodeURIComponent(inList) +
+      '&select=vin,out_of_state,voided_at,created_at,location,deal_type');
+    var dealByVin = {};
+    (dealRows || []).forEach(function(d){ if (d.vin) dealByVin[d.vin] = d; });
+    var perLoc = { DeBary: 0, DeLand: 0 };
+    (d26 || []).forEach(function(r){
+      var d = dealByVin[r.sold_inv_vin];
+      if (!d) return;
+      if (d.out_of_state) return;       // legit $0 tax forever
+      if (d.voided_at) return;          // dead deal
+      if (!(parseFloat(r.money) > 0)) return;   // no down payment yet
+      var loc = r.location || d.location || 'DeBary';
+      if (perLoc[loc] !== undefined) perLoc[loc] += 1;
+    });
+    var any = perLoc.DeBary || perLoc.DeLand;
+    _reviewStaleCsv = any ? perLoc : null;
+  } catch(e){
+    console.warn('_checkStaleCsvForReview failed:', e);
+    _reviewStaleCsv = null;
+  }
+}
+
 async function _reviewLoad(){
   var list = document.getElementById('review-list');
   var count = document.getElementById('review-count');
   if (list) list.innerHTML = '<div style="text-align:center;color:#555;padding:40px 0;">Loading...</div>';
   try {
     var rows = await sbGet('payment_reviews', 'status=eq.pending&order=created_at.desc&limit=300');
+    // Run the stale-CSV check in parallel with the rest of the load —
+    // doesn't block the queue render but the banner appears once it
+    // resolves on the next render pass.
+    _checkStaleCsvForReview().then(function(){ try { _reviewRender(); } catch(_){} });
     rows = Array.isArray(rows) ? rows : [];
     // Auto-resolve cards whose trigger condition no longer holds before
     // we render. Drops the resolved IDs from the visible set.
@@ -20918,6 +20969,26 @@ function _reviewRender(){
   var invScanBar = _reviewTab === 'inventory'
     ? '<div style="margin-bottom:12px;"><button onclick="_rvForceScan()" id="rv-scan-btn" style="width:100%;padding:11px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;">⟳ Scan for new cars</button><div id="rv-scan-result" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div></div>'
     : '';
+
+  // Stale Pending Sales CSV banner. Populated by _checkStaleCsvForReview
+  // at load time. Surfaces deals stuck with taxes=0 because the
+  // location's CSV hasn't been refreshed since the sale.
+  var staleBanner = '';
+  if (_reviewStaleCsv && _reviewTab === 'sales'){
+    var locParts = [];
+    if (_reviewStaleCsv.DeBary) locParts.push('DeBary (' + _reviewStaleCsv.DeBary + ')');
+    if (_reviewStaleCsv.DeLand) locParts.push('DeLand (' + _reviewStaleCsv.DeLand + ')');
+    if (locParts.length){
+      staleBanner =
+        '<div style="background:#1a0c00;border:1px solid #c2410c;border-radius:10px;padding:12px;margin-bottom:12px;color:#fb923c;font-size:12px;line-height:1.5;">' +
+          '<div style="font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#f97316;margin-bottom:4px;">Pending Sales CSV out of date</div>' +
+          'Deals missing taxes: <b>' + locParts.join(' · ') + '</b>. ' +
+          'Pull a fresh <code>SalesOpenPending</code> export from the DMS for ' +
+          (locParts.length > 1 ? 'each lot' : (locParts[0].split(' ')[0])) + ' and push it. ' +
+          'pending-sales-sync auto-promotes to root, then tax-fill backfills the rows.' +
+        '</div>';
+    }
+  }
   if (!visible.length){
     var otherCt = (_reviewData || []).length - visible.length;
     var tabLabel = _reviewTab === 'sales' ? 'sales' : _reviewTab === 'inventory' ? 'inventory' : 'payment';
@@ -20925,10 +20996,10 @@ function _reviewRender(){
       ? '<div style="text-align:center;color:#666;padding:40px 0 8px;font-size:14px;">No ' + tabLabel + ' reviews</div>' +
         '<div style="text-align:center;color:#888;font-size:12px;">' + otherCt + ' in other tabs</div>'
       : '<div style="text-align:center;color:#4ade80;padding:40px 0;font-size:15px;">✓ All clear</div>';
-    list.innerHTML = invScanBar + hint;
+    list.innerHTML = staleBanner + invScanBar + hint;
     return;
   }
-  var html = invScanBar;
+  var html = staleBanner + invScanBar;
   for (var i = 0; i < visible.length; i++){
     var r = visible[i];
 
