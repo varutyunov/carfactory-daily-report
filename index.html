@@ -30396,12 +30396,15 @@ function _pickSoldInvVin(invRow, candidates){
   return new Promise(function(resolve){
     var o=document.createElement('div');
     o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10003;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0;';
+    var subtitle = candidates.length
+      ? candidates.length+' VIN(s) sold for this year/model in SoldInventory:'
+      : 'No SoldInventory match — type the VIN (or last 6) below.';
     var html='<div class="tb" style="background:#000;border-bottom:1px solid #111;padding:14px 16px;display:flex;align-items:center;gap:10px;">'+
       '<button id="_pkb-cancel" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;">&#8592;</button>'+
-      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">PICK BUYER &amp; VIN</span>'+
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">LINK TO VIN</span>'+
       '<div style="width:36px;"></div></div>'+
       '<div style="padding:14px 16px 80px;">'+
-      '<div style="font-size:13px;color:#888;margin-bottom:14px;">'+_escHtml(invRow.name)+(invRow.location?' &middot; '+_escHtml(invRow.location):'')+'<br><span style="color:#555;font-size:11px;">'+candidates.length+' VIN(s) sold for this year/model in SoldInventory:</span></div>'+
+      '<div style="font-size:13px;color:#888;margin-bottom:14px;">'+_escHtml(invRow.name)+(invRow.location?' &middot; '+_escHtml(invRow.location):'')+'<br><span style="color:#555;font-size:11px;">'+subtitle+'</span></div>'+
       '<div style="display:flex;flex-direction:column;gap:10px;">';
     candidates.forEach(function(c, i){
       var buyers=c.buyers.filter(function(b){return b && b!=='Car Factory Deland' && b!=='Car Factory';});
@@ -30412,26 +30415,33 @@ function _pickSoldInvVin(invRow, candidates){
         '<div style="font-size:10px;color:#555;margin-top:2px;">'+_escHtml(c.make+' '+c.model)+(c.location?' &middot; '+_escHtml(c.location):'')+'</div>'+
       '</div>';
     });
-    html+='<div data-vin="__manual" class="_pkb-row" style="background:#0d0d0d;border:1px dashed #333;border-radius:10px;padding:12px 14px;cursor:pointer;margin-top:6px;color:#888;-webkit-tap-highlight-color:transparent;">';
-    html+='<div style="font-size:13px;font-weight:700;">None of these — type VIN manually</div></div></div>';
+    html+='</div>'; // close VIN list
+    // Inline manual-entry row — accepts the full VIN OR a partial (last 6
+    // is enough to uniquely identify a car in our ledger). No popup; the
+    // input lives in the chooser so partials are obviously fine.
+    html+='<div style="margin-top:14px;padding:12px 14px;background:#0d0d0d;border:1px dashed #333;border-radius:10px;">'+
+      '<div style="font-size:11px;color:#888;letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Or save VIN (full or last 6)</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<input id="_pkb-manual" type="text" autocomplete="off" autocapitalize="characters" placeholder="e.g. 009492" style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;color:#fff;padding:10px 12px;font-size:14px;font-family:\'SF Mono\',\'Consolas\',monospace;letter-spacing:.5px;outline:none;">'+
+        '<button id="_pkb-save" style="background:#1a3d20;border:1px solid rgba(74,222,128,.4);border-radius:8px;color:#4ade80;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:0 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save</button>'+
+      '</div>'+
+    '</div></div>';
     o.innerHTML=html;
     document.body.appendChild(o);
     var done=false;
     var finish=function(v){if(done)return;done=true;try{document.body.removeChild(o);}catch(_){};resolve(v);};
     document.getElementById('_pkb-cancel').onclick=function(){finish(null);};
+    var inp=document.getElementById('_pkb-manual');
+    var saveBtn=document.getElementById('_pkb-save');
+    var saveManual=function(){
+      var typed=(inp.value||'').trim().toUpperCase();
+      if(typed.length<4){alert('VIN looks too short — need at least 4 chars (last 6 of VIN is fine).');inp.focus();return;}
+      finish(typed);
+    };
+    saveBtn.onclick=saveManual;
+    inp.onkeydown=function(e){if(e.key==='Enter')saveManual();};
     Array.prototype.forEach.call(o.querySelectorAll('._pkb-row'),function(el){
-      el.onclick=function(){
-        var v=el.getAttribute('data-vin');
-        if(v==='__manual'){
-          var typed=prompt('Enter VIN to save and link:\n('+invRow.name+')');
-          if(typed==null){finish(null);return;}
-          typed=(typed||'').trim().toUpperCase();
-          if(typed.length<5){alert('VIN looks too short — link cancelled.');finish(null);return;}
-          finish(typed);
-        } else {
-          finish(v);
-        }
-      };
+      el.onclick=function(){ finish(el.getAttribute('data-vin')); };
     });
   });
 }
@@ -30448,15 +30458,14 @@ async function d26LinkPick(carId){
     try{ cands=await _findSoldInvCandidates(car); }catch(_){}
     if(cands.length===1){
       vin=cands[0].vin;
-    } else if(cands.length>1){
+    } else {
+      // 0-match or multi-match — both go through the chooser. With 0
+      // candidates the user just sees the inline VIN-entry box. With
+      // multi, the candidates appear above the box. Either way, the
+      // entry accepts a full VIN OR the last 6 (handy when SoldInventory
+      // doesn't have the car at all — see Accord/Chiro).
       vin=await _pickSoldInvVin(car, cands);
       if(!vin) return;
-    } else {
-      var entered=prompt('No SoldInventory match for '+car.name+'.\n\nEnter VIN to save and link:');
-      if(entered==null) return;
-      entered=(entered||'').trim().toUpperCase();
-      if(entered.length<5){alert('VIN looks too short — link cancelled.');return;}
-      vin=entered;
     }
     try{
       await sbPatch('inventory',car.id,{vin:vin});
