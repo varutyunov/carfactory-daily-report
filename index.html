@@ -28475,16 +28475,44 @@ function openDealDetail(id) {
   html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
   if(d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
-  // Miles — sourced from the linked inventory row (deals table doesn't
-  // store miles directly). Falls back gracefully if the car has already
-  // been hard-deleted (>30d after sale).
+  // Miles — preferred source order:
+  //   1. Linked inventory row (in-memory, instant)
+  //   2. _d26Data cache (already loaded if user opened the Sheets view)
+  //   3. Async fetch deals26 by VIN, parse "<N>k" out of car_desc
+  // The deals table doesn't store miles directly, so for older deals whose
+  // inventory row was hard-deleted (sold >30d ago) the deals26 row's
+  // car_desc — built like "16 Pilot blue 202k Cruz Velazquez" — is the
+  // only place mileage survives.
+  function _milesFromText(s){
+    var m = String(s||'').match(/(\d{1,4})k\b/i);
+    return m ? parseInt(m[1],10)*1000 : null;
+  }
   var _dealInv = (S.inventory||[]).find(function(c){
     return (d.vin && c.vin && c.vin.trim().toUpperCase()===d.vin.trim().toUpperCase())
         || (d.stock && c.stock && String(c.stock).trim()===String(d.stock).trim());
   });
-  if(_dealInv && _dealInv.miles){
-    var _milesNum = parseFloat(_dealInv.miles)||0;
-    html += '<div style="font-size:12px;color:#666;margin-top:2px;">Miles: <span style="color:#ccc;">'+_milesNum.toLocaleString('en-US')+'</span></div>';
+  var _milesNow = (_dealInv && _dealInv.miles) ? (parseFloat(_dealInv.miles)||0) : null;
+  if(!_milesNow && Array.isArray(_d26Data) && d.vin){
+    var _d26Row = _d26Data.find(function(r){ return (r.sold_inv_vin||'').trim().toUpperCase()===d.vin.trim().toUpperCase(); });
+    if(_d26Row) _milesNow = _milesFromText(_d26Row.car_desc);
+  }
+  var _milesSlotId = 'deal-detail-miles-'+d.id;
+  if(_milesNow){
+    html += '<div id="'+_milesSlotId+'" style="font-size:12px;color:#666;margin-top:2px;">Miles: <span style="color:#ccc;">'+_milesNow.toLocaleString('en-US')+'</span></div>';
+  } else if(d.vin){
+    // Reserve the slot, fill it async if deals26 has the row.
+    html += '<div id="'+_milesSlotId+'" style="font-size:12px;color:#666;margin-top:2px;display:none;"></div>';
+    (function(vin, slotId){
+      sbGet('deals26', 'sold_inv_vin=eq.'+encodeURIComponent(vin)+'&select=car_desc&limit=1').then(function(rows){
+        if(!rows || !rows.length) return;
+        var miles = _milesFromText(rows[0].car_desc);
+        var el = document.getElementById(slotId);
+        if(el && miles){
+          el.style.display = '';
+          el.innerHTML = 'Miles: <span style="color:#ccc;">'+miles.toLocaleString('en-US')+'</span>';
+        }
+      }).catch(function(){});
+    })(d.vin, _milesSlotId);
   }
   // Color — click to edit. Covers cases where the VIN decoder got it wrong
   // (e.g. factory color vs repaint) or a blank was left on upload.
