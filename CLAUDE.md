@@ -1,5 +1,35 @@
 # Car Factory — Project Brain
 
+## CRITICAL: Confirm Before Acting on Ambiguity
+
+**When Vlad's request could plausibly mean more than one thing, STOP and ask
+ONE clarifying question before doing anything.** Don't run with the most
+likely interpretation, don't run with multiple interpretations in parallel,
+don't pre-emptively start "while clarifying."
+
+This applies especially when:
+- An ask references a feature with multiple sub-components ("the Review
+  tab", "the Sales section", "GPS sync", "notifications")
+- A direction is implied but not stated ("pulling in serial numbers" —
+  pull from where, push to where?)
+- A fix is requested but the symptom isn't described ("it's not working",
+  "phantom deals", "didn't open the right tab")
+- A confirmation is given ("ok did that fire away") that could be either
+  "I'm ready, fire" or "I'm done, what's next?"
+
+The cost of asking one question is ~5 seconds. The cost of building the
+wrong thing is hours and a frustrated user. Default to asking.
+
+When you DO act without confirming, name your assumption explicitly in
+the response so Vlad can correct it before you go too far:
+> "I'm taking 'fix Sales' to mean cleaning up the phantom #1541 review
+> + the drift-bug victim #1645. Tell me if you mean something else."
+
+Burned today (2026-05-01): GPS bookmarklet rewrite (assumed PULL when
+the right answer was PUSH), notification deep-link routing (multiple
+hours wasted on wrong assumptions), Review tab cleanup (jumped from
+Sales to Payments without confirming Sales was done).
+
 ## What This Is
 Single-page PWA for a used car dealership with two locations (DeBary + DeLand). Manages inventory, employee work assignments, vehicle sales deals, payments, payroll, deposits, invoices, and AI voice assistant. Everything lives in one `index.html` (~27k lines). No framework — vanilla JS, inline CSS.
 
