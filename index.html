@@ -28443,7 +28443,7 @@ async function _prLoadHistory(){
 }
 // ── END PAYROLL VIEW ─────────────────────────────────────────────────────────
 
-function openDealDetail(id) {
+async function openDealDetail(id) {
   _dealsViewingDetail = true;
   _dealEditRemovedPhotos=[];
   _dealEditNewPhotoUrls=[];
@@ -28451,6 +28451,11 @@ function openDealDetail(id) {
   if(!d) d = (_dealsAllData||[]).find(function(x){ return x.id === id; });
   if(!d) return;
   document.getElementById('deals-view-title').textContent = d.customer_name || 'Deal';
+
+  // Sign photo URLs for this one deal — list-level signing only runs for
+  // the currently-viewed week's _dealsData. Older deals reached via the
+  // all-data search would otherwise show broken/inaccessible photos.
+  try { await _signStorageUrls([d], ['photo_urls']); } catch(_){}
 
   var isFinance = d.deal_type === 'finance';
   var total = d.total_collected ? '$'+parseFloat(d.total_collected).toLocaleString('en-US',{minimumFractionDigits:2}) : 'N/A';
