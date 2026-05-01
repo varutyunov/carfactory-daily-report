@@ -28413,6 +28413,17 @@ function openDealDetail(id) {
   html += '<div style="font-size:16px;font-weight:600;color:#fff;">'+(d.vehicle_desc||'N/A')+'</div>';
   if(d.vin) html += '<div style="font-size:12px;color:#666;margin-top:4px;">VIN: '+d.vin+'</div>';
   if(d.stock) html += '<div style="font-size:12px;color:#666;margin-top:2px;">Stock: '+d.stock+'</div>';
+  // Miles — sourced from the linked inventory row (deals table doesn't
+  // store miles directly). Falls back gracefully if the car has already
+  // been hard-deleted (>30d after sale).
+  var _dealInv = (S.inventory||[]).find(function(c){
+    return (d.vin && c.vin && c.vin.trim().toUpperCase()===d.vin.trim().toUpperCase())
+        || (d.stock && c.stock && String(c.stock).trim()===String(d.stock).trim());
+  });
+  if(_dealInv && _dealInv.miles){
+    var _milesNum = parseFloat(_dealInv.miles)||0;
+    html += '<div style="font-size:12px;color:#666;margin-top:2px;">Miles: <span style="color:#ccc;">'+_milesNum.toLocaleString('en-US')+'</span></div>';
+  }
   // Color — click to edit. Covers cases where the VIN decoder got it wrong
   // (e.g. factory color vs repaint) or a blank was left on upload.
   var colorDisplay = d.color ? fixColor(d.color) : '(not set)';
