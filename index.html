@@ -30335,6 +30335,106 @@ function d26LinkFilter(){
   });
   list.innerHTML=html;
 }
+// Match a candidate's CSV model against an inventory model token. Handles
+// BMW '528i' → '5-series', multi-word models like 'grand caravan', and
+// substring overlap either way. Tuned for the 30 audit-created rows.
+var _BMW_SERIES={'328i':'3','328xi':'3','328ix':'3','335i':'3','428i':'4','528i':'5','528xi':'5','528ix':'5','535i':'5','228i':'2'};
+function _modelLooseMatch(invModel, csvModel){
+  invModel=(invModel||'').toLowerCase().trim();
+  csvModel=(csvModel||'').toLowerCase().trim();
+  if(!invModel||!csvModel) return true; // permissive when either side empty
+  if(invModel===csvModel) return true;
+  if(invModel.indexOf(csvModel)>=0||csvModel.indexOf(invModel)>=0) return true;
+  // BMW series — '528i' matches '5-series' etc.
+  var s=_BMW_SERIES[invModel];
+  if(s&&csvModel.indexOf(s+'-series')===0) return true;
+  // Token-level intersect
+  var iToks=invModel.split(/\s+/), cToks=csvModel.split(/\s+/);
+  for(var a=0;a<iToks.length;a++) for(var b=0;b<cToks.length;b++){
+    if(iToks[a]&&cToks[b]&&(iToks[a]===cToks[b]||cToks[b].indexOf(iToks[a])>=0||iToks[a].indexOf(cToks[b])>=0)) return true;
+  }
+  return false;
+}
+// Extract year/make/model from an inventory.name like '2007 Cadillac Escalade'.
+function _parseInvName(name){
+  name=(name||'').trim();
+  var parts=name.split(/\s+/);
+  var yr=0;
+  for(var i=0;i<parts.length;i++){
+    var n=parseInt(parts[i],10);
+    if(n>=1980&&n<=2099){yr=n;break;}
+  }
+  return {year:yr, make:(parts[1]||'').toLowerCase(), model:parts.slice(2).join(' ').toLowerCase()};
+}
+// Find SoldInventory candidate VINs for an inventory row. Returns an array
+// of {vin, year, make, model, location, buyers:[]} grouped by VIN.
+async function _findSoldInvCandidates(invRow){
+  var pool=await loadSoldInventory();
+  if(!pool||!pool.length) return [];
+  var p=_parseInvName(invRow.name);
+  if(!p.year) return [];
+  var loc=(invRow.location||'').toLowerCase();
+  var byVin={};
+  pool.forEach(function(r){
+    // r = [lookupname, vin, year, make, model, location]
+    if(!r||!r[1]) return;
+    if(parseInt(r[2],10)!==p.year) return;
+    if(p.make&&r[3]&&r[3].toLowerCase()!==p.make&&r[3].toLowerCase().indexOf(p.make)<0) return;
+    if(!_modelLooseMatch(p.model, r[4])) return;
+    var vin=r[1].toUpperCase();
+    if(!byVin[vin]) byVin[vin]={vin:vin, year:r[2], make:r[3], model:r[4], location:r[5], buyers:[]};
+    byVin[vin].buyers.push(r[0]);
+  });
+  var out=Object.keys(byVin).map(function(k){return byVin[k];});
+  // Prefer same-location candidates first
+  if(loc) out.sort(function(a,b){return ((b.location||'').toLowerCase()===loc?1:0) - ((a.location||'').toLowerCase()===loc?1:0);});
+  return out;
+}
+// Show a chooser overlay listing candidate VINs with their buyer names.
+// Resolves with the picked VIN, or null if user cancelled.
+function _pickSoldInvVin(invRow, candidates){
+  return new Promise(function(resolve){
+    var o=document.createElement('div');
+    o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10003;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0;';
+    var html='<div class="tb" style="background:#000;border-bottom:1px solid #111;padding:14px 16px;display:flex;align-items:center;gap:10px;">'+
+      '<button id="_pkb-cancel" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 8px;">&#8592;</button>'+
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:900;color:#f59e0b;letter-spacing:2px;text-transform:uppercase;flex:1;text-align:center;">PICK BUYER &amp; VIN</span>'+
+      '<div style="width:36px;"></div></div>'+
+      '<div style="padding:14px 16px 80px;">'+
+      '<div style="font-size:13px;color:#888;margin-bottom:14px;">'+_escHtml(invRow.name)+(invRow.location?' &middot; '+_escHtml(invRow.location):'')+'<br><span style="color:#555;font-size:11px;">'+candidates.length+' VIN(s) sold for this year/model in SoldInventory:</span></div>'+
+      '<div style="display:flex;flex-direction:column;gap:10px;">';
+    candidates.forEach(function(c, i){
+      var buyers=c.buyers.filter(function(b){return b && b!=='Car Factory Deland' && b!=='Car Factory';});
+      if(!buyers.length) buyers=c.buyers; // fall back if all are repo entries
+      html+='<div data-vin="'+_escHtml(c.vin)+'" class="_pkb-row" style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;">'+
+        '<div style="font-family:\'SF Mono\',\'Consolas\',monospace;font-size:12px;color:#4ade80;font-weight:700;letter-spacing:.5px;">'+_escHtml(c.vin)+'</div>'+
+        '<div style="font-size:13px;color:#fff;margin-top:4px;">'+_escHtml(buyers.slice(0,3).join(' · '))+(buyers.length>3?' &middot; +'+(buyers.length-3):'')+'</div>'+
+        '<div style="font-size:10px;color:#555;margin-top:2px;">'+_escHtml(c.make+' '+c.model)+(c.location?' &middot; '+_escHtml(c.location):'')+'</div>'+
+      '</div>';
+    });
+    html+='<div data-vin="__manual" class="_pkb-row" style="background:#0d0d0d;border:1px dashed #333;border-radius:10px;padding:12px 14px;cursor:pointer;margin-top:6px;color:#888;-webkit-tap-highlight-color:transparent;">';
+    html+='<div style="font-size:13px;font-weight:700;">None of these — type VIN manually</div></div></div>';
+    o.innerHTML=html;
+    document.body.appendChild(o);
+    var done=false;
+    var finish=function(v){if(done)return;done=true;try{document.body.removeChild(o);}catch(_){};resolve(v);};
+    document.getElementById('_pkb-cancel').onclick=function(){finish(null);};
+    Array.prototype.forEach.call(o.querySelectorAll('._pkb-row'),function(el){
+      el.onclick=function(){
+        var v=el.getAttribute('data-vin');
+        if(v==='__manual'){
+          var typed=prompt('Enter VIN to save and link:\n('+invRow.name+')');
+          if(typed==null){finish(null);return;}
+          typed=(typed||'').trim().toUpperCase();
+          if(typed.length<5){alert('VIN looks too short — link cancelled.');finish(null);return;}
+          finish(typed);
+        } else {
+          finish(v);
+        }
+      };
+    });
+  });
+}
 async function d26LinkPick(carId){
   if(_d26LinkIdx<0)return;
   var car=(_d26LinkInv||[]).find(function(c){return c.id===carId;});
@@ -30342,17 +30442,28 @@ async function d26LinkPick(carId){
   var vin=(car.vin||'').trim();
   if(!vin){
     // Empty-VIN inventory row (created during the audit pass for unlinked
-    // deals). Prompt Vlad for the VIN, save it to inventory, then link.
-    var entered=prompt('No VIN on this inventory row.\n\nEnter VIN to save and link:\n('+car.name+')');
-    if(entered==null) return; // user cancelled
-    entered=(entered||'').trim().toUpperCase();
-    if(entered.length<5){alert('VIN looks too short — link cancelled.');return;}
+    // deals). Try to find candidate VINs from SoldInventory by year/model;
+    // 1 hit → auto, multi → chooser, 0 → manual prompt.
+    var cands=[];
+    try{ cands=await _findSoldInvCandidates(car); }catch(_){}
+    if(cands.length===1){
+      vin=cands[0].vin;
+    } else if(cands.length>1){
+      vin=await _pickSoldInvVin(car, cands);
+      if(!vin) return;
+    } else {
+      var entered=prompt('No SoldInventory match for '+car.name+'.\n\nEnter VIN to save and link:');
+      if(entered==null) return;
+      entered=(entered||'').trim().toUpperCase();
+      if(entered.length<5){alert('VIN looks too short — link cancelled.');return;}
+      vin=entered;
+    }
     try{
-      await sbPatch('inventory',car.id,{vin:entered});
-      car.vin=entered; vin=entered;
+      await sbPatch('inventory',car.id,{vin:vin});
+      car.vin=vin;
       // Update local inventory cache too so other UIs see the new VIN
       var sCar=(S.inventory||[]).find(function(c){return c.id===car.id;});
-      if(sCar) sCar.vin=entered;
+      if(sCar) sCar.vin=vin;
     }catch(e){alert('Could not save VIN to inventory: '+(e.message||e));return;}
   }
   return d26LinkSelect(vin);
