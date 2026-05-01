@@ -20747,6 +20747,41 @@ async function _reviewAutoStale(reviewRows){
 // (Day 11 — Adelaida Gonzalez CR-V + Goodman RSX both had taxes=0
 // because no DeLand CSV had been pushed since their sale dates).
 var _reviewStaleCsv = null;
+// Banner tap handler — runs _fillMissingTaxes against the latest
+// published Pending Sales CSV, then re-runs the stale-CSV count and
+// re-renders. Gives Vlad a one-tap "I just pushed a fresh DMS export,
+// fill the taxes now" path instead of waiting for the 30-min cron.
+async function _reviewStaleBannerTap(){
+  var btn = document.getElementById('rv-stale-banner');
+  var origLabel = null;
+  if (btn){
+    var labelEl = btn.querySelector('div > div:last-child');
+    origLabel = labelEl ? labelEl.textContent : null;
+    if (labelEl) labelEl.textContent = 'refreshing…';
+    btn.style.opacity = '0.6';
+    btn.style.cursor = 'wait';
+  }
+  var beforeTotal = _reviewStaleCsv
+    ? (_reviewStaleCsv.DeBary || 0) + (_reviewStaleCsv.DeLand || 0) : 0;
+  try {
+    if (typeof _fillMissingTaxes === 'function'){
+      await _fillMissingTaxes();
+    }
+  } catch(e){ console.warn('stale-banner _fillMissingTaxes error:', e); }
+  await _checkStaleCsvForReview();
+  var afterTotal = _reviewStaleCsv
+    ? (_reviewStaleCsv.DeBary || 0) + (_reviewStaleCsv.DeLand || 0) : 0;
+  try { _reviewRender(); } catch(_){}
+  if (afterTotal < beforeTotal){
+    _showReviewToast('Filled taxes on ' + (beforeTotal - afterTotal) + ' deal' +
+      ((beforeTotal - afterTotal) === 1 ? '' : 's') + '.', 3500);
+  } else if (afterTotal === 0){
+    _showReviewToast('All deals tax-filled. ✓', 3000);
+  } else {
+    _showReviewToast('No new tax data in CSV — push a fresh DMS export first.', 4500);
+  }
+}
+
 async function _checkStaleCsvForReview(){
   try {
     var d26 = await sbGet('deals26',
@@ -20970,9 +21005,12 @@ function _reviewRender(){
     ? '<div style="margin-bottom:12px;"><button onclick="_rvForceScan()" id="rv-scan-btn" style="width:100%;padding:11px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;">⟳ Scan for new cars</button><div id="rv-scan-result" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div></div>'
     : '';
 
-  // Stale Pending Sales CSV banner. Populated by _checkStaleCsvForReview
+  // Stale Pending Sales CSV banner — populated by _checkStaleCsvForReview
   // at load time. Surfaces deals stuck with taxes=0 because the
-  // location's CSV hasn't been refreshed since the sale.
+  // location's CSV hasn't been refreshed since the sale. Tap it to
+  // re-fetch the published CSV and run _fillMissingTaxes against the
+  // affected deals — instant fill if the CSV is now current, or a
+  // toast saying "push a fresh DMS export first" if it's still stale.
   var staleBanner = '';
   if (_reviewStaleCsv && _reviewTab === 'sales'){
     var locParts = [];
@@ -20980,13 +21018,23 @@ function _reviewRender(){
     if (_reviewStaleCsv.DeLand) locParts.push('DeLand (' + _reviewStaleCsv.DeLand + ')');
     if (locParts.length){
       staleBanner =
-        '<div style="background:#1a0c00;border:1px solid #c2410c;border-radius:10px;padding:12px;margin-bottom:12px;color:#fb923c;font-size:12px;line-height:1.5;">' +
-          '<div style="font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#f97316;margin-bottom:4px;">Pending Sales CSV out of date</div>' +
+        '<button id="rv-stale-banner" onclick="_reviewStaleBannerTap()" ' +
+          'style="display:block;width:100%;text-align:left;background:#1a0c00;border:1px solid #c2410c;' +
+          'border-radius:10px;padding:12px;margin-bottom:12px;color:#fb923c;font-size:12px;' +
+          'line-height:1.5;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:inherit;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<div style="font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#f97316;">' +
+              'Pending Sales CSV out of date' +
+            '</div>' +
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;' +
+              'color:#fb923c;background:rgba(249,115,22,.2);border:1px solid rgba(249,115,22,.4);' +
+              'border-radius:6px;padding:3px 8px;">tap to refresh</div>' +
+          '</div>' +
           'Deals missing taxes: <b>' + locParts.join(' · ') + '</b>. ' +
-          'Pull a fresh <code>SalesOpenPending</code> export from the DMS for ' +
-          (locParts.length > 1 ? 'each lot' : (locParts[0].split(' ')[0])) + ' and push it. ' +
-          'pending-sales-sync auto-promotes to root, then tax-fill backfills the rows.' +
-        '</div>';
+          'Push a fresh <code>SalesOpenPending</code> export from the DMS for ' +
+          (locParts.length > 1 ? 'each lot' : (locParts[0].split(' ')[0])) + ', then tap ' +
+          'this banner to backfill the rows. (Auto-runs on the next cron tick too.)' +
+        '</button>';
     }
   }
   if (!visible.length){
