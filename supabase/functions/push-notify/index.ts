@@ -67,15 +67,24 @@ serve(async (req) => {
       payload.send_after = send_after;
     }
 
-    // Forward optional `tab` and `data` to OneSignal so the SW can read it
-    // back from the notification on click and deep-link to the right tab.
-    const extra = {};
+    // Forward optional `tab` and `data` to OneSignal so the page-side
+    // click listener (and the SW backup) can read it and deep-link.
+    const extra: Record<string, unknown> = {};
     if (tab) extra.tab = String(tab);
     if (data && typeof data === "object") {
       for (const k in data) extra[k] = data[k];
     }
     if (Object.keys(extra).length > 0) {
       payload.data = extra;
+    }
+
+    // Cold-start path: when the user taps a notification with the PWA
+    // closed, OneSignal opens this URL. The page-side ?notif_tab parser
+    // routes from there. Belt-and-suspenders alongside the OneSignal click
+    // listener — covers iOS where SDK click events sometimes don't fire
+    // before the page renders.
+    if (tab) {
+      payload.web_url = `https://carfactory.work/?notif_tab=${encodeURIComponent(String(tab))}`;
     }
 
     // OneSignal v2 endpoint with v2 app key (`os_v2_app_*`) and Key auth.

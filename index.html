@@ -2404,6 +2404,23 @@ OneSignalDeferred.push(async function(OneSignal){
     serviceWorkerParam: { scope: '/' },
     serviceWorkerPath: 'sw.js'
   });
+  // Notification click → deep-link. OneSignal's SW intercepts the
+  // notificationclick event before our custom sw.js handler can post a
+  // message, so we listen here on the page side instead. The data we
+  // forward in push-notify (`{ tab: '...' }`) lands in
+  // event.notification.additionalData on iOS / web v16.
+  try {
+    OneSignal.Notifications.addEventListener('click', function(ev){
+      try {
+        var n = ev && ev.notification ? ev.notification : {};
+        var d = n.additionalData || n.data || {};
+        var tab = d.tab || (d.data && d.data.tab) || null;
+        if (tab && typeof _navigateToTab === 'function'){
+          _navigateToTab(tab);
+        }
+      } catch(_){}
+    });
+  } catch(_){}
 });
 
 // Call after login to link user + show enable bar if needed
