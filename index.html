@@ -2570,19 +2570,24 @@ if (navigator.serviceWorker) {
   });
 }
 
-// Cold-open from a notification: the SW used clients.openWindow with
-// `?notif_tab=X`. After the app finishes its initial render (login + me
-// resolved), navigate. We poll briefly because login flows are async.
-(function(){
+// Notification → tab routing via URL param. Three scenarios fire this:
+//   1. Cold start: notification tap with PWA closed. OneSignal opens
+//      `?notif_tab=X`, the page boots fresh, we route once `me` exists.
+//   2. PWA already open: tap navigates the existing window, URL bar
+//      updates but the page doesn't reload. visibilitychange catches it
+//      when the PWA comes back into focus.
+//   3. iOS edge case: `pageshow` fires on bfcache restore. Same handler.
+function _checkNotifTabAndRoute(){
   try {
     var params = new URLSearchParams(location.search);
     var t = params.get('notif_tab');
     if (!t) return;
-    // Strip the param so a refresh doesn't keep re-triggering.
+    // Strip the param so a refresh / second visibility doesn't re-fire.
     var url = new URL(location.href);
     url.searchParams.delete('notif_tab');
     history.replaceState({}, '', url.toString());
-    // Wait for `me` (logged-in user) to be set before routing.
+    // Wait for `me` (logged-in user) to be set before routing — login
+    // flows are async; on cold-start the page is mid-render.
     var tries = 0;
     var iv = setInterval(function(){
       tries++;
@@ -2594,7 +2599,13 @@ if (navigator.serviceWorker) {
       }
     }, 250);
   } catch(_){}
-})();
+}
+_checkNotifTabAndRoute();
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden) _checkNotifTabAndRoute();
+});
+window.addEventListener('pageshow', _checkNotifTabAndRoute);
+window.addEventListener('focus', _checkNotifTabAndRoute);
 
 async function sbGet(table, params='') {
   const hdrs = _sbHeaders({'Cache-Control':'no-cache','Pragma':'no-cache'});
