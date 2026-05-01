@@ -69,28 +69,41 @@ _AMT_RE = re.compile(r'^(-?\d+(?:\.\d+)?)\s*(.*)$')
 
 
 def cash_sale_tokens(deal, car_desc):
-    """Year (yShort + yFull), first model word, lowercase lastname."""
+    """Year (yShort + yFull), first model word, lowercase lastname.
+
+    Profit26 note lines mirror d26.car_desc format (e.g. "08 CRV grey 217k
+    2 Gonzalez"). vehicle_desc gives "2008 Honda CR-V" — its model token
+    'cr-v' won't substring-match the line's 'crv'. So we prefer car_desc
+    and only fall back to vehicle_desc when car_desc is empty/incomplete.
+    Plus we expose `model_norm` (alphanum-only) so the matcher can compare
+    against a normalized line and survive hyphen mismatches either way.
+    """
     cust = (deal.get('customer_name') or '').strip().split()
     last = (cust[-1] if cust else '').lower()
 
     year = ''
     model_first = ''
-    vd = (deal.get('vehicle_desc') or '').strip().split()
-    if vd and re.match(r'^(19|20)\d{2}$', vd[0]):
-        year = vd[0]
-        model_tok = ' '.join(vd[2:]) if len(vd) >= 3 else (vd[1] if len(vd) > 1 else '')
-        model_first = (model_tok.split() or [''])[0].lower()
-    elif car_desc:
+    if car_desc:
         cd = car_desc.strip().split()
         if cd and re.match(r'^\d{2}$', cd[0]):
             year = '20' + cd[0]
         if len(cd) > 1:
             model_first = cd[1].lower()
+    if not year or not model_first:
+        vd = (deal.get('vehicle_desc') or '').strip().split()
+        if vd and re.match(r'^(19|20)\d{2}$', vd[0]):
+            if not year:
+                year = vd[0]
+            if not model_first:
+                model_tok = ' '.join(vd[2:]) if len(vd) >= 3 else (vd[1] if len(vd) > 1 else '')
+                model_first = (model_tok.split() or [''])[0].lower()
 
+    model_norm = re.sub(r'[^a-z0-9]', '', model_first)
     return {
         'y_short': year[-2:] if year else '',
         'y_full': year,
         'model': model_first,
+        'model_norm': model_norm,
         'last': last,
     }
 
@@ -114,8 +127,13 @@ def find_posted_note(note, tokens):
         )
         if not has_year:
             continue
-        if tokens['model'] and tokens['model'] not in ll:
-            continue
+        if tokens['model']:
+            # Compare against alphanum-normalized line so 'crv' matches
+            # 'cr-v' / 'hr-v' / '5-series' regardless of hyphenation.
+            ll_norm = re.sub(r'[^a-z0-9]', '', ll)
+            m_norm = tokens.get('model_norm') or tokens['model']
+            if m_norm and m_norm not in ll_norm:
+                continue
         m = _AMT_RE.match(line)
         if m:
             return {'amount': float(m.group(1)), 'desc': (m.group(2) or '').strip()}
@@ -144,8 +162,13 @@ def find_all_posted_notes(note, tokens):
         )
         if not has_year:
             continue
-        if tokens['model'] and tokens['model'] not in ll:
-            continue
+        if tokens['model']:
+            # Compare against alphanum-normalized line so 'crv' matches
+            # 'cr-v' / 'hr-v' / '5-series' regardless of hyphenation.
+            ll_norm = re.sub(r'[^a-z0-9]', '', ll)
+            m_norm = tokens.get('model_norm') or tokens['model']
+            if m_norm and m_norm not in ll_norm:
+                continue
         m = _AMT_RE.match(line)
         if m:
             out.append({'amount': float(m.group(1)), 'desc': (m.group(2) or '').strip()})

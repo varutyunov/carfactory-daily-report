@@ -18525,21 +18525,35 @@ async function cleanUpStaleCashSales(){
 function _cashSaleTokens(deal, carDesc){
   var custParts = String((deal && deal.customer_name) || '').trim().split(/\s+/);
   var last = (custParts[custParts.length - 1] || '').toLowerCase();
+  // Profit26 note lines mirror d26.car_desc format (e.g. "08 CRV grey 217k
+  // 2 Gonzalez"). vehicle_desc gives "2008 Honda CR-V" — its model token
+  // 'cr-v' won't substring-match the line's 'crv'. Prefer car_desc so the
+  // model token matches the format the line was actually written in.
   var year = '', modelFirst = '';
-  var vd = String((deal && deal.vehicle_desc) || '').trim().split(/\s+/);
-  if (vd[0] && /^(19|20)\d{2}$/.test(vd[0])){
-    year = vd[0];
-    var modelTok = (vd.slice(2).join(' ') || vd[1] || '').toLowerCase();
-    modelFirst = (modelTok.split(/\s+/)[0] || '');
-  } else if (carDesc){
+  if (carDesc){
     var cd = String(carDesc).trim().split(/\s+/);
     if (cd[0] && /^\d{2}$/.test(cd[0])) year = '20' + cd[0];
     if (cd[1]) modelFirst = cd[1].toLowerCase();
   }
+  if (!year || !modelFirst){
+    var vd = String((deal && deal.vehicle_desc) || '').trim().split(/\s+/);
+    if (vd[0] && /^(19|20)\d{2}$/.test(vd[0])){
+      if (!year) year = vd[0];
+      if (!modelFirst){
+        var modelTok = (vd.slice(2).join(' ') || vd[1] || '').toLowerCase();
+        modelFirst = (modelTok.split(/\s+/)[0] || '');
+      }
+    }
+  }
+  // Normalize hyphens/spaces in the model token so 'cr-v' matches 'crv',
+  // 'hr-v' matches 'hrv', '5-series' matches '5series' etc. Yes, slightly
+  // looser — but the year + lastname filters keep it specific enough.
+  var modelNorm = modelFirst.replace(/[^a-z0-9]/g, '');
   return {
     yShort: year ? year.slice(-2) : '',
     yFull: year || '',
     model: modelFirst,
+    modelNorm: modelNorm,
     last: last
   };
 }
@@ -18562,7 +18576,13 @@ function _findPostedNoteForTokens(mirror, tokens){
       var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
                     (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
       if (!hasYear) continue;
-      if (tokens.model && ll.indexOf(tokens.model) < 0) continue;
+      if (tokens.model){
+        // Match against the alphanum-normalized line so 'crv' matches
+        // 'cr-v' regardless of which side carries the hyphen.
+        var _llNorm = ll.replace(/[^a-z0-9]/g, '');
+        var _mNorm = tokens.modelNorm || tokens.model;
+        if (_mNorm && _llNorm.indexOf(_mNorm) < 0) continue;
+      }
       var m = line.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
       if (m){
         return { amount: parseFloat(m[1]), desc: (m[2] || '').trim() };
@@ -18845,7 +18865,13 @@ async function _cfBackfillProfitPostings(opts){
       var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
                     (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
       if (!hasYear) continue;
-      if (tokens.model && ll.indexOf(tokens.model) < 0) continue;
+      if (tokens.model){
+        // Match against the alphanum-normalized line so 'crv' matches
+        // 'cr-v' regardless of which side carries the hyphen.
+        var _llNorm = ll.replace(/[^a-z0-9]/g, '');
+        var _mNorm = tokens.modelNorm || tokens.model;
+        if (_mNorm && _llNorm.indexOf(_mNorm) < 0) continue;
+      }
       hit = L; break;
     }
     if (!hit) continue;
@@ -22760,6 +22786,10 @@ async function _reviewApprovePending(id){
     var oldDesc = snap.posted_desc || '';
     var newAmt = Math.round(parseFloat(r.amount) || 0);
     var newDesc = r.note_line || oldDesc || '';
+    // Sanitize the rewrite desc — drops the d26 deal_num and title-cases
+    // the surname so the corrected line reads cleanly in Profit26.
+    try { newDesc = _cleanCashSalesDesc(newDesc, { customer_name: r.customer_name }); }
+    catch(_){}
     // row_type defaults to 'cash_sales' for backward compat (existing
     // queue cards have no row_type in their snapshot). profit_sweep
     // sets snap.row_type='payments' for finance-deal corrections so
@@ -25547,6 +25577,38 @@ async function _autopopulateDeals26(record, car, icOverride) {
   };
 }
 
+// Sanitize a desc before posting to Profit26 Cash Sales. The d26.car_desc
+// includes the weekly deal_num (e.g. "08 CRV grey 217k 2 Gonzalez" — the
+// "2" is week-position, NOT part of the car). For Profit26 we want a
+// clean line: year + Model + color + miles + Surname (Title Case).
+//
+// Pattern: `<...miles>k <1-2 digit num> <Surname...>` → drop the num.
+// Title-case the trailing surname token if it ended up lowercase
+// ("rackley" → "Rackley"). Trim trailing whitespace either way.
+function _cleanCashSalesDesc(desc, record){
+  desc = String(desc || '').replace(/\s+/g, ' ').trim();
+  if (!desc) return '';
+  // Drop the deal_num if it's wedged between miles and surname:
+  //   "08 CRV grey 217k 2 Gonzalez" → "08 CRV grey 217k Gonzalez"
+  // Also handles "...k <num> trade Perez" by being permissive after the num.
+  desc = desc.replace(/(\d+k)\s+\d{1,2}\s+(?=\S)/i, '$1 ');
+  // Title-case the LAST token (the surname). _titleCaseLastName preserves
+  // intentionally mixed-case names (McDonald, Van Der Berg, Garcia-Martinez).
+  var toks = desc.split(' ');
+  if (toks.length){
+    var lastIdx = toks.length - 1;
+    var lastTok = toks[lastIdx];
+    // Only title-case if it looks like a name (letters + maybe hyphen),
+    // not "TDI" / "131k" / numeric trailers.
+    if (/^[a-z][a-z'\-]*$/i.test(lastTok) && lastTok.length >= 2 &&
+        lastTok !== lastTok.toUpperCase()){  // skip pure-uppercase tokens like 'TDI'
+      try { toks[lastIdx] = _titleCaseLastName(lastTok); }
+      catch(_){ toks[lastIdx] = lastTok.charAt(0).toUpperCase() + lastTok.slice(1).toLowerCase(); }
+    }
+  }
+  return toks.join(' ').trim();
+}
+
 // ══════════════════════════════════════════════════════════════
 // D3: APPEND CASH DEAL → PROFIT CASH SALES
 // Posts owed (profit = money − cost − expenses − taxes − dealer_fee − manny)
@@ -25587,7 +25649,7 @@ async function _appendCashSaleToProfit(opts) {
         if (last) desc = (desc ? desc + ' ' : '') + last;
       }
     }
-    desc = desc.trim();
+    desc = _cleanCashSalesDesc(desc, record);
     if (!desc) return;
 
     // Idempotency — query the Supabase profit mirror for the month and
