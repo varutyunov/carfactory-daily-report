@@ -1,7 +1,7 @@
 // Import OneSignal service worker for push notification handling
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-const CACHE = 'cf-cache-v620';
+const CACHE = 'cf-cache-v621';
 
 // Install: skip waiting immediately so new SW takes over
 self.addEventListener('install', e => {
@@ -87,28 +87,37 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const d = e.notification.data || {};
-  const tab =
-    d.tab ||
-    (d.data && d.data.tab) ||
-    (d.additionalData && d.additionalData.tab) ||
-    (d.custom && d.custom.a && d.custom.a.tab) ||
-    null;
+  // Hunt for the data field across OneSignal's different SDK shapes.
+  const pickData = () => {
+    if (d.tab) return d;
+    if (d.data && d.data.tab) return d.data;
+    if (d.additionalData && d.additionalData.tab) return d.additionalData;
+    if (d.custom && d.custom.a && d.custom.a.tab) return d.custom.a;
+    return {};
+  };
+  const data = pickData();
+  const tab = data.tab || null;
+  // Pass any other fields (e.g. location for payments) as opts through to
+  // the page-side router so it can pre-select the right lot etc.
+  const opts = {};
+  for (const k in data) if (k !== 'tab') opts[k] = data[k];
 
   e.waitUntil(
     self.clients.matchAll({type:'window',includeUncontrolled:true}).then(clients => {
       if(clients.length > 0){
         const client = clients[0];
         if(tab){
-          // Tell the existing window to switch tabs. _navigateToTab in the
-          // page-side message listener does the actual UI work.
-          try { client.postMessage({type:'NAVIGATE_TAB', tab:tab}); } catch(_){}
+          try { client.postMessage({type:'NAVIGATE_TAB', tab:tab, opts:opts}); } catch(_){}
         }
         return client.focus();
       }
-      // No open window — pass tab as URL param. The page parses ?notif_tab
-      // on startup and switches to it after login finishes rendering.
-      const url = tab ? '/?notif_tab=' + encodeURIComponent(tab) : '/';
-      return self.clients.openWindow(url);
+      // No open window — encode tab + opts into URL params (notif_tab,
+      // notif_location, etc.). The page parses them on startup.
+      let qs = 'notif_tab=' + encodeURIComponent(tab || '');
+      for (const k in opts){
+        qs += '&notif_' + encodeURIComponent(k) + '=' + encodeURIComponent(opts[k]);
+      }
+      return self.clients.openWindow(tab ? '/?' + qs : '/');
     })
   );
 });

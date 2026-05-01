@@ -600,14 +600,18 @@ body.light .cal-fab{background:#4488ff !important;}
 </style>
 <script>
 (function(){
-  // Strip the URL query string on load EXCEPT for `notif_tab`, which the
-  // notification-deep-link parser reads later. Without this exception,
-  // tapping a push that opens `?notif_tab=payments` had its tab wiped
-  // before any router could see it.
+  // Strip the URL query string on load EXCEPT for any `notif_*` params,
+  // which the notification-deep-link parser reads later. Without this
+  // exception, tapping a push that opens `?notif_tab=payments` had its
+  // routing data wiped before any router could see it.
   if(location.search){
     var _p = new URLSearchParams(location.search);
-    var _keep = _p.get('notif_tab');
-    history.replaceState(null,'', location.pathname + (_keep ? '?notif_tab='+encodeURIComponent(_keep) : ''));
+    var _kept = new URLSearchParams();
+    _p.forEach(function(v, k){
+      if (k.indexOf('notif_') === 0) _kept.append(k, v);
+    });
+    var _newSearch = _kept.toString();
+    history.replaceState(null,'', location.pathname + (_newSearch ? '?'+_newSearch : ''));
   }
   fetch('version.json?_='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
@@ -2420,15 +2424,15 @@ OneSignalDeferred.push(async function(OneSignal){
   try {
     OneSignal.Notifications.addEventListener('click', function(ev){
       try {
-        _notifDebugToast('OS click fired', '#0a4d6e');
         var n = ev && ev.notification ? ev.notification : {};
         var d = n.additionalData || n.data || {};
-        var tab = d.tab || (d.data && d.data.tab) || null;
-        _notifDebugToast('OS data: '+JSON.stringify(d).slice(0,120), '#0a4d6e');
+        // Some OneSignal SDK versions nest the data field one more level.
+        if (d.data && typeof d.data === 'object') d = Object.assign({}, d.data, d);
+        var tab = d.tab || null;
         if (tab && typeof _navigateToTab === 'function'){
-          _navigateToTab(tab);
+          _navigateToTab(tab, d);
         }
-      } catch(err){ _notifDebugToast('OS click err: '+err.message, '#a02020'); }
+      } catch(_){}
     });
   } catch(_){}
 });
@@ -2530,11 +2534,14 @@ function dismissNotifBarPermanent(){
 // `tab` (optional) deep-links the recipient to that section when they
 // tap the notification — see sw.js notificationclick handler + the
 // _navigateToTab + ?notif_tab= URL param below.
-async function sendPushNotification(targetNames, title, body, tab){
+// `extraData` (optional) object of extra context like { location:'DeLand' }
+// that the deep-link target reads (e.g. payments uses it to pre-select lot).
+async function sendPushNotification(targetNames, title, body, tab, extraData){
   if(!targetNames||targetNames.length===0) return;
   try{
     var payload = {target_names:targetNames, title:title, body:body};
     if(tab) payload.tab = tab;
+    if(extraData && typeof extraData==='object') payload.data = extraData;
     await fetch(SB_URL+'/functions/v1/push-notify',{
       method:'POST',
       headers:_sbHeaders({'Prefer':null}),
@@ -2548,26 +2555,29 @@ async function sendPushNotification(targetNames, title, body, tab){
 // posts {type:'NAVIGATE_TAB', tab:'...'} to it, OR opens a fresh window
 // with `?notif_tab=...`. Both paths land here. Mirrors the AI tool's
 // `navigate` action so the destinations stay in sync.
-// ── Temporary diagnostic toast ──
-// Shown for 4s in the upper-right when notification routing fires (or
-// fails to). Helps verify which path triggered without devtools. Remove
-// once deep-link is confirmed working.
-function _notifDebugToast(msg, color){
-  try {
-    var el = document.createElement('div');
-    el.textContent = msg;
-    el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:'+(color||'#222')+';color:#fff;padding:10px 14px;border-radius:8px;font:600 13px system-ui;box-shadow:0 4px 12px rgba(0,0,0,.4);max-width:80vw;word-wrap:break-word;';
-    document.body.appendChild(el);
-    setTimeout(function(){ try{document.body.removeChild(el);}catch(_){} }, 4000);
-  } catch(_){}
-}
-function _navigateToTab(s){
-  _notifDebugToast('🎯 _navigateToTab("'+s+'")', '#1a4d2e');
+// _navigateToTab(tab, opts?)
+// opts.location — for tab='payments': lot to pre-select after openPayScan.
+function _navigateToTab(s, opts){
+  opts = opts || {};
   try {
     if(!s) return;
     if(s==='home'){ if(typeof goMgrHome==='function') goMgrHome(); return; }
     if(s==='carpay'){ if(typeof setSwipePage==='function') setSwipePage(1); return; }
-    if(s==='payments'){ if(typeof setSwipePage==='function') setSwipePage(2); return; }
+    if(s==='payments'){
+      // Land on the actual Payments view, not the tile grid. Steps:
+      //   1. swipe to Tools page (where the Payments tile lives)
+      //   2. open the Payments overlay (mirrors tapping the tile)
+      //   3. switch to the deal's lot if the notification carried one
+      if (typeof setSwipePage==='function') setSwipePage(2);
+      setTimeout(function(){
+        if (typeof openPayScan==='function') openPayScan();
+        if (opts.location && typeof paySetLocation==='function'){
+          // Small delay so the overlay's own location init runs first.
+          setTimeout(function(){ paySetLocation(opts.location); }, 150);
+        }
+      }, 100);
+      return;
+    }
     if(s==='forms'){ if(typeof openFormsView==='function') openFormsView(); return; }
     if(s==='deals'){
       var tabBtn=document.getElementById('tab-deals');
@@ -2590,8 +2600,7 @@ function _navigateToTab(s){
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener('message', function(e){
     if (!e.data || e.data.type !== 'NAVIGATE_TAB' || !e.data.tab) return;
-    _notifDebugToast('SW msg → '+e.data.tab, '#6e0a4d');
-    _navigateToTab(e.data.tab);
+    _navigateToTab(e.data.tab, e.data.opts || {});
   });
 }
 
@@ -2607,10 +2616,18 @@ function _checkNotifTabAndRoute(){
     var params = new URLSearchParams(location.search);
     var t = params.get('notif_tab');
     if (!t) return;
-    _notifDebugToast('URL parse → '+t, '#4d3d0a');
-    // Strip the param so a refresh / second visibility doesn't re-fire.
+    // Collect any other notif_* params as opts (e.g. notif_location → location)
+    var opts = {};
+    params.forEach(function(v, k){
+      if (k !== 'notif_tab' && k.indexOf('notif_') === 0) {
+        opts[k.replace('notif_', '')] = v;
+      }
+    });
+    // Strip the params so a refresh / second visibility doesn't re-fire.
     var url = new URL(location.href);
-    url.searchParams.delete('notif_tab');
+    url.searchParams.forEach(function(_v, k){
+      if (k === 'notif_tab' || k.indexOf('notif_') === 0) url.searchParams.delete(k);
+    });
     history.replaceState({}, '', url.toString());
     // Wait for `me` (logged-in user) to be set before routing — login
     // flows are async; on cold-start the page is mid-render.
@@ -2619,7 +2636,7 @@ function _checkNotifTabAndRoute(){
       tries++;
       if (typeof me !== 'undefined' && me) {
         clearInterval(iv);
-        setTimeout(function(){ _navigateToTab(t); }, 300);
+        setTimeout(function(){ _navigateToTab(t, opts); }, 300);
       } else if (tries > 40) { // ~10s max
         clearInterval(iv);
       }
@@ -24570,7 +24587,7 @@ async function payScanSave(){
       });
       var amtStr='$'+totalAmt.toFixed(2);
       var methodStr=payRows.length>1?'('+methodParts.join(' + ')+')':'('+payRows[0].method.toUpperCase()+')';
-      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amtStr+' '+methodStr+' '+_payLocation+finalTag,'payments');
+      await sendPushNotification(mgrNames,'💰 Payment Posted',name+' — '+amtStr+' '+methodStr+' '+_payLocation+finalTag,'payments',{location:_payLocation});
     }catch(ex){console.warn('Push notify failed:',ex);}
   }
 

@@ -82,9 +82,18 @@ serve(async (req) => {
     // closed, OneSignal opens this URL. The page-side ?notif_tab parser
     // routes from there. Belt-and-suspenders alongside the OneSignal click
     // listener — covers iOS where SDK click events sometimes don't fire
-    // before the page renders.
+    // before the page renders. Any extra `data` fields (e.g. `location`
+    // for payments) get encoded as `notif_<field>` so the page can read
+    // them too.
     if (tab) {
-      payload.web_url = `https://carfactory.work/?notif_tab=${encodeURIComponent(String(tab))}`;
+      const qsParts = [`notif_tab=${encodeURIComponent(String(tab))}`];
+      if (data && typeof data === "object") {
+        for (const k in data) {
+          if (data[k] === undefined || data[k] === null) continue;
+          qsParts.push(`notif_${encodeURIComponent(k)}=${encodeURIComponent(String(data[k]))}`);
+        }
+      }
+      payload.web_url = `https://carfactory.work/?${qsParts.join("&")}`;
     }
 
     // OneSignal v2 endpoint with v2 app key (`os_v2_app_*`) and Key auth.
