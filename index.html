@@ -15188,6 +15188,16 @@ async function formEditSave(table, id){
     var rec = _formEditFindRecord(table, id);
     if (rec) Object.keys(patch).forEach(function(k){ rec[k] = patch[k]; });
 
+    // Bucket is private, so the unsigned /public/... URL we just wrote to
+    // the cache won't load in <img>. Re-sign the photo fields in place so
+    // the detail view's <img src=...> renders the new photo immediately.
+    if (rec && cfg.photos && cfg.photos.length){
+      try {
+        var photoFields = cfg.photos.map(function(p){return p.field;});
+        await _signStorageUrls([rec], photoFields);
+      } catch(signErr){ console.warn('formEditSave: re-sign failed:', signErr); }
+    }
+
     if (status) status.innerHTML = '<span style="color:#4ade80;font-weight:600;">Saved!</span>';
     setTimeout(function(){ _formEditReturnToDetail(table, id); }, 500);
   } catch(e){
