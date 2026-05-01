@@ -600,7 +600,15 @@ body.light .cal-fab{background:#4488ff !important;}
 </style>
 <script>
 (function(){
-  if(location.search) history.replaceState(null,'',location.pathname);
+  // Strip the URL query string on load EXCEPT for `notif_tab`, which the
+  // notification-deep-link parser reads later. Without this exception,
+  // tapping a push that opens `?notif_tab=payments` had its tab wiped
+  // before any router could see it.
+  if(location.search){
+    var _p = new URLSearchParams(location.search);
+    var _keep = _p.get('notif_tab');
+    history.replaceState(null,'', location.pathname + (_keep ? '?notif_tab='+encodeURIComponent(_keep) : ''));
+  }
   fetch('version.json?_='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
