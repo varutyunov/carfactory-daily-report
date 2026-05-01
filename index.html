@@ -24195,9 +24195,22 @@ async function _reviewReprocessPending(){
             });
           }
           if (cands.length){
+            // CRITICAL: don't clobber posting-flow reasons. Until Day 11
+            // this branch unconditionally overwrote reason='multiple',
+            // which silently demoted cash_sale_correction / deal_pending
+            // / cash_sale_pending cards to a payment-multi-match card —
+            // a totally different render path that asks the user to
+            // PICK a deal. That's the drift bug we hunted all day.
+            var _POSTING_REASONS = {
+              cash_sale_correction: 1, cash_sale_pending: 1, deal_pending: 1,
+              inv_create_pending: 1, inv_relocate_pending: 1, csv_reconciliation: 1
+            };
+            var _newReason = _POSTING_REASONS[r.reason]
+              ? r.reason
+              : ((resolved && resolved.ambiguous) ? 'ambiguous' : 'multiple');
             await sbPatch('payment_reviews', r.id, {
               candidates: JSON.stringify(cands),
-              reason: (resolved && resolved.ambiguous) ? 'ambiguous' : 'multiple'
+              reason: _newReason
             });
             refreshed = true;
           }
