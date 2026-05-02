@@ -30193,26 +30193,41 @@ function sheetsPush(tab, rowIndex, data, action, location){
   var url=_SHEETS_URL;
   var secret=_SHEETS_SECRET;
   if(!url||!secret) return Promise.resolve({ok:false, error:'sheets_url_or_secret_missing'});
-  return fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
-    body:JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{},location:location||'DeBary'})
-  }).then(function(resp){
-    if(!resp.ok) return { ok:false, error:'http_' + resp.status, action: action||'update', tab: tab, row_index: rowIndex };
-    return resp.json().then(function(parsed){
-      // AS error responses are { error: "..." } with no ok field — treat any
-      // truthy error as failure so callers don't fire audit / mark approved
-      // when the Sheet write actually didn't happen.
-      if (!parsed || parsed.ok === false || parsed.error){
-        return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action: action||'update', tab: tab, row_index: rowIndex };
+  var payload=JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{},location:location||'DeBary'});
+  var _meta = { action: action||'update', tab: tab, row_index: rowIndex };
+  // Retry wrapper — GAS endpoints flake on mobile (Safari "Load failed",
+  // Chrome "Failed to fetch") due to transient network drops. Up to 2
+  // retries with short backoff before giving up.
+  function _attempt(tries){
+    return fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
+      body:payload
+    }).then(function(resp){
+      if(!resp.ok) return { ok:false, error:'http_' + resp.status, action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
+      return resp.json().then(function(parsed){
+        // AS error responses are { error: "..." } with no ok field — treat any
+        // truthy error as failure so callers don't fire audit / mark approved
+        // when the Sheet write actually didn't happen.
+        if (!parsed || parsed.ok === false || parsed.error){
+          return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
+        }
+        return parsed;
+      }, function(){
+        return { ok:false, error:'invalid_json', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
+      });
+    }, function(e){
+      // Network-level failure ("Load failed", "Failed to fetch")
+      if (tries < 2){
+        console.warn('sheetsPush attempt ' + (tries+1) + ' failed (' + (e&&e.message||e) + '), retrying in ' + ((tries+1)*2) + 's...');
+        return new Promise(function(resolve){
+          setTimeout(function(){ resolve(_attempt(tries+1)); }, (tries+1)*2000);
+        });
       }
-      return parsed;
-    }, function(){
-      return { ok:false, error:'invalid_json', action: action||'update', tab: tab, row_index: rowIndex };
+      return { ok:false, error:String((e && e.message) || e), action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
     });
-  }, function(e){
-    return { ok:false, error:String((e && e.message) || e), action: action||'update', tab: tab, row_index: rowIndex };
-  });
+  }
+  return _attempt(0);
 }
 
 // ── INVENTORY SHEETS ────────────────────────────────────────────────────────
