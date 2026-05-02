@@ -338,25 +338,60 @@ async function sbLoadExistingLinks() {
   return map;
 }
 
-// Resolve vehicle description.
-// Returns a string like "16 Hyundai Genesis" or "08 Sentra" or null.
-// Priority: csv_accounts by account → csv_accounts by stock → deal_account_links car_desc.
-function resolveVehicle(cust, csvLookup, dealLinks) {
-  // 1. Account is the strongest key — one account = one customer, never reused.
+// Load app inventory — the third vertex of the triangle.
+// Builds stock → vehicle and vinLast6 → vehicle lookup maps.
+async function sbLoadInventory() {
+  const url = SB_URL + '/rest/v1/inventory?select=stock,name,vin&limit=10000';
+  const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
+  if (!res.ok) {
+    console.error('  inventory load failed: ' + res.status);
+    return { byStock: {}, byVin6: {} };
+  }
+  const rows = await res.json();
+  const byStock = {};
+  const byVin6 = {};
+  rows.forEach(r => {
+    if (r.stock) byStock[r.stock] = r;
+    // Last 6 of VIN — matches CarPay's vin_last6 field
+    if (r.vin && r.vin.length >= 6) byVin6[r.vin.slice(-6)] = r;
+  });
+  return { byStock, byVin6 };
+}
+
+// Parse inventory name ("2014 Volkswagen Passat") → "14 Volkswagen Passat"
+function invNameToShort(name) {
+  if (!name) return null;
+  const m = name.match(/^(\d{4})\s+(.+)/);
+  if (!m) return null;
+  return m[1].slice(-2) + ' ' + m[2];
+}
+
+// Resolve vehicle description — triangulation across 3 data sources.
+// Returns a string like "16 Hyundai Genesis" or null.
+// Priority: csv_accounts by acct → csv_accounts by stock → app inventory
+// by stock → app inventory by VIN last 6 → deal_account_links car_desc.
+function resolveVehicle(cust, csvLookup, invLookup, dealLinks) {
+  // 1. csv_accounts by account — strongest (1:1, never reused).
   let csv = cust.account ? csvLookup.byAccount[cust.account] : null;
-  // 2. Fall back to stock_no (active-only map avoids stale reuse collisions).
+  // 2. csv_accounts by stock (active-only to avoid reuse collisions).
   if (!csv || !csv.year) csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
   if (csv && csv.year && csv.make && csv.model) {
-    const yr = String(csv.year).slice(-2);
-    return yr + ' ' + csv.make + ' ' + csv.model;
+    return String(csv.year).slice(-2) + ' ' + csv.make + ' ' + csv.model;
   }
-  // 3. Last resort: deal_account_links car_desc (e.g. "08 Sentra blue 197k Adams").
-  //    Extract the "YY Model" prefix — first two tokens if [0] is 2-digit number.
+  // 3. App inventory by stock_no.
+  if (invLookup) {
+    const inv = cust.stock_no ? invLookup.byStock[cust.stock_no] : null;
+    if (inv) { const s = invNameToShort(inv.name); if (s) return s; }
+    // 4. App inventory by VIN last 6.
+    const inv2 = cust.vin_last6 ? invLookup.byVin6[cust.vin_last6] : null;
+    if (inv2) { const s = invNameToShort(inv2.name); if (s) return s; }
+  }
+  // 5. deal_account_links car_desc (e.g. "08 Sentra blue 197k Adams" → "08 Sentra").
   const link = dealLinks && cust.account ? dealLinks[cust.account] : null;
   if (link && link.car_desc_at_link) {
     const parts = link.car_desc_at_link.trim().split(/\s+/);
     if (parts.length >= 2 && /^\d{2}$/.test(parts[0])) {
-      return parts[0] + ' ' + parts[1];  // e.g. "08 Sentra"
+      return parts[0] + ' ' + parts[1];
     }
   }
   return null;
@@ -392,9 +427,11 @@ async function main() {
 
   let totalCust = 0, totalPay = 0;
 
-  // Load csv_accounts once — used for vehicle resolution and deal linking.
+  // Load all three data sources once — triangulation for vehicle resolution.
   const csvLookup = await sbLoadCsvAccounts();
   console.log('Loaded csv_accounts: ' + Object.keys(csvLookup.byStock).length + ' by stock, ' + Object.keys(csvLookup.byAccount).length + ' by account');
+  const invLookup = await sbLoadInventory();
+  console.log('Loaded inventory: ' + Object.keys(invLookup.byStock).length + ' by stock, ' + Object.keys(invLookup.byVin6).length + ' by vin6');
   const existingLinks = await sbLoadExistingLinks();
   console.log('Loaded ' + Object.keys(existingLinks).length + ' existing deal_account_links');
 
@@ -448,9 +485,9 @@ async function main() {
       c.location = LOCATION_OVERRIDES[c.account] || loc.name;
       c.synced_at = NOW_ISO;
       applyPreserved(c, preserved);
-      // Resolve vehicle: csv_accounts (DMS) → deal_account_links → give up.
+      // Resolve vehicle: csv_accounts → inventory → deal_links → give up.
       // Always overwrite — authoritative sources beat preserved values.
-      const veh = resolveVehicle(c, csvLookup, existingLinks);
+      const veh = resolveVehicle(c, csvLookup, invLookup, existingLinks);
       if (veh) { c.vehicle = veh; vehiclesResolved++; }
     });
     if (vehiclesResolved) console.log('  Resolved ' + vehiclesResolved + ' vehicles (csv_accounts + deal_links)');
