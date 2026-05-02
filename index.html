@@ -30100,8 +30100,8 @@ async function dealEditSave(id){
       if(Array.isArray(payRows)) existingPayRows=payRows;
     }catch(e){}
 
-    // Parse vehicle info
-    var vDesc=d.vehicle_desc||'';
+    // Parse vehicle info — use updated desc if it changed
+    var vDesc=patch.vehicle_desc||d.vehicle_desc||'';
     var vParts=vDesc.split(' ');
     var vYear=vParts[0]||'';
     var vMake=vParts[1]||'';
@@ -30156,11 +30156,55 @@ async function dealEditSave(id){
     }
     var cashAmt=totalPosted;
 
+    // Snapshot old vehicle info BEFORE applying patch — needed for cascade
+    var _oldVehicleDesc=d.vehicle_desc||'';
+    var _oldVin=d.vin||'';
+    var _oldColor=d.color||'';
+    var _oldDealTag='Deal — '+_oldVehicleDesc;
     // Save deal
     if(Object.keys(patch).length){
       await sbPatch('deals',id,patch);
       // Update local data
       Object.keys(patch).forEach(function(k){d[k]=patch[k];});
+    }
+    // Cascade vehicle info changes to existing payments for this deal.
+    // When vehicle_desc, vin, or color changes, update all payment rows
+    // that reference this deal so they stay consistent.
+    if(patch.vehicle_desc||patch.vin||patch.color){
+      try{
+        // Find payments by old VIN, new VIN, or by raw_ocr_text deal tag
+        var _cascadePayments=[];
+        if(_oldVin){
+          var _cp1=await sbGet('payments','vehicle_vin=eq.'+encodeURIComponent(_oldVin)+'&limit=50');
+          if(Array.isArray(_cp1)) _cascadePayments=_cascadePayments.concat(_cp1);
+        }
+        if(patch.vin&&d.vin!==_oldVin){
+          var _cp2=await sbGet('payments','vehicle_vin=eq.'+encodeURIComponent(d.vin)+'&limit=50');
+          if(Array.isArray(_cp2)) _cascadePayments=_cascadePayments.concat(_cp2);
+        }
+        var _cp3=await sbGet('payments','raw_ocr_text=eq.'+encodeURIComponent(_oldDealTag)+'&limit=50');
+        if(Array.isArray(_cp3)) _cascadePayments=_cascadePayments.concat(_cp3);
+        // Deduplicate by id
+        var _seenIds={};
+        _cascadePayments=_cascadePayments.filter(function(p){
+          if(_seenIds[p.id])return false;
+          _seenIds[p.id]=true;
+          return true;
+        });
+        // Build the vehicle patch from new deal state
+        var _vPatch={vehicle_year:vYear,vehicle_make:vMake,vehicle_model:vModel};
+        if(patch.vin) _vPatch.vehicle_vin=d.vin;
+        if(patch.color) _vPatch.vehicle_color=d.color;
+        if(patch.vehicle_desc) _vPatch.raw_ocr_text='Deal — '+d.vehicle_desc;
+        var _cascadeCount=0;
+        for(var ci=0;ci<_cascadePayments.length;ci++){
+          try{
+            await sbPatch('payments',_cascadePayments[ci].id,_vPatch);
+            _cascadeCount++;
+          }catch(e){console.warn('Cascade payment update failed:',e);}
+        }
+        if(_cascadeCount) console.log('Cascaded vehicle info to '+_cascadeCount+' payment(s)');
+      }catch(e){console.warn('Vehicle cascade error:',e);}
     }
     // Auto-create inventory rows for any newly-added trade-ins (matches deal-submit flow)
     for(var nti=0;nti<newPayments.length;nti++){
