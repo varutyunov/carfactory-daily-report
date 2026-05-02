@@ -25856,24 +25856,35 @@ async function _autopopulateDeals26(record, car, icOverride) {
   console.log('Deals26 autopopulate: writing to sheet — tab=Deals26 sortOrder=' + sortOrder +
     ' loc=' + (record.location || 'DeBary') + ' cost=$' + cost + ' carDesc="' + carDesc + '"');
   var sheetResult = await sheetsPush('Deals26', sortOrder, _sheetObj, 'update', (record.location || 'DeBary'));
-  if (!sheetResult || sheetResult.ok === false){
-    // Nothing has been written to Supabase yet; ic row still intact.
-    // Throw so the caller (dealSubmit / _reviewApprovePending) knows
-    // NOT to mark the post successful. Review card stays pending.
+  var _sheetOk = sheetResult && sheetResult.ok !== false && !sheetResult.error;
+  if (!_sheetOk){
     var _sheetErr = (sheetResult && sheetResult.error) || 'unknown';
     console.error('Deals26 sheet write failed:', JSON.stringify(sheetResult));
-    throw new Error('Sheet write failed (row ' + sortOrder + ', ' + (record.location||'DeBary') + '): ' + _sheetErr);
+    // If this is a network/GAS-authorization failure, fall through to
+    // Supabase-first path so the deal is at least saved in the database.
+    // The user can sync to the sheet later once GAS is re-authorized.
+    // Only hard-fail for GAS-returned errors (http_4xx/5xx) which mean
+    // GAS processed the request but something was wrong with the data.
+    var _isNetworkErr = /Load failed|Failed to fetch|xhr_network|xhr_timeout/i.test(_sheetErr);
+    if (!_isNetworkErr){
+      throw new Error('Sheet write failed (row ' + sortOrder + ', ' + (record.location||'DeBary') + '): ' + _sheetErr);
+    }
+    console.warn('Deals26 autopopulate: GAS unreachable — writing to Supabase only (sheet sync needed later)');
   }
 
-  // Step B: Insert into Supabase. If this fails, the sheet has the row
-  //         and the reconciler (5-min cycle) will upsert Supabase to
-  //         match. Non-fatal — log and continue to ic-delete so we
-  //         keep the user's expected behavior (car transferred out).
+  // Step B: Insert into Supabase. If sheet succeeded, this is a backup
+  //         (reconciler catches up). If sheet failed due to network, this
+  //         is the PRIMARY write — the deal must be saved somewhere.
   var res = null;
   try {
     res = await sbPost('deals26', d26Obj);
   } catch (sbErr){
-    console.warn('deals26 Supabase insert failed (sheet already written; reconciler will catch up):', sbErr);
+    if (_sheetOk){
+      console.warn('deals26 Supabase insert failed (sheet already written; reconciler will catch up):', sbErr);
+    } else {
+      // Both sheet AND Supabase failed — nothing saved. Hard fail.
+      throw new Error('Both sheet and Supabase writes failed.\nSheet: ' + ((sheetResult&&sheetResult.error)||'?') + '\nSupabase: ' + (sbErr.message||sbErr));
+    }
   }
 
   // Step C: Update local _d26Data cache if loaded.
@@ -25931,7 +25942,8 @@ async function _autopopulateDeals26(record, car, icOverride) {
     owed: owed,
     taxes: taxes,
     taxesKnown: !!record.out_of_state || taxes > 0,
-    carDescWarning: carDescWarning
+    carDescWarning: carDescWarning,
+    sheetSyncPending: !_sheetOk
   };
 }
 
@@ -29933,12 +29945,23 @@ async function dealPostToSheet(id){
     var car=(S.inventory||[]).find(function(c){return c.vin&&d.vin&&c.vin.toUpperCase()===d.vin.toUpperCase();});
     _step = 'running autopopulate';
     var snap=await _autopopulateDeals26(d, car||null);
-    if(btn){btn.textContent='✓ Posted';btn.style.background='#16a34a';}
-    alert('Posted to Deals26 sheet.\n\n' +
-      (snap && snap.carDesc ? 'Row: ' + snap.carDesc : '') +
-      (snap && snap.owed != null ? '\nOwed: $' + snap.owed : '') +
-      (snap && snap.taxes ? '\nTaxes: $' + snap.taxes : '') +
-      (snap && snap.carDescWarning ? '\n⚠ ' + snap.carDescWarning : ''));
+    if (snap && snap.sheetSyncPending){
+      if(btn){btn.textContent='✓ Saved (sheet pending)';btn.style.background='#b45309';btn.disabled=true;}
+      alert('Deal saved to database ✓\n\n' +
+        (snap.carDesc ? 'Row: ' + snap.carDesc : '') +
+        (snap.owed != null ? '\nOwed: $' + snap.owed : '') +
+        '\n\n⚠ Google Sheet write failed (GAS needs re-authorization).\n' +
+        'The deal is saved in Supabase. Open the Apps Script editor\n' +
+        'and run any function to re-authorize, then the sheet will\n' +
+        'sync on the next reconciler pass.');
+    } else {
+      if(btn){btn.textContent='✓ Posted';btn.style.background='#16a34a';btn.disabled=true;}
+      alert('Posted to Deals26 sheet.\n\n' +
+        (snap && snap.carDesc ? 'Row: ' + snap.carDesc : '') +
+        (snap && snap.owed != null ? '\nOwed: $' + snap.owed : '') +
+        (snap && snap.taxes ? '\nTaxes: $' + snap.taxes : '') +
+        (snap && snap.carDescWarning ? '\n⚠ ' + snap.carDescWarning : ''));
+    }
   }catch(e){
     if(btn){btn.textContent='Post to Deals26';btn.disabled=false;}
     console.error('dealPostToSheet error:', e);
