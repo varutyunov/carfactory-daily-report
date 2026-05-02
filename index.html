@@ -28927,11 +28927,56 @@ async function openDealDetail(id) {
     html += '</div>';
   }
 
-  // Total
-  html += '<div style="background:#111;border-radius:14px;padding:16px;margin-bottom:10px;">';
-  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Collected</div>';
+  // Total Collected + Profit side by side
+  var _totalRaw = parseFloat(d.total_collected) || 0;
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px;">';
+  // Left: collected
+  html += '<div onclick="dealToggleMath('+d.id+')" style="flex:1;background:#111;border-radius:14px;padding:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Collected</div>';
   html += '<div style="font-size:22px;font-weight:700;color:#4ade80;">'+total+'</div>';
   html += '</div>';
+  // Right: profit / breakeven (filled async from deals26)
+  html += '<div onclick="dealToggleMath('+d.id+')" id="de-profit-box-'+d.id+'" style="flex:1;background:#111;border-radius:14px;padding:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;">';
+  html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Profit</div>';
+  html += '<div id="de-profit-val-'+d.id+'" style="font-size:22px;font-weight:700;color:#555;">—</div>';
+  html += '</div>';
+  html += '</div>';
+
+  // Expandable math breakdown (hidden until clicked)
+  html += '<div id="de-math-'+d.id+'" style="display:none;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:14px;padding:16px;margin-bottom:10px;font-size:13px;color:#888;">';
+  html += '<div id="de-math-body-'+d.id+'"><div style="text-align:center;color:#444;">Loading...</div></div>';
+  html += '</div>';
+
+  // Async: load profit data from deals26 (or IC if not posted)
+  if (d.vin) {
+    (function(_d, _totalR){
+      var _vin = (_d.vin||'').trim();
+      sbGet('deals26', 'sold_inv_vin=eq.'+encodeURIComponent(_vin)+'&select=id,car_desc,cost,expenses,taxes,money,owed,dealer_fee,manny,sort_order&limit=1').then(function(rows){
+        var profitEl = document.getElementById('de-profit-val-'+_d.id);
+        var boxEl = document.getElementById('de-profit-box-'+_d.id);
+        if (rows && rows.length) {
+          var r = rows[0];
+          var owed = parseFloat(r.owed) || 0;
+          if (profitEl) {
+            profitEl.textContent = '$' + Math.abs(owed).toLocaleString('en-US',{minimumFractionDigits:0});
+            profitEl.style.color = owed >= 0 ? '#4ade80' : '#ef4444';
+          }
+          if (boxEl) {
+            var lbl = boxEl.querySelector('div');
+            if (lbl) lbl.textContent = owed >= 0 ? 'PROFIT' : 'OWES';
+          }
+          // Store data for math expand
+          _d._d26 = r;
+        } else {
+          if (profitEl) { profitEl.textContent = 'Not posted'; profitEl.style.fontSize = '14px'; }
+          if (boxEl) {
+            var lbl = boxEl.querySelector('div');
+            if (lbl) { lbl.textContent = 'DEALS26'; lbl.style.color = '#f59e0b'; }
+          }
+        }
+      }).catch(function(){});
+    })(d, _totalRaw);
+  }
 
   // Payment breakdown
   if(payments.length) {
@@ -28976,59 +29021,20 @@ async function openDealDetail(id) {
   if(d.location) html += 'Location: '+d.location;
   html += '</div>';
 
-  // ── Deals26 Sheet Status — profit breakdown + Post button ───────────
-  // Shows for every deal. If not yet posted, shows a green Post button
-  // with the profit math so you can see what's going to hit the sheet.
-  html += '<div id="de-sheet-block-'+d.id+'" style="margin-top:20px;border-top:1px solid #1a1a1a;padding-top:16px;display:none;">';
-  html += '</div>';
+  // ── Post to Deals26 button — only shown for unposted deals ──────────
+  html += '<div id="de-sheet-block-'+d.id+'" style="margin-top:10px;display:none;"></div>';
   if (d.vin) {
-    (function(_d, _payments){
+    (function(_d){
       var _vin = (_d.vin||'').trim();
-      sbGet('deals26', 'sold_inv_vin=eq.'+encodeURIComponent(_vin)+'&select=id,car_desc,cost,expenses,taxes,money,owed,sort_order&limit=1').then(function(rows){
+      sbGet('deals26', 'sold_inv_vin=eq.'+encodeURIComponent(_vin)+'&select=id&limit=1').then(function(rows){
+        if (rows && rows.length) return; // already posted
         var block = document.getElementById('de-sheet-block-'+_d.id);
         if (!block) return;
         block.style.display = 'block';
-        if (rows && rows.length) {
-          // Already on sheet — show summary
-          var r = rows[0];
-          var _fmt = function(v){return '$'+(parseFloat(v)||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
-          block.innerHTML =
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
-              '<div style="width:10px;height:10px;border-radius:50%;background:#4ade80;flex-shrink:0;"></div>'+
-              '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;color:#4ade80;letter-spacing:1px;text-transform:uppercase;">On Deals26 Sheet</div>'+
-            '</div>'+
-            '<div style="background:#111;border-radius:12px;padding:14px;font-size:13px;color:#888;">'+
-              '<div style="color:#ccc;font-weight:600;margin-bottom:8px;">'+_escHtml(r.car_desc||'')+'</div>'+
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">'+
-                '<div>Cost: <span style="color:#fff;">'+_fmt(r.cost)+'</span></div>'+
-                '<div>Money: <span style="color:#4ade80;">'+_fmt(r.money)+'</span></div>'+
-                '<div>Expenses: <span style="color:#fff;">'+_fmt(r.expenses)+'</span></div>'+
-                '<div>Taxes: <span style="color:#fff;">'+_fmt(r.taxes)+'</span></div>'+
-              '</div>'+
-              '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #222;font-size:15px;font-weight:700;color:'+((parseFloat(r.owed)||0)>=0?'#4ade80':'#ef4444')+';">'+
-                'Profit: '+_fmt(r.owed)+
-              '</div>'+
-            '</div>';
-        } else {
-          // Not on sheet — show Post button with profit preview
-          var _money = 0;
-          (_payments||[]).forEach(function(p){_money += parseFloat(p.amount)||0;});
-          block.innerHTML =
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
-              '<div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></div>'+
-              '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;color:#f59e0b;letter-spacing:1px;text-transform:uppercase;">Not on Deals26 Sheet</div>'+
-            '</div>'+
-            '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;font-size:13px;color:#888;">'+
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">'+
-                '<div>Money collected: <span style="color:#4ade80;">$'+_money.toLocaleString('en-US',{minimumFractionDigits:0})+'</span></div>'+
-                '<div>Type: <span style="color:#ccc;">'+(_d.deal_type==='finance'?'Finance':'Cash')+'</span></div>'+
-              '</div>'+
-              '<div style="font-size:11px;color:#555;margin-top:8px;">Cost, expenses &amp; taxes will be pulled from Sheet Inventory when posted.</div>'+
-            '</div>'+
-            '<button onclick="dealPostToSheet('+_d.id+')" id="de-post-sheet-'+_d.id+'" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a2a1a,#16a34a);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Post to Deals26</button>';
-        }
+        block.innerHTML =
+          '<button onclick="dealPostToSheet('+_d.id+')" id="de-post-sheet-'+_d.id+'" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a2a1a,#16a34a);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Post to Deals26</button>';
       }).catch(function(){});
-    })(d, payments);
+    })(d);
   }
 
   // Edit Deal (owner only)
@@ -29703,6 +29709,163 @@ function deToggleOOS(id){
     box.style.borderColor = on?'#fbbf24':'#333';
   }
   if(chk) chk.style.display = on?'block':'none';
+}
+
+// Toggle the math breakdown panel on deal detail view.
+function dealToggleMath(id){
+  var el = document.getElementById('de-math-'+id);
+  if (!el) return;
+  var showing = el.style.display !== 'none';
+  el.style.display = showing ? 'none' : 'block';
+  if (showing) return;
+
+  // Build the math body
+  var body = document.getElementById('de-math-body-'+id);
+  if (!body) return;
+
+  var d = _dealsData.find(function(x){return x.id===id;});
+  if (!d) d = (_dealsAllData||[]).find(function(x){return x.id===id;});
+  if (!d) { body.innerHTML = '<div style="color:#555;">Deal not found</div>'; return; }
+
+  var _fmt = function(v){ var n = parseFloat(v)||0; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
+  var _row = function(label, val, color){
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0;">'+
+      '<span>'+label+'</span><span style="color:'+(color||'#ccc')+';font-weight:600;">'+_fmt(val)+'</span></div>';
+  };
+
+  var r = d._d26;
+  if (r) {
+    // Data from deals26
+    var cost = parseFloat(r.cost)||0;
+    var expenses = parseFloat(r.expenses)||0;
+    var taxes = parseFloat(r.taxes)||0;
+    var dealerFee = parseFloat(r.dealer_fee)||0;
+    var manny = parseFloat(r.manny)||0;
+    var money = parseFloat(r.money)||0;
+    var breakeven = cost + expenses + taxes + dealerFee + manny;
+    var owed = parseFloat(r.owed)||0;
+
+    var h = '';
+    h += _row('Cost', cost);
+    h += _row('Expenses', expenses);
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;">';
+    h += '<span>Taxes</span>';
+    h += '<span style="display:flex;align-items:center;gap:8px;">';
+    h += '<span style="color:#ccc;font-weight:600;">'+_fmt(taxes)+'</span>';
+    h += '<button onclick="dealPullTaxes('+id+')" style="background:none;border:1px solid #1e3a5f;border-radius:6px;color:#60a5fa;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;-webkit-tap-highlight-color:transparent;">Pull</button>';
+    h += '</span></div>';
+    h += _row('Dealer Fee', dealerFee);
+    if (manny) h += _row('Manny', manny);
+    h += '<div style="border-top:1px solid #222;margin:6px 0;"></div>';
+    h += _row('Breakeven', breakeven, '#f59e0b');
+    h += _row('Collected', money, '#4ade80');
+    h += '<div style="border-top:1px solid #222;margin:6px 0;"></div>';
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:16px;">'+
+      '<span style="font-weight:700;">'+(owed>=0?'Profit':'Owes')+'</span>'+
+      '<span style="color:'+(owed>=0?'#4ade80':'#ef4444')+';font-weight:800;">'+_fmt(Math.abs(owed))+'</span></div>';
+    body.innerHTML = h;
+  } else {
+    body.innerHTML = '<div style="color:#555;text-align:center;">Not on Deals26 yet — post the deal first to see the math.</div>';
+  }
+}
+
+// Pull taxes from Pending Sales CSV for a deal that's already on the sheet.
+async function dealPullTaxes(id){
+  var d = _dealsData.find(function(x){return x.id===id;});
+  if (!d) d = (_dealsAllData||[]).find(function(x){return x.id===id;});
+  if (!d || !d._d26) { alert('Deal not on sheet yet'); return; }
+  var vin = (d.vin||'').trim();
+  if (!vin) { alert('No VIN'); return; }
+
+  try {
+    var loc = d.location || 'DeBary';
+    var psFile = (loc === 'DeLand') ? 'PendingSalesDeland.csv' : 'PendingSalesDebary.csv';
+    var psUrl = 'https://raw.githubusercontent.com/varutyunov/carfactory-daily-report/main/' + psFile + '?t=' + Date.now();
+    var psResp = await fetch(psUrl);
+    if (!psResp.ok) throw new Error('CSV fetch failed: ' + psResp.status);
+    var psCsv = await psResp.text();
+    var psLines = psCsv.trim().split('\n');
+
+    var _parseCsvLine = function(s){
+      var out = [], cur = '', q = false;
+      for (var i = 0; i < s.length; i++){
+        var ch = s.charAt(i);
+        if (q){
+          if (ch === '"' && s.charAt(i+1) === '"'){ cur += '"'; i++; }
+          else if (ch === '"'){ q = false; }
+          else cur += ch;
+        } else {
+          if (ch === '"') q = true;
+          else if (ch === ','){ out.push(cur); cur = ''; }
+          else cur += ch;
+        }
+      }
+      out.push(cur);
+      return out.map(function(v){ return v.trim(); });
+    };
+
+    var psHdr = _parseCsvLine(psLines[0]).map(function(h){ return h.toLowerCase(); });
+    var vinIdx = psHdr.indexOf('vin');
+    var taxIdx = psHdr.indexOf('salestax');
+    var tagIdx = psHdr.indexOf('tagfee');
+    var titleIdx = psHdr.indexOf('titlefee');
+    if (vinIdx < 0 || taxIdx < 0) throw new Error('CSV missing vin/salestax columns');
+
+    var taxes = 0;
+    var found = false;
+    for (var pi = 1; pi < psLines.length; pi++) {
+      var psVals = _parseCsvLine(psLines[pi]);
+      var psVin = (psVals[vinIdx] || '').trim();
+      if (psVin && vin.indexOf(psVin) === 0) {
+        var st = parseFloat(psVals[taxIdx]) || 0;
+        var tg = tagIdx >= 0 ? (parseFloat(psVals[tagIdx]) || 0) : 0;
+        var tt = titleIdx >= 0 ? (parseFloat(psVals[titleIdx]) || 0) : 0;
+        taxes = Math.round((st + tg + tt) * 100) / 100;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      alert('VIN not found in ' + psFile + '.\n\nThe deal may not be in Pending Sales yet.');
+      return;
+    }
+
+    var oldTaxes = parseFloat(d._d26.taxes) || 0;
+    if (taxes === oldTaxes) {
+      alert('Taxes already match: $' + taxes);
+      return;
+    }
+
+    // Update deals26 in Supabase
+    var d26Id = d._d26.id;
+    var oldOwed = parseFloat(d._d26.owed) || 0;
+    var newOwed = Math.round((oldOwed + oldTaxes - taxes) * 100) / 100;
+    await sbPatch('deals26', d26Id, { taxes: taxes, owed: newOwed });
+
+    // Update the Google Sheet too
+    var sortOrder = d._d26.sort_order;
+    if (sortOrder) {
+      await sheetsPush('Deals26', sortOrder, { taxes: taxes, owed: newOwed }, 'update', loc);
+    }
+
+    // Update local cache
+    d._d26.taxes = taxes;
+    d._d26.owed = newOwed;
+
+    // Refresh the math panel + profit box
+    var profitEl = document.getElementById('de-profit-val-'+id);
+    if (profitEl) {
+      profitEl.textContent = '$' + Math.abs(newOwed).toLocaleString('en-US',{minimumFractionDigits:0});
+      profitEl.style.color = newOwed >= 0 ? '#4ade80' : '#ef4444';
+    }
+    dealToggleMath(id); // close
+    dealToggleMath(id); // re-open with new data
+
+    alert('Taxes updated: $' + oldTaxes + ' → $' + taxes + '\nProfit: $' + newOwed);
+  } catch(e) {
+    alert('Pull taxes failed:\n\n' + (e.message || e));
+  }
 }
 
 // Post an existing deal to the Deals26 sheet. Used when a deal was
