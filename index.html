@@ -25549,14 +25549,20 @@ async function _autopopulateDeals26(record, car, icOverride) {
       throw new Error('Cost is $0 — inventory_costs linked row disagrees with this deal (' + carDescWarning + '). Fix the Inventory Costs sheet link first.');
     }
     var _money = parseFloat(record.total_collected) || 0;
-    var _msg = 'Cost is $0 for this deal.\n\n' +
-      'For a repo (no purchase cost, just recovery + repair expenses) this is correct.\n' +
-      'For a normal purchase, you usually want the cost filled in on the Inventory Costs sheet first.\n\n' +
+    var _costInput = prompt(
+      'Cost is $0 for this deal.\n\n' +
+      'If this is a repo or trade-in, enter the breakeven or trade value.\n' +
+      'If cost is truly $0, leave blank and tap OK.\n\n' +
       'Money collected: $' + _money + '\n' +
-      'Expenses recorded: $' + expenses + '\n\n' +
-      'Post the deal with cost = $0?';
-    if (!confirm(_msg)){
-      throw new Error('Cost is $0 — user declined to post.');
+      'Expenses: $' + expenses + '\n\n' +
+      'Enter cost (or leave blank for $0):');
+    if (_costInput === null){
+      throw new Error('Cost is $0 — user cancelled.');
+    }
+    var _parsedCost = parseFloat((_costInput || '').replace(/[^0-9.]/g, '')) || 0;
+    if (_parsedCost > 0){
+      cost = _parsedCost;
+      // Recalculate owed with the user-provided cost
     }
   }
 
