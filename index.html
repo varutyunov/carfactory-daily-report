@@ -28906,6 +28906,17 @@ async function openDealDetail(id) {
     html += '<input id="de-customer-mname-'+d.id+'" value="'+_deMname.replace(/"/g,'&quot;')+'" placeholder="Middle (optional)" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-top:6px;"/>';
     html += '</div>';
 
+    // Vehicle info — editable so wrong car can be corrected after submission
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
+    html += '<input id="de-vehicle-desc-'+d.id+'" value="'+_escHtml(d.vehicle_desc||'')+'" placeholder="e.g. 2018 Mitsubishi Outlander" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px;"/>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
+    html += '<input id="de-vin-'+d.id+'" value="'+_escHtml(d.vin||'')+'" placeholder="VIN" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:monospace;"/>';
+    html += '<input id="de-color-'+d.id+'" value="'+_escHtml(d.color||'')+'" placeholder="Color" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;"/>';
+    html += '</div>';
+    html += '<input id="de-stock-'+d.id+'" value="'+_escHtml(d.stock||'')+'" placeholder="Stock #" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-top:6px;"/>';
+    html += '</div>';
+
     // Deal type toggle
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Deal Type</div>';
@@ -29523,6 +29534,15 @@ async function dealEditSave(id){
     var deLn=(document.getElementById('de-customer-lname-'+id)||{}).value||'';
     var deCust=[deFn.trim(),deMn.trim(),deLn.trim()].filter(Boolean).join(' ');
     if(deCust&&deCust!==d.customer_name) patch.customer_name=deCust;
+    // Vehicle info
+    var deVehicle=(document.getElementById('de-vehicle-desc-'+id)||{}).value||'';
+    if(deVehicle.trim()&&deVehicle.trim()!==d.vehicle_desc) patch.vehicle_desc=deVehicle.trim();
+    var deVin=(document.getElementById('de-vin-'+id)||{}).value||'';
+    if(deVin.trim().toUpperCase()!==(d.vin||'').toUpperCase()) patch.vin=deVin.trim().toUpperCase();
+    var deColor=(document.getElementById('de-color-'+id)||{}).value||'';
+    if(deColor.trim()!==(d.color||'')) patch.color=deColor.trim();
+    var deStock=(document.getElementById('de-stock-'+id)||{}).value||'';
+    if(deStock.trim()!==(d.stock||'')) patch.stock=deStock.trim();
     // Deal type
     var typeEl=document.getElementById('de-type-'+id);
     if(typeEl&&typeEl.value!==d.deal_type) patch.deal_type=typeEl.value;
