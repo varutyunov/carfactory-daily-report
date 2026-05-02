@@ -25470,10 +25470,49 @@ async function _autopopulateDeals26(record, car, icOverride) {
       if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
     }
 
-    // 3. Sheet fallback — if Supabase IC is missing or has $0 cost,
-    //    read the actual cost from the Google Sheet's Inventory tab.
-    //    This is the source of truth for trade-ins and repos where
-    //    the CSV cost is wrong or the IC row was archived on a prior sale.
+    // 2b. Name-based IC search — if car_id lookup missed (broken link,
+    //     e.g. deal vehicle was swapped but IC still points at the old
+    //     inventory car), search IC by year+model in car_name. This is
+    //     faster & more reliable than the GAS Sheet fallback.
+    if (!ic || (parseFloat((ic && ic.purchase_cost) || 0) || 0) <= 0) {
+      try {
+        var _vdParts = String(record.vehicle_desc || '').trim().split(/\s+/);
+        var _yrShort = (_vdParts[0] && /^(19|20)\d{2}$/.test(_vdParts[0])) ? _vdParts[0].slice(2) : '';
+        var _mdlToken = _vdParts.length >= 3 ? _vdParts[2] : (_vdParts[1] || '');
+        var _loc = record.location || 'DeBary';
+        if (_yrShort && _mdlToken) {
+          var _icByName = await sbGet('inventory_costs',
+            'location=eq.' + encodeURIComponent(_loc) +
+            '&car_name=ilike.*' + encodeURIComponent(_yrShort + '%' + _mdlToken) + '*' +
+            '&sold_at=is.null&select=id,car_id,car_name,purchase_cost,joint_expenses,vlad_expenses,expense_notes,vlad_expense_notes,sort_order&limit=5');
+          if (Array.isArray(_icByName) && _icByName.length) {
+            // Pick best match — prefer non-zero cost, color match
+            var _dealColor = _extractColorWord(record.color || '');
+            var _bestIc = null;
+            for (var _ni = 0; _ni < _icByName.length; _ni++) {
+              var _nr = _icByName[_ni];
+              if ((parseFloat(_nr.purchase_cost) || 0) <= 0) continue;
+              _bestIc = _nr;
+              if (_dealColor && (_nr.car_name || '').toLowerCase().indexOf(_dealColor.toLowerCase()) !== -1) break;
+            }
+            if (_bestIc) {
+              console.log('Deals26 autopopulate: car_id lookup missed — found IC by name: "' +
+                _bestIc.car_name + '" cost=$' + _bestIc.purchase_cost);
+              ic = _bestIc;
+              // Fix the broken link so this doesn't happen again
+              if (invId && _bestIc.car_id !== invId) {
+                try { await sbPatch('inventory_costs', _bestIc.id, { car_id: invId }); } catch(_){}
+              }
+            }
+          }
+        }
+      } catch(e) {
+        console.warn('Deals26 autopopulate: IC name search failed:', e);
+      }
+    }
+
+    // 3. Sheet fallback — if still no IC, read cost from the Google
+    //    Sheet's Inventory tab (source of truth for manual edits).
     if (!ic || (parseFloat((ic && ic.purchase_cost) || 0) || 0) <= 0) {
       try {
         var _sheetIc = await _fetchSheetInventoryCost(record, car);
@@ -25483,9 +25522,6 @@ async function _autopopulateDeals26(record, car, icOverride) {
             ' — pulled from Sheet Inventory: "' + _sheetIc.car_name +
             '" cost=$' + _sheetIc.purchase_cost);
           if (ic) {
-            // Supabase IC exists but $0 cost — merge the Sheet's cost
-            // + expense data while keeping Supabase id/sort_order so
-            // the archival step (Step D) can still archive & delete.
             ic.purchase_cost = _sheetIc.purchase_cost;
             ic.car_name = _sheetIc.car_name || ic.car_name;
             ic.joint_expenses = _sheetIc.joint_expenses || ic.joint_expenses;
@@ -25493,9 +25529,6 @@ async function _autopopulateDeals26(record, car, icOverride) {
             ic.expense_notes = _sheetIc.expense_notes || ic.expense_notes;
             ic.vlad_expense_notes = _sheetIc.vlad_expense_notes || ic.vlad_expense_notes;
           } else {
-            // No Supabase IC at all — use sheet IC directly.
-            // No id/sort_order means Step D archival is skipped (correct:
-            // there's nothing in Supabase to archive).
             ic = _sheetIc;
           }
         }
