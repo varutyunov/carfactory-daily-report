@@ -165,13 +165,21 @@ function parseCustomers(html) {
     const linkMatch = row.match(/\/dms\/customer\/(\d+)/);
     const carpayId = linkMatch ? linkMatch[1] : '';
 
+    // Columns 10–12: Last 6 VIN, Stock #, Co-Buyer
+    const vinLast6 = (tds[10] || '').trim() || null;
+    const stockNo = (tds[11] || '').trim() || null;
+    const coBuyer = (tds[12] || '').trim() || null;
+
     out.push({
       name, account,
       days_late: isNaN(daysLate) ? 0 : daysLate,
       next_payment: nextPayment,
       auto_pay: autoPay,
       carpay_id: carpayId,
-      phone: phone
+      phone: phone,
+      vin_last6: vinLast6,
+      stock_no: stockNo,
+      co_buyer: coBuyer
     });
   }
   return out;
@@ -198,7 +206,9 @@ function parsePayments(html) {
     if (!name || !account) continue;
     out.push({
       name, account,
+      stock_no: (tds[2] || '').trim() || null,
       reference: tds[3] || '',
+      vin: (tds[4] || '').trim() || null,
       date: tds[5] || '',
       time: tds[6] || '',
       method: tds[12] || '',
@@ -296,6 +306,48 @@ function applyPreserved(cust, preserved) {
   if (p.repo_flagged) cust.repo_flagged = true;
 }
 
+// ── Vehicle resolution via csv_accounts ─────────────────────────────────────
+// Load all csv_accounts to build stock_no → vehicle info and
+// account → deal_account_links mappings.
+async function sbLoadCsvAccounts() {
+  const url = SB_URL + '/rest/v1/csv_accounts?select=custaccountno,stock_no,vin,year,make,model,color,lookupname,location&is_active=eq.true&limit=10000';
+  const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
+  if (!res.ok) {
+    console.error('  csv_accounts load failed: ' + res.status);
+    return { byStock: {}, byAccount: {} };
+  }
+  const rows = await res.json();
+  const byStock = {};
+  const byAccount = {};
+  rows.forEach(r => {
+    if (r.stock_no) byStock[r.stock_no] = r;
+    if (r.custaccountno) byAccount[r.custaccountno] = r;
+  });
+  return { byStock, byAccount };
+}
+
+async function sbLoadExistingLinks() {
+  const url = SB_URL + '/rest/v1/deal_account_links?select=custaccountno&limit=10000';
+  const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
+  if (!res.ok) return {};
+  const rows = await res.json();
+  const map = {};
+  rows.forEach(r => { if (r.custaccountno) map[r.custaccountno] = true; });
+  return map;
+}
+
+// Resolve vehicle description from stock_no or account via csv_accounts.
+// Returns a string like "11 Chevrolet Equinox" or null.
+function resolveVehicle(cust, csvLookup) {
+  // Try stock_no first (most direct)
+  let csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
+  // Fall back to account number
+  if (!csv) csv = csvLookup.byAccount[cust.account] || null;
+  if (!csv || !csv.year || !csv.make || !csv.model) return null;
+  const yr = String(csv.year).slice(-2);
+  return yr + ' ' + csv.make + ' ' + csv.model;
+}
+
 // ── Location config ─────────────────────────────────────────────────────────
 const LOCATIONS = [
   { name: 'debary', dealerId: process.env.CARPAY_DEBARY_ID || '656' },
@@ -326,6 +378,12 @@ async function main() {
 
   let totalCust = 0, totalPay = 0;
 
+  // Load csv_accounts once — used for vehicle resolution and deal linking.
+  const csvLookup = await sbLoadCsvAccounts();
+  console.log('Loaded csv_accounts: ' + Object.keys(csvLookup.byStock).length + ' by stock, ' + Object.keys(csvLookup.byAccount).length + ' by account');
+  const existingLinks = await sbLoadExistingLinks();
+  console.log('Loaded ' + Object.keys(existingLinks).length + ' existing deal_account_links');
+
   // Stamp synced_at on every row we write so the audit trail in
   // Supabase tells us when the data last moved (the column had a
   // DEFAULT now() but on UPSERT/UPDATE Postgres keeps the existing
@@ -344,7 +402,8 @@ async function main() {
     if (customers.length){
       const sample = customers[0];
       console.log('    sample customer: ' + JSON.stringify({
-        name: sample.name, account: sample.account, days_late: sample.days_late
+        name: sample.name, account: sample.account, stock_no: sample.stock_no,
+        vin_last6: sample.vin_last6, days_late: sample.days_late
       }));
     }
 
@@ -370,11 +429,20 @@ async function main() {
         ' — refusing to wipe Supabase. Likely login bounce or HTML structure change.');
     }
 
+    let vehiclesResolved = 0;
     customers.forEach(c => {
       c.location = LOCATION_OVERRIDES[c.account] || loc.name;
       c.synced_at = NOW_ISO;
       applyPreserved(c, preserved);
+      // Resolve vehicle from stock_no / account via csv_accounts.
+      // Only overwrite if we found a match and no manually-set vehicle exists.
+      if (!c.vehicle) {
+        const veh = resolveVehicle(c, csvLookup);
+        if (veh) { c.vehicle = veh; vehiclesResolved++; }
+      }
     });
+    if (vehiclesResolved) console.log('  Resolved ' + vehiclesResolved + ' vehicles from csv_accounts');
+
     payments.forEach(p => {
       p.location = LOCATION_OVERRIDES[p.account] || loc.name;
       p.synced_at = NOW_ISO;
@@ -388,6 +456,11 @@ async function main() {
     console.log('  Stored: ' + custCount + ' customers, ' + payCount + ' payments (synced_at=' + NOW_ISO + ')');
     totalCust += custCount;
     totalPay += payCount;
+
+    // Note: deal_account_links are created by auto_link_accounts.py
+    // (VIN matching against the sheet) and by the OCR Account # feature
+    // (first scanned receipt). The sync script provides the stock_no and
+    // vehicle data those systems need to work.
   }
 
   console.log('\n=== CARPAY SYNC COMPLETE ===');

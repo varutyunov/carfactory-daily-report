@@ -196,6 +196,9 @@
             days_late: parseInt(cells[8] ? cells[8].innerText.trim().replace(/[()]/g,'') : '0') || 0,
             auto_pay: autoPay,
             carpay_id: idMatch ? idMatch[1] : '',
+            vin_last6: cells[10] ? cells[10].innerText.trim() || null : null,
+            stock_no: cells[11] ? cells[11].innerText.trim() || null : null,
+            co_buyer: cells[12] ? cells[12].innerText.trim() || null : null,
             location: _loc
           });
         }
@@ -220,6 +223,9 @@
             days_late: parseInt(cells[8] ? (cells[8].textContent || '').trim().replace(/[()]/g,'') : '0') || 0,
             auto_pay: false,
             carpay_id: idMatch ? idMatch[1] : '',
+            vin_last6: cells[10] ? (cells[10].textContent || '').trim() || null : null,
+            stock_no: cells[11] ? (cells[11].textContent || '').trim() || null : null,
+            co_buyer: cells[12] ? (cells[12].textContent || '').trim() || null : null,
             location: _loc
           });
         }
