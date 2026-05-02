@@ -1257,3 +1257,126 @@ manual linking needed.
   function checks for existing links first. One account → one deal.
   If the customer gets a new car, the link stays with the old deal
   until manually updated (cosigner/trade-in edge case).
+
+## Day 13 (cont.) — CarPay vehicle triangulation (2026-05-02)
+
+### The problem
+
+CarPay customers had no vehicle info in Supabase. The CarPay portal
+list page shows name, account, stock #, and VIN last 6 — but not the
+actual car. We need the vehicle description on every CarPay customer
+record so the app can display it and so payment routing can validate
+that a link is correct.
+
+### The triangle
+
+Three independent data sources each know something about the car:
+
+```
+        CarPay portal
+       (stock_no, vin_last6)
+            /         \
+           /           \
+     DMS CSVs          App data
+  (csv_accounts:     (inventory table +
+   year/make/model    deals table:
+   by custaccountno   vehicle_desc/VIN
+   or stock_no)       by stock or VIN)
+```
+
+**When two or more sources agree on the vehicle for a given account,
+the link is validated.** This is the confirmation mechanism — not just
+gap-filling but cross-checking that the account→deal link is right.
+
+### The 6-step resolution chain
+
+CarPay sync (`carpay-sync.js`) resolves vehicle for each customer
+using this priority:
+
+1. **csv_accounts by custaccountno** — DMS gold standard, 1:1 with
+   customer, never reused. Loads ALL records (active + inactive)
+   because a CarPay customer may still be paying after DMS marks
+   their deal inactive.
+
+2. **csv_accounts by stock_no** — fallback when account has no
+   vehicle data. Active-only map to avoid stale stock_no reuse
+   collisions (stock numbers get recycled across deals).
+
+3. **App inventory + deals by stock_no** — the `inventory` table
+   (older stock list) and `deals` table (where Manny/Jesse log new
+   sales from the app) are merged into one lookup. Deals overwrite
+   inventory for same stock since they're newer.
+
+4. **App inventory + deals by VIN last 6** — catches cases where
+   CarPay's stock_no doesn't match but the VIN does (stock_no
+   mismatches, reassignments).
+
+5. **deal_account_links car_desc** — last resort. Parses the "YY
+   Model" prefix from the sheet's car description (e.g.
+   "08 Sentra blue 197k Adams" → "08 Sentra"). Less precise
+   (no make), but better than nothing.
+
+6. **Give up** — no data anywhere. Customer is brand new or
+   ancient/dead. Will auto-resolve once any source picks them up.
+
+### Why each source matters
+
+| Source | Strength | Weakness |
+|---|---|---|
+| csv_accounts (DMS) | Has year/make/model, keyed by account | Sold Inventory CSV can be stale; new deals may have empty vehicle fields |
+| App deals table | Has newest sales immediately (Manny logs them same day) | Only covers deals since the app launched |
+| App inventory table | Broad stock coverage | Doesn't include every sold car |
+| CarPay portal | Has stock_no + VIN last 6 for every customer | No vehicle description — just identifiers |
+| deal_account_links | Has car_desc from sheet | Partial info only ("08 Sentra" not "08 Nissan Sentra") |
+
+### Bugs found and fixed
+
+1. **Preserved vehicle override** — `applyPreserved()` copied stale
+   vehicle names from old DB records before resolution ran, and the
+   `if (!c.vehicle)` guard skipped the lookup. Wrong vehicles
+   persisted forever. **Fix:** csv_accounts always overwrites
+   preserved values.
+
+2. **Stock-first lookup + active-only filter** — stock_no gets
+   recycled (e.g. stock 25252 = Acevedo's Genesis then Vazquez's
+   Sequoia). Old code tried stock_no first from an active-only
+   query, so Acevedo got Vazquez's car. **Fix:** account lookup
+   first (deterministic, never reused); stock_no as fallback.
+
+3. **Missing deals table** — inventory table didn't have recent
+   sales logged through the app. Rembert (17 BMW 3-Series, deal
+   logged by Manny Apr 17) was invisible. **Fix:** merged
+   inventory + deals into unified lookup.
+
+### Results
+
+| Stage | Resolved | Rate |
+|---|---|---|
+| csv_accounts only (stock-first, active-only) | 215/261 | 82% |
+| Account-first + inactive records | 235/261 | 90% |
+| + deal_account_links car_desc | 244/261 | 93% |
+| + app inventory by stock + VIN | 252/261 | 97% |
+| + app deals table | 260/261 | **99.6%** |
+
+The one unresolved: Perez Vasquez, Marcos — account 2505, stock
+22-363, 1,160 days late, last payment due Feb 2023. Ancient dead
+account not in any system.
+
+### Anti-patterns
+
+- **Never trust stock_no alone for vehicle lookup.** Stock numbers
+  get recycled. Always prefer custaccountno (1:1 with customer).
+
+- **Never filter csv_accounts to active-only for the account map.**
+  CarPay customers keep paying after DMS marks them inactive. The
+  stock map should be active-only (to avoid reuse collisions), but
+  the account map must include everything.
+
+- **Don't skip the deals table.** New sales show up there first —
+  days or weeks before they appear in DMS CSV exports or Sold
+  Inventory CSVs. The Sold Inventory CSVs can be months stale
+  (DeLand was 8 months behind as of May 2026).
+
+- **Preserved vehicle values are not authoritative.** They come from
+  prior sync runs and may reflect old bugs. Any resolved value from
+  the triangulation chain always overwrites the preserved value.
