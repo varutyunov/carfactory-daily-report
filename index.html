@@ -28906,9 +28906,11 @@ async function openDealDetail(id) {
     html += '<input id="de-customer-mname-'+d.id+'" value="'+_deMname.replace(/"/g,'&quot;')+'" placeholder="Middle (optional)" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-top:6px;"/>';
     html += '</div>';
 
-    // Vehicle info — editable so wrong car can be corrected after submission
+    // Vehicle info — search inventory or type manually
     html += '<div style="margin-bottom:10px;">';
     html += '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Vehicle</div>';
+    html += '<input id="de-inv-search-'+d.id+'" placeholder="Search inventory by stock #, year, make..." oninput="deInvFilter('+d.id+',this.value)" style="width:100%;background:#0a0a0a;border:1px solid #3b82f6;border-radius:10px;color:#60a5fa;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px;"/>';
+    html += '<div id="de-inv-results-'+d.id+'" style="display:none;max-height:200px;overflow-y:auto;margin-bottom:6px;border-radius:10px;border:1px solid #1e1e1e;"></div>';
     html += '<input id="de-vehicle-desc-'+d.id+'" value="'+_escHtml(d.vehicle_desc||'')+'" placeholder="e.g. 2018 Mitsubishi Outlander" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px;"/>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
     html += '<input id="de-vin-'+d.id+'" value="'+_escHtml(d.vin||'')+'" placeholder="VIN" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;color:#fff;padding:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:monospace;"/>';
@@ -29345,6 +29347,44 @@ async function _cleanupReviewsForDeal(dealId, why){
     console.warn('_cleanupReviewsForDeal lookup failed:', e);
     return [];
   }
+}
+
+function deInvFilter(dealId, val){
+  var box = document.getElementById('de-inv-results-'+dealId);
+  if(!box) return;
+  var q = (val||'').toLowerCase().trim();
+  if(!q){ box.style.display='none'; box.innerHTML=''; return; }
+  // Search across all locations (deal might be correcting to a car at the other lot)
+  var cars = (S.inventory||[]).filter(function(c){
+    return fuzzyMatch([c.name,c.stock||'',c.vin||'',c.color||'',c.location||''],q);
+  }).sort(function(a,b){ return b.id - a.id; }).slice(0,8);
+  if(!cars.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML = cars.map(function(c){
+    var label = c.name||[c.year,c.make,c.model].filter(Boolean).join(' ')||'Unknown';
+    var sub = [c.stock?'#'+c.stock:'',c.color||'',c.location||''].filter(Boolean).join(' · ');
+    return '<div onclick="deInvSelect('+dealId+','+c.id+')" style="padding:10px 12px;border-bottom:1px solid #1a1a1a;cursor:pointer;-webkit-tap-highlight-color:transparent;">'+
+      '<div style="font-size:14px;font-weight:700;color:#fff;">'+_escHtml(label)+'</div>'+
+      '<div style="font-size:11px;color:#555;">'+_escHtml(sub)+(c.vin?' · VIN '+c.vin.slice(-6):'')+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+function deInvSelect(dealId, carId){
+  var car = (S.inventory||[]).find(function(c){return c.id==carId;});
+  if(!car) return;
+  var descEl=document.getElementById('de-vehicle-desc-'+dealId);
+  var vinEl=document.getElementById('de-vin-'+dealId);
+  var colorEl=document.getElementById('de-color-'+dealId);
+  var stockEl=document.getElementById('de-stock-'+dealId);
+  var searchEl=document.getElementById('de-inv-search-'+dealId);
+  var resultsEl=document.getElementById('de-inv-results-'+dealId);
+  if(descEl) descEl.value=car.name||[car.year,car.make,car.model].filter(Boolean).join(' ')||'';
+  if(vinEl) vinEl.value=car.vin||'';
+  if(colorEl) colorEl.value=car.color||'';
+  if(stockEl) stockEl.value=car.stock||'';
+  if(searchEl) searchEl.value='';
+  if(resultsEl){resultsEl.style.display='none';resultsEl.innerHTML='';}
 }
 
 function dealEditAddPayment(id){
