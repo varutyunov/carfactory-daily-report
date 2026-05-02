@@ -115,7 +115,12 @@ def parse_vehicle(s):
     parts = s.split()
     year = ''
     rest = parts[:]
+    # Accept both 4-digit ("2014") and 2-digit ("14") year prefixes.
+    # carpay_customers.vehicle uses 2-digit from the sync ("14 Honda Accord").
     if parts and re.match(r'^(19|20)\d{2}$', parts[0]):
+        year = parts[0]
+        rest = parts[1:]
+    elif parts and re.match(r'^\d{2}$', parts[0]):
         year = parts[0]
         rest = parts[1:]
     make = rest[0] if rest else ''
