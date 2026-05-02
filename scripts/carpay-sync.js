@@ -338,23 +338,37 @@ async function sbLoadExistingLinks() {
   return map;
 }
 
-// Load app inventory — the third vertex of the triangle.
-// Builds stock → vehicle and vinLast6 → vehicle lookup maps.
-async function sbLoadInventory() {
-  const url = SB_URL + '/rest/v1/inventory?select=stock,name,vin&limit=10000';
-  const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
-  if (!res.ok) {
-    console.error('  inventory load failed: ' + res.status);
-    return { byStock: {}, byVin6: {} };
-  }
-  const rows = await res.json();
+// Load app inventory + deals — the third vertex of the triangle.
+// Merges both tables into unified stock → vehicle and vin6 → vehicle maps.
+// `deals` is where Manny/Jesse log new sales; `inventory` is the older
+// stock list. Deals take priority (more recent, has vehicle_desc + full VIN).
+async function sbLoadAppVehicles() {
   const byStock = {};
   const byVin6 = {};
-  rows.forEach(r => {
-    if (r.stock) byStock[r.stock] = r;
-    // Last 6 of VIN — matches CarPay's vin_last6 field
-    if (r.vin && r.vin.length >= 6) byVin6[r.vin.slice(-6)] = r;
-  });
+
+  // 1. Inventory (older stock, name = "2014 Ford Transit Connect")
+  const invRes = await fetch(SB_URL + '/rest/v1/inventory?select=stock,name,vin&limit=10000',
+    { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
+  if (invRes.ok) {
+    const invRows = await invRes.json();
+    invRows.forEach(r => {
+      if (r.stock) byStock[String(r.stock)] = { name: r.name, vin: r.vin };
+      if (r.vin && r.vin.length >= 6) byVin6[r.vin.slice(-6)] = { name: r.name, vin: r.vin };
+    });
+  }
+
+  // 2. Deals (recent sales, vehicle_desc = "2017 BMW 3-Series")
+  //    Overwrites inventory entries for the same stock — deals are newer.
+  const dealRes = await fetch(SB_URL + '/rest/v1/deals?select=stock,vehicle_desc,vin&limit=10000',
+    { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
+  if (dealRes.ok) {
+    const dealRows = await dealRes.json();
+    dealRows.forEach(r => {
+      if (r.stock) byStock[String(r.stock)] = { name: r.vehicle_desc, vin: r.vin };
+      if (r.vin && r.vin.length >= 6) byVin6[r.vin.slice(-6)] = { name: r.vehicle_desc, vin: r.vin };
+    });
+  }
+
   return { byStock, byVin6 };
 }
 
@@ -366,10 +380,15 @@ function invNameToShort(name) {
   return m[1].slice(-2) + ' ' + m[2];
 }
 
-// Resolve vehicle description — triangulation across 3 data sources.
-// Returns a string like "16 Hyundai Genesis" or null.
-// Priority: csv_accounts by acct → csv_accounts by stock → app inventory
-// by stock → app inventory by VIN last 6 → deal_account_links car_desc.
+// Resolve vehicle — full triangulation across all data sources.
+// Returns "17 BMW 3-Series" or null.
+//
+// Priority chain (6 lookups):
+//   1. csv_accounts by account  (DMS gold standard, 1:1)
+//   2. csv_accounts by stock    (DMS, active-only to avoid reuse)
+//   3. App vehicles by stock    (inventory + deals table merged)
+//   4. App vehicles by VIN-6    (catches stock_no mismatches)
+//   5. deal_account_links desc  (partial: "08 Sentra" from sheet)
 function resolveVehicle(cust, csvLookup, invLookup, dealLinks) {
   // 1. csv_accounts by account — strongest (1:1, never reused).
   let csv = cust.account ? csvLookup.byAccount[cust.account] : null;
@@ -378,11 +397,11 @@ function resolveVehicle(cust, csvLookup, invLookup, dealLinks) {
   if (csv && csv.year && csv.make && csv.model) {
     return String(csv.year).slice(-2) + ' ' + csv.make + ' ' + csv.model;
   }
-  // 3. App inventory by stock_no.
+  // 3. App vehicles (inventory + deals) by stock_no.
   if (invLookup) {
-    const inv = cust.stock_no ? invLookup.byStock[cust.stock_no] : null;
+    const inv = cust.stock_no ? invLookup.byStock[String(cust.stock_no)] : null;
     if (inv) { const s = invNameToShort(inv.name); if (s) return s; }
-    // 4. App inventory by VIN last 6.
+    // 4. App vehicles by VIN last 6.
     const inv2 = cust.vin_last6 ? invLookup.byVin6[cust.vin_last6] : null;
     if (inv2) { const s = invNameToShort(inv2.name); if (s) return s; }
   }
@@ -430,8 +449,8 @@ async function main() {
   // Load all three data sources once — triangulation for vehicle resolution.
   const csvLookup = await sbLoadCsvAccounts();
   console.log('Loaded csv_accounts: ' + Object.keys(csvLookup.byStock).length + ' by stock, ' + Object.keys(csvLookup.byAccount).length + ' by account');
-  const invLookup = await sbLoadInventory();
-  console.log('Loaded inventory: ' + Object.keys(invLookup.byStock).length + ' by stock, ' + Object.keys(invLookup.byVin6).length + ' by vin6');
+  const invLookup = await sbLoadAppVehicles();
+  console.log('Loaded app vehicles (inventory+deals): ' + Object.keys(invLookup.byStock).length + ' by stock, ' + Object.keys(invLookup.byVin6).length + ' by vin6');
   const existingLinks = await sbLoadExistingLinks();
   console.log('Loaded ' + Object.keys(existingLinks).length + ' existing deal_account_links');
 
