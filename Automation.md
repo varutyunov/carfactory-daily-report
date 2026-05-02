@@ -1380,3 +1380,19 @@ account not in any system.
 - **Preserved vehicle values are not authoritative.** They come from
   prior sync runs and may reflect old bugs. Any resolved value from
   the triangulation chain always overwrites the preserved value.
+
+- **csv_accounts stock lookup must verify the account matches.**
+  When `byStock[stock_no]` returns a record with a different
+  `custaccountno`, it's someone else's car on a reused stock.
+  Skip it and let inventory/deals resolve (they have the right
+  answer). Example: Bruten (4579) stock 25200 → csv said Todd's
+  F250SD; Santiago (4558) stock 26099 → csv said Spencer's Optima.
+  Both wrong. The triangulation caught it — sheet car_desc
+  disagreed with the sync vehicle.
+
+- **Use triangulation to validate links, not just fill gaps.**
+  When the sync vehicle disagrees with the sheet car_desc from
+  `carpay_payment_postings`, the link is wrong. The May 2026
+  cross-check caught Bruten and Santiago this way — two bad
+  vehicles that would have gone unnoticed without the three-way
+  comparison.
