@@ -68,42 +68,72 @@ def sb_post(table, body):
 _AMT_RE = re.compile(r'^(-?\d+(?:\.\d+)?)\s*(.*)$')
 
 
+_COLORS = {'white','black','gray','grey','silver','red','blue','green','yellow',
+           'orange','purple','brown','gold','beige','tan','maroon'}
+
+
 def cash_sale_tokens(deal, car_desc):
-    """Year (yShort + yFull), first model word, lowercase lastname.
+    """Year, ALL model words (alphanum-normalized), lowercase lastname.
 
     Profit26 note lines mirror d26.car_desc format (e.g. "08 CRV grey 217k
     2 Gonzalez"). vehicle_desc gives "2008 Honda CR-V" — its model token
     'cr-v' won't substring-match the line's 'crv'. So we prefer car_desc
     and only fall back to vehicle_desc when car_desc is empty/incomplete.
-    Plus we expose `model_norm` (alphanum-only) so the matcher can compare
-    against a normalized line and survive hyphen mismatches either way.
+
+    Captures every non-color, non-numeric model word so idempotency /
+    posted-line matching survives descriptor drift between posts of the
+    same deal — caught a Caravan double-post where the older line had
+    only "caravan" but the new car_desc started with "grand". Any of the
+    model words appearing in a line is enough; surname + year already
+    keeps the filter tight.
     """
     cust = (deal.get('customer_name') or '').strip().split()
     last = (cust[-1] if cust else '').lower()
 
     year = ''
-    model_first = ''
+    model_words = []
     if car_desc:
         cd = car_desc.strip().split()
         if cd and re.match(r'^\d{2}$', cd[0]):
             year = '20' + cd[0]
-        if len(cd) > 1:
-            model_first = cd[1].lower()
-    if not year or not model_first:
+        for tok in cd[1:]:
+            t = tok.lower()
+            if not t:
+                continue
+            if re.match(r'^\d', t):
+                break  # miles like "197k" or trailing deal_num — stop
+            if t in _COLORS:
+                continue
+            model_words.append(t)
+    if not year or not model_words:
         vd = (deal.get('vehicle_desc') or '').strip().split()
         if vd and re.match(r'^(19|20)\d{2}$', vd[0]):
             if not year:
                 year = vd[0]
-            if not model_first:
-                model_tok = ' '.join(vd[2:]) if len(vd) >= 3 else (vd[1] if len(vd) > 1 else '')
-                model_first = (model_tok.split() or [''])[0].lower()
+            if not model_words:
+                # vehicle_desc form: "2016 Volkswagen Jetta" → keep
+                # "Jetta" only (skip the make at vd[1]). For multi-word
+                # models like "Grand Caravan" both words land here.
+                for tok in vd[2:]:
+                    t = tok.lower()
+                    if not t:
+                        continue
+                    if re.match(r'^\d', t):
+                        break
+                    if t in _COLORS:
+                        continue
+                    model_words.append(t)
 
-    model_norm = re.sub(r'[^a-z0-9]', '', model_first)
+    model_first = model_words[0] if model_words else ''
+    model_norm_words = [re.sub(r'[^a-z0-9]', '', w) for w in model_words]
+    model_norm_words = [w for w in model_norm_words if w]
     return {
         'y_short': year[-2:] if year else '',
         'y_full': year,
         'model': model_first,
-        'model_norm': model_norm,
+        'model_norm': model_norm_words[0] if model_norm_words else '',
+        'model_words': model_words,
+        'model_norm_words': model_norm_words,
         'last': last,
     }
 
@@ -127,12 +157,12 @@ def find_posted_note(note, tokens):
         )
         if not has_year:
             continue
-        if tokens['model']:
-            # Compare against alphanum-normalized line so 'crv' matches
-            # 'cr-v' / 'hr-v' / '5-series' regardless of hyphenation.
+        words = tokens.get('model_norm_words') or []
+        if words:
+            # Any-of-words match against alphanum-normalized line. Mirrors
+            # JS _findPostedNoteForTokens so JS + Python sweeps agree.
             ll_norm = re.sub(r'[^a-z0-9]', '', ll)
-            m_norm = tokens.get('model_norm') or tokens['model']
-            if m_norm and m_norm not in ll_norm:
+            if not any(w and w in ll_norm for w in words):
                 continue
         m = _AMT_RE.match(line)
         if m:
@@ -162,12 +192,12 @@ def find_all_posted_notes(note, tokens):
         )
         if not has_year:
             continue
-        if tokens['model']:
-            # Compare against alphanum-normalized line so 'crv' matches
-            # 'cr-v' / 'hr-v' / '5-series' regardless of hyphenation.
+        words = tokens.get('model_norm_words') or []
+        if words:
+            # Any-of-words match against alphanum-normalized line. Mirrors
+            # JS _findPostedNoteForTokens so JS + Python sweeps agree.
             ll_norm = re.sub(r'[^a-z0-9]', '', ll)
-            m_norm = tokens.get('model_norm') or tokens['model']
-            if m_norm and m_norm not in ll_norm:
+            if not any(w and w in ll_norm for w in words):
                 continue
         m = _AMT_RE.match(line)
         if m:

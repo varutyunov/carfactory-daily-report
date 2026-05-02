@@ -18684,31 +18684,52 @@ function _cashSaleTokens(deal, carDesc){
   // 2 Gonzalez"). vehicle_desc gives "2008 Honda CR-V" — its model token
   // 'cr-v' won't substring-match the line's 'crv'. Prefer car_desc so the
   // model token matches the format the line was actually written in.
-  var year = '', modelFirst = '';
+  // We capture ALL model words (not just the first) so idempotency
+  // matches lines written with any subset — caught a Caravan double-post
+  // where the older line had "Caravan" but the new car_desc began with
+  // "Grand". Any-of match is safer for dedupe purposes.
+  var COLORS = {white:1,black:1,gray:1,grey:1,silver:1,red:1,blue:1,green:1,yellow:1,orange:1,purple:1,brown:1,gold:1,beige:1,tan:1,maroon:1};
+  var year = '', modelWords = [];
   if (carDesc){
     var cd = String(carDesc).trim().split(/\s+/);
     if (cd[0] && /^\d{2}$/.test(cd[0])) year = '20' + cd[0];
-    if (cd[1]) modelFirst = cd[1].toLowerCase();
+    for (var i = 1; i < cd.length; i++){
+      var t = (cd[i] || '').toLowerCase();
+      if (!t) continue;
+      if (/^\d/.test(t)) break;       // miles like "197k", or trailing deal_num
+      if (COLORS[t]) continue;
+      modelWords.push(t);
+    }
   }
-  if (!year || !modelFirst){
+  if (!year || !modelWords.length){
     var vd = String((deal && deal.vehicle_desc) || '').trim().split(/\s+/);
     if (vd[0] && /^(19|20)\d{2}$/.test(vd[0])){
       if (!year) year = vd[0];
-      if (!modelFirst){
-        var modelTok = (vd.slice(2).join(' ') || vd[1] || '').toLowerCase();
-        modelFirst = (modelTok.split(/\s+/)[0] || '');
+      if (!modelWords.length){
+        // vehicle_desc form: "2016 Volkswagen Jetta" → keep "Jetta" only
+        // (skip the make at vd[1]). For multi-word models like
+        // "Grand Caravan" both words land in modelWords.
+        for (var j = 2; j < vd.length; j++){
+          var v = (vd[j] || '').toLowerCase();
+          if (!v) continue;
+          if (/^\d/.test(v)) break;
+          if (COLORS[v]) continue;
+          modelWords.push(v);
+        }
       }
     }
   }
-  // Normalize hyphens/spaces in the model token so 'cr-v' matches 'crv',
-  // 'hr-v' matches 'hrv', '5-series' matches '5series' etc. Yes, slightly
-  // looser — but the year + lastname filters keep it specific enough.
-  var modelNorm = modelFirst.replace(/[^a-z0-9]/g, '');
+  var modelFirst = modelWords[0] || '';
+  // Normalize hyphens/spaces in each model word so 'cr-v' matches 'crv',
+  // 'hr-v' matches 'hrv', '5-series' matches '5series' etc.
+  var modelNormWords = modelWords.map(function(w){ return w.replace(/[^a-z0-9]/g, ''); }).filter(Boolean);
   return {
     yShort: year ? year.slice(-2) : '',
     yFull: year || '',
     model: modelFirst,
-    modelNorm: modelNorm,
+    modelNorm: modelNormWords[0] || '',
+    modelWords: modelWords,
+    modelNormWords: modelNormWords,
     last: last
   };
 }
@@ -18731,12 +18752,19 @@ function _findPostedNoteForTokens(mirror, tokens){
       var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
                     (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
       if (!hasYear) continue;
-      if (tokens.model){
+      if (tokens.modelNormWords && tokens.modelNormWords.length){
         // Match against the alphanum-normalized line so 'crv' matches
-        // 'cr-v' regardless of which side carries the hyphen.
+        // 'cr-v' regardless of which side carries the hyphen. ANY model
+        // word matching is enough — caught a Caravan dupe where the
+        // older line had only "caravan" and the new desc started with
+        // "grand". Surname + year is already a tight filter; loosening
+        // model from all-of to any-of just protects against descriptor
+        // drift between posts of the same deal.
         var _llNorm = ll.replace(/[^a-z0-9]/g, '');
-        var _mNorm = tokens.modelNorm || tokens.model;
-        if (_mNorm && _llNorm.indexOf(_mNorm) < 0) continue;
+        var _hit = tokens.modelNormWords.some(function(w){
+          return w && _llNorm.indexOf(w) >= 0;
+        });
+        if (!_hit) continue;
       }
       var m = line.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
       if (m){
@@ -19020,12 +19048,15 @@ async function _cfBackfillProfitPostings(opts){
       var hasYear = (tokens.yShort && ll.indexOf(tokens.yShort) >= 0) ||
                     (tokens.yFull && ll.indexOf(tokens.yFull) >= 0);
       if (!hasYear) continue;
-      if (tokens.model){
-        // Match against the alphanum-normalized line so 'crv' matches
-        // 'cr-v' regardless of which side carries the hyphen.
+      if (tokens.modelNormWords && tokens.modelNormWords.length){
+        // Any-model-word match (mirrors _findPostedNoteForTokens). Caught
+        // a Caravan dupe where the older line had only "caravan" and the
+        // new desc started with "grand".
         var _llNorm = ll.replace(/[^a-z0-9]/g, '');
-        var _mNorm = tokens.modelNorm || tokens.model;
-        if (_mNorm && _llNorm.indexOf(_mNorm) < 0) continue;
+        var _hit = tokens.modelNormWords.some(function(w){
+          return w && _llNorm.indexOf(w) >= 0;
+        });
+        if (!_hit) continue;
       }
       hit = L; break;
     }
