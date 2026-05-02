@@ -28976,6 +28976,61 @@ async function openDealDetail(id) {
   if(d.location) html += 'Location: '+d.location;
   html += '</div>';
 
+  // ── Deals26 Sheet Status — profit breakdown + Post button ───────────
+  // Shows for every deal. If not yet posted, shows a green Post button
+  // with the profit math so you can see what's going to hit the sheet.
+  html += '<div id="de-sheet-block-'+d.id+'" style="margin-top:20px;border-top:1px solid #1a1a1a;padding-top:16px;display:none;">';
+  html += '</div>';
+  if (d.vin) {
+    (function(_d, _payments){
+      var _vin = (_d.vin||'').trim();
+      sbGet('deals26', 'sold_inv_vin=eq.'+encodeURIComponent(_vin)+'&select=id,car_desc,cost,expenses,taxes,money,owed,sort_order&limit=1').then(function(rows){
+        var block = document.getElementById('de-sheet-block-'+_d.id);
+        if (!block) return;
+        block.style.display = 'block';
+        if (rows && rows.length) {
+          // Already on sheet — show summary
+          var r = rows[0];
+          var _fmt = function(v){return '$'+(parseFloat(v)||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});};
+          block.innerHTML =
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+              '<div style="width:10px;height:10px;border-radius:50%;background:#4ade80;flex-shrink:0;"></div>'+
+              '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;color:#4ade80;letter-spacing:1px;text-transform:uppercase;">On Deals26 Sheet</div>'+
+            '</div>'+
+            '<div style="background:#111;border-radius:12px;padding:14px;font-size:13px;color:#888;">'+
+              '<div style="color:#ccc;font-weight:600;margin-bottom:8px;">'+_escHtml(r.car_desc||'')+'</div>'+
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">'+
+                '<div>Cost: <span style="color:#fff;">'+_fmt(r.cost)+'</span></div>'+
+                '<div>Money: <span style="color:#4ade80;">'+_fmt(r.money)+'</span></div>'+
+                '<div>Expenses: <span style="color:#fff;">'+_fmt(r.expenses)+'</span></div>'+
+                '<div>Taxes: <span style="color:#fff;">'+_fmt(r.taxes)+'</span></div>'+
+              '</div>'+
+              '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #222;font-size:15px;font-weight:700;color:'+((parseFloat(r.owed)||0)>=0?'#4ade80':'#ef4444')+';">'+
+                'Profit: '+_fmt(r.owed)+
+              '</div>'+
+            '</div>';
+        } else {
+          // Not on sheet — show Post button with profit preview
+          var _money = 0;
+          (_payments||[]).forEach(function(p){_money += parseFloat(p.amount)||0;});
+          block.innerHTML =
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+              '<div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></div>'+
+              '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:800;color:#f59e0b;letter-spacing:1px;text-transform:uppercase;">Not on Deals26 Sheet</div>'+
+            '</div>'+
+            '<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:12px;font-size:13px;color:#888;">'+
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">'+
+                '<div>Money collected: <span style="color:#4ade80;">$'+_money.toLocaleString('en-US',{minimumFractionDigits:0})+'</span></div>'+
+                '<div>Type: <span style="color:#ccc;">'+(_d.deal_type==='finance'?'Finance':'Cash')+'</span></div>'+
+              '</div>'+
+              '<div style="font-size:11px;color:#555;margin-top:8px;">Cost, expenses &amp; taxes will be pulled from Sheet Inventory when posted.</div>'+
+            '</div>'+
+            '<button onclick="dealPostToSheet('+_d.id+')" id="de-post-sheet-'+_d.id+'" style="width:100%;padding:16px;background:linear-gradient(145deg,#0a2a1a,#16a34a);border:1px solid rgba(74,222,128,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Post to Deals26</button>';
+        }
+      }).catch(function(){});
+    })(d, payments);
+  }
+
   // Edit Deal (owner only)
   if(me && ['vlad','tommy'].some(function(n){return me.name.toLowerCase().indexOf(n)!==-1;})){
     html += '<div style="margin-top:24px;border-top:1px solid #1a1a1a;padding-top:20px;">';
@@ -29146,6 +29201,7 @@ async function openDealDetail(id) {
 
     // Save button
     html += '<button onclick="dealEditSave('+d.id+')" id="de-save-'+d.id+'" style="width:100%;padding:14px;background:linear-gradient(145deg,#0a1a3a,#1d4ed8);border:1px solid rgba(96,165,250,.4);border-radius:14px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent;">Save Changes</button>';
+
     html += '</div>';
 
     // Move week buttons (legacy)
@@ -29647,6 +29703,28 @@ function deToggleOOS(id){
     box.style.borderColor = on?'#fbbf24':'#333';
   }
   if(chk) chk.style.display = on?'block':'none';
+}
+
+// Post an existing deal to the Deals26 sheet. Used when a deal was
+// submitted before direct-posting existed, or the original sheet write
+// failed and needs to be retried.
+async function dealPostToSheet(id){
+  var d=_dealsData.find(function(x){return x.id===id;});
+  if(!d) d=(_dealsAllData||[]).find(function(x){return x.id===id;});
+  if(!d){alert('Deal not found');return;}
+  var btn=document.getElementById('de-post-sheet-'+id);
+  if(btn){btn.textContent='Posting...';btn.disabled=true;}
+  try {
+    var car=(S.inventory||[]).find(function(c){return c.vin&&d.vin&&c.vin.toUpperCase()===d.vin.toUpperCase();});
+    var snap=await _autopopulateDeals26(d, car||null);
+    if(btn){btn.textContent='✓ Posted';btn.style.background='#16a34a';}
+    alert('Posted to Deals26 sheet.\n\n' +
+      (snap && snap.carDesc ? 'Row: ' + snap.carDesc : '') +
+      (snap && snap.owed != null ? '\nOwed: $' + snap.owed : ''));
+  }catch(e){
+    if(btn){btn.textContent='Post to Deals26 Sheet';btn.disabled=false;}
+    alert('Deals26 post failed:\n\n'+(e.message||e));
+  }
 }
 
 async function dealEditSave(id){
