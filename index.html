@@ -29019,6 +29019,11 @@ async function openDealDetail(id) {
           }
           // Store data for math expand
           _d._d26 = r;
+          // If math panel is already open, refresh it with real data
+          var _mathEl = document.getElementById('de-math-'+_d.id);
+          if (_mathEl && _mathEl.style.display !== 'none') {
+            _renderMathBody(_d.id, _d);
+          }
         } else {
           if (profitEl) { profitEl.textContent = 'Not posted'; profitEl.style.fontSize = '14px'; }
           if (boxEl) {
@@ -29779,6 +29784,14 @@ function dealToggleMath(id){
   if (!d) d = (_dealsAllData||[]).find(function(x){return x.id===id;});
   if (!d) { body.innerHTML = '<div style="color:#555;">Deal not found</div>'; return; }
 
+  _renderMathBody(id, d, body);
+}
+/* Render (or re-render) the math breakdown for a deal.
+   Called by dealToggleMath and by the async _d26 setter. */
+function _renderMathBody(id, d, body){
+  if (!body) body = document.getElementById('de-math-body-'+id);
+  if (!body) return;
+
   var _fmt = function(v){ var n = parseFloat(v)||0; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
   var _row = function(label, val, color){
     return '<div style="display:flex;justify-content:space-between;padding:4px 0;">'+
@@ -29816,6 +29829,20 @@ function dealToggleMath(id){
       '<span style="font-weight:700;">'+(owed>=0?'Profit':'Owes')+'</span>'+
       '<span style="color:'+(owed>=0?'#4ade80':'#ef4444')+';font-weight:800;">'+_fmt(Math.abs(owed))+'</span></div>';
     body.innerHTML = h;
+  } else if (d.vin) {
+    // _d26 hasn't arrived yet — show spinner and poll until it does
+    body.innerHTML = '<div style="text-align:center;color:#666;"><span class="math-spin" style="display:inline-block;animation:spin .8s linear infinite;font-size:18px;">⏳</span> Loading…</div>';
+    var _pollCount = 0;
+    var _pollTimer = setInterval(function(){
+      _pollCount++;
+      if (d._d26) {
+        clearInterval(_pollTimer);
+        _renderMathBody(id, d, body);
+      } else if (_pollCount > 20) {
+        clearInterval(_pollTimer);
+        body.innerHTML = '<div style="color:#555;text-align:center;">Not on Deals26 yet — post the deal first to see the math.</div>';
+      }
+    }, 250);
   } else {
     body.innerHTML = '<div style="color:#555;text-align:center;">Not on Deals26 yet — post the deal first to see the math.</div>';
   }
