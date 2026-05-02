@@ -17818,12 +17818,12 @@ function _paymentNoteLineFit(amtStr, pieces){
 // Hard rule: amount + M/D always present. Color → model-extra → lastName
 // truncate, in that order.
 // Examples:
-//   "200 Passat Gauvin 4/21"
-//   "1465 Avalon Rackley 4/25"
+//   "$200 Passat Gauvin 4/21"
+//   "$1465 Avalon Rackley 4/25"
 function _paymentNoteLine(amount, payload){
   var amt = parseFloat(amount);
   if(!isFinite(amt)) amt = 0;
-  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var amtStr = amt < 0 ? '-$' + String(Math.abs(amt)) : '$' + String(amt);
   return _paymentNoteLineFit(amtStr, _paymentFormatPieces(payload));
 }
 
@@ -17878,7 +17878,7 @@ function _parseCarDesc(carDesc){
 function _paymentNoteLineFromDeal(amount, carDesc, paymentDate){
   var amt = parseFloat(amount);
   if(!isFinite(amt)) amt = 0;
-  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var amtStr = amt < 0 ? '-$' + String(Math.abs(amt)) : '$' + String(amt);
   var pieces = _parseCarDesc(carDesc);
   // Date string from paymentDate (YYYY-MM-DD) → "M/D"
   var dateStr = '';
@@ -17962,7 +17962,7 @@ function _paymentDescFromPayload(payload){
   // Dummy amount placeholder of typical length to share the size budget
   var amt = parseFloat(payload && payload.amount);
   if(!isFinite(amt)) amt = 0;
-  var amtStr = amt < 0 ? '-' + String(Math.abs(amt)) : String(amt);
+  var amtStr = amt < 0 ? '-$' + String(Math.abs(amt)) : '$' + String(amt);
   var fullLine = _paymentNoteLineFit(amtStr, _paymentFormatPieces(payload));
   // Slice off "{amtStr} " prefix
   var prefix = amtStr + ' ';
@@ -18766,9 +18766,9 @@ function _findPostedNoteForTokens(mirror, tokens){
         });
         if (!_hit) continue;
       }
-      var m = line.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+      var m = line.match(/^(-?\$?\d+(?:\.\d+)?)\s*(.*)$/);
       if (m){
-        return { amount: parseFloat(m[1]), desc: (m[2] || '').trim() };
+        return { amount: parseFloat(m[1].replace('$','')), desc: (m[2] || '').trim() };
       }
     }
   }
@@ -19014,9 +19014,9 @@ async function _cfBackfillProfitPostings(opts){
     for (var li = 0; li < nlines.length; li++){
       var ln = String(nlines[li] || '').trim();
       if (!ln) continue;
-      var lm = ln.match(/^(-?\d+(?:\.\d+)?)\s+(.*)$/);
+      var lm = ln.match(/^(-?\$?\d+(?:\.\d+)?)\s+(.*)$/);
       if (!lm){ summary.skipped++; continue; }
-      var lAmt = parseFloat(lm[1]);
+      var lAmt = parseFloat(lm[1].replace('$',''));
       if (!isFinite(lAmt)){ summary.skipped++; continue; }
       allLines.push({
         loc: pr.location, month: pr.month_idx, row_type: rt,
@@ -30821,16 +30821,17 @@ function _pfBeParseFormula(formula){
 }
 function _pfBeParseNote(note){
   // Each line is '<amount> <description>' — amount optional, description optional
+  // Amount may have $ prefix (e.g. "$235 souza 5/1" or "235 souza 5/1")
   var out=[];
   var lines=String(note||'').split(/\r?\n/);
   for(var i=0;i<lines.length;i++){
     var l=(lines[i]||'').trim();
     if(!l)continue;
-    var m=l.match(/^(-?\d+(?:\.\d+)?)\s+(.+)$/);
-    if(m) out.push({amount:parseFloat(m[1]),description:m[2].trim()});
+    var m=l.match(/^(-?\$?\d+(?:\.\d+)?)\s+(.+)$/);
+    if(m) out.push({amount:parseFloat(m[1].replace('$','')),description:m[2].trim()});
     else{
-      var mOnly=l.match(/^(-?\d+(?:\.\d+)?)$/);
-      if(mOnly) out.push({amount:parseFloat(mOnly[1]),description:''});
+      var mOnly=l.match(/^(-?\$?\d+(?:\.\d+)?)$/);
+      if(mOnly) out.push({amount:parseFloat(mOnly[1].replace('$','')),description:''});
       else out.push({amount:null,description:l});
     }
   }
@@ -30865,7 +30866,7 @@ function _pfBeBuild(entries){
     }else{
       parts.push('+'+String(a));
     }
-    noteLines.push((a<0?('-'+Math.abs(a)):String(a))+(d?' '+d:''));
+    noteLines.push((a<0?('-$'+Math.abs(a)):('$'+String(a)))+(d?' '+d:''));
   }
   var formula=parts.length?'='+parts.join(''):'';
   return {formula:formula, note:noteLines.join('\n'), total: entries.reduce(function(s,e){return s+(Number(e.amount)||0);},0), count: parts.length};
