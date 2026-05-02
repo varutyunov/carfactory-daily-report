@@ -21214,13 +21214,10 @@ var _reviewStaleCsv = null;
 // fill the taxes now" path instead of waiting for the 30-min cron.
 async function _reviewStaleBannerTap(){
   var btn = document.getElementById('rv-stale-banner');
-  var origLabel = null;
   if (btn){
-    var labelEl = btn.querySelector('div > div:last-child');
-    origLabel = labelEl ? labelEl.textContent : null;
-    if (labelEl) labelEl.textContent = 'refreshing…';
     btn.style.opacity = '0.6';
     btn.style.cursor = 'wait';
+    btn.disabled = true;
   }
   var beforeTotal = _reviewStaleCsv
     ? (_reviewStaleCsv.DeBary || 0) + (_reviewStaleCsv.DeLand || 0) : 0;
@@ -21466,35 +21463,32 @@ function _reviewRender(){
     ? '<div style="margin-bottom:12px;"><button onclick="_rvForceScan()" id="rv-scan-btn" style="width:100%;padding:11px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:10px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;">⟳ Scan for new cars</button><div id="rv-scan-result" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div></div>'
     : '';
 
-  // Stale Pending Sales CSV banner — populated by _checkStaleCsvForReview
-  // at load time. Surfaces deals stuck with taxes=0 because the
-  // location's CSV hasn't been refreshed since the sale. Tap it to
-  // re-fetch the published CSV and run _fillMissingTaxes against the
-  // affected deals — instant fill if the CSV is now current, or a
-  // toast saying "push a fresh DMS export first" if it's still stale.
+  // Stale Pending Sales CSV — compact pill button. Populated by
+  // _checkStaleCsvForReview. Tap → _fillMissingTaxes against the latest
+  // published CSV (and auto-posts profit for any cash deal whose owed
+  // flips positive after the fill).
   var staleBanner = '';
   if (_reviewStaleCsv && _reviewTab === 'sales'){
-    var locParts = [];
-    if (_reviewStaleCsv.DeBary) locParts.push('DeBary (' + _reviewStaleCsv.DeBary + ')');
-    if (_reviewStaleCsv.DeLand) locParts.push('DeLand (' + _reviewStaleCsv.DeLand + ')');
-    if (locParts.length){
+    var lotChips = [];
+    if (_reviewStaleCsv.DeBary) lotChips.push('DeBary · ' + _reviewStaleCsv.DeBary);
+    if (_reviewStaleCsv.DeLand) lotChips.push('DeLand · ' + _reviewStaleCsv.DeLand);
+    if (lotChips.length){
       staleBanner =
         '<button id="rv-stale-banner" onclick="_reviewStaleBannerTap()" ' +
-          'style="display:block;width:100%;text-align:left;background:#1a0c00;border:1px solid #c2410c;' +
-          'border-radius:10px;padding:12px;margin-bottom:12px;color:#fb923c;font-size:12px;' +
-          'line-height:1.5;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:inherit;">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-            '<div style="font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#f97316;">' +
-              'Pending Sales CSV out of date' +
-            '</div>' +
-            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;' +
-              'color:#fb923c;background:rgba(249,115,22,.2);border:1px solid rgba(249,115,22,.4);' +
-              'border-radius:6px;padding:3px 8px;">tap to refresh</div>' +
+          'style="display:flex;width:100%;align-items:center;justify-content:space-between;' +
+          'gap:10px;background:#111;border:1px solid #1e1e1e;border-radius:12px;' +
+          'padding:12px 14px;margin-bottom:12px;color:#ddd;font-family:inherit;' +
+          'font-size:13px;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:#f97316;' +
+              'box-shadow:0 0 6px rgba(249,115,22,.6);flex-shrink:0;"></span>' +
+            '<span style="font-weight:700;">Fill taxes</span>' +
+            '<span style="color:#666;">·</span>' +
+            '<span style="color:#fb923c;font-variant-numeric:tabular-nums;">' +
+              lotChips.join(' · ') +
+            '</span>' +
           '</div>' +
-          'Deals missing taxes: <b>' + locParts.join(' · ') + '</b>. ' +
-          'Push a fresh <code>SalesOpenPending</code> export from the DMS for ' +
-          (locParts.length > 1 ? 'each lot' : (locParts[0].split(' ')[0])) + ', then tap ' +
-          'this banner to backfill the rows. (Auto-runs on the next cron tick too.)' +
+          '<span style="color:#666;font-size:16px;line-height:1;">↻</span>' +
         '</button>';
     }
   }
