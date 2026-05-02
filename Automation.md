@@ -1056,3 +1056,116 @@ Pending `payment_reviews` for a deleted/voided deal become orphans.
 `dealReturnFinal`. `review_revalidate.py` does the same via
 `load_deal_ids()` orphan check on every cron pass. Don't leave
 orphan reviews.
+
+---
+
+## Day 12 — deal posting, vehicle cascade, note formatting (2026-05-02)
+
+### Deposit handling: deals26.money = full total_collected
+
+**Rule: NEVER subtract deposits from `deals26.money`.**
+
+`_autopopulateDeals26(record, car, icOverride)` sets:
+```javascript
+var money = parseFloat(record.total_collected) || 0;
+```
+
+This is the FULL amount collected for the deal — deposit + day-of-sale
+cash + pickup payments. Example: if a customer put down a $1,000
+deposit last week and paid $1,000 cash at signing, `total_collected`
+is $2,000. `money` = $2,000. The deposit is part of the deal's total
+collected, not a deduction.
+
+**Where deposit subtraction DOES apply:** only in payment ROW posting
+(lines ~25155–25212 of index.html). When the app creates individual
+payment rows for a newly posted deal, it detects prior deposit rows
+(`raw_ocr_text` starting with `"Deposit —"`) and subtracts the
+deposit amount from the day-of-sale cash row. This prevents
+double-posting: the deposit was already recorded as its own payment
+row, so the cash row should only reflect the non-deposit portion.
+
+**Anti-pattern (Day 12 lesson):** An earlier attempt subtracted
+deposits inside `_autopopulateDeals26` itself — this caused the
+Deals26 row's money/owed to be wrong (e.g., Holliday 14 Outlander
+Sport showed $1,000 money instead of $2,000, which cascaded into
+the breakeven/owed calculation and would have corrupted future profit
+tracking). The subtraction was reverted and the deal's data corrected.
+
+### Vehicle cascade on VIN re-link
+
+Two paths cascade vehicle info to payment rows when the linked
+vehicle changes:
+
+1. **`dealEditSave`** — when editing a deal's vehicle fields directly
+   in the deal detail view, all payment rows with the old VIN are
+   patched with the new vehicle year/make/model/color/VIN. The
+   `raw_ocr_text` prefix (`"Deal — "` or `"Deposit — "`) is preserved
+   and the vehicle description updated.
+
+2. **`d26LinkSelect(vin)`** — when re-linking a deals26 row to a
+   different inventory car via the VIN picker. Queries the `inventory`
+   table for the new VIN's `name` and `color`, parses year/make/model
+   from the name, then patches every payment row that had the OLD VIN:
+   - `vehicle_vin`, `vehicle_year`, `vehicle_make`, `vehicle_model`,
+     `vehicle_color`
+   - `raw_ocr_text` prefix preserved (`"Deal — "` / `"Deposit — "`)
+     with updated vehicle description.
+
+Both paths log to console (`cascaded vehicle info to N payment(s)`).
+Failure on individual payment updates is caught and logged but doesn't
+block the VIN re-link itself.
+
+**Why this matters:** payment rows carry vehicle metadata used by
+the matcher, Review UI cards, and the GPS sync bookmarklet. Stale
+vehicle info on payments causes mis-routing and confusing displays.
+When Jesse accidentally posted a deal under the wrong vehicle (2018
+Outlander instead of 2014 Outlander Sport), the cascade ensured that
+fixing the VIN on the deals26 row also fixed all associated payment
+rows automatically.
+
+### GPS sync: resetting gps_uploaded
+
+The `gps_uploaded` flag on the `deals` table controls whether the
+GPS sync bookmarklet (Passtime portal) shows a deal as pending for
+serial upload. When vehicle info was wrong at the time of sync (deal
+was synced under the wrong car), set `gps_uploaded = false` on the
+deal so it reappears in the bookmarklet's pending list for re-sync
+with the corrected vehicle info.
+
+Edge function `gps-sync` (`supabase/functions/gps-sync/index.ts`)
+returns deals where `gps_uploaded=false AND gps_serial IS NOT NULL
+AND voided_at IS NULL`. The `mark_uploaded` action sets
+`gps_uploaded=true` after the bookmarklet completes the Passtime
+portal entry.
+
+### Payment note formatting
+
+**Dollar signs on amounts.** All payment note builders now prefix
+amounts with `$`:
+
+- `_paymentNoteLine(amount, payload)` → `$350 14 Camry blue smith 5/1`
+- `_paymentNoteLineFromDeal(amount, carDesc, date)` → same format
+- `_paymentDescFromPayload(payload)` → `$350 14 Camry blue smith 5/1`
+- `_pfBeBuild` note lines → `$350 description` (or `-$50 description`
+  for negatives)
+
+All parsers updated to accept the optional `$` prefix:
+```javascript
+var m = l.match(/^(-?\$?\d+(?:\.\d+)?)\s+(.+)$/);
+```
+
+**Truncation order for 26-char budget.** `_paymentNoteLineFit` fits
+note entries into 26 characters. When the line is too long, pieces
+drop in this priority order (least important dropped first):
+
+1. Full line: `$350 14 Camry blue smith 5/1`
+2. Drop **year** (least important): `$350 Camry blue smith 5/1`
+3. Drop **color** (year already gone): `$350 Camry smith 5/1`
+4. Shorten **model** to first token: `$350 Cam smith 5/1`
+5. Truncate **lastName** to whatever fits (most important — kept
+   longest)
+
+**Importance hierarchy: lastName > model > color > year.** The
+lastName and model are the most important for identifying which deal
+a payment belongs to. Year is least important because it's usually
+obvious from context (most deals are for the same-era vehicles).
