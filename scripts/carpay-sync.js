@@ -434,12 +434,11 @@ async function main() {
       c.location = LOCATION_OVERRIDES[c.account] || loc.name;
       c.synced_at = NOW_ISO;
       applyPreserved(c, preserved);
-      // Resolve vehicle from stock_no / account via csv_accounts.
-      // Only overwrite if we found a match and no manually-set vehicle exists.
-      if (!c.vehicle) {
-        const veh = resolveVehicle(c, csvLookup);
-        if (veh) { c.vehicle = veh; vehiclesResolved++; }
-      }
+      // Resolve vehicle from csv_accounts (DMS = gold standard).
+      // Always overwrite — csv_accounts is more authoritative than the
+      // preserved value (which may be stale / from a wrong prior link).
+      const veh = resolveVehicle(c, csvLookup);
+      if (veh) { c.vehicle = veh; vehiclesResolved++; }
     });
     if (vehiclesResolved) console.log('  Resolved ' + vehiclesResolved + ' vehicles from csv_accounts');
 
