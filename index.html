@@ -31731,13 +31731,49 @@ async function d26LinkSelect(vin){
   if(!vin){alert('Cannot link with empty VIN.');return;}
   var idx=_d26LinkIdx;
   var d=_d26Data[idx];if(!d)return;
+  var oldVin=(d.sold_inv_vin||'').trim();
   try{
     await sbPatch('deals26',d.id,{sold_inv_vin:vin});
     d.sold_inv_vin=vin;
     d26LinkClose();
     d26Render();
     d26Edit(idx);
-  }catch(e){alert('Error: '+(e.message||e));}
+  }catch(e){alert('Error: '+(e.message||e));return;}
+  // Cascade vehicle info to payments when VIN link changes.
+  // Look up new car from inventory → update every payment that
+  // referenced the old VIN so year/make/model/color/vin stay in sync.
+  if(oldVin && oldVin !== vin){
+    try{
+      var invRow=await sbGet('inventory','vin=eq.'+encodeURIComponent(vin)+'&select=name,color,vin&limit=1');
+      var inv=(Array.isArray(invRow)&&invRow[0])?invRow[0]:null;
+      if(inv){
+        var parts=(inv.name||'').split(/\s+/);
+        var vYear=parts[0]||'';
+        var vMake=parts[1]||'';
+        var vModel=parts.slice(2).join(' ')||'';
+        var vPatch={vehicle_vin:vin,vehicle_year:vYear,vehicle_make:vMake,vehicle_model:vModel};
+        if(inv.color) vPatch.vehicle_color=inv.color;
+        // Find payments by old VIN
+        var oldPays=await sbGet('payments','vehicle_vin=eq.'+encodeURIComponent(oldVin)+'&limit=100');
+        if(Array.isArray(oldPays)&&oldPays.length){
+          var cascadeCount=0;
+          for(var ci=0;ci<oldPays.length;ci++){
+            try{
+              // Also update raw_ocr_text if it's a deal/deposit tag
+              var rOcr=oldPays[ci].raw_ocr_text||'';
+              if(rOcr.indexOf('Deal —')===0||rOcr.indexOf('Deposit —')===0){
+                var prefix=rOcr.indexOf('Deal —')===0?'Deal — ':'Deposit — ';
+                vPatch.raw_ocr_text=prefix+inv.name+(inv.color?' '+inv.color:'');
+              }
+              await sbPatch('payments',oldPays[ci].id,vPatch);
+              cascadeCount++;
+            }catch(e){console.warn('d26 VIN cascade payment update failed:',e);}
+          }
+          if(cascadeCount) console.log('d26LinkSelect: cascaded vehicle info to '+cascadeCount+' payment(s)');
+        }
+      }
+    }catch(e){console.warn('d26LinkSelect vehicle cascade error:',e);}
+  }
 }
 async function d26Unlink(){
   if(_d26EditIdx<0)return;
