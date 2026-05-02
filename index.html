@@ -17745,15 +17745,13 @@ function _paymentFormatPieces(payload){
 // proportional-font wrap. Target 26 total with progressive drops so
 // NOTHING wraps.
 //
-// Truncation order (first to drop) — v545 added year; year is kept
-// longer than color because it's the strongest matcher signal after
-// model:
-//   1. color   (e.g. "silver")
-//   2. year    (e.g. "17")  — dropped only if still too long
+// Truncation order (first to drop → last):
+//   1. year    (e.g. "17")  — least important, drop first
+//   2. color   (e.g. "silver")
 //   3. model is reduced to its first token (e.g. "Grand Prix" → "Grand")
-//   4. lastName is truncated
+//   4. lastName is truncated — most important, drop last
 // Amount + date are non-negotiable (amount is the data, date is the
-// dedup key).
+// dedup key). lastName + model are the highest-priority identifiers.
 // 26 chars — dropped from 30 after Vlad reported visual wrap on
 // "320 Silverado 1500 garcia 4/23" and "250 Accord silver alverio
 // 4/23" at font size 13pt. 30 passes a char-count test but wraps
@@ -17761,10 +17759,10 @@ function _paymentFormatPieces(payload){
 // threshold.
 var _PAY_NOTE_MAX = 26;
 
-// Fit {amount year model [color] lastName date} into MAX chars. Amount
-// and date are reserved first (never lost); the middle "core" is
-// truncated progressively:
-//   color dropped → year dropped → model reduced → lastName truncated.
+// Fit {amount model [color] lastName [year] date} into MAX chars.
+// Amount and date are reserved first (never lost); the middle "core"
+// is truncated progressively:
+//   year dropped → color dropped → model reduced → lastName truncated.
 // Guarantees ≤ MAX and that amount + date always survive.
 function _paymentNoteLineFit(amtStr, pieces){
   var MAX = _PAY_NOTE_MAX;
@@ -17788,9 +17786,9 @@ function _paymentNoteLineFit(amtStr, pieces){
   var core;
   // Step 1: everything
   core = fitCore(year, model, color, last);
-  // Step 2: drop color
-  if (core.length > coreBudget) core = fitCore(year, model, '', last);
-  // Step 3: drop year (color already gone)
+  // Step 2: drop year (least important)
+  if (core.length > coreBudget) core = fitCore('', model, color, last);
+  // Step 3: drop color (year already gone)
   if (core.length > coreBudget) core = fitCore('', model, '', last);
   // Step 4: reduce model to first token
   if (core.length > coreBudget){
