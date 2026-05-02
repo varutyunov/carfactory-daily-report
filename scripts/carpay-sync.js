@@ -329,26 +329,37 @@ async function sbLoadCsvAccounts() {
 }
 
 async function sbLoadExistingLinks() {
-  const url = SB_URL + '/rest/v1/deal_account_links?select=custaccountno&limit=10000';
+  const url = SB_URL + '/rest/v1/deal_account_links?select=custaccountno,car_desc_at_link&limit=10000';
   const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
   if (!res.ok) return {};
   const rows = await res.json();
   const map = {};
-  rows.forEach(r => { if (r.custaccountno) map[r.custaccountno] = true; });
+  rows.forEach(r => { if (r.custaccountno) map[r.custaccountno] = r; });
   return map;
 }
 
-// Resolve vehicle description via csv_accounts.
-// Returns a string like "16 Hyundai Genesis" or null.
-// Priority: account (deterministic 1:1) → stock_no (can be reused).
-function resolveVehicle(cust, csvLookup) {
-  // Account is the strongest key — one account = one customer, never reused.
+// Resolve vehicle description.
+// Returns a string like "16 Hyundai Genesis" or "08 Sentra" or null.
+// Priority: csv_accounts by account → csv_accounts by stock → deal_account_links car_desc.
+function resolveVehicle(cust, csvLookup, dealLinks) {
+  // 1. Account is the strongest key — one account = one customer, never reused.
   let csv = cust.account ? csvLookup.byAccount[cust.account] : null;
-  // Fall back to stock_no (active-only map avoids stale reuse collisions).
-  if (!csv) csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
-  if (!csv || !csv.year || !csv.make || !csv.model) return null;
-  const yr = String(csv.year).slice(-2);
-  return yr + ' ' + csv.make + ' ' + csv.model;
+  // 2. Fall back to stock_no (active-only map avoids stale reuse collisions).
+  if (!csv || !csv.year) csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
+  if (csv && csv.year && csv.make && csv.model) {
+    const yr = String(csv.year).slice(-2);
+    return yr + ' ' + csv.make + ' ' + csv.model;
+  }
+  // 3. Last resort: deal_account_links car_desc (e.g. "08 Sentra blue 197k Adams").
+  //    Extract the "YY Model" prefix — first two tokens if [0] is 2-digit number.
+  const link = dealLinks && cust.account ? dealLinks[cust.account] : null;
+  if (link && link.car_desc_at_link) {
+    const parts = link.car_desc_at_link.trim().split(/\s+/);
+    if (parts.length >= 2 && /^\d{2}$/.test(parts[0])) {
+      return parts[0] + ' ' + parts[1];  // e.g. "08 Sentra"
+    }
+  }
+  return null;
 }
 
 // ── Location config ─────────────────────────────────────────────────────────
@@ -437,13 +448,12 @@ async function main() {
       c.location = LOCATION_OVERRIDES[c.account] || loc.name;
       c.synced_at = NOW_ISO;
       applyPreserved(c, preserved);
-      // Resolve vehicle from csv_accounts (DMS = gold standard).
-      // Always overwrite — csv_accounts is more authoritative than the
-      // preserved value (which may be stale / from a wrong prior link).
-      const veh = resolveVehicle(c, csvLookup);
+      // Resolve vehicle: csv_accounts (DMS) → deal_account_links → give up.
+      // Always overwrite — authoritative sources beat preserved values.
+      const veh = resolveVehicle(c, csvLookup, existingLinks);
       if (veh) { c.vehicle = veh; vehiclesResolved++; }
     });
-    if (vehiclesResolved) console.log('  Resolved ' + vehiclesResolved + ' vehicles from csv_accounts');
+    if (vehiclesResolved) console.log('  Resolved ' + vehiclesResolved + ' vehicles (csv_accounts + deal_links)');
 
     payments.forEach(p => {
       p.location = LOCATION_OVERRIDES[p.account] || loc.name;
