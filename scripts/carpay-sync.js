@@ -392,8 +392,14 @@ function invNameToShort(name) {
 function resolveVehicle(cust, csvLookup, invLookup, dealLinks) {
   // 1. csv_accounts by account — strongest (1:1, never reused).
   let csv = cust.account ? csvLookup.byAccount[cust.account] : null;
-  // 2. csv_accounts by stock (active-only to avoid reuse collisions).
-  if (!csv || !csv.year) csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
+  // 2. csv_accounts by stock — but ONLY if the record belongs to THIS
+  //    customer. Stock numbers get reused (Bruten 25200 = Todd's F250,
+  //    Santiago 26099 = Spencer's Optima). A cross-customer stock hit is
+  //    worse than no hit — it puts the wrong car on the record.
+  if (!csv || !csv.year) {
+    const stockCsv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
+    if (stockCsv && stockCsv.custaccountno === cust.account) csv = stockCsv;
+  }
   if (csv && csv.year && csv.make && csv.model) {
     return String(csv.year).slice(-2) + ' ' + csv.make + ' ' + csv.model;
   }
