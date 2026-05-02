@@ -1437,6 +1437,7 @@ body.light .cal-fab{background:#4488ff !important;}
           <label style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:1px;">VIN</label>
           <input id="pay-scan-vin" placeholder="VIN number" maxlength="17" style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;color:#fff;padding:14px 16px;font-size:16px;outline:none;text-transform:uppercase;"/>
         </div>
+        <input id="pay-scan-acct" type="hidden"/>
 
         <div style="margin-bottom:16px;">
           <label style="font-size:12px;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Color <span style="color:#ff453a;">*</span> <span style="color:#666;font-weight:400;font-size:10px;text-transform:none;">(not on receipt — enter manually)</span></label>
@@ -15658,7 +15659,7 @@ function openPayScanForm(){
   document.getElementById('pay-scan-fields').style.display='block';
   document.getElementById('pay-scan-capture').style.display='block';
   document.getElementById('pay-skip-photo-btn').style.display='block';
-  ['pay-scan-fname','pay-scan-mname','pay-scan-lname','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color'].forEach(function(id){
+  ['pay-scan-fname','pay-scan-mname','pay-scan-lname','pay-scan-year','pay-scan-make','pay-scan-model','pay-scan-vin','pay-scan-color','pay-scan-acct'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   document.getElementById('pay-scan-date').value=new Date().toISOString().split('T')[0];
@@ -15702,6 +15703,7 @@ function payEditPayment(id){
   document.getElementById('pay-scan-model').value=p.vehicle_model||'';
   document.getElementById('pay-scan-vin').value=p.vehicle_vin||'';
   document.getElementById('pay-scan-color').value=p.vehicle_color||'';
+  document.getElementById('pay-scan-acct').value=p.custaccountno||'';
   var noteEl=document.getElementById('pay-scan-note');if(noteEl)noteEl.value=p.notes||'';
   document.getElementById('pay-scan-raw').textContent=p.raw_ocr_text||'';
   // Load single payment row for editing
@@ -17357,7 +17359,8 @@ async function runPayScanOCR(imgSrc){
       '7. "vehicle_vin" — Vehicle VIN number\n' +
       '8. "amount" — Total amount paid as "$X,XXX.XX"\n' +
       '9. "payment_method" — One of: "cash", "card", "check", "other"\n' +
-      '10. "rawText" — All text from the document\n\n' +
+      '10. "account_number" — The Account # (a short numeric ID like 4053, 4573). Look for "Account #", "Account No", "Acct #", "Acct No", or similar labels followed by a number. Use "" if not found.\n' +
+      '11. "rawText" — All text from the document\n\n' +
       'RULES:\n' +
       '- Return ONLY valid JSON, no explanation, no markdown\n' +
       '- Use empty string "" for any field you cannot find\n' +
@@ -17434,6 +17437,14 @@ async function runPayScanOCR(imgSrc){
     document.getElementById('pay-scan-make').value=parsed.vehicle_make||'';
     document.getElementById('pay-scan-model').value=parsed.vehicle_model||'';
     document.getElementById('pay-scan-vin').value=parsed.vehicle_vin||'';
+    // Account # — try Gemini field first, fall back to regex on rawText
+    var ocrAcct = (parsed.account_number||'').replace(/\D/g,'');
+    if(!ocrAcct && rawText){
+      var acctMatch = rawText.match(/(?:Account|Acct)\s*(?:#|No\.?|Number)?\s*[:.]?\s*(\d{3,6})/i);
+      if(acctMatch) ocrAcct = acctMatch[1];
+    }
+    document.getElementById('pay-scan-acct').value = ocrAcct || '';
+    if(ocrAcct) console.log('[PayScan] Account # extracted: ' + ocrAcct);
     var parsedAmt=(parsed.amount||'').replace(/[^0-9.]/g,'');
     var parsedMethod=(parsed.payment_method&&['cash','card','check','money_order'].indexOf(parsed.payment_method)!==-1)?parsed.payment_method:'cash';
     // Reset payment rows and fill with OCR data
@@ -18198,6 +18209,33 @@ async function _findDealAlias(payload){
   return null;
 }
 
+// Auto-create deal_account_link when a payment with custaccountno
+// gets matched to a deal row via alias or matcher. This ensures
+// future CSV payments for the same account auto-route.
+async function _autoCreateDealAccountLink(acctNo, dealTab, dealLoc, dealRow, carDesc, vin){
+  if(!acctNo) return;
+  try {
+    // Check if link already exists
+    var existing = await sbGet('deal_account_links',
+      'custaccountno=eq.' + encodeURIComponent(acctNo) + '&limit=1');
+    if(existing && existing.length) return; // already linked
+    var dealKey = dealTab + ':' + dealLoc + ':' + dealRow;
+    await sbPost('deal_account_links', {
+      custaccountno: acctNo,
+      deal_key: dealKey,
+      deal_tab: dealTab,
+      deal_loc: dealLoc,
+      deal_row: dealRow,
+      car_desc_at_link: carDesc || null,
+      vin_at_link: (vin||'').toUpperCase() || null,
+      linked_by: 'auto-ocr-acct',
+      source: 'auto-ocr-acct',
+      linked_at: new Date().toISOString()
+    });
+    console.log('Auto-created deal_account_link: acct ' + acctNo + ' → ' + dealKey);
+  } catch(e){ console.warn('Auto-create deal_account_link failed:', e); }
+}
+
 // D2a: Append this payment to the matching deal's Deals26 (or Deals25)
 // col G, and conditionally post to Profit26 Payments.
 // Returns one of:
@@ -18242,6 +18280,54 @@ async function _appendPaymentToDeals26(payload){
         });
       } catch(e){ console.warn('Approve-first queue failed:', e); }
       return { ok: true, matched: false, review: true };
+    }
+
+    // ── Account # deterministic link ──────────────────────────────
+    // If the payment has a custaccountno (from OCR), look up
+    // deal_account_links for a direct route to the deal row. This is
+    // the most reliable linking path — no fuzzy matching at all.
+    var _acctNo = (payload.custaccountno||'').replace(/\D/g,'');
+    if (_acctNo){
+      try {
+        var dalRows = await sbGet('deal_account_links',
+          'custaccountno=eq.' + encodeURIComponent(_acctNo) +
+          '&select=deal_tab,deal_loc,deal_row,car_desc_at_link,vin_at_link&limit=1');
+        if (dalRows && dalRows.length){
+          var dal = dalRows[0];
+          var dalNoteLine = dal.car_desc_at_link
+            ? _paymentNoteLineFromDeal(amt, dal.car_desc_at_link, payload.payment_date)
+            : noteLine;
+          var dalLoc = dal.deal_loc || loc;
+          var allLastNamesDal = _paymentLastNames(payload.customer_name);
+          var dalResp = await fetch(_SHEETS_URL, {
+            method:'POST', headers:{'Content-Type':'text/plain'},
+            body: JSON.stringify({
+              secret: _SHEETS_SECRET,
+              action: 'deals26_append_payment_direct',
+              location: dalLoc,
+              data: {
+                tab: dal.deal_tab, row: dal.deal_row,
+                amount: amt, note_line: dalNoteLine,
+                last_names: allLastNamesDal,
+                expected_car_desc: dal.car_desc_at_link || null
+              }
+            })
+          });
+          var dalData = null; try { dalData = await dalResp.json(); } catch(e){}
+          if (dalData && dalData.ok !== false){
+            var dalOwed = parseFloat(dalData.owed) || 0;
+            var dalPosted = false;
+            var dalProfitCap = _computeProfitCap(amt, dalOwed);
+            if (dalProfitCap > 0){
+              try { await _appendPaymentToProfit(payload, dalProfitCap, dalLoc); dalPosted = true; } catch(ep){ console.warn(ep); }
+            }
+            console.log('Account # ' + _acctNo + ' → deal_account_link hit: ' + dal.deal_tab + ' row ' + dal.deal_row + ' [' + dalLoc + '] · profitCap=$' + dalProfitCap);
+            return { ok:true, matched:true, posted_to_profit:dalPosted, owed:dalOwed, tab:dal.deal_tab, row:dal.deal_row, location:dalLoc, via_account_link:true };
+          }
+          console.warn('Account # ' + _acctNo + ' deal_account_link found but sheet write failed:', dalData);
+          // Fall through to alias / matcher
+        }
+      } catch(acctErr){ console.warn('Account # link lookup error:', acctErr); }
     }
 
     // Check for a learned alias first — user previously approved a
@@ -18326,6 +18412,8 @@ async function _appendPaymentToDeals26(payload){
           try { await _appendPaymentToProfit(payload, dProfitCap, aliasLoc); dPosted = true; } catch(ep){ console.warn(ep); }
         }
         console.log('Alias hit: ' + aliasCarDesc + ' → ' + alias.target_tab + ' row ' + aliasTargetRow + ' [' + aliasLoc + '] · profitCap=$' + dProfitCap);
+        // Auto-create deal_account_link from OCR Account # if available
+        if(_acctNo) _autoCreateDealAccountLink(_acctNo, alias.target_tab, aliasLoc, aliasTargetRow, aliasCarDesc, payload.vehicle_vin);
         return { ok:true, matched:true, posted_to_profit:dPosted, owed:dOwed, tab:alias.target_tab, row:aliasTargetRow, location:aliasLoc, via_alias:true };
       }
       // Alias direct-write failed — fall through to the normal matcher
@@ -18379,6 +18467,8 @@ async function _appendPaymentToDeals26(payload){
         console.log('Cross-location match: payment tagged ' + payload.location +
           ' but deal lives on ' + data.location + ' — wrote there');
       }
+      // Auto-create deal_account_link from OCR Account # if available
+      if(_acctNo) _autoCreateDealAccountLink(_acctNo, data.tab, postLoc, data.row, data.car_desc||null, payload.vehicle_vin);
       return { ok:true, matched:true, posted_to_profit:posted, owed:owed, tab:data.tab, row:data.row, matched_loc:postLoc };
     }
 
@@ -24497,6 +24587,8 @@ async function payScanSave(){
   var model=document.getElementById('pay-scan-model').value.trim();
   var vin=document.getElementById('pay-scan-vin').value.trim();
   var color=document.getElementById('pay-scan-color').value.trim();
+  var acct=(document.getElementById('pay-scan-acct')||{}).value||'';
+  acct=acct.trim().replace(/\D/g,'');
   var note=(document.getElementById('pay-scan-note')||{}).value||'';
   note=note.trim();
 
@@ -24564,7 +24656,8 @@ async function payScanSave(){
       location:_payLocation,
       logged_by:me?me.name:'',week_start:weekStart,
       notes:note||null,raw_ocr_text:rawOcr,
-      is_final_payment:isFinal||false
+      is_final_payment:isFinal||false,
+      custaccountno:acct||null
     };
     // Only update photo if a new one was taken (don't erase existing)
     if(photoUrl) record.receipt_photo_url=photoUrl;
@@ -24591,7 +24684,8 @@ async function payScanSave(){
         receipt_photo_url:photoUrl||null,location:_payLocation,
         logged_by:me?me.name:'',week_start:weekStart,
         notes:note||null,raw_ocr_text:rawOcr,
-        is_final_payment:isFinal||false,created_at:new Date().toISOString()
+        is_final_payment:isFinal||false,custaccountno:acct||null,
+        created_at:new Date().toISOString()
       };
       var _ePostRes = await sbPost('payments',_ePayload);
       if(_ePostRes && _ePostRes[0] && _ePostRes[0].id) _ePayload.id = _ePostRes[0].id;
@@ -24617,7 +24711,8 @@ async function payScanSave(){
         receipt_photo_url:photoUrl||null,location:_payLocation,
         logged_by:me?me.name:'',week_start:weekStart,
         notes:note||null,raw_ocr_text:rawOcr,
-        is_final_payment:isFinal||false,created_at:new Date().toISOString()
+        is_final_payment:isFinal||false,custaccountno:acct||null,
+        created_at:new Date().toISOString()
       };
       var _payPostRes = await sbPost('payments',_payPayload);
       if(_payPostRes && _payPostRes[0] && _payPostRes[0].id) _payPayload.id = _payPostRes[0].id;

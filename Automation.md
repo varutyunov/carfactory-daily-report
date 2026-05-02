@@ -1169,3 +1169,91 @@ drop in this priority order (least important dropped first):
 lastName and model are the most important for identifying which deal
 a payment belongs to. Year is least important because it's usually
 obvious from context (most deals are for the same-era vehicles).
+
+---
+
+## Day 13 — Account # deterministic linking (2026-05-02)
+
+### Problem
+
+~20% of deals couldn't auto-link to CSV accounts. The fuzzy matching
+(VIN → name+year+model) failed on cosigners, name variants, VIN-multi
+cases. Manual linking was tedious and the biggest recurring pain point.
+
+### Discovery
+
+Every scanned payment receipt contains `Account # XXXX` in the OCR
+text — 100% hit rate across 30 receipts checked. This number is the
+DMS `custaccountno`, which is the primary key in `csv_accounts`.
+
+### Solution: parse Account # at scan time
+
+**Changes made (v629):**
+
+1. **Gemini OCR prompt** — added `account_number` field (#10 in the
+   extraction list). Instructs Gemini to look for "Account #",
+   "Account No", "Acct #" etc.
+
+2. **Regex fallback** — if Gemini misses it, a regex runs on rawText:
+   ```javascript
+   /(?:Account|Acct)\s*(?:#|No\.?|Number)?\s*[:.]?\s*(\d{3,6})/i
+   ```
+
+3. **Hidden form field** — `<input id="pay-scan-acct" type="hidden"/>`
+   stores the parsed Account # through the form lifecycle.
+
+4. **Supabase `payments.custaccountno`** — new text column. Every
+   payment now stores the Account # from the receipt.
+
+5. **Routing priority in `_appendPaymentToDeals26()`:**
+   ```
+   custaccountno → deal_account_links lookup → direct write (highest priority)
+     ↓ (no link found)
+   alias → payment_deal_aliases lookup → direct write
+     ↓ (no alias)
+   matcher → Apps Script fuzzy match → write or queue Review
+   ```
+
+6. **Auto-link creation** — when a payment WITH a custaccountno gets
+   matched through alias or matcher, `_autoCreateDealAccountLink()`
+   fires and creates the `deal_account_links` row with
+   `linked_by: 'auto-ocr-acct'`. Future payments for the same account
+   skip fuzzy matching entirely.
+
+### The flow
+
+```
+Receipt scan
+  → Gemini OCR extracts Account # 4053
+  → pay-scan-acct = "4053"
+  → payScanSave() stores custaccountno="4053" on payment
+  → _appendPaymentToDeals26():
+      1. Has custaccountno? → check deal_account_links for 4053
+         → FOUND: direct write to deal row (skip everything else)
+         → NOT FOUND: fall through
+      2. Check payment_deal_aliases (VIN/name match)
+         → MATCHED: write + auto-create deal_account_link for 4053
+      3. Apps Script fuzzy matcher (last_name + model)
+         → MATCHED: write + auto-create deal_account_link for 4053
+         → NO MATCH: queue for Review
+```
+
+### Self-healing property
+
+The first scanned receipt for any customer permanently establishes the
+`deal_account_link`. Even if that first payment routes through the
+fuzzy matcher or alias, the link gets created. All subsequent CSV
+payments for that custaccountno auto-route through the link — no more
+manual linking needed.
+
+### Anti-patterns
+
+- **Do NOT extract Account # from payments that have Deal/Deposit
+  prefixes in `raw_ocr_text`.** Those are auto-posted from deal
+  approvals, not scanned receipts. The `_profitShouldPropagate()`
+  check already filters them out before reaching the acct logic.
+
+- **Do NOT overwrite existing deal_account_links.** The auto-create
+  function checks for existing links first. One account → one deal.
+  If the customer gets a new car, the link stays with the old deal
+  until manually updated (cosigner/trade-in edge case).
