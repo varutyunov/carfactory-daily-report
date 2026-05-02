@@ -25389,6 +25389,62 @@ function _icInvNameMismatch(icName, invName){
   return !invMod.some(function(t){ return icSet[t]; });
 }
 
+// ── Sheet-fallback: read cost from Google Sheet Inventory tab ────────
+// When the Supabase inventory_costs row is missing or has $0 cost
+// (common for trade-ins & repos where CSV cost is wrong), read the
+// real cost from the Google Sheet — the source of truth Vlad maintains.
+async function _fetchSheetInventoryCost(record, car) {
+  if (!_SHEETS_URL || !_SHEETS_SECRET) return null;
+  var loc = record.location || 'DeBary';
+
+  // Build search from vehicle_desc: "2014 Mitsubishi Outlander" → "14 Outlander"
+  var vdParts = String(record.vehicle_desc || '').trim().split(/\s+/);
+  var yearShort = (vdParts[0] && /^(19|20)\d{2}$/.test(vdParts[0])) ? vdParts[0].slice(2) : '';
+  var modelToken = vdParts.length >= 3 ? vdParts[2] : (vdParts[1] || '');
+  var query = [yearShort, modelToken].filter(Boolean).join(' ');
+  if (!query) return null;
+
+  var resp = await fetch(_SHEETS_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify({
+      secret: _SHEETS_SECRET,
+      action: 'find_rows',
+      tab: 'Inventory',
+      location: loc,
+      data: { query: query }
+    })
+  });
+  var data = null;
+  try { data = await resp.json(); } catch(_){ return null; }
+  if (!data || !data.ok || !Array.isArray(data.rows) || !data.rows.length) return null;
+
+  // Filter & rank matches: must contain year + model tokens.
+  // Color match is a bonus tiebreaker but not required.
+  var dealColor = _extractColorWord(record.color || '');
+  var best = null;
+  for (var i = 0; i < data.rows.length; i++) {
+    var r = data.rows[i];
+    if (!r.car_name) continue;
+    var lower = r.car_name.toLowerCase();
+    if (yearShort && lower.indexOf(yearShort) === -1) continue;
+    if (modelToken && lower.indexOf(modelToken.toLowerCase()) === -1) continue;
+    best = r;
+    if (dealColor && lower.indexOf(dealColor.toLowerCase()) !== -1) break;
+  }
+
+  if (!best) return null;
+  return {
+    purchase_cost: best.purchase_cost || 0,
+    car_name: best.car_name || '',
+    joint_expenses: best.joint_expenses || 0,
+    vlad_expenses: best.vlad_expenses || 0,
+    expense_notes: best.expense_notes || '',
+    vlad_expense_notes: best.vlad_expense_notes || '',
+    _fromSheet: true
+  };
+}
+
 async function _autopopulateDeals26(record, car, icOverride) {
   var vin = (record.vin || '').trim();
   if (!vin) return;
@@ -25412,6 +25468,40 @@ async function _autopopulateDeals26(record, car, icOverride) {
     if (invId) {
       var icRows = await sbGet('inventory_costs', 'car_id=eq.' + invId + '&limit=1');
       if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
+    }
+
+    // 3. Sheet fallback — if Supabase IC is missing or has $0 cost,
+    //    read the actual cost from the Google Sheet's Inventory tab.
+    //    This is the source of truth for trade-ins and repos where
+    //    the CSV cost is wrong or the IC row was archived on a prior sale.
+    if (!ic || (parseFloat((ic && ic.purchase_cost) || 0) || 0) <= 0) {
+      try {
+        var _sheetIc = await _fetchSheetInventoryCost(record, car);
+        if (_sheetIc && (parseFloat(_sheetIc.purchase_cost) || 0) > 0) {
+          console.log('Deals26 autopopulate: Supabase IC ' +
+            (ic ? 'has $0 cost' : 'not found') +
+            ' — pulled from Sheet Inventory: "' + _sheetIc.car_name +
+            '" cost=$' + _sheetIc.purchase_cost);
+          if (ic) {
+            // Supabase IC exists but $0 cost — merge the Sheet's cost
+            // + expense data while keeping Supabase id/sort_order so
+            // the archival step (Step D) can still archive & delete.
+            ic.purchase_cost = _sheetIc.purchase_cost;
+            ic.car_name = _sheetIc.car_name || ic.car_name;
+            ic.joint_expenses = _sheetIc.joint_expenses || ic.joint_expenses;
+            ic.vlad_expenses = _sheetIc.vlad_expenses || ic.vlad_expenses;
+            ic.expense_notes = _sheetIc.expense_notes || ic.expense_notes;
+            ic.vlad_expense_notes = _sheetIc.vlad_expense_notes || ic.vlad_expense_notes;
+          } else {
+            // No Supabase IC at all — use sheet IC directly.
+            // No id/sort_order means Step D archival is skipped (correct:
+            // there's nothing in Supabase to archive).
+            ic = _sheetIc;
+          }
+        }
+      } catch(e) {
+        console.warn('Deals26 autopopulate: Sheet IC fallback failed:', e);
+      }
     }
   }
 
@@ -25529,30 +25619,24 @@ async function _autopopulateDeals26(record, car, icOverride) {
   var vladExp = _useIc ? (parseFloat(ic.vlad_expenses) || 0) : 0;
   var expenses = jointExp + vladExp;
 
-  // $0 cost guard — hybrid block + confirm.
+  // $0 cost guard — last-resort prompt.
   //
-  //   - carDescWarning path: linked IC was zero'd because the row
-  //     describes a different car (color/year mismatch). That's a data
-  //     error, not a real $0-cost car — hard-block; the user must fix
-  //     the IC linkage in the Inventory Costs sheet.
-  //
-  //   - everything else: $0 cost can be legitimate. Repos are the
-  //     canonical case — Vlad takes the car back from a defaulted
-  //     buyer, has no purchase cost, only the recovery + repair
-  //     expenses. We still want a speed bump (the typical case is
-  //     "you forgot to fill in the cost"), so prompt confirm() before
-  //     proceeding. If the user confirms, post with cost=$0 and let
-  //     the profit math reflect reality (owed = money − expenses −
-  //     taxes − dealer fee − manny).
+  // By this point, both Supabase IC and Sheet Inventory have been
+  // checked. If cost is still $0:
+  //   - carDescWarning path: linked IC was for a different car — hard
+  //     block (user must fix the IC linkage).
+  //   - everything else: genuinely $0 or data gap. Prompt so the user
+  //     can enter the real cost manually. Repos with zero purchase cost
+  //     tap OK with blank field.
   if (!cost || cost <= 0){
     if (carDescWarning){
       throw new Error('Cost is $0 — inventory_costs linked row disagrees with this deal (' + carDescWarning + '). Fix the Inventory Costs sheet link first.');
     }
     var _money = parseFloat(record.total_collected) || 0;
     var _costInput = prompt(
-      'Cost is $0 for this deal.\n\n' +
-      'If this is a repo or trade-in, enter the breakeven or trade value.\n' +
-      'If cost is truly $0, leave blank and tap OK.\n\n' +
+      'Cost is $0 — not found in Supabase or Sheet Inventory.\n\n' +
+      'Enter the actual cost (breakeven / trade value),\n' +
+      'or leave blank for a true $0-cost deal (repo).\n\n' +
       'Money collected: $' + _money + '\n' +
       'Expenses: $' + expenses + '\n\n' +
       'Enter cost (or leave blank for $0):');
@@ -25562,7 +25646,6 @@ async function _autopopulateDeals26(record, car, icOverride) {
     var _parsedCost = parseFloat((_costInput || '').replace(/[^0-9.]/g, '')) || 0;
     if (_parsedCost > 0){
       cost = _parsedCost;
-      // Recalculate owed with the user-provided cost
     }
   }
 
