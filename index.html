@@ -25810,12 +25810,61 @@ async function _autopopulateDeals26(record, car, icOverride) {
     } catch (e) { /* taxes stays 0 */ }
   }
 
+  // 7c. Subtract prior deposits so deals26.money reflects only NET NEW
+  //     cash collected at deal time.  Deposits are already tracked as
+  //     separate payment rows (raw_ocr_text = "Deposit — ...").  Without
+  //     this, a $2,000 total_collected that includes a prior $1,000
+  //     deposit would overstate money by $1,000, making owed wrong.
+  //     Matching logic mirrors the payment-posting deposit detection.
+  var _depositTotal = 0;
+  try {
+    var _depPays = await sbGet('payments',
+      'raw_ocr_text=like.Deposit*&order=created_at.desc&limit=200');
+    if (Array.isArray(_depPays)) {
+      var _dVin = vin.toLowerCase();
+      var _dVeh = (record.vehicle_desc || '').toLowerCase();
+      var _dCustParts = (record.customer_name || '').toLowerCase().split(/\s+/);
+      var _dLast = _dCustParts[_dCustParts.length - 1] || '';
+      var _dFirst = _dCustParts[0] || '';
+      _depPays.forEach(function(dp) {
+        var matched = false;
+        var dpVin = (dp.vehicle_vin || '').toLowerCase().trim();
+        // 1. VIN match
+        if (_dVin && dpVin && _dVin === dpVin) matched = true;
+        // 2. Vehicle desc match — raw_ocr_text "Deposit — 2014 Mitsubishi ..."
+        if (!matched && dp.raw_ocr_text) {
+          var dpVeh = (dp.raw_ocr_text.replace(/^Deposit\s*[—–-]\s*/i, '') || '').toLowerCase();
+          if (dpVeh && _dVeh && _dVeh.indexOf(dpVeh) !== -1) matched = true;
+          if (!matched && dpVeh.length > 5) {
+            var _vWords = _dVeh.split(/\s+/).filter(function(w) { return w.length > 2; });
+            if (_vWords.length >= 2 && _vWords.every(function(w) { return dpVeh.indexOf(w) !== -1; })) matched = true;
+          }
+        }
+        // 3. Customer last+first name match
+        if (!matched) {
+          var dpCParts = (dp.customer_name || '').toLowerCase().split(/\s+/);
+          var dpLast = dpCParts[dpCParts.length - 1] || '';
+          var dpFirst = dpCParts[0] || '';
+          if (_dLast && dpLast && _dLast === dpLast && _dFirst && dpFirst &&
+              (_dFirst === dpFirst || _dFirst.indexOf(dpFirst) === 0 || dpFirst.indexOf(_dFirst) === 0)) matched = true;
+        }
+        if (matched) {
+          _depositTotal += parseFloat((dp.amount || '').replace(/[^0-9.]/g, '')) || 0;
+        }
+      });
+    }
+    if (_depositTotal > 0) {
+      console.log('Deals26 autopopulate: found $' + _depositTotal +
+        ' in prior deposits for VIN=' + vin + ' — subtracting from money');
+    }
+  } catch (e) { console.warn('Deals26 autopopulate: deposit lookup failed:', e); }
+
   // 8. Build deals26 object. 'owed' is the deal's profit — money minus
   //     cost, expenses, taxes, dealer fee, and Manny's cut. It mirrors the
   //     Google Sheet's Net column formula and is the value Cash Sales posts
   //     use. If taxes haven't been filled yet (CSV miss and not OOS), owed
   //     will be too high; _fillMissingTaxes will recompute on backfill.
-  var money = parseFloat(record.total_collected) || 0;
+  var money = Math.max(0, (parseFloat(record.total_collected) || 0) - _depositTotal);
   var dealerFee = 399;
   var manny = 0;
   var owed = money - cost - expenses - taxes - dealerFee - manny;
