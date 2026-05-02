@@ -307,20 +307,22 @@ function applyPreserved(cust, preserved) {
 }
 
 // ── Vehicle resolution via csv_accounts ─────────────────────────────────────
-// Load all csv_accounts to build stock_no → vehicle info and
-// account → deal_account_links mappings.
+// Load ALL csv_accounts (active + inactive) so we can always resolve by
+// custaccountno — a CarPay customer may still be making payments after the
+// DMS marks their deal inactive.  Stock-based lookup uses active-only to
+// avoid stale stock_no reuse collisions (stock numbers get recycled).
 async function sbLoadCsvAccounts() {
-  const url = SB_URL + '/rest/v1/csv_accounts?select=custaccountno,stock_no,vin,year,make,model,color,lookupname,location&is_active=eq.true&limit=10000';
+  const url = SB_URL + '/rest/v1/csv_accounts?select=custaccountno,stock_no,vin,year,make,model,color,lookupname,location,is_active&limit=10000';
   const res = await fetch(url, { method: 'GET', headers: Object.assign({}, SB_HEADERS, { 'Cache-Control': 'no-cache' }) });
   if (!res.ok) {
     console.error('  csv_accounts load failed: ' + res.status);
     return { byStock: {}, byAccount: {} };
   }
   const rows = await res.json();
-  const byStock = {};
-  const byAccount = {};
+  const byStock = {};   // active records only — stock_no can be reused
+  const byAccount = {}; // ALL records — custaccountno is 1:1 with customer
   rows.forEach(r => {
-    if (r.stock_no) byStock[r.stock_no] = r;
+    if (r.stock_no && r.is_active) byStock[r.stock_no] = r;
     if (r.custaccountno) byAccount[r.custaccountno] = r;
   });
   return { byStock, byAccount };
@@ -336,13 +338,14 @@ async function sbLoadExistingLinks() {
   return map;
 }
 
-// Resolve vehicle description from stock_no or account via csv_accounts.
-// Returns a string like "11 Chevrolet Equinox" or null.
+// Resolve vehicle description via csv_accounts.
+// Returns a string like "16 Hyundai Genesis" or null.
+// Priority: account (deterministic 1:1) → stock_no (can be reused).
 function resolveVehicle(cust, csvLookup) {
-  // Try stock_no first (most direct)
-  let csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
-  // Fall back to account number
-  if (!csv) csv = csvLookup.byAccount[cust.account] || null;
+  // Account is the strongest key — one account = one customer, never reused.
+  let csv = cust.account ? csvLookup.byAccount[cust.account] : null;
+  // Fall back to stock_no (active-only map avoids stale reuse collisions).
+  if (!csv) csv = cust.stock_no ? csvLookup.byStock[cust.stock_no] : null;
   if (!csv || !csv.year || !csv.make || !csv.model) return null;
   const yr = String(csv.year).slice(-2);
   return yr + ' ' + csv.make + ' ' + csv.model;
