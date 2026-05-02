@@ -21067,11 +21067,25 @@ async function _reviewAutoStale(reviewRows){
           } catch(_){ /* lookup fail — fall through to VIN check */ }
         }
         if (!r.vehicle_vin) continue;
+        // Day 12 fix: match deals26 row by VIN AND customer surname.
+        // VIN-only matching caused resales (same car, different buyer)
+        // to auto-resolve — the old owner's deals26 row made the new
+        // deal_pending card look "already posted". The Outlander resale
+        // from Pineda → Holliday was silently dropped this way.
         var d26 = await sbGet('deals26',
           'sold_inv_vin=eq.' + encodeURIComponent(r.vehicle_vin) +
-          '&select=id,car_desc&limit=1');
-        if (Array.isArray(d26) && d26[0] && d26[0].car_desc){
-          staleIds.push(r.id);
+          '&select=id,car_desc&limit=10');
+        if (Array.isArray(d26) && d26.length){
+          var _rvSurname = _extractSurname(r.customer_name || '').toLowerCase();
+          var _d26HasMatch = d26.some(function(row){
+            if (!row.car_desc) return false;
+            // car_desc ends with surname (e.g. "18 Outlander white 60k Holliday")
+            var _rowLower = String(row.car_desc).toLowerCase();
+            return _rvSurname && _rowLower.indexOf(_rvSurname) !== -1;
+          });
+          if (_d26HasMatch){
+            staleIds.push(r.id);
+          }
         }
         continue;
       }
@@ -25223,13 +25237,43 @@ async function dealSubmit() {
       }
     }
 
-    // Deals26 post — route through Review when approve-first is on,
-    // otherwise auto-populate immediately (legacy path).
+    // Deals26 post — always write directly to the sheet. No review queue.
+    // Day 12 fix: the deal_pending → auto_resolve race condition silently
+    // dropped deals when the same VIN existed from a prior sale (Outlander
+    // resale to Holliday lost because Pineda's old row matched). Direct
+    // posting eliminates that entire class of bug.
     var _d26Snap = null;
-    if (_APPROVE_FIRST_MODE){
-      try { await _queueDealReview(record, car); } catch(e){ console.warn('Queue deal review failed:', e); }
-    } else {
-      try { _d26Snap = await _autopopulateDeals26(record, car); } catch(e) { console.warn('Deals26 auto-populate failed:', e); }
+    var _skipD26 = false;
+
+    // Inline duplicate check: if VIN already in deals26, confirm before posting.
+    // Replaces the review card's "Already in Deals26" banner with an immediate
+    // prompt so the user knows right away (and can still proceed for resales).
+    try {
+      var _dealVin = (record.vin || '').trim();
+      if (_dealVin){
+        var _existingD26 = await sbGet('deals26',
+          'sold_inv_vin=eq.' + encodeURIComponent(_dealVin) +
+          '&select=id,car_desc,sort_order,location&limit=5');
+        if (Array.isArray(_existingD26) && _existingD26.length){
+          var _exLines = _existingD26.map(function(ex){
+            return '  Row ' + (ex.sort_order || '?') + ' — ' + (ex.car_desc || '') + ' (' + (ex.location || '') + ')';
+          }).join('\n');
+          _skipD26 = !confirm(
+            'This VIN already has ' + _existingD26.length + ' row(s) in Deals26:\n\n' +
+            _exLines + '\n\n' +
+            'Post anyway? (Tap OK for a resale of the same car, Cancel to skip.)');
+        }
+      }
+    } catch(_){}
+
+    if (!_skipD26){
+      try {
+        _d26Snap = await _autopopulateDeals26(record, car);
+      } catch(e) {
+        console.warn('Deals26 auto-populate failed:', e);
+        alert('Deal saved to the app but the Deals26 sheet write failed:\n\n' +
+          (e.message || e) + '\n\nCheck the Inventory tab and retry from the Review tab.');
+      }
 
       if (_d26Snap && _d26Snap.carDescWarning){
         alert('Heads up — Deals26 car description was built from the deal data because the linked inventory_costs row disagreed:\n\n' +
@@ -25237,18 +25281,10 @@ async function dealSubmit() {
           '\n\nThe new Deals26 entry: "' + (_d26Snap.carDesc || '') + '"\n\nCheck the Inventory tab to re-link or rename the stray cost row if needed.');
       }
 
-      // D3: auto-append cash deals to Profit Cash Sales — ONLY when the owed
-      //     amount is final. If taxes are still pending (CSV miss, not OOS),
-      //     skip here and let _fillMissingTaxes post once taxes are filled.
-      if (record.deal_type === 'cash' && _d26Snap && _d26Snap.taxesKnown && _d26Snap.owed > 0) {
-        try {
-          await _appendCashSaleToProfit({
-            record: record,
-            car: car,
-            amount: _d26Snap.owed,
-            carDesc: _d26Snap.carDesc
-          });
-        } catch(e) { console.warn('Profit Cash Sales auto-link failed:', e); }
+      // Cash sale → Profit26: queue a review card for second confirmation.
+      // The deal is already on the sheet; this is just the profit posting.
+      if (record.deal_type === 'cash' && _d26Snap && _d26Snap.owed > 0){
+        try { await _queueCashSaleReview(record, car, _d26Snap.owed, _d26Snap.carDesc); } catch(e){}
       }
     }
 
