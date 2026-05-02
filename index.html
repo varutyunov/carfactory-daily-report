@@ -30195,39 +30195,69 @@ function sheetsPush(tab, rowIndex, data, action, location){
   if(!url||!secret) return Promise.resolve({ok:false, error:'sheets_url_or_secret_missing'});
   var payload=JSON.stringify({secret:secret,tab:tab,action:action||'update',row_index:rowIndex,data:data||{},location:location||'DeBary'});
   var _meta = { action: action||'update', tab: tab, row_index: rowIndex };
-  // Retry wrapper — GAS endpoints flake on mobile (Safari "Load failed",
-  // Chrome "Failed to fetch") due to transient network drops. Up to 2
-  // retries with short backoff before giving up.
-  function _attempt(tries){
+
+  function _parseResult(parsed){
+    if (!parsed || parsed.ok === false || parsed.error){
+      return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
+    }
+    return parsed;
+  }
+
+  // Primary: fetch() — works on most browsers/contexts.
+  // Fallback: XMLHttpRequest — handles GAS 302 redirects more reliably
+  // on mobile Safari where fetch() dies with "Load failed" when the
+  // redirect chain loses the POST body.
+  function _fetchAttempt(){
     return fetch(url,{
       method:'POST',
-      headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
-      body:payload
+      headers:{'Content-Type':'text/plain'},
+      body:payload,
+      redirect:'follow'
     }).then(function(resp){
       if(!resp.ok) return { ok:false, error:'http_' + resp.status, action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
-      return resp.json().then(function(parsed){
-        // AS error responses are { error: "..." } with no ok field — treat any
-        // truthy error as failure so callers don't fire audit / mark approved
-        // when the Sheet write actually didn't happen.
-        if (!parsed || parsed.ok === false || parsed.error){
-          return { ok:false, error:(parsed && parsed.error) || 'no_json_body', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
-        }
-        return parsed;
-      }, function(){
+      return resp.json().then(function(p){ return _parseResult(p); }, function(){
         return { ok:false, error:'invalid_json', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
       });
-    }, function(e){
-      // Network-level failure ("Load failed", "Failed to fetch")
-      if (tries < 2){
-        console.warn('sheetsPush attempt ' + (tries+1) + ' failed (' + (e&&e.message||e) + '), retrying in ' + ((tries+1)*2) + 's...');
-        return new Promise(function(resolve){
-          setTimeout(function(){ resolve(_attempt(tries+1)); }, (tries+1)*2000);
-        });
-      }
-      return { ok:false, error:String((e && e.message) || e), action:_meta.action, tab:_meta.tab, row_index:_meta.row_index };
     });
   }
-  return _attempt(0);
+
+  function _xhrAttempt(){
+    return new Promise(function(resolve){
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Content-Type', 'text/plain');
+      xhr.onload = function(){
+        if (xhr.status >= 200 && xhr.status < 300){
+          try { resolve(_parseResult(JSON.parse(xhr.responseText))); }
+          catch(_){ resolve({ ok:false, error:'xhr_invalid_json', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index }); }
+        } else {
+          resolve({ ok:false, error:'xhr_http_' + xhr.status, action:_meta.action, tab:_meta.tab, row_index:_meta.row_index });
+        }
+      };
+      xhr.onerror = function(){
+        resolve({ ok:false, error:'xhr_network_error', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index });
+      };
+      xhr.ontimeout = function(){
+        resolve({ ok:false, error:'xhr_timeout', action:_meta.action, tab:_meta.tab, row_index:_meta.row_index });
+      };
+      xhr.timeout = 30000; // 30s — GAS can be slow
+      xhr.send(payload);
+    });
+  }
+
+  // Try fetch first, fall back to XHR on network failure, retry XHR once.
+  return _fetchAttempt().catch(function(e){
+    console.warn('sheetsPush fetch failed (' + (e&&e.message||e) + '), falling back to XHR...');
+    return _xhrAttempt();
+  }).then(function(result){
+    if (result && result.ok === false && /xhr_network|Load failed|Failed to fetch/i.test(result.error||'')){
+      console.warn('sheetsPush first try failed (' + result.error + '), retrying XHR in 3s...');
+      return new Promise(function(resolve){
+        setTimeout(function(){ resolve(_xhrAttempt()); }, 3000);
+      });
+    }
+    return result;
+  });
 }
 
 // ── INVENTORY SHEETS ────────────────────────────────────────────────────────
