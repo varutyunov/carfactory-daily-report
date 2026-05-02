@@ -25463,11 +25463,14 @@ async function _autopopulateDeals26(record, car, icOverride) {
     // 1. Find inventory car by VIN to get inventory.id
     var invRows = await sbGet('inventory', 'vin=eq.' + encodeURIComponent(vin) + '&select=id&limit=1');
     invId = (Array.isArray(invRows) && invRows[0]) ? invRows[0].id : null;
+    console.log('Deals26 autopopulate: VIN=' + vin + ' → invId=' + invId);
 
     // 2. Find inventory_costs row linked to this inventory car
     if (invId) {
       var icRows = await sbGet('inventory_costs', 'car_id=eq.' + invId + '&limit=1');
       if (Array.isArray(icRows) && icRows[0]) ic = icRows[0];
+      console.log('Deals26 autopopulate: IC by car_id=' + invId + ' → ' +
+        (ic ? 'id=' + ic.id + ' cost=$' + ic.purchase_cost + ' name="' + ic.car_name + '"' : 'not found'));
     }
 
     // 2b. Name-based IC search — if car_id lookup missed (broken link,
@@ -25483,7 +25486,7 @@ async function _autopopulateDeals26(record, car, icOverride) {
         if (_yrShort && _mdlToken) {
           var _icByName = await sbGet('inventory_costs',
             'location=eq.' + encodeURIComponent(_loc) +
-            '&car_name=ilike.*' + encodeURIComponent(_yrShort + '%' + _mdlToken) + '*' +
+            '&car_name=ilike.*' + encodeURIComponent(_yrShort) + '*' + encodeURIComponent(_mdlToken) + '*' +
             '&sold_at=is.null&select=id,car_id,car_name,purchase_cost,joint_expenses,vlad_expenses,expense_notes,vlad_expense_notes,sort_order&limit=5');
           if (Array.isArray(_icByName) && _icByName.length) {
             // Pick best match — prefer non-zero cost, color match
@@ -25850,12 +25853,16 @@ async function _autopopulateDeals26(record, car, icOverride) {
   var _sheetObj = Object.assign({}, d26Obj);
   delete _sheetObj.payments;
   delete _sheetObj.payment_notes;
+  console.log('Deals26 autopopulate: writing to sheet — tab=Deals26 sortOrder=' + sortOrder +
+    ' loc=' + (record.location || 'DeBary') + ' cost=$' + cost + ' carDesc="' + carDesc + '"');
   var sheetResult = await sheetsPush('Deals26', sortOrder, _sheetObj, 'update', (record.location || 'DeBary'));
   if (!sheetResult || sheetResult.ok === false){
     // Nothing has been written to Supabase yet; ic row still intact.
     // Throw so the caller (dealSubmit / _reviewApprovePending) knows
     // NOT to mark the post successful. Review card stays pending.
-    throw new Error('deals26 sheet write failed: ' + ((sheetResult && sheetResult.error) || 'unknown'));
+    var _sheetErr = (sheetResult && sheetResult.error) || 'unknown';
+    console.error('Deals26 sheet write failed:', JSON.stringify(sheetResult));
+    throw new Error('Sheet write failed (row ' + sortOrder + ', ' + (record.location||'DeBary') + '): ' + _sheetErr);
   }
 
   // Step B: Insert into Supabase. If this fails, the sheet has the row
@@ -29911,15 +29918,34 @@ async function dealPostToSheet(id){
   var btn=document.getElementById('de-post-sheet-'+id);
   if(btn){btn.textContent='Posting...';btn.disabled=true;}
   try {
+    // Duplicate guard — check if deals26 row already exists for this VIN
+    var _vin = (d.vin || '').trim();
+    if (_vin) {
+      var _existing = await sbGet('deals26', 'sold_inv_vin=eq.' + encodeURIComponent(_vin) + '&select=id&limit=1');
+      if (Array.isArray(_existing) && _existing.length > 0) {
+        if(btn){btn.textContent='Already Posted';btn.disabled=true;btn.style.background='#666';}
+        alert('This deal is already posted to Deals26.\n\nVIN ' + _vin + ' has an existing row.');
+        return;
+      }
+    }
+    // Diagnostic: capture which step fails
+    var _step = 'looking up inventory car';
     var car=(S.inventory||[]).find(function(c){return c.vin&&d.vin&&c.vin.toUpperCase()===d.vin.toUpperCase();});
+    _step = 'running autopopulate';
     var snap=await _autopopulateDeals26(d, car||null);
     if(btn){btn.textContent='✓ Posted';btn.style.background='#16a34a';}
     alert('Posted to Deals26 sheet.\n\n' +
       (snap && snap.carDesc ? 'Row: ' + snap.carDesc : '') +
-      (snap && snap.owed != null ? '\nOwed: $' + snap.owed : ''));
+      (snap && snap.owed != null ? '\nOwed: $' + snap.owed : '') +
+      (snap && snap.taxes ? '\nTaxes: $' + snap.taxes : '') +
+      (snap && snap.carDescWarning ? '\n⚠ ' + snap.carDescWarning : ''));
   }catch(e){
-    if(btn){btn.textContent='Post to Deals26 Sheet';btn.disabled=false;}
-    alert('Deals26 post failed:\n\n'+(e.message||e));
+    if(btn){btn.textContent='Post to Deals26';btn.disabled=false;}
+    console.error('dealPostToSheet error:', e);
+    alert('Deals26 post failed:\n\n' + (e.message||e) +
+      '\n\nDeal: ' + (d.customer_name||'?') +
+      '\nVIN: ' + (d.vin||'?') +
+      '\nLocation: ' + (d.location||'?'));
   }
 }
 
