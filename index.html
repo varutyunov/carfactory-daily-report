@@ -26450,6 +26450,25 @@ async function _autoCreateInventoryCosts(insertedRows) {
     if (_n && _n !== 'total') existingNameKeys.add(_n + '||' + (r.location || 'DeBary'));
   });
 
+  // Also skip cars that are already tracked as sold in d26 — they're
+  // historical sales, not active inventory needing a cost-basis ledger.
+  // The audit pass yesterday created stub inventory rows for unlinked
+  // d26 deals; CSV sync then queued 39 inv_create_pending reviews for
+  // them, which Vlad rightly flagged as bogus ("all already created").
+  // Match by VIN AND by normalized car_desc so VIN-less audit stubs are
+  // also caught.
+  var soldVins = new Set();
+  var soldDescKeys = new Set();
+  try {
+    var d26rows = await sbGet('deals26', 'select=sold_inv_vin,car_desc,location&limit=2000');
+    if (Array.isArray(d26rows)) d26rows.forEach(function(d){
+      var v = (d.sold_inv_vin || '').trim().toUpperCase();
+      if (v) soldVins.add(v);
+      var k = _normalizeIcKey(d.car_desc || '');
+      if (k && k !== 'total') soldDescKeys.add(k + '||' + (d.location || 'DeBary'));
+    });
+  } catch(_){}
+
   for (var i = 0; i < insertedRows.length; i++) {
     var row = insertedRows[i];
     if (!row || !row.id) continue;
@@ -26458,6 +26477,14 @@ async function _autoCreateInventoryCosts(insertedRows) {
     var carName = _icCarNameFromInv(row);
 
     var loc = row.location || 'DeBary';
+
+    // Already-sold guard. Anything matching a d26 row by VIN (preferred)
+    // or by car_desc (fallback for audit stubs without VIN) is a
+    // historical sale, not new active inventory. Don't queue a review.
+    var rowVin = (row.vin || '').trim().toUpperCase();
+    if (rowVin && soldVins.has(rowVin)) continue;
+    var rowKey = _normalizeIcKey(carName) + '||' + loc;
+    if (soldDescKeys.has(rowKey)) continue;
     var _nameKey = _normalizeIcKey(carName) + '||' + loc;
     if (existingNameKeys.has(_nameKey)) {
       console.log('_autoCreateInventoryCosts: skipping duplicate name "' + carName + '" for ' + loc);
